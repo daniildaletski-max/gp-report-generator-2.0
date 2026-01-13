@@ -21,16 +21,23 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
+import { CSSProperties, useEffect, useRef, useState, createContext, useContext } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "Page 1", path: "/" },
-  { icon: Users, label: "Page 2", path: "/some-path" },
+type MenuItem = {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  path: string;
+};
+
+const defaultMenuItems: MenuItem[] = [
+  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
 ];
+
+const MenuItemsContext = createContext<MenuItem[]>(defaultMenuItems);
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 280;
@@ -39,9 +46,14 @@ const MAX_WIDTH = 480;
 
 export default function DashboardLayout({
   children,
+  sidebarItems,
 }: {
   children: React.ReactNode;
+  sidebarItems?: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }[];
 }) {
+  const menuItems: MenuItem[] = sidebarItems 
+    ? sidebarItems.map(item => ({ icon: item.icon, label: item.label, path: item.href }))
+    : defaultMenuItems;
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
@@ -83,17 +95,19 @@ export default function DashboardLayout({
   }
 
   return (
-    <SidebarProvider
-      style={
-        {
-          "--sidebar-width": `${sidebarWidth}px`,
-        } as CSSProperties
-      }
-    >
-      <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
-        {children}
-      </DashboardLayoutContent>
-    </SidebarProvider>
+    <MenuItemsContext.Provider value={menuItems}>
+      <SidebarProvider
+        style={
+          {
+            "--sidebar-width": `${sidebarWidth}px`,
+          } as CSSProperties
+        }
+      >
+        <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
+          {children}
+        </DashboardLayoutContent>
+      </SidebarProvider>
+    </MenuItemsContext.Provider>
   );
 }
 
@@ -112,6 +126,7 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const menuItems = useContext(MenuItemsContext);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 
@@ -171,7 +186,7 @@ function DashboardLayoutContent({
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-semibold tracking-tight truncate">
-                    Navigation
+                    GP Reports
                   </span>
                 </div>
               ) : null}

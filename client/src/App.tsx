@@ -4,32 +4,53 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import DashboardLayout from "./components/DashboardLayout";
 import Home from "./pages/Home";
+import Dashboard from "./pages/Dashboard";
+import Upload from "./pages/Upload";
+import Evaluations from "./pages/Evaluations";
+import Reports from "./pages/Reports";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet } from "lucide-react";
+
+const sidebarItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/upload", label: "Upload", icon: UploadIcon },
+  { href: "/evaluations", label: "Evaluations", icon: FileCheck },
+  { href: "/reports", label: "Reports", icon: FileSpreadsheet },
+];
+
+function DashboardRoutes() {
+  return (
+    <DashboardLayout sidebarItems={sidebarItems}>
+      <Switch>
+        <Route path="/dashboard" component={Dashboard} />
+        <Route path="/upload" component={Upload} />
+        <Route path="/evaluations" component={Evaluations} />
+        <Route path="/reports" component={Reports} />
+        <Route component={NotFound} />
+      </Switch>
+    </DashboardLayout>
+  );
+}
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
+      <Route path="/" component={Home} />
+      <Route path="/dashboard" component={DashboardRoutes} />
+      <Route path="/upload" component={DashboardRoutes} />
+      <Route path="/evaluations" component={DashboardRoutes} />
+      <Route path="/reports" component={DashboardRoutes} />
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
           <Router />
