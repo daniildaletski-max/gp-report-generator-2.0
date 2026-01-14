@@ -283,3 +283,40 @@
 - [x] Top 3 Performers and Needs Improvement sections
 - [x] Team Statistics (Total Evaluations, Avg Appearance, Avg Game Performance)
 - [x] Color-coded performance indicators (green >=18, yellow >=15, red <15)
+
+
+## System Functionality Improvements (v17)
+
+### Quick Actions (save time on daily tasks)
+- [x] Quick Attitude buttons (1-5) in GP Stats for fast input (one-click setting)
+- [x] Color-coded attitude buttons (red 1-2, yellow 3, green 4-5)
+- [ ] Bulk attitude update for multiple GPs at once
+- [ ] One-click "Mark all as reviewed" for evaluations
+- [ ] Quick notes/comments for GP performance
+
+### Automation Features
+- [ ] Auto-calculate monthly averages when month ends
+- [ ] Auto-generate report draft when all data is collected
+- [ ] Smart suggestions based on GP performance trends
+- [x] Auto-fill Team Overview based on evaluation data (Sparkles button)
+
+### Dashboard Improvements
+- [x] Quick Actions bar with navigation buttons
+- [x] Progress tracker for monthly report completion (progress bar)
+- [ ] Recent activity feed (who uploaded what, when)
+- [ ] Alerts for GPs with declining performance
+
+### Search & Filter
+- [x] Search evaluations by GP name, evaluator, or game
+- [x] Filter evaluations by month/year
+- [x] Sort evaluations by date, score, or name
+- [x] Clear filters button
+- [x] Results count display
+
+### Export & Sharing
+- [ ] Export GP Stats to Excel
+- [ ] Share report preview link with team
+- [ ] Download all team data as backup
+
+### Mobile-Friendly
+- [ ] Responsive design improvements for tablet/phone use

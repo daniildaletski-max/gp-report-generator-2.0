@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Eye, Pencil, Trash2, Image, Trash } from "lucide-react";
+import { Eye, Pencil, Trash2, Image, Trash, Search, Filter, X } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -27,6 +27,71 @@ export default function EvaluationsPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [clearMonth, setClearMonth] = useState(new Date().getMonth() + 1);
   const [clearYear, setClearYear] = useState(new Date().getFullYear());
+  
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterMonth, setFilterMonth] = useState<number | null>(null);
+  const [filterYear, setFilterYear] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<"date" | "score" | "name">("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
+  // Filter and sort evaluations
+  const filteredEvaluations = useMemo(() => {
+    if (!evaluations) return [];
+    
+    let filtered = evaluations.filter(({ evaluation, gamePresenter }) => {
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const gpName = gamePresenter?.name?.toLowerCase() || "";
+        const evaluator = evaluation.evaluatorName?.toLowerCase() || "";
+        const game = evaluation.game?.toLowerCase() || "";
+        if (!gpName.includes(query) && !evaluator.includes(query) && !game.includes(query)) {
+          return false;
+        }
+      }
+      
+      // Month/Year filter
+      if (filterMonth !== null || filterYear !== null) {
+        const evalDate = evaluation.evaluationDate ? new Date(evaluation.evaluationDate) : null;
+        if (evalDate) {
+          if (filterMonth !== null && evalDate.getMonth() + 1 !== filterMonth) return false;
+          if (filterYear !== null && evalDate.getFullYear() !== filterYear) return false;
+        } else {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+    
+    // Sort
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      switch (sortBy) {
+        case "date":
+          const dateA = a.evaluation.evaluationDate ? new Date(a.evaluation.evaluationDate).getTime() : 0;
+          const dateB = b.evaluation.evaluationDate ? new Date(b.evaluation.evaluationDate).getTime() : 0;
+          comparison = dateA - dateB;
+          break;
+        case "score":
+          comparison = (a.evaluation.totalScore || 0) - (b.evaluation.totalScore || 0);
+          break;
+        case "name":
+          comparison = (a.gamePresenter?.name || "").localeCompare(b.gamePresenter?.name || "");
+          break;
+      }
+      return sortOrder === "desc" ? -comparison : comparison;
+    });
+    
+    return filtered;
+  }, [evaluations, searchQuery, filterMonth, filterYear, sortBy, sortOrder]);
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setFilterMonth(null);
+    setFilterYear(null);
+  };
   
   const deleteMutation = trpc.evaluation.delete.useMutation({
     onSuccess: () => {
@@ -187,8 +252,83 @@ export default function EvaluationsPage() {
             Extracted data from uploaded evaluation screenshots. Click Edit to modify or Delete to remove.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {evaluations && evaluations.length > 0 ? (
+        <CardContent className="space-y-4">
+          {/* Search and Filter Bar */}
+          <div className="flex flex-wrap items-center gap-3 p-3 bg-muted/50 rounded-lg">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by GP name, evaluator, or game..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Select
+                value={filterMonth !== null ? String(filterMonth) : "all"}
+                onValueChange={(v) => setFilterMonth(v === "all" ? null : Number(v))}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Months</SelectItem>
+                  {MONTHS.map((month, i) => (
+                    <SelectItem key={i} value={String(i + 1)}>{month}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={filterYear !== null ? String(filterYear) : "all"}
+                onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}
+              >
+                <SelectTrigger className="w-24">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Years</SelectItem>
+                  {[2024, 2025, 2026].map((year) => (
+                    <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={`${sortBy}-${sortOrder}`}
+                onValueChange={(v) => {
+                  const [by, order] = v.split("-") as ["date" | "score" | "name", "asc" | "desc"];
+                  setSortBy(by);
+                  setSortOrder(order);
+                }}
+              >
+                <SelectTrigger className="w-36">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date-desc">Newest First</SelectItem>
+                  <SelectItem value="date-asc">Oldest First</SelectItem>
+                  <SelectItem value="score-desc">Highest Score</SelectItem>
+                  <SelectItem value="score-asc">Lowest Score</SelectItem>
+                  <SelectItem value="name-asc">Name A-Z</SelectItem>
+                  <SelectItem value="name-desc">Name Z-A</SelectItem>
+                </SelectContent>
+              </Select>
+              {(searchQuery || filterMonth !== null || filterYear !== null) && (
+                <Button variant="ghost" size="sm" onClick={clearFilters}>
+                  <X className="h-4 w-4 mr-1" />
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
+          
+          {/* Results count */}
+          <div className="text-sm text-muted-foreground">
+            Showing {filteredEvaluations.length} of {evaluations?.length || 0} evaluations
+          </div>
+
+          {filteredEvaluations.length > 0 ? (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -208,7 +348,7 @@ export default function EvaluationsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {evaluations.map(({ evaluation, gamePresenter }) => (
+                  {filteredEvaluations.map(({ evaluation, gamePresenter }) => (
                     <TableRow key={evaluation.id}>
                       <TableCell className="font-medium">
                         {gamePresenter?.name || "Unknown"}

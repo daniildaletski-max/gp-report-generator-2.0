@@ -826,22 +826,28 @@ function GPStatsTab({
                       </TableCell>
                       <TableCell className="text-center">
                         {isEditing ? (
-                          <Select
-                            value={editAttitude ? String(editAttitude) : "none"}
-                            onValueChange={(v) => setEditAttitude(v === "none" ? null : Number(v))}
-                          >
-                            <SelectTrigger className="w-20 mx-auto">
-                              <SelectValue placeholder="-" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">-</SelectItem>
-                              {[1, 2, 3, 4, 5].map((n) => (
-                                <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="flex items-center justify-center gap-1">
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <Button
+                                key={n}
+                                size="sm"
+                                variant={editAttitude === n ? "default" : "outline"}
+                                className={`w-8 h-8 p-0 ${editAttitude === n ? '' : n <= 2 ? 'hover:bg-red-100 hover:text-red-700' : n === 3 ? 'hover:bg-yellow-100 hover:text-yellow-700' : 'hover:bg-green-100 hover:text-green-700'}`}
+                                onClick={() => setEditAttitude(editAttitude === n ? null : n)}
+                              >
+                                {n}
+                              </Button>
+                            ))}
+                          </div>
                         ) : (
-                          <AttitudeBadge attitude={gp.stats?.attitude} />
+                          <QuickAttitudeButtons 
+                            gpId={gp.id} 
+                            currentAttitude={gp.stats?.attitude}
+                            currentMistakes={gp.stats?.mistakes ?? 0}
+                            selectedMonth={selectedMonth}
+                            selectedYear={selectedYear}
+                            onUpdate={refetch}
+                          />
                         )}
                       </TableCell>
                       <TableCell className="text-center">
@@ -930,6 +936,76 @@ function AttitudeBadge({ attitude }: { attitude: number | null | undefined }) {
         {attitude}
       </Badge>
       <span className="text-xs text-muted-foreground">{getStars(attitude)}</span>
+    </div>
+  );
+}
+
+// Quick Attitude Buttons Component for one-click attitude setting
+function QuickAttitudeButtons({ 
+  gpId, 
+  currentAttitude, 
+  currentMistakes,
+  selectedMonth, 
+  selectedYear, 
+  onUpdate 
+}: { 
+  gpId: number; 
+  currentAttitude: number | null | undefined;
+  currentMistakes: number;
+  selectedMonth: number; 
+  selectedYear: number; 
+  onUpdate: () => void;
+}) {
+  const updateStatsMutation = trpc.gamePresenter.updateStats.useMutation();
+  const [isUpdating, setIsUpdating] = useState<number | null>(null);
+
+  const handleQuickSet = async (attitude: number) => {
+    setIsUpdating(attitude);
+    try {
+      await updateStatsMutation.mutateAsync({
+        gpId,
+        month: selectedMonth,
+        year: selectedYear,
+        attitude,
+        mistakes: currentMistakes,
+      });
+      toast.success(`Attitude set to ${attitude}`);
+      onUpdate();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update");
+    } finally {
+      setIsUpdating(null);
+    }
+  };
+
+  const getButtonStyle = (n: number) => {
+    const isSelected = currentAttitude === n;
+    if (isSelected) {
+      if (n <= 2) return "bg-red-500 text-white hover:bg-red-600";
+      if (n === 3) return "bg-yellow-500 text-white hover:bg-yellow-600";
+      return "bg-green-500 text-white hover:bg-green-600";
+    }
+    return "bg-muted/50 hover:bg-muted";
+  };
+
+  return (
+    <div className="flex items-center justify-center gap-1">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Button
+          key={n}
+          size="sm"
+          variant="ghost"
+          className={`w-7 h-7 p-0 text-xs font-medium ${getButtonStyle(n)}`}
+          onClick={() => handleQuickSet(n)}
+          disabled={isUpdating !== null}
+        >
+          {isUpdating === n ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            n
+          )}
+        </Button>
+      ))}
     </div>
   );
 }

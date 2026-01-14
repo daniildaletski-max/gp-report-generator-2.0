@@ -2,7 +2,10 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, FileCheck, TrendingUp, FileSpreadsheet } from "lucide-react";
+import { Users, FileCheck, TrendingUp, FileSpreadsheet, AlertCircle, CheckCircle2, Clock, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { useLocation } from "wouter";
 import { useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
@@ -16,10 +19,18 @@ export default function Dashboard() {
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
 
+  const [, setLocation] = useLocation();
+  
   const { data: stats, isLoading } = trpc.dashboard.stats.useQuery({
     month: selectedMonth,
     year: selectedYear,
   });
+
+  // Calculate progress metrics
+  const totalGPs = stats?.totalGPs || 0;
+  const evaluatedGPs = stats?.thisMonthGPs || 0;
+  const evaluationProgress = totalGPs > 0 ? Math.round((evaluatedGPs / totalGPs) * 100) : 0;
+  const pendingGPs = totalGPs - evaluatedGPs;
 
   if (isLoading) {
     return (
@@ -81,6 +92,38 @@ export default function Dashboard() {
           </SelectContent>
         </Select>
       </div>
+
+      {/* Quick Actions Bar */}
+      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-blue-600" />
+                <span className="font-medium">Quick Actions</span>
+              </div>
+              <div className="h-6 w-px bg-blue-200" />
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Progress:</span>
+                <Progress value={evaluationProgress} className="w-32 h-2" />
+                <span className="font-medium">{evaluationProgress}%</span>
+                <span className="text-muted-foreground">({evaluatedGPs}/{totalGPs} GPs)</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setLocation('/upload')}>
+                Upload Evaluations
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setLocation('/admin')}>
+                Manage GP Stats
+              </Button>
+              <Button size="sm" onClick={() => setLocation('/reports')}>
+                Generate Report <ArrowRight className="ml-1 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
