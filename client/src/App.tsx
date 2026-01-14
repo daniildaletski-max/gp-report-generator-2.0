@@ -11,6 +11,7 @@ import Upload from "./pages/Upload";
 import Evaluations from "./pages/Evaluations";
 import Reports from "./pages/Reports";
 import Admin from "./pages/Admin";
+import GPPortal from "./pages/GPPortal";
 import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings } from "lucide-react";
 
 const sidebarItems = [
@@ -40,6 +41,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/gp/:token" component={GPPortal} />
       <Route path="/dashboard" component={DashboardRoutes} />
       <Route path="/upload" component={DashboardRoutes} />
       <Route path="/evaluations" component={DashboardRoutes} />

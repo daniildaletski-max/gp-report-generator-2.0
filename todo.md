@@ -101,3 +101,33 @@
 - [x] Match GP names from error files with database records
 - [x] Auto-populate Mistakes column in attendance table
 - [x] Store parsed error data for report generation
+
+
+## GP Access System (v4) - COMPLETED
+
+### Database Schema
+- [x] Create gpAccessTokens table (id, gamePresenterId, token, createdAt, isActive, lastAccessedAt)
+- [x] Link GP tokens to evaluations by gamePresenterId
+
+### Backend API
+- [x] Generate unique access token/link for each GP (gpAccess.generateToken)
+- [x] Public endpoint to view GP evaluations by token (gpAccess.getEvaluationsByToken - no auth required)
+- [x] Validate token and return only that GP's evaluations
+- [x] Endpoint to list all GP access links for FM (gpAccess.list)
+- [x] Deactivate token endpoint (gpAccess.deactivate)
+
+### Frontend - GP Portal
+- [x] Public page /gp/:token for GP to view their evaluations
+- [x] Display all evaluations for that GP (read-only)
+- [x] Show evaluation details: date, scores, comments with progress bars
+- [x] Mobile-friendly design with responsive layout
+- [x] Summary stats: total evaluations, avg appearance, avg game perf
+
+### Frontend - FM Management
+- [x] New "GP Access Links" tab in Admin panel
+- [x] Generate new link button for each GP
+- [x] Copy link to clipboard functionality
+- [x] Deactivate/regenerate link option
+- [x] Show link status (Active/No Link)
+- [x] Show last accessed timestamp
+- [x] Open link in new tab button

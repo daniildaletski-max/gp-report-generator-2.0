@@ -9,7 +9,8 @@ import {
   fmTeams, InsertFmTeam, FmTeam,
   gpMonthlyAttendance, InsertGpMonthlyAttendance, GpMonthlyAttendance,
   errorFiles, InsertErrorFile, ErrorFile,
-  gpErrors, InsertGpError, GpError
+  gpErrors, InsertGpError, GpError,
+  gpAccessTokens, InsertGpAccessToken, GpAccessToken
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -184,6 +185,13 @@ export async function getGamePresentersByTeam(teamId: number): Promise<GamePrese
   const db = await getDb();
   if (!db) return [];
   return await db.select().from(gamePresenters).where(eq(gamePresenters.teamId, teamId)).orderBy(gamePresenters.name);
+}
+
+export async function getGamePresenterById(id: number): Promise<GamePresenter | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(gamePresenters).where(eq(gamePresenters.id, id)).limit(1);
+  return result.length > 0 ? result[0] : null;
 }
 
 export async function updateGamePresenterTeam(gpId: number, teamId: number): Promise<void> {
@@ -792,4 +800,121 @@ export async function getGPEvaluationsForDataSheet(teamId: number, year: number,
   }
 
   return result;
+}
+
+
+// ============================================
+// GP ACCESS TOKEN FUNCTIONS
+// ============================================
+
+export async function createGpAccessToken(data: InsertGpAccessToken): Promise<GpAccessToken> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(gpAccessTokens).values(data);
+  
+  const newToken = await db.select().from(gpAccessTokens)
+    .where(eq(gpAccessTokens.id, Number(result[0].insertId)))
+    .limit(1);
+
+  return newToken[0];
+}
+
+export async function getGpAccessTokenByToken(token: string): Promise<GpAccessToken | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(gpAccessTokens)
+    .where(and(
+      eq(gpAccessTokens.token, token),
+      eq(gpAccessTokens.isActive, 1)
+    ))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getGpAccessTokenByGpId(gpId: number): Promise<GpAccessToken | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(gpAccessTokens)
+    .where(and(
+      eq(gpAccessTokens.gamePresenterId, gpId),
+      eq(gpAccessTokens.isActive, 1)
+    ))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getAllGpAccessTokens() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    token: gpAccessTokens,
+    gp: gamePresenters,
+  })
+  .from(gpAccessTokens)
+  .leftJoin(gamePresenters, eq(gpAccessTokens.gamePresenterId, gamePresenters.id))
+  .orderBy(desc(gpAccessTokens.createdAt));
+}
+
+export async function deactivateGpAccessToken(id: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  await db.update(gpAccessTokens)
+    .set({ isActive: 0 })
+    .where(eq(gpAccessTokens.id, id));
+
+  return true;
+}
+
+export async function updateGpAccessTokenLastAccess(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(gpAccessTokens)
+    .set({ lastAccessedAt: new Date() })
+    .where(eq(gpAccessTokens.id, id));
+}
+
+export async function getGpEvaluationsForPortal(gpId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    id: evaluations.id,
+    evaluationDate: evaluations.evaluationDate,
+    evaluatorName: evaluations.evaluatorName,
+    game: evaluations.game,
+    totalScore: evaluations.totalScore,
+    hairScore: evaluations.hairScore,
+    hairMaxScore: evaluations.hairMaxScore,
+    hairComment: evaluations.hairComment,
+    makeupScore: evaluations.makeupScore,
+    makeupMaxScore: evaluations.makeupMaxScore,
+    makeupComment: evaluations.makeupComment,
+    outfitScore: evaluations.outfitScore,
+    outfitMaxScore: evaluations.outfitMaxScore,
+    outfitComment: evaluations.outfitComment,
+    postureScore: evaluations.postureScore,
+    postureMaxScore: evaluations.postureMaxScore,
+    postureComment: evaluations.postureComment,
+    dealingStyleScore: evaluations.dealingStyleScore,
+    dealingStyleMaxScore: evaluations.dealingStyleMaxScore,
+    dealingStyleComment: evaluations.dealingStyleComment,
+    gamePerformanceScore: evaluations.gamePerformanceScore,
+    gamePerformanceMaxScore: evaluations.gamePerformanceMaxScore,
+    gamePerformanceComment: evaluations.gamePerformanceComment,
+    appearanceScore: evaluations.appearanceScore,
+    gamePerformanceTotalScore: evaluations.gamePerformanceTotalScore,
+    screenshotUrl: evaluations.screenshotUrl,
+    createdAt: evaluations.createdAt,
+  })
+  .from(evaluations)
+  .where(eq(evaluations.gamePresenterId, gpId))
+  .orderBy(desc(evaluations.evaluationDate));
 }

@@ -190,3 +190,20 @@ export const uploadBatches = mysqlTable("upload_batches", {
 
 export type UploadBatch = typeof uploadBatches.$inferSelect;
 export type InsertUploadBatch = typeof uploadBatches.$inferInsert;
+
+
+/**
+ * GP Access Tokens - unique access links for Game Presenters to view their evaluations
+ */
+export const gpAccessTokens = mysqlTable("gp_access_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  gamePresenterId: int("gamePresenterId").notNull(),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  isActive: int("isActive").default(1).notNull(), // 1 = active, 0 = inactive
+  createdById: int("createdById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  lastAccessedAt: timestamp("lastAccessedAt"),
+});
+
+export type GpAccessToken = typeof gpAccessTokens.$inferSelect;
+export type InsertGpAccessToken = typeof gpAccessTokens.$inferInsert;

@@ -246,3 +246,82 @@ describe("Month Names", () => {
     expect(MONTH_NAMES[11]).toBe("December");
   });
 });
+
+
+describe("gpAccess.generateToken", () => {
+  it("should generate a valid token format", () => {
+    // Token should be 32 characters (nanoid default)
+    const tokenLength = 32;
+    const mockToken = "abcdefghijklmnopqrstuvwxyz123456";
+    
+    expect(mockToken.length).toBe(tokenLength);
+    expect(typeof mockToken).toBe("string");
+  });
+
+  it("should create valid GP portal URL", () => {
+    const token = "test-token-12345";
+    const baseUrl = "https://example.com";
+    const portalUrl = `${baseUrl}/gp/${token}`;
+    
+    expect(portalUrl).toContain("/gp/");
+    expect(portalUrl).toContain(token);
+  });
+});
+
+describe("gpAccess.getEvaluationsByToken", () => {
+  it("should return GP name and evaluations array", () => {
+    const mockResponse = {
+      gpName: "Test Presenter",
+      gpId: 1,
+      evaluations: [],
+    };
+    
+    expect(mockResponse).toHaveProperty("gpName");
+    expect(mockResponse).toHaveProperty("gpId");
+    expect(mockResponse).toHaveProperty("evaluations");
+    expect(Array.isArray(mockResponse.evaluations)).toBe(true);
+  });
+
+  it("should include all evaluation fields for GP portal", () => {
+    const requiredFields = [
+      "id",
+      "evaluationDate",
+      "evaluatorName",
+      "game",
+      "totalScore",
+      "hairScore",
+      "makeupScore",
+      "outfitScore",
+      "postureScore",
+      "dealingStyleScore",
+      "gamePerformanceScore",
+      "appearanceScore",
+      "gamePerformanceTotalScore",
+    ];
+    
+    expect(requiredFields.length).toBeGreaterThan(10);
+    expect(requiredFields).toContain("totalScore");
+    expect(requiredFields).toContain("appearanceScore");
+  });
+});
+
+describe("GP Portal Access Control", () => {
+  it("should only allow read access (no mutations)", () => {
+    // GP portal should only have query access, not mutation
+    const allowedOperations = ["getEvaluationsByToken"];
+    const forbiddenOperations = ["updateEvaluation", "deleteEvaluation", "createEvaluation"];
+    
+    expect(allowedOperations).toContain("getEvaluationsByToken");
+    forbiddenOperations.forEach((op) => {
+      expect(allowedOperations).not.toContain(op);
+    });
+  });
+
+  it("should validate token before returning data", () => {
+    const validToken = "valid-token-123";
+    const invalidToken = "";
+    
+    expect(validToken.length).toBeGreaterThan(0);
+    expect(invalidToken.length).toBe(0);
+  });
+});

@@ -847,6 +847,78 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
+
+  // GP Access Token management
+  gpAccess: router({
+    // Generate a new access token for a GP
+    generateToken: protectedProcedure
+      .input(z.object({ gpId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        // Check if GP exists
+        const gp = await db.getGamePresenterById(input.gpId);
+        if (!gp) {
+          throw new Error("Game Presenter not found");
+        }
+
+        // Deactivate any existing tokens for this GP
+        const existingToken = await db.getGpAccessTokenByGpId(input.gpId);
+        if (existingToken) {
+          await db.deactivateGpAccessToken(existingToken.id);
+        }
+
+        // Generate new token
+        const token = nanoid(32);
+        const accessToken = await db.createGpAccessToken({
+          gamePresenterId: input.gpId,
+          token,
+          createdById: ctx.user.id,
+        });
+
+        return { ...accessToken, gpName: gp.name };
+      }),
+
+    // Get all GP access tokens (for FM management)
+    list: protectedProcedure.query(async () => {
+      return await db.getAllGpAccessTokens();
+    }),
+
+    // Deactivate a token
+    deactivate: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deactivateGpAccessToken(input.id);
+        return { success: true };
+      }),
+
+    // Public endpoint: Get GP evaluations by token (no auth required)
+    getEvaluationsByToken: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        // Find the token
+        const accessToken = await db.getGpAccessTokenByToken(input.token);
+        if (!accessToken) {
+          throw new Error("Invalid or expired access link");
+        }
+
+        // Update last accessed time
+        await db.updateGpAccessTokenLastAccess(accessToken.id);
+
+        // Get GP info
+        const gp = await db.getGamePresenterById(accessToken.gamePresenterId);
+        if (!gp) {
+          throw new Error("Game Presenter not found");
+        }
+
+        // Get all evaluations for this GP
+        const evaluations = await db.getGpEvaluationsForPortal(accessToken.gamePresenterId);
+
+        return {
+          gpName: gp.name,
+          gpId: gp.id,
+          evaluations,
+        };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
