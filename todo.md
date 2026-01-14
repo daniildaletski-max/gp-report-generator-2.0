@@ -358,3 +358,12 @@
 - [x] Low performance alerts on Dashboard (GPs scoring below 15)
 - [x] All 50 tests passing
 - [x] All features work together seamlessly
+
+
+## Excel Native Chart (v20)
+
+- [x] Add native Excel bar chart using xlsx-chart library
+- [x] Chart displays GP names on X-axis, scores on Y-axis
+- [x] Includes Appearance and Game Performance as separate series (column chart)
+- [x] Chart exported as separate Excel file with embedded chart
+- [x] Both main report and chart file download automatically on export

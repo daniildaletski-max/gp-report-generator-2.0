@@ -9,6 +9,7 @@ import { notifyOwner } from "./_core/notification";
 import { nanoid } from "nanoid";
 import * as db from "./db";
 import ExcelJS from "exceljs";
+import XLSXChart from "xlsx-chart";
 
 // Month names for report formatting
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", 
@@ -1047,10 +1048,61 @@ export const appRouter = router({
           mainSheet.getCell(`G${visualRow}`).value = "<15 (Needs Improvement)";
         }
 
-        // Generate buffer and upload to S3
+        // ===== GENERATE CHART FILE USING xlsx-chart =====
+        // Prepare chart data
+        const chartTitles = ["Appearance", "Game Performance"];
+        const chartFields: string[] = [];
+        const chartData: Record<string, Record<string, number>> = {
+          "Appearance": {},
+          "Game Performance": {}
+        };
+
+        for (const gp of gpEvaluationsData) {
+          if (gp.evaluations.length > 0) {
+            const avgAppearance = gp.evaluations.reduce((sum, e) => sum + (e.appearanceScore || 0), 0) / gp.evaluations.length;
+            const avgGamePerf = gp.evaluations.reduce((sum, e) => sum + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
+            
+            const gpName = gp.gpName.split(" ")[0]; // First name only
+            chartFields.push(gpName);
+            chartData["Appearance"][gpName] = Number(avgAppearance.toFixed(1));
+            chartData["Game Performance"][gpName] = Number(avgGamePerf.toFixed(1));
+          }
+        }
+
+        // Generate chart using xlsx-chart
+        let chartBuffer: Buffer | null = null;
+        if (chartFields.length > 0) {
+          const xlsxChart = new XLSXChart();
+          const chartOpts = {
+            chart: "column" as const,
+            titles: chartTitles,
+            fields: chartFields,
+            data: chartData,
+            chartTitle: `${teamName} Performance - ${monthName} ${report.reportYear}`
+          };
+
+          chartBuffer = await new Promise<Buffer>((resolve, reject) => {
+            xlsxChart.generate(chartOpts, (err: Error | null, data: Buffer) => {
+              if (err) reject(err);
+              else resolve(data);
+            });
+          });
+        }
+
+        // Generate main report buffer
         const buffer = await workbook.xlsx.writeBuffer();
+        
+        // Upload both files to S3
         const fileKey = `reports/${report.id}/${nanoid()}-TeamOverview_${teamName.replace(/\s+/g, '_')}_${monthName}${report.reportYear}.xlsx`;
         const { url: excelUrl } = await storagePut(fileKey, Buffer.from(buffer), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+        // Upload chart file separately if generated
+        let chartUrl: string | null = null;
+        if (chartBuffer) {
+          const chartFileKey = `reports/${report.id}/${nanoid()}-Chart_${teamName.replace(/\s+/g, '_')}_${monthName}${report.reportYear}.xlsx`;
+          const chartResult = await storagePut(chartFileKey, chartBuffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+          chartUrl = chartResult.url;
+        }
 
         await db.updateReport(report.id, {
           excelFileUrl: excelUrl,
@@ -1061,6 +1113,7 @@ export const appRouter = router({
         return {
           success: true,
           excelUrl,
+          chartUrl,
         };
       }),
 

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw } from "lucide-react";
+import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, BarChart3 } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -20,6 +20,7 @@ const MONTHS = [
 export default function ReportsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExporting, setIsExporting] = useState<number | null>(null);
+  const [lastChartUrl, setLastChartUrl] = useState<string | null>(null);
   const [showNewReport, setShowNewReport] = useState(false);
   
   const [formData, setFormData] = useState({
@@ -118,8 +119,15 @@ export default function ReportsPage() {
     setIsExporting(reportId);
     try {
       const result = await exportMutation.mutateAsync({ reportId });
-      toast.success("Excel file generated");
+      toast.success("Excel file generated" + (result.chartUrl ? " with chart" : ""));
       window.open(result.excelUrl, "_blank");
+      if (result.chartUrl) {
+        setLastChartUrl(result.chartUrl);
+        // Also open chart in new tab
+        setTimeout(() => {
+          window.open(result.chartUrl!, "_blank");
+        }, 500);
+      }
       refetch();
     } catch (error: any) {
       toast.error(error.message || "Failed to export report");
