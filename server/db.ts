@@ -5,7 +5,11 @@ import {
   gamePresenters, InsertGamePresenter, GamePresenter,
   evaluations, InsertEvaluation, Evaluation,
   reports, InsertReport, Report,
-  uploadBatches, InsertUploadBatch, UploadBatch
+  uploadBatches, InsertUploadBatch, UploadBatch,
+  fmTeams, InsertFmTeam, FmTeam,
+  gpMonthlyAttendance, InsertGpMonthlyAttendance, GpMonthlyAttendance,
+  errorFiles, InsertErrorFile, ErrorFile,
+  gpErrors, InsertGpError, GpError
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -99,10 +103,53 @@ export async function getUserByOpenId(openId: string) {
 }
 
 // ============================================
+// FM TEAMS FUNCTIONS
+// ============================================
+
+export async function getAllFmTeams(): Promise<FmTeam[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(fmTeams).orderBy(fmTeams.teamName);
+}
+
+export async function getFmTeamById(id: number): Promise<FmTeam | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(fmTeams).where(eq(fmTeams.id, id)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function createFmTeam(data: InsertFmTeam): Promise<FmTeam> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(fmTeams).values(data);
+  const newTeam = await db.select().from(fmTeams).where(eq(fmTeams.id, Number(result[0].insertId))).limit(1);
+  return newTeam[0];
+}
+
+export async function initializeDefaultTeams(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const defaultTeams = [
+    { teamName: "Team Omnicron", floorManagerName: "Andri Saaret" },
+    { teamName: "Team Alpha", floorManagerName: "Kristina Bobrovskaja" },
+    { teamName: "Team Zeta", floorManagerName: "Alissa Gujevskaja" },
+  ];
+
+  for (const team of defaultTeams) {
+    const existing = await db.select().from(fmTeams).where(eq(fmTeams.teamName, team.teamName)).limit(1);
+    if (existing.length === 0) {
+      await db.insert(fmTeams).values(team);
+    }
+  }
+}
+
+// ============================================
 // GAME PRESENTER FUNCTIONS
 // ============================================
 
-export async function findOrCreateGamePresenter(name: string, teamName?: string): Promise<GamePresenter> {
+export async function findOrCreateGamePresenter(name: string, teamId?: number): Promise<GamePresenter> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -116,7 +163,7 @@ export async function findOrCreateGamePresenter(name: string, teamName?: string)
 
   const result = await db.insert(gamePresenters).values({
     name,
-    teamName: teamName || null,
+    teamId: teamId || null,
   });
 
   const newGP = await db.select().from(gamePresenters)
@@ -133,6 +180,18 @@ export async function getAllGamePresenters(): Promise<GamePresenter[]> {
   return await db.select().from(gamePresenters).orderBy(gamePresenters.name);
 }
 
+export async function getGamePresentersByTeam(teamId: number): Promise<GamePresenter[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(gamePresenters).where(eq(gamePresenters.teamId, teamId)).orderBy(gamePresenters.name);
+}
+
+export async function updateGamePresenterTeam(gpId: number, teamId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(gamePresenters).set({ teamId }).where(eq(gamePresenters.id, gpId));
+}
+
 // ============================================
 // EVALUATION FUNCTIONS
 // ============================================
@@ -141,7 +200,15 @@ export async function createEvaluation(data: InsertEvaluation): Promise<Evaluati
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const result = await db.insert(evaluations).values(data);
+  // Calculate composite scores
+  const appearanceScore = (data.hairScore || 0) + (data.makeupScore || 0) + (data.outfitScore || 0) + (data.postureScore || 0);
+  const gamePerformanceTotalScore = (data.dealingStyleScore || 0) + (data.gamePerformanceScore || 0);
+
+  const result = await db.insert(evaluations).values({
+    ...data,
+    appearanceScore,
+    gamePerformanceTotalScore,
+  });
   
   const newEval = await db.select().from(evaluations)
     .where(eq(evaluations.id, Number(result[0].insertId)))
@@ -213,6 +280,138 @@ export async function getEvaluationsWithGP() {
 }
 
 // ============================================
+// GP MONTHLY ATTENDANCE FUNCTIONS
+// ============================================
+
+export async function getOrCreateAttendance(gpId: number, month: number, year: number): Promise<GpMonthlyAttendance> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await db.select().from(gpMonthlyAttendance)
+    .where(and(
+      eq(gpMonthlyAttendance.gamePresenterId, gpId),
+      eq(gpMonthlyAttendance.month, month),
+      eq(gpMonthlyAttendance.year, year)
+    ))
+    .limit(1);
+
+  if (existing.length > 0) return existing[0];
+
+  const result = await db.insert(gpMonthlyAttendance).values({
+    gamePresenterId: gpId,
+    month,
+    year,
+    mistakes: 0,
+    extraShifts: 0,
+    lateToWork: 0,
+    missedDays: 0,
+    sickLeaves: 0,
+  });
+
+  const newRecord = await db.select().from(gpMonthlyAttendance)
+    .where(eq(gpMonthlyAttendance.id, Number(result[0].insertId)))
+    .limit(1);
+
+  return newRecord[0];
+}
+
+export async function updateAttendance(id: number, data: Partial<InsertGpMonthlyAttendance>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(gpMonthlyAttendance).set(data).where(eq(gpMonthlyAttendance.id, id));
+}
+
+export async function getAttendanceByTeamMonth(teamId: number, month: number, year: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    attendance: gpMonthlyAttendance,
+    gamePresenter: gamePresenters,
+  })
+  .from(gpMonthlyAttendance)
+  .innerJoin(gamePresenters, eq(gpMonthlyAttendance.gamePresenterId, gamePresenters.id))
+  .where(and(
+    eq(gamePresenters.teamId, teamId),
+    eq(gpMonthlyAttendance.month, month),
+    eq(gpMonthlyAttendance.year, year)
+  ));
+}
+
+// ============================================
+// ERROR FILES FUNCTIONS
+// ============================================
+
+export async function createErrorFile(data: InsertErrorFile): Promise<ErrorFile> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(errorFiles).values(data);
+  const newFile = await db.select().from(errorFiles)
+    .where(eq(errorFiles.id, Number(result[0].insertId)))
+    .limit(1);
+
+  return newFile[0];
+}
+
+export async function getAllErrorFiles(): Promise<ErrorFile[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(errorFiles).orderBy(desc(errorFiles.createdAt));
+}
+
+// ============================================
+// GP ERRORS FUNCTIONS
+// ============================================
+
+export async function createGpError(data: InsertGpError): Promise<GpError> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(gpErrors).values(data);
+  const newError = await db.select().from(gpErrors)
+    .where(eq(gpErrors.id, Number(result[0].insertId)))
+    .limit(1);
+
+  return newError[0];
+}
+
+export async function getErrorCountByGP(month: number, year: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
+
+  return await db.select({
+    gpName: gpErrors.gpName,
+    errorCount: sql<number>`COUNT(${gpErrors.id})`,
+  })
+  .from(gpErrors)
+  .where(and(
+    gte(gpErrors.errorDate, startDate),
+    lte(gpErrors.errorDate, endDate)
+  ))
+  .groupBy(gpErrors.gpName);
+}
+
+export async function updateGPMistakesFromErrors(month: number, year: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const errorCounts = await getErrorCountByGP(month, year);
+  
+  for (const { gpName, errorCount } of errorCounts) {
+    // Find GP by name
+    const gp = await db.select().from(gamePresenters).where(eq(gamePresenters.name, gpName)).limit(1);
+    if (gp.length > 0) {
+      const attendance = await getOrCreateAttendance(gp[0].id, month, year);
+      await updateAttendance(attendance.id, { mistakes: errorCount });
+    }
+  }
+}
+
+// ============================================
 // REPORT FUNCTIONS
 // ============================================
 
@@ -253,6 +452,22 @@ export async function getReportById(id: number): Promise<Report | null> {
   return result.length > 0 ? result[0] : null;
 }
 
+export async function getReportWithTeam(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select({
+    report: reports,
+    team: fmTeams,
+  })
+  .from(reports)
+  .leftJoin(fmTeams, eq(reports.teamId, fmTeams.id))
+  .where(eq(reports.id, id))
+  .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
 export async function getAllReports(): Promise<Report[]> {
   const db = await getDb();
   if (!db) return [];
@@ -260,14 +475,27 @@ export async function getAllReports(): Promise<Report[]> {
   return await db.select().from(reports).orderBy(desc(reports.createdAt));
 }
 
-export async function getReportByMonthYear(teamName: string, month: string, year: number): Promise<Report | null> {
+export async function getReportsWithTeams() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    report: reports,
+    team: fmTeams,
+  })
+  .from(reports)
+  .leftJoin(fmTeams, eq(reports.teamId, fmTeams.id))
+  .orderBy(desc(reports.createdAt));
+}
+
+export async function getReportByTeamMonthYear(teamId: number, month: number, year: number): Promise<Report | null> {
   const db = await getDb();
   if (!db) return null;
 
   const result = await db.select().from(reports)
     .where(
       and(
-        eq(reports.teamName, teamName),
+        eq(reports.teamId, teamId),
         eq(reports.reportMonth, month),
         eq(reports.reportYear, year)
       )
@@ -311,7 +539,7 @@ export async function updateUploadBatch(id: number, data: Partial<InsertUploadBa
 // AGGREGATION FUNCTIONS
 // ============================================
 
-export async function getGPMonthlyStats(year: number, month: number) {
+export async function getGPMonthlyStats(teamId: number, year: number, month: number) {
   const db = await getDb();
   if (!db) return [];
 
@@ -321,25 +549,46 @@ export async function getGPMonthlyStats(year: number, month: number) {
   const result = await db.select({
     gpId: gamePresenters.id,
     gpName: gamePresenters.name,
-    teamName: gamePresenters.teamName,
     evaluationCount: sql<number>`COUNT(${evaluations.id})`,
+    avgAppearanceScore: sql<number>`AVG(${evaluations.appearanceScore})`,
+    avgGamePerfScore: sql<number>`AVG(${evaluations.gamePerformanceTotalScore})`,
     avgTotalScore: sql<number>`AVG(${evaluations.totalScore})`,
-    avgHairScore: sql<number>`AVG(${evaluations.hairScore})`,
-    avgMakeupScore: sql<number>`AVG(${evaluations.makeupScore})`,
-    avgOutfitScore: sql<number>`AVG(${evaluations.outfitScore})`,
-    avgPostureScore: sql<number>`AVG(${evaluations.postureScore})`,
-    avgDealingStyleScore: sql<number>`AVG(${evaluations.dealingStyleScore})`,
-    avgGamePerformanceScore: sql<number>`AVG(${evaluations.gamePerformanceScore})`,
   })
   .from(evaluations)
   .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
   .where(
     and(
+      eq(gamePresenters.teamId, teamId),
       gte(evaluations.evaluationDate, startDate),
       lte(evaluations.evaluationDate, endDate)
     )
   )
-  .groupBy(gamePresenters.id, gamePresenters.name, gamePresenters.teamName);
+  .groupBy(gamePresenters.id, gamePresenters.name);
 
   return result;
+}
+
+export async function getDashboardStats() {
+  const db = await getDb();
+  if (!db) return { totalGPs: 0, totalEvaluations: 0, totalReports: 0, recentEvaluations: [] };
+
+  const [gpCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(gamePresenters);
+  const [evalCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(evaluations);
+  const [reportCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(reports);
+
+  const recentEvals = await db.select({
+    evaluation: evaluations,
+    gamePresenter: gamePresenters,
+  })
+  .from(evaluations)
+  .leftJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+  .orderBy(desc(evaluations.createdAt))
+  .limit(5);
+
+  return {
+    totalGPs: gpCount.count,
+    totalEvaluations: evalCount.count,
+    totalReports: reportCount.count,
+    recentEvaluations: recentEvals,
+  };
 }

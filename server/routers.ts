@@ -10,6 +10,10 @@ import { nanoid } from "nanoid";
 import * as db from "./db";
 import ExcelJS from "exceljs";
 
+// Month names for report formatting
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", 
+                     "July", "August", "September", "October", "November", "December"];
+
 // Schema for extracted evaluation data
 const EvaluationDataSchema = z.object({
   presenterName: z.string(),
@@ -174,7 +178,6 @@ function parseEvaluationDate(dateStr: string | undefined): Date | null {
   if (!dateStr) return null;
   
   try {
-    // Handle formats like "9 Jan 2026" or "7 Jan 2026"
     const parsed = new Date(dateStr);
     if (!isNaN(parsed.getTime())) {
       return parsed;
@@ -197,9 +200,20 @@ export const appRouter = router({
     }),
   }),
 
+  // FM Teams management
+  fmTeam: router({
+    list: protectedProcedure.query(async () => {
+      return await db.getAllFmTeams();
+    }),
+    
+    initialize: protectedProcedure.mutation(async () => {
+      await db.initializeDefaultTeams();
+      return { success: true };
+    }),
+  }),
+
   // Upload and process evaluation screenshots
   evaluation: router({
-    // Upload a single screenshot and extract data
     uploadAndExtract: protectedProcedure
       .input(z.object({
         imageBase64: z.string(),
@@ -207,21 +221,14 @@ export const appRouter = router({
         mimeType: z.string().default("image/png"),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Upload to S3
         const fileKey = `evaluations/${ctx.user.id}/${nanoid()}-${input.filename}`;
         const buffer = Buffer.from(input.imageBase64, "base64");
         const { url: imageUrl } = await storagePut(fileKey, buffer, input.mimeType);
 
-        // Extract data using LLM
         const extractedData = await extractEvaluationFromImage(imageUrl);
-
-        // Find or create Game Presenter
         const gp = await db.findOrCreateGamePresenter(extractedData.presenterName);
-
-        // Parse evaluation date
         const evalDate = parseEvaluationDate(extractedData.date);
 
-        // Save evaluation to database
         const evaluation = await db.createEvaluation({
           gamePresenterId: gp.id,
           evaluatorName: extractedData.evaluatorName || null,
@@ -260,12 +267,10 @@ export const appRouter = router({
         };
       }),
 
-    // Get all evaluations with GP info
     list: protectedProcedure.query(async () => {
       return await db.getEvaluationsWithGP();
     }),
 
-    // Get evaluations for a specific month
     getByMonth: protectedProcedure
       .input(z.object({
         year: z.number(),
@@ -274,16 +279,6 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return await db.getEvaluationsByMonth(input.year, input.month);
       }),
-
-    // Get monthly stats aggregated by GP
-    getMonthlyStats: protectedProcedure
-      .input(z.object({
-        year: z.number(),
-        month: z.number().min(1).max(12),
-      }))
-      .query(async ({ input }) => {
-        return await db.getGPMonthlyStats(input.year, input.month);
-      }),
   }),
 
   // Game Presenters management
@@ -291,16 +286,31 @@ export const appRouter = router({
     list: protectedProcedure.query(async () => {
       return await db.getAllGamePresenters();
     }),
+    
+    assignToTeam: protectedProcedure
+      .input(z.object({
+        gpId: z.number(),
+        teamId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.updateGamePresenterTeam(input.gpId, input.teamId);
+        return { success: true };
+      }),
+  }),
+
+  // Dashboard stats
+  dashboard: router({
+    stats: protectedProcedure.query(async () => {
+      return await db.getDashboardStats();
+    }),
   }),
 
   // Report generation
   report: router({
-    // Generate a new report
     generate: protectedProcedure
       .input(z.object({
-        teamName: z.string(),
-        floorManagerName: z.string().optional(),
-        reportMonth: z.string(),
+        teamId: z.number(),
+        reportMonth: z.number().min(1).max(12),
         reportYear: z.number(),
         fmPerformance: z.string().optional(),
         goalsThisMonth: z.string().optional(),
@@ -308,130 +318,308 @@ export const appRouter = router({
         additionalComments: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Get monthly stats
-        const monthNumber = new Date(`${input.reportMonth} 1, ${input.reportYear}`).getMonth() + 1;
-        const stats = await db.getGPMonthlyStats(input.reportYear, monthNumber);
+        const team = await db.getFmTeamById(input.teamId);
+        if (!team) throw new Error("Team not found");
 
-        // Create report
+        const stats = await db.getGPMonthlyStats(input.teamId, input.reportYear, input.reportMonth);
+        const attendance = await db.getAttendanceByTeamMonth(input.teamId, input.reportMonth, input.reportYear);
+
         const report = await db.createReport({
-          teamName: input.teamName,
-          floorManagerName: input.floorManagerName || null,
+          teamId: input.teamId,
           reportMonth: input.reportMonth,
           reportYear: input.reportYear,
           fmPerformance: input.fmPerformance || null,
           goalsThisMonth: input.goalsThisMonth || null,
           teamOverview: input.teamOverview || null,
           additionalComments: input.additionalComments || null,
-          reportData: stats,
+          reportData: { stats, attendance },
           status: "generated",
           generatedById: ctx.user.id,
         });
 
-        // Notify owner
         await notifyOwner({
           title: "New Report Generated",
-          content: `A new Team Monthly Overview report has been generated for ${input.teamName} - ${input.reportMonth} ${input.reportYear}`,
+          content: `A new Team Monthly Overview report has been generated for ${team.teamName} - ${MONTH_NAMES[input.reportMonth - 1]} ${input.reportYear}`,
         });
 
         return report;
       }),
 
-    // Export report to Excel
     exportToExcel: protectedProcedure
       .input(z.object({
         reportId: z.number(),
       }))
       .mutation(async ({ input }) => {
-        const report = await db.getReportById(input.reportId);
-        if (!report) {
-          throw new Error("Report not found");
-        }
+        const reportWithTeam = await db.getReportWithTeam(input.reportId);
+        if (!reportWithTeam) throw new Error("Report not found");
+
+        const { report, team } = reportWithTeam;
+        const teamName = team?.teamName || "Unknown Team";
+        const fmName = team?.floorManagerName || "Unknown FM";
+        const monthName = MONTH_NAMES[report.reportMonth - 1];
 
         const workbook = new ExcelJS.Workbook();
         
-        // Sheet 1: Monthly Report
-        const mainSheet = workbook.addWorksheet("Monthly Report");
+        // Sheet 1: Monthly Report (matching template format)
+        const mainSheet = workbook.addWorksheet(`${monthName} ${report.reportYear}`);
         
-        // Title
-        mainSheet.mergeCells("A1:J1");
-        mainSheet.getCell("A1").value = "TEAM MONTHLY OVERVIEW";
-        mainSheet.getCell("A1").font = { bold: true, size: 18 };
-        mainSheet.getCell("A1").alignment = { horizontal: "center" };
+        // Set column widths to match template
+        mainSheet.columns = [
+          { width: 4 }, { width: 12 }, { width: 12 }, { width: 12 }, 
+          { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 },
+          { width: 4 }, { width: 12 }, { width: 12 }, { width: 12 },
+          { width: 4 }, { width: 18 }, { width: 4 }, { width: 4 },
+          { width: 10 }, { width: 4 }, { width: 10 }, { width: 4 },
+          { width: 10 }, { width: 4 }, { width: 10 }, { width: 4 },
+          { width: 10 }, { width: 4 }, { width: 25 }, { width: 4 },
+          { width: 4 }, { width: 4 }, { width: 4 }
+        ];
 
-        // Team info
-        mainSheet.getCell("A3").value = "Team Name:";
-        mainSheet.getCell("B3").value = report.teamName;
-        mainSheet.getCell("A4").value = "Floor Manager:";
-        mainSheet.getCell("B4").value = report.floorManagerName || "";
-        mainSheet.getCell("A5").value = "Report Month:";
-        mainSheet.getCell("B5").value = `${report.reportMonth} ${report.reportYear}`;
+        // Row 2: Title headers
+        mainSheet.mergeCells("A2:H3");
+        mainSheet.getCell("A2").value = `${fmName} - ${teamName}`;
+        mainSheet.getCell("A2").font = { bold: true, size: 14 };
+        mainSheet.getCell("A2").alignment = { horizontal: "center", vertical: "middle" };
+        mainSheet.getCell("A2").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE7E6E6" } };
 
-        // FM Performance section
-        mainSheet.mergeCells("A7:J7");
-        mainSheet.getCell("A7").value = "FM PERFORMANCE (Self Evaluation)";
-        mainSheet.getCell("A7").font = { bold: true, color: { argb: "FFFFFFFF" } };
-        mainSheet.getCell("A7").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
+        mainSheet.mergeCells("N2:AE3");
+        mainSheet.getCell("N2").value = `${teamName} Overview ${monthName} ${report.reportYear}`;
+        mainSheet.getCell("N2").font = { bold: true, size: 14 };
+        mainSheet.getCell("N2").alignment = { horizontal: "center", vertical: "middle" };
+        mainSheet.getCell("N2").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE7E6E6" } };
 
-        mainSheet.mergeCells("A8:J12");
-        mainSheet.getCell("A8").value = report.fmPerformance || "";
-        mainSheet.getCell("A8").alignment = { wrapText: true, vertical: "top" };
+        // Row 4: FM Performance header and GP table headers
+        mainSheet.mergeCells("A4:H5");
+        mainSheet.getCell("A4").value = "FM Performance (self evaluation)";
+        mainSheet.getCell("A4").font = { bold: true };
+        mainSheet.getCell("A4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+
+        // GP Attendance table headers
+        mainSheet.mergeCells("N4:P5");
+        mainSheet.getCell("N4").value = "Name";
+        mainSheet.getCell("N4").font = { bold: true };
+        mainSheet.getCell("N4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+        mainSheet.getCell("N4").alignment = { horizontal: "center", vertical: "middle" };
+
+        mainSheet.mergeCells("Q4:R5");
+        mainSheet.getCell("Q4").value = "Mistakes";
+        mainSheet.getCell("Q4").font = { bold: true };
+        mainSheet.getCell("Q4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+        mainSheet.getCell("Q4").alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+
+        mainSheet.mergeCells("S4:T5");
+        mainSheet.getCell("S4").value = "Extra shifts/\nStaying longer";
+        mainSheet.getCell("S4").font = { bold: true };
+        mainSheet.getCell("S4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+        mainSheet.getCell("S4").alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+
+        mainSheet.mergeCells("U4:V5");
+        mainSheet.getCell("U4").value = "Late to work";
+        mainSheet.getCell("U4").font = { bold: true };
+        mainSheet.getCell("U4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+        mainSheet.getCell("U4").alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+
+        mainSheet.mergeCells("W4:X5");
+        mainSheet.getCell("W4").value = "Missed days";
+        mainSheet.getCell("W4").font = { bold: true };
+        mainSheet.getCell("W4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+        mainSheet.getCell("W4").alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+
+        mainSheet.mergeCells("Y4:Z5");
+        mainSheet.getCell("Y4").value = "Sick leaves";
+        mainSheet.getCell("Y4").font = { bold: true };
+        mainSheet.getCell("Y4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+        mainSheet.getCell("Y4").alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+
+        mainSheet.mergeCells("AA4:AE5");
+        mainSheet.getCell("AA4").value = "Attitude/ Concerns/ Remarks";
+        mainSheet.getCell("AA4").font = { bold: true };
+        mainSheet.getCell("AA4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+        mainSheet.getCell("AA4").alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+
+        // FM Performance text area (rows 6-19)
+        mainSheet.mergeCells("A6:H19");
+        mainSheet.getCell("A6").value = report.fmPerformance || "";
+        mainSheet.getCell("A6").alignment = { wrapText: true, vertical: "top" };
+        mainSheet.getCell("A6").border = {
+          top: { style: "thin" }, left: { style: "thin" },
+          bottom: { style: "thin" }, right: { style: "thin" }
+        };
+
+        // Populate GP attendance data
+        const reportData = report.reportData as { stats?: any[], attendance?: any[] } || {};
+        const attendanceData = reportData.attendance || [];
+        let gpRow = 6;
+        
+        for (const item of attendanceData) {
+          if (gpRow > 35) break;
+          
+          mainSheet.mergeCells(`N${gpRow}:P${gpRow + 1}`);
+          mainSheet.getCell(`N${gpRow}`).value = item.gamePresenter?.name || "";
+          mainSheet.getCell(`N${gpRow}`).alignment = { vertical: "middle" };
+
+          mainSheet.mergeCells(`Q${gpRow}:R${gpRow + 1}`);
+          mainSheet.getCell(`Q${gpRow}`).value = item.attendance?.mistakes || 0;
+          mainSheet.getCell(`Q${gpRow}`).alignment = { horizontal: "center", vertical: "middle" };
+
+          mainSheet.mergeCells(`S${gpRow}:T${gpRow + 1}`);
+          mainSheet.getCell(`S${gpRow}`).value = item.attendance?.extraShifts || 0;
+          mainSheet.getCell(`S${gpRow}`).alignment = { horizontal: "center", vertical: "middle" };
+
+          mainSheet.mergeCells(`U${gpRow}:V${gpRow + 1}`);
+          mainSheet.getCell(`U${gpRow}`).value = item.attendance?.lateToWork || 0;
+          mainSheet.getCell(`U${gpRow}`).alignment = { horizontal: "center", vertical: "middle" };
+
+          mainSheet.mergeCells(`W${gpRow}:X${gpRow + 1}`);
+          mainSheet.getCell(`W${gpRow}`).value = item.attendance?.missedDays || 0;
+          mainSheet.getCell(`W${gpRow}`).alignment = { horizontal: "center", vertical: "middle" };
+
+          mainSheet.mergeCells(`Y${gpRow}:Z${gpRow + 1}`);
+          mainSheet.getCell(`Y${gpRow}`).value = item.attendance?.sickLeaves || 0;
+          mainSheet.getCell(`Y${gpRow}`).alignment = { horizontal: "center", vertical: "middle" };
+
+          mainSheet.mergeCells(`AA${gpRow}:AE${gpRow + 1}`);
+          mainSheet.getCell(`AA${gpRow}`).value = item.attendance?.remarks || "";
+          mainSheet.getCell(`AA${gpRow}`).alignment = { wrapText: true, vertical: "middle" };
+
+          gpRow += 2;
+        }
 
         // Team Management section
-        mainSheet.mergeCells("A14:J14");
-        mainSheet.getCell("A14").value = "TEAM MANAGEMENT";
-        mainSheet.getCell("A14").font = { bold: true, color: { argb: "FFFFFFFF" } };
-        mainSheet.getCell("A14").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
+        mainSheet.mergeCells("A21:H22");
+        mainSheet.getCell("A21").value = "Team Management";
+        mainSheet.getCell("A21").font = { bold: true };
+        mainSheet.getCell("A21").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
 
-        mainSheet.getCell("A15").value = "Goals This Month:";
-        mainSheet.getCell("A15").font = { bold: true };
-        mainSheet.mergeCells("A16:J18");
-        mainSheet.getCell("A16").value = report.goalsThisMonth || "";
+        mainSheet.mergeCells("A23:D23");
+        mainSheet.getCell("A23").value = "Goals this month:";
+        mainSheet.getCell("A23").font = { bold: true };
 
-        mainSheet.getCell("A20").value = "Team Overview:";
-        mainSheet.getCell("A20").font = { bold: true };
-        mainSheet.mergeCells("A21:J23");
-        mainSheet.getCell("A21").value = report.teamOverview || "";
+        mainSheet.mergeCells("E23:H23");
+        mainSheet.getCell("E23").value = "Team Overview:";
+        mainSheet.getCell("E23").font = { bold: true };
 
-        // Sheet 2: GP Data
-        const dataSheet = workbook.addWorksheet("GP Data");
+        mainSheet.mergeCells("A24:D36");
+        mainSheet.getCell("A24").value = report.goalsThisMonth || "";
+        mainSheet.getCell("A24").alignment = { wrapText: true, vertical: "top" };
+        mainSheet.getCell("A24").border = {
+          top: { style: "thin" }, left: { style: "thin" },
+          bottom: { style: "thin" }, right: { style: "thin" }
+        };
+
+        mainSheet.mergeCells("E24:H36");
+        mainSheet.getCell("E24").value = report.teamOverview || "";
+        mainSheet.getCell("E24").alignment = { wrapText: true, vertical: "top" };
+        mainSheet.getCell("E24").border = {
+          top: { style: "thin" }, left: { style: "thin" },
+          bottom: { style: "thin" }, right: { style: "thin" }
+        };
+
+        // TOTAL row for attendance
+        mainSheet.mergeCells("N36:P37");
+        mainSheet.getCell("N36").value = "TOTAL";
+        mainSheet.getCell("N36").font = { bold: true };
+        mainSheet.getCell("N36").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+        mainSheet.getCell("N36").alignment = { horizontal: "center", vertical: "middle" };
+
+        // Sum formulas for totals
+        mainSheet.mergeCells("Q36:R37");
+        mainSheet.getCell("Q36").value = { formula: "SUM(Q6:R35)" };
+        mainSheet.getCell("Q36").alignment = { horizontal: "center", vertical: "middle" };
+
+        mainSheet.mergeCells("S36:T37");
+        mainSheet.getCell("S36").value = { formula: "SUM(S6:T35)" };
+        mainSheet.getCell("S36").alignment = { horizontal: "center", vertical: "middle" };
+
+        mainSheet.mergeCells("U36:V37");
+        mainSheet.getCell("U36").value = { formula: "SUM(U6:V35)" };
+        mainSheet.getCell("U36").alignment = { horizontal: "center", vertical: "middle" };
+
+        mainSheet.mergeCells("W36:X37");
+        mainSheet.getCell("W36").value = { formula: "SUM(W6:X35)" };
+        mainSheet.getCell("W36").alignment = { horizontal: "center", vertical: "middle" };
+
+        mainSheet.mergeCells("Y36:Z37");
+        mainSheet.getCell("Y36").value = { formula: "SUM(Y6:Z35)" };
+        mainSheet.getCell("Y36").alignment = { horizontal: "center", vertical: "middle" };
+
+        // Additional Notes section
+        mainSheet.mergeCells("A38:H39");
+        mainSheet.getCell("A38").value = "Additional Notes";
+        mainSheet.getCell("A38").font = { bold: true };
+        mainSheet.getCell("A38").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+
+        mainSheet.mergeCells("A40:H53");
+        mainSheet.getCell("A40").value = report.additionalComments || "";
+        mainSheet.getCell("A40").alignment = { wrapText: true, vertical: "top" };
+        mainSheet.getCell("A40").border = {
+          top: { style: "thin" }, left: { style: "thin" },
+          bottom: { style: "thin" }, right: { style: "thin" }
+        };
+
+        // Sheet 2: Data (GP Performance scores)
+        const dataSheet = workbook.addWorksheet("Data");
         
-        // Headers
-        const headers = ["Name", "Eval Count", "Avg Total", "Hair", "Makeup", "Outfit", "Posture", "Dealing", "Game Perf"];
-        headers.forEach((header, idx) => {
-          const cell = dataSheet.getCell(1, idx + 1);
-          cell.value = header;
-          cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
-          cell.alignment = { horizontal: "center" };
-        });
+        // Set up Data sheet structure (2 GPs per row block)
+        const statsData = reportData.stats || [];
+        let dataRow = 9;
+        
+        for (let i = 0; i < statsData.length; i += 2) {
+          const gp1 = statsData[i];
+          const gp2 = statsData[i + 1];
 
-        // Data rows
-        const reportData = report.reportData as any[] || [];
-        reportData.forEach((gp, rowIdx) => {
-          const row = rowIdx + 2;
-          dataSheet.getCell(row, 1).value = gp.gpName;
-          dataSheet.getCell(row, 2).value = gp.evaluationCount;
-          dataSheet.getCell(row, 3).value = gp.avgTotalScore ? Number(gp.avgTotalScore).toFixed(1) : "-";
-          dataSheet.getCell(row, 4).value = gp.avgHairScore ? Number(gp.avgHairScore).toFixed(1) : "-";
-          dataSheet.getCell(row, 5).value = gp.avgMakeupScore ? Number(gp.avgMakeupScore).toFixed(1) : "-";
-          dataSheet.getCell(row, 6).value = gp.avgOutfitScore ? Number(gp.avgOutfitScore).toFixed(1) : "-";
-          dataSheet.getCell(row, 7).value = gp.avgPostureScore ? Number(gp.avgPostureScore).toFixed(1) : "-";
-          dataSheet.getCell(row, 8).value = gp.avgDealingStyleScore ? Number(gp.avgDealingStyleScore).toFixed(1) : "-";
-          dataSheet.getCell(row, 9).value = gp.avgGamePerformanceScore ? Number(gp.avgGamePerformanceScore).toFixed(1) : "-";
-        });
+          // GP 1 (columns B-D)
+          if (gp1) {
+            dataSheet.getCell(`B${dataRow}`).value = gp1.gpName;
+            dataSheet.getCell(`C${dataRow}`).value = "GAME PERF.";
+            dataSheet.getCell(`D${dataRow}`).value = "APPEARANCE";
+            dataSheet.getCell(`C${dataRow}`).font = { bold: true };
+            dataSheet.getCell(`D${dataRow}`).font = { bold: true };
 
-        // Set column widths
+            // Individual scores (up to 4 evaluations)
+            for (let j = 0; j < 4; j++) {
+              dataSheet.getCell(`C${dataRow + 1 + j}`).value = gp1.avgGamePerfScore ? Number(gp1.avgGamePerfScore).toFixed(0) : "";
+              dataSheet.getCell(`D${dataRow + 1 + j}`).value = gp1.avgAppearanceScore ? Number(gp1.avgAppearanceScore).toFixed(0) : "";
+            }
+
+            // Total average row
+            dataSheet.getCell(`B${dataRow + 5}`).value = "Total average:";
+            dataSheet.getCell(`C${dataRow + 5}`).value = { formula: `AVERAGE(C${dataRow + 1}:C${dataRow + 4})` };
+            dataSheet.getCell(`D${dataRow + 5}`).value = { formula: `AVERAGE(D${dataRow + 1}:D${dataRow + 4})` };
+          }
+
+          // GP 2 (columns F-H)
+          if (gp2) {
+            dataSheet.getCell(`F${dataRow}`).value = gp2.gpName;
+            dataSheet.getCell(`G${dataRow}`).value = "GAME PERF.";
+            dataSheet.getCell(`H${dataRow}`).value = "APPEARANCE";
+            dataSheet.getCell(`G${dataRow}`).font = { bold: true };
+            dataSheet.getCell(`H${dataRow}`).font = { bold: true };
+
+            for (let j = 0; j < 4; j++) {
+              dataSheet.getCell(`G${dataRow + 1 + j}`).value = gp2.avgGamePerfScore ? Number(gp2.avgGamePerfScore).toFixed(0) : "";
+              dataSheet.getCell(`H${dataRow + 1 + j}`).value = gp2.avgAppearanceScore ? Number(gp2.avgAppearanceScore).toFixed(0) : "";
+            }
+
+            dataSheet.getCell(`F${dataRow + 5}`).value = "Total average:";
+            dataSheet.getCell(`G${dataRow + 5}`).value = { formula: `AVERAGE(G${dataRow + 1}:G${dataRow + 4})` };
+            dataSheet.getCell(`H${dataRow + 5}`).value = { formula: `AVERAGE(H${dataRow + 1}:H${dataRow + 4})` };
+          }
+
+          dataRow += 7;
+        }
+
+        // Set column widths for Data sheet
         dataSheet.columns = [
-          { width: 25 }, { width: 12 }, { width: 12 }, { width: 10 },
-          { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 12 }
+          { width: 4 }, { width: 25 }, { width: 12 }, { width: 12 },
+          { width: 4 }, { width: 25 }, { width: 12 }, { width: 12 }
         ];
 
         // Generate buffer and upload to S3
         const buffer = await workbook.xlsx.writeBuffer();
-        const fileKey = `reports/${report.id}/${nanoid()}-TeamOverview_${report.teamName}_${report.reportMonth}${report.reportYear}.xlsx`;
+        const fileKey = `reports/${report.id}/${nanoid()}-TeamOverview_${teamName.replace(/\s+/g, '_')}_${monthName}${report.reportYear}.xlsx`;
         const { url: excelUrl } = await storagePut(fileKey, Buffer.from(buffer), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
-        // Update report with Excel URL
         await db.updateReport(report.id, {
           excelFileUrl: excelUrl,
           excelFileKey: fileKey,
@@ -444,17 +632,59 @@ export const appRouter = router({
         };
       }),
 
-    // List all reports
     list: protectedProcedure.query(async () => {
-      return await db.getAllReports();
+      return await db.getReportsWithTeams();
     }),
 
-    // Get single report
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
-        return await db.getReportById(input.id);
+        return await db.getReportWithTeam(input.id);
       }),
+  }),
+
+  // Error file management
+  errorFile: router({
+    upload: protectedProcedure
+      .input(z.object({
+        fileBase64: z.string(),
+        filename: z.string(),
+        month: z.number().min(1).max(12),
+        year: z.number(),
+        errorType: z.enum(["playgon", "mg"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Upload file to S3
+        const fileBuffer = Buffer.from(input.fileBase64, "base64");
+        const fileKey = `error-files/${input.year}/${input.month}/${input.errorType}-${nanoid()}.xlsx`;
+        const { url: fileUrl } = await storagePut(fileKey, fileBuffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+        // Parse Excel file to count errors
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(fileBuffer as any);
+        
+        let errorsCount = 0;
+        workbook.eachSheet((worksheet) => {
+          errorsCount += Math.max(0, worksheet.rowCount - 1); // Exclude header row
+        });
+
+        // Save to database
+        const errorFile = await db.createErrorFile({
+          fileName: input.filename,
+          fileUrl,
+          fileKey,
+          month: input.month,
+          year: input.year,
+          fileType: input.errorType,
+          uploadedById: ctx.user.id,
+        });
+
+        return errorFile;
+      }),
+
+    list: protectedProcedure.query(async () => {
+      return await db.getAllErrorFiles();
+    }),
   }),
 });
 

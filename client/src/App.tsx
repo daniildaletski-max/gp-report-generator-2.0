@@ -10,13 +10,15 @@ import Dashboard from "./pages/Dashboard";
 import Upload from "./pages/Upload";
 import Evaluations from "./pages/Evaluations";
 import Reports from "./pages/Reports";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet } from "lucide-react";
+import Admin from "./pages/Admin";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings } from "lucide-react";
 
 const sidebarItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/upload", label: "Upload", icon: UploadIcon },
   { href: "/evaluations", label: "Evaluations", icon: FileCheck },
   { href: "/reports", label: "Reports", icon: FileSpreadsheet },
+  { href: "/admin", label: "Admin", icon: Settings },
 ];
 
 function DashboardRoutes() {
@@ -27,6 +29,7 @@ function DashboardRoutes() {
         <Route path="/upload" component={Upload} />
         <Route path="/evaluations" component={Evaluations} />
         <Route path="/reports" component={Reports} />
+        <Route path="/admin" component={Admin} />
         <Route component={NotFound} />
       </Switch>
     </DashboardLayout>
@@ -41,6 +44,7 @@ function Router() {
       <Route path="/upload" component={DashboardRoutes} />
       <Route path="/evaluations" component={DashboardRoutes} />
       <Route path="/reports" component={DashboardRoutes} />
+      <Route path="/admin" component={DashboardRoutes} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

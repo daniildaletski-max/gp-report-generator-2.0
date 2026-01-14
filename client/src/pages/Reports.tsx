@@ -2,8 +2,6 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { FileSpreadsheet, Download, Plus, Loader2, Eye } from "lucide-react";
+import { FileSpreadsheet, Download, Plus, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -25,9 +23,8 @@ export default function ReportsPage() {
   const [showNewReport, setShowNewReport] = useState(false);
   
   const [formData, setFormData] = useState({
-    teamName: "",
-    floorManagerName: "",
-    reportMonth: "",
+    teamId: 0,
+    reportMonth: 0,
     reportYear: new Date().getFullYear(),
     fmPerformance: "",
     goalsThisMonth: "",
@@ -36,12 +33,13 @@ export default function ReportsPage() {
   });
 
   const { data: reports, isLoading, refetch } = trpc.report.list.useQuery();
+  const { data: teams } = trpc.fmTeam.list.useQuery();
   const generateMutation = trpc.report.generate.useMutation();
   const exportMutation = trpc.report.exportToExcel.useMutation();
 
   const handleGenerate = async () => {
-    if (!formData.teamName || !formData.reportMonth) {
-      toast.error("Please fill in required fields");
+    if (!formData.teamId || !formData.reportMonth) {
+      toast.error("Please select team and month");
       return;
     }
 
@@ -51,9 +49,8 @@ export default function ReportsPage() {
       toast.success("Report generated successfully");
       setShowNewReport(false);
       setFormData({
-        teamName: "",
-        floorManagerName: "",
-        reportMonth: "",
+        teamId: 0,
+        reportMonth: 0,
         reportYear: new Date().getFullYear(),
         fmPerformance: "",
         goalsThisMonth: "",
@@ -107,10 +104,9 @@ export default function ReportsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
-          <p className="text-muted-foreground">
-            Generate and manage Team Monthly Overview reports
-          </p>
+          <p className="text-muted-foreground">Generate and manage Team Monthly Overview reports</p>
         </div>
+        
         <Dialog open={showNewReport} onOpenChange={setShowNewReport}>
           <DialogTrigger asChild>
             <Button>
@@ -120,125 +116,115 @@ export default function ReportsPage() {
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Generate New Report</DialogTitle>
+              <DialogTitle>Generate Team Monthly Overview</DialogTitle>
               <DialogDescription>
-                Create a new Team Monthly Overview report with aggregated evaluation data
+                Create a new monthly report for your team
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            
+            <div className="space-y-6 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="teamName">Team Name *</Label>
-                  <Input
-                    id="teamName"
-                    placeholder="e.g., Team Omnicron"
-                    value={formData.teamName}
-                    onChange={(e) =>
-                      setFormData({ ...formData, teamName: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="floorManagerName">Floor Manager</Label>
-                  <Input
-                    id="floorManagerName"
-                    placeholder="e.g., Andri Saaret"
-                    value={formData.floorManagerName}
-                    onChange={(e) =>
-                      setFormData({ ...formData, floorManagerName: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="reportMonth">Report Month *</Label>
+                  <label className="text-sm font-medium">Team *</label>
                   <Select
-                    value={formData.reportMonth}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, reportMonth: value })
-                    }
+                    value={formData.teamId ? String(formData.teamId) : ""}
+                    onValueChange={(v) => setFormData({ ...formData, teamId: Number(v) })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select team" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams?.map((team) => (
+                        <SelectItem key={team.id} value={String(team.id)}>
+                          {team.teamName} ({team.floorManagerName})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Month *</label>
+                  <Select
+                    value={formData.reportMonth ? String(formData.reportMonth) : ""}
+                    onValueChange={(v) => setFormData({ ...formData, reportMonth: Number(v) })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select month" />
                     </SelectTrigger>
                     <SelectContent>
-                      {MONTHS.map((month) => (
-                        <SelectItem key={month} value={month}>
+                      {MONTHS.map((month, idx) => (
+                        <SelectItem key={month} value={String(idx + 1)}>
                           {month}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Year</label>
+                <Select
+                  value={String(formData.reportYear)}
+                  onValueChange={(v) => setFormData({ ...formData, reportYear: Number(v) })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[2024, 2025, 2026].map((year) => (
+                      <SelectItem key={year} value={String(year)}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">FM Performance (Self Evaluation)</label>
+                <Textarea
+                  placeholder="Describe your performance this month..."
+                  value={formData.fmPerformance}
+                  onChange={(e) => setFormData({ ...formData, fmPerformance: e.target.value })}
+                  rows={4}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="reportYear">Report Year *</Label>
-                  <Input
-                    id="reportYear"
-                    type="number"
-                    value={formData.reportYear}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        reportYear: parseInt(e.target.value),
-                      })
-                    }
+                  <label className="text-sm font-medium">Goals This Month</label>
+                  <Textarea
+                    placeholder="What were your goals?"
+                    value={formData.goalsThisMonth}
+                    onChange={(e) => setFormData({ ...formData, goalsThisMonth: e.target.value })}
+                    rows={4}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Team Overview</label>
+                  <Textarea
+                    placeholder="Overview of team performance..."
+                    value={formData.teamOverview}
+                    onChange={(e) => setFormData({ ...formData, teamOverview: e.target.value })}
+                    rows={4}
                   />
                 </div>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="fmPerformance">FM Performance (Self Evaluation)</Label>
+                <label className="text-sm font-medium">Additional Notes</label>
                 <Textarea
-                  id="fmPerformance"
-                  placeholder="Evaluate your performance as a Floor Manager..."
-                  rows={4}
-                  value={formData.fmPerformance}
-                  onChange={(e) =>
-                    setFormData({ ...formData, fmPerformance: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="goalsThisMonth">Goals This Month</Label>
-                <Textarea
-                  id="goalsThisMonth"
-                  placeholder="What were your goals for this month?"
-                  rows={3}
-                  value={formData.goalsThisMonth}
-                  onChange={(e) =>
-                    setFormData({ ...formData, goalsThisMonth: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="teamOverview">Team Overview</Label>
-                <Textarea
-                  id="teamOverview"
-                  placeholder="General overview of your team's performance..."
-                  rows={3}
-                  value={formData.teamOverview}
-                  onChange={(e) =>
-                    setFormData({ ...formData, teamOverview: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="additionalComments">Additional Comments</Label>
-                <Textarea
-                  id="additionalComments"
                   placeholder="Any additional comments..."
-                  rows={2}
                   value={formData.additionalComments}
-                  onChange={(e) =>
-                    setFormData({ ...formData, additionalComments: e.target.value })
-                  }
+                  onChange={(e) => setFormData({ ...formData, additionalComments: e.target.value })}
+                  rows={3}
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowNewReport(false)}
-                >
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowNewReport(false)}>
                   Cancel
                 </Button>
                 <Button onClick={handleGenerate} disabled={isGenerating}>
@@ -278,36 +264,36 @@ export default function ReportsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {reports.map((report) => (
-                  <TableRow key={report.id}>
-                    <TableCell className="font-medium">{report.teamName}</TableCell>
+                {reports.map((item) => (
+                  <TableRow key={item.report.id}>
+                    <TableCell className="font-medium">{item.team?.teamName || "Unknown"}</TableCell>
                     <TableCell>
-                      {report.reportMonth} {report.reportYear}
+                      {MONTHS[item.report.reportMonth - 1]} {item.report.reportYear}
                     </TableCell>
-                    <TableCell>{report.floorManagerName || "-"}</TableCell>
+                    <TableCell>{item.team?.floorManagerName || "-"}</TableCell>
                     <TableCell>
                       <Badge
                         variant={
-                          report.status === "finalized"
+                          item.report.status === "finalized"
                             ? "default"
-                            : report.status === "generated"
+                            : item.report.status === "generated"
                             ? "secondary"
                             : "outline"
                         }
                       >
-                        {report.status}
+                        {item.report.status}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {format(new Date(report.createdAt), "dd MMM yyyy")}
+                      {format(new Date(item.report.createdAt), "dd MMM yyyy")}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {report.excelFileUrl ? (
+                        {item.report.excelFileUrl ? (
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => window.open(report.excelFileUrl!, "_blank")}
+                            onClick={() => window.open(item.report.excelFileUrl!, "_blank")}
                           >
                             <Download className="h-4 w-4 mr-1" />
                             Download
@@ -316,10 +302,10 @@ export default function ReportsPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleExport(report.id)}
-                            disabled={isExporting === report.id}
+                            onClick={() => handleExport(item.report.id)}
+                            disabled={isExporting === item.report.id}
                           >
-                            {isExporting === report.id ? (
+                            {isExporting === item.report.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                               <>

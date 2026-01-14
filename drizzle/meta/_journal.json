@@ -15,6 +15,13 @@
       "when": 1768317833499,
       "tag": "0001_brief_tempest",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1768388253378,
+      "tag": "0002_sharp_doctor_spectrum",
+      "breakpoints": true
     }
   ]
 }
