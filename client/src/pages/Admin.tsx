@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { FileSpreadsheet, Loader2, Users, AlertTriangle, Trash2, Link, Copy, Check, RefreshCw, ExternalLink, Star, AlertCircle } from "lucide-react";
+import { FileSpreadsheet, Loader2, Users, AlertTriangle, Trash2, Link, Copy, Check, RefreshCw, ExternalLink, Star, AlertCircle, UserCog } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -176,6 +176,10 @@ export default function AdminPage() {
           <TabsTrigger value="errors" className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" />
             Error Files
+          </TabsTrigger>
+          <TabsTrigger value="users" className="flex items-center gap-2">
+            <UserCog className="h-4 w-4" />
+            User Management
           </TabsTrigger>
         </TabsList>
 
@@ -561,8 +565,108 @@ export default function AdminPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* User Management Tab */}
+        <UserManagementTab teams={teams || []} />
       </Tabs>
     </div>
+  );
+}
+
+// User Management Tab Component
+function UserManagementTab({ teams }: { teams: any[] }) {
+  const { data: users, isLoading, refetch } = trpc.user.list.useQuery();
+  const assignToTeam = trpc.user.assignToTeam.useMutation({
+    onSuccess: () => {
+      toast.success("Team assignment updated");
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to update team");
+    },
+  });
+
+  const handleTeamChange = (userId: number, teamId: string) => {
+    assignToTeam.mutate({
+      userId,
+      teamId: teamId === "none" ? null : Number(teamId),
+    });
+  };
+
+  return (
+    <TabsContent value="users" className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserCog className="h-5 w-5" />
+            User Management
+          </CardTitle>
+          <CardDescription>
+            Assign Floor Managers to their teams. Each FM will only see Game Presenters from their assigned team.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : users && users.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Assigned Team</TableHead>
+                  <TableHead>Last Sign In</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {users.map((item: any) => (
+                  <TableRow key={item.user.id}>
+                    <TableCell className="font-medium">{item.user.name || "Unknown"}</TableCell>
+                    <TableCell>{item.user.email || "-"}</TableCell>
+                    <TableCell>
+                      <Badge variant={item.user.role === "admin" ? "default" : "secondary"}>
+                        {item.user.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Select
+                        value={item.user.teamId ? String(item.user.teamId) : "none"}
+                        onValueChange={(v) => handleTeamChange(item.user.id, v)}
+                        disabled={assignToTeam.isPending}
+                      >
+                        <SelectTrigger className="w-40">
+                          <SelectValue placeholder="Select team" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No Team (All Access)</SelectItem>
+                          {teams.map((team) => (
+                            <SelectItem key={team.id} value={String(team.id)}>
+                              {team.teamName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {item.user.lastSignedIn ? format(new Date(item.user.lastSignedIn), "MMM d, yyyy HH:mm") : "Never"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              No users found
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </TabsContent>
   );
 }
 
@@ -734,9 +838,7 @@ function GPStatsTab({
                             </SelectContent>
                           </Select>
                         ) : (
-                          <span className={gp.stats?.attitude ? "" : "text-muted-foreground"}>
-                            {gp.stats?.attitude ?? "-"}
-                          </span>
+                          <AttitudeBadge attitude={gp.stats?.attitude} />
                         )}
                       </TableCell>
                       <TableCell className="text-center">
@@ -800,5 +902,31 @@ function GPStatsTab({
         </CardContent>
       </Card>
     </TabsContent>
+  );
+}
+
+// Attitude Badge Component with color coding
+function AttitudeBadge({ attitude }: { attitude: number | null | undefined }) {
+  if (!attitude) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+
+  const getColor = (score: number) => {
+    if (score <= 2) return "bg-red-100 text-red-700 border-red-200";
+    if (score === 3) return "bg-yellow-100 text-yellow-700 border-yellow-200";
+    return "bg-green-100 text-green-700 border-green-200";
+  };
+
+  const getStars = (score: number) => {
+    return "★".repeat(score) + "☆".repeat(5 - score);
+  };
+
+  return (
+    <div className="flex items-center justify-center gap-2">
+      <Badge variant="outline" className={`${getColor(attitude)} font-medium`}>
+        {attitude}
+      </Badge>
+      <span className="text-xs text-muted-foreground">{getStars(attitude)}</span>
+    </div>
   );
 }

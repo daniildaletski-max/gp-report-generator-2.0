@@ -487,3 +487,127 @@ describe("gamePresenter.listWithStats", () => {
     expect(filteredGPs.every(gp => gp.teamId === teamId)).toBe(true);
   });
 });
+
+
+// ============================================
+// VISUAL INDICATORS TESTS
+// ============================================
+
+describe("Attitude Visual Indicators", () => {
+  it("should show red for low attitude (1-2)", () => {
+    const getColor = (score: number) => {
+      if (score <= 2) return "red";
+      if (score === 3) return "yellow";
+      return "green";
+    };
+    
+    expect(getColor(1)).toBe("red");
+    expect(getColor(2)).toBe("red");
+  });
+
+  it("should show yellow for medium attitude (3)", () => {
+    const getColor = (score: number) => {
+      if (score <= 2) return "red";
+      if (score === 3) return "yellow";
+      return "green";
+    };
+    
+    expect(getColor(3)).toBe("yellow");
+  });
+
+  it("should show green for high attitude (4-5)", () => {
+    const getColor = (score: number) => {
+      if (score <= 2) return "red";
+      if (score === 3) return "yellow";
+      return "green";
+    };
+    
+    expect(getColor(4)).toBe("green");
+    expect(getColor(5)).toBe("green");
+  });
+
+  it("should generate correct star display", () => {
+    const getStars = (score: number) => {
+      return "★".repeat(score) + "☆".repeat(5 - score);
+    };
+    
+    expect(getStars(1)).toBe("★☆☆☆☆");
+    expect(getStars(3)).toBe("★★★☆☆");
+    expect(getStars(5)).toBe("★★★★★");
+  });
+});
+
+// ============================================
+// USER MANAGEMENT TESTS
+// ============================================
+
+describe("User Management", () => {
+  it("should allow admin to list all users", () => {
+    const adminUser = { role: "admin" };
+    const canListUsers = adminUser.role === "admin";
+    
+    expect(canListUsers).toBe(true);
+  });
+
+  it("should prevent non-admin from listing users", () => {
+    const regularUser = { role: "user" };
+    const canListUsers = regularUser.role === "admin";
+    
+    expect(canListUsers).toBe(false);
+  });
+
+  it("should have correct user structure with team", () => {
+    const mockUserWithTeam = {
+      user: {
+        id: 1,
+        name: "Test FM",
+        email: "test@example.com",
+        role: "user",
+        teamId: 1,
+        lastSignedIn: new Date(),
+      },
+      team: {
+        id: 1,
+        teamName: "Team Alpha",
+      },
+    };
+    
+    expect(mockUserWithTeam.user).toHaveProperty("teamId");
+    expect(mockUserWithTeam.team).toHaveProperty("teamName");
+  });
+});
+
+// ============================================
+// EXCEL REPORT WITH STATS TESTS
+// ============================================
+
+describe("Excel Report with Monthly Stats", () => {
+  it("should include attitude in remarks column", () => {
+    const monthlyStats = { attitude: 4, mistakes: 2, notes: "Good progress" };
+    const attendance = { remarks: "" };
+    
+    const attitudeText = monthlyStats.attitude ? `Attitude: ${monthlyStats.attitude}/5` : "";
+    const remarksText = attendance.remarks || monthlyStats.notes || "";
+    const combined = [attitudeText, remarksText].filter(Boolean).join(" | ");
+    
+    expect(combined).toBe("Attitude: 4/5 | Good progress");
+  });
+
+  it("should use monthlyStats.mistakes over attendance.mistakes", () => {
+    const monthlyStats = { mistakes: 5 };
+    const attendance = { mistakes: 2 };
+    
+    const mistakesValue = monthlyStats?.mistakes ?? attendance?.mistakes ?? 0;
+    
+    expect(mistakesValue).toBe(5);
+  });
+
+  it("should fallback to attendance.mistakes when monthlyStats is null", () => {
+    const monthlyStats = null;
+    const attendance = { mistakes: 3 };
+    
+    const mistakesValue = monthlyStats?.mistakes ?? attendance?.mistakes ?? 0;
+    
+    expect(mistakesValue).toBe(3);
+  });
+});

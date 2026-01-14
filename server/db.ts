@@ -104,6 +104,19 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function getAllUsers() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    user: users,
+    team: fmTeams,
+  })
+  .from(users)
+  .leftJoin(fmTeams, eq(users.teamId, fmTeams.id))
+  .orderBy(users.name);
+}
+
 // ============================================
 // FM TEAMS FUNCTIONS
 // ============================================
@@ -348,7 +361,8 @@ export async function getAttendanceByTeamMonth(teamId: number, month: number, ye
   const db = await getDb();
   if (!db) return [];
 
-  return await db.select({
+  // Get attendance data
+  const attendanceData = await db.select({
     attendance: gpMonthlyAttendance,
     gamePresenter: gamePresenters,
   })
@@ -359,6 +373,28 @@ export async function getAttendanceByTeamMonth(teamId: number, month: number, ye
     eq(gpMonthlyAttendance.month, month),
     eq(gpMonthlyAttendance.year, year)
   ));
+
+  // Get monthly stats (attitude, mistakes from monthly_gp_stats)
+  const statsData = await db.select({
+    stats: monthlyGpStats,
+    gamePresenter: gamePresenters,
+  })
+  .from(monthlyGpStats)
+  .innerJoin(gamePresenters, eq(monthlyGpStats.gamePresenterId, gamePresenters.id))
+  .where(and(
+    eq(gamePresenters.teamId, teamId),
+    eq(monthlyGpStats.month, month),
+    eq(monthlyGpStats.year, year)
+  ));
+
+  // Merge stats into attendance data
+  return attendanceData.map(item => {
+    const gpStats = statsData.find(s => s.gamePresenter.id === item.gamePresenter.id);
+    return {
+      ...item,
+      monthlyStats: gpStats?.stats || null,
+    };
+  });
 }
 
 // ============================================
@@ -434,8 +470,15 @@ export async function updateGPMistakesFromErrors(month: number, year: number): P
     // Find GP by name
     const gp = await db.select().from(gamePresenters).where(eq(gamePresenters.name, gpName)).limit(1);
     if (gp.length > 0) {
+      // Update attendance table (legacy)
       const attendance = await getOrCreateAttendance(gp[0].id, month, year);
       await updateAttendance(attendance.id, { mistakes: errorCount });
+      
+      // Also update monthly_gp_stats table (new)
+      const stats = await getOrCreateMonthlyGpStats(gp[0].id, month, year);
+      await db.update(monthlyGpStats)
+        .set({ mistakes: errorCount })
+        .where(eq(monthlyGpStats.id, stats.id));
     }
   }
 }

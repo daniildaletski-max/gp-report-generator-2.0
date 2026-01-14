@@ -161,3 +161,26 @@
 - [x] Filter GP list by FM's team (gamePresenter.list checks ctx.user.teamId)
 - [x] Add user.assignToTeam API for admin to assign FM to teams
 - [x] Add gamePresenter.listWithStats API for filtered stats view
+
+
+## UI Improvements & Integration (v8) - COMPLETED
+
+### Visual Indicators
+- [x] Add color-coded badges for attitude (red 1-2, yellow 3, green 4-5)
+- [x] Add visual star display for attitude (★★★☆☆)
+
+### Auto-fill Mistakes from Error Files
+- [x] When error file is uploaded, automatically update mistakes count in monthly_gp_stats
+- [x] Show mistakes count in GP Stats tab after error file upload
+
+### User Management Page
+- [x] Create Users tab in Admin panel
+- [x] List all users with their assigned teams
+- [x] Add dropdown to assign/change team for each user
+- [x] Show role badge (admin/user)
+- [x] Show last sign in timestamp
+
+### Excel Report Integration
+- [x] Include attitude score in Monthly Report remarks column
+- [x] Include mistakes count from monthly_gp_stats in report
+- [x] Auto-populate from monthly_gp_stats when generating report

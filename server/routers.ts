@@ -418,6 +418,14 @@ export const appRouter = router({
       return userWithTeam;
     }),
 
+    // List all users (admin only)
+    list: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== 'admin') {
+        throw new Error("Only admins can view all users");
+      }
+      return await db.getAllUsers();
+    }),
+
     // Assign user to team (admin only)
     assignToTeam: protectedProcedure
       .input(z.object({
@@ -677,7 +685,8 @@ export const appRouter = router({
           mainSheet.getCell(`N${gpRow}`).alignment = { vertical: "middle" };
 
           mainSheet.mergeCells(`Q${gpRow}:R${gpRow + 1}`);
-          mainSheet.getCell(`Q${gpRow}`).value = item.attendance?.mistakes || 0;
+          // Use monthlyStats.mistakes if available, fallback to attendance.mistakes
+          mainSheet.getCell(`Q${gpRow}`).value = item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0;
           mainSheet.getCell(`Q${gpRow}`).alignment = { horizontal: "center", vertical: "middle" };
 
           mainSheet.mergeCells(`S${gpRow}:T${gpRow + 1}`);
@@ -697,7 +706,10 @@ export const appRouter = router({
           mainSheet.getCell(`Y${gpRow}`).alignment = { horizontal: "center", vertical: "middle" };
 
           mainSheet.mergeCells(`AA${gpRow}:AE${gpRow + 1}`);
-          mainSheet.getCell(`AA${gpRow}`).value = item.attendance?.remarks || "";
+          // Combine attitude score with remarks
+          const attitudeText = item.monthlyStats?.attitude ? `Attitude: ${item.monthlyStats.attitude}/5` : "";
+          const remarksText = item.attendance?.remarks || item.monthlyStats?.notes || "";
+          mainSheet.getCell(`AA${gpRow}`).value = [attitudeText, remarksText].filter(Boolean).join(" | ");
           mainSheet.getCell(`AA${gpRow}`).alignment = { wrapText: true, vertical: "middle" };
 
           gpRow += 2;
