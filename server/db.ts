@@ -744,3 +744,52 @@ export async function getEvaluationById(id: number): Promise<Evaluation | null> 
   const result = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
   return result.length > 0 ? result[0] : null;
 }
+
+
+// ============================================
+// DATA SHEET FUNCTIONS
+// ============================================
+
+export async function getGPEvaluationsForDataSheet(teamId: number, year: number, month: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
+
+  // Get all GPs in the team with their evaluations for the month
+  const gps = await db.select({
+    gpId: gamePresenters.id,
+    gpName: gamePresenters.name,
+  })
+  .from(gamePresenters)
+  .where(eq(gamePresenters.teamId, teamId));
+
+  const result = [];
+
+  for (const gp of gps) {
+    // Get all evaluations for this GP in the month
+    const gpEvaluations = await db.select({
+      gamePerformanceScore: evaluations.gamePerformanceTotalScore,
+      appearanceScore: evaluations.appearanceScore,
+      evaluationDate: evaluations.evaluationDate,
+    })
+    .from(evaluations)
+    .where(
+      and(
+        eq(evaluations.gamePresenterId, gp.gpId),
+        gte(evaluations.evaluationDate, startDate),
+        lte(evaluations.evaluationDate, endDate)
+      )
+    )
+    .orderBy(evaluations.evaluationDate);
+
+    result.push({
+      gpId: gp.gpId,
+      gpName: gp.gpName,
+      evaluations: gpEvaluations,
+    });
+  }
+
+  return result;
+}

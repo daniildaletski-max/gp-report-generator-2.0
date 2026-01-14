@@ -22,19 +22,19 @@
 - [x] Add Goals this month text field
 - [x] Add Team Overview text field
 - [x] Add Additional Notes text field
-- [ ] Generate Excel with exact template format (2 sheets: Data + Monthly)
-- [ ] Data sheet: GP names with GAME PERF. and APPEARANCE scores
-- [ ] Monthly sheet: Full layout with FM info, attendance table, text areas
-- [ ] Calculate GAME PERF. = Dealing Style + Game Performance
-- [ ] Calculate APPEARANCE = Hair + Makeup + Outfit + Posture
-- [ ] Auto-populate GP attendance table from database
-- [ ] Add AVERAGE formulas for scores
-- [ ] Add SUM formulas for attendance totals
+- [x] Generate Excel with exact template format (2 sheets: Data + Monthly)
+- [x] Data sheet: GP names with GAME PERF. and APPEARANCE scores
+- [x] Monthly sheet: Full layout with FM info, attendance table, text areas
+- [x] Calculate GAME PERF. = Dealing Style + Game Performance
+- [x] Calculate APPEARANCE = Hair + Makeup + Outfit + Posture
+- [x] Auto-populate GP attendance table from database
+- [x] Add AVERAGE formulas for scores
+- [x] Add SUM formulas for attendance totals
 
 - [x] Admin interface to upload Playgon and MG error files
 - [x] Parse error files to extract GP error counts
 - [x] Store error data in database linked to GP names
-- [ ] Auto-match GP names from error files with evaluation data
+- [x] Auto-match GP names from error files with evaluation data
 - [x] Pre-configure FM teams: Andri Saaret - Team Omnicron, Kristina Bobrovskaja - Team Alpha, Alissa Gujevskaja - Team Zeta
 
 
@@ -69,13 +69,35 @@
 - [x] Clear all evaluations for a month
 
 ### Excel Report Matching Template
-- [ ] Monthly Report sheet with FM Performance, Goals, Team Overview sections
-- [ ] Attendance table with Mistakes, Extra shifts, Late, Missed days, Sick leaves, Remarks
-- [ ] Data sheet with GAME PERF. and APPEARANCE scores per GP
-- [ ] Proper formatting matching template (colors, fonts, borders)
+- [x] Monthly Report sheet with FM Performance, Goals, Team Overview sections
+- [x] Attendance table with Mistakes, Extra shifts, Late, Missed days, Sick leaves, Remarks
+- [x] Data sheet with GAME PERF. and APPEARANCE scores per GP
+- [x] Proper formatting matching template (colors, fonts, borders)
 
 ### UI Improvements
 - [x] Evaluation edit modal with all fields
 - [x] Delete confirmation dialog
 - [x] Bulk actions toolbar in Evaluations page
 - [x] Month/year filter for clearing old data
+
+
+## Excel Report Improvement (v3) - COMPLETED
+
+### Excel Generation Matching Template
+- [x] Create Monthly Report sheet with exact template layout
+- [x] Add FM Performance text area (rows 6-19)
+- [x] Add Goals this month text area (rows 24-36)
+- [x] Add Team Overview text area (rows 24-36)
+- [x] Create GP Attendance table (Name, Mistakes, Extra shifts, Late, Missed days, Sick leaves, Remarks)
+- [x] Add Additional Notes section (rows 38-53)
+- [x] Create Data sheet with GAME PERF. and APPEARANCE columns
+- [x] Individual evaluation scores per GP (up to 4 evaluations)
+- [x] Add AVERAGE formulas for scores
+- [x] Apply proper formatting (colors, fonts, borders matching template)
+
+### Error Files Parsing - COMPLETED
+- [x] Parse Playgon error files to extract GP names and error counts (from Errors sheet, column B)
+- [x] Parse MG error files to extract GP names and error counts (from Errors sheet, column B)
+- [x] Match GP names from error files with database records
+- [x] Auto-populate Mistakes column in attendance table
+- [x] Store parsed error data for report generation

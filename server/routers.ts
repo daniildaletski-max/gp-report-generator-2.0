@@ -422,21 +422,93 @@ export const appRouter = router({
         const fmName = team?.floorManagerName || "Unknown FM";
         const monthName = MONTH_NAMES[report.reportMonth - 1];
 
+        // Get detailed GP evaluations for Data sheet
+        const gpEvaluationsData = await db.getGPEvaluationsForDataSheet(
+          report.teamId, 
+          report.reportYear, 
+          report.reportMonth
+        );
+
         const workbook = new ExcelJS.Workbook();
         
-        // Sheet 1: Monthly Report (matching template format)
+        // ===== Sheet 1: Data (GP Performance scores) - FIRST =====
+        const dataSheet = workbook.addWorksheet("Data");
+        
+        // Set column widths for Data sheet
+        dataSheet.columns = [
+          { width: 4 }, { width: 25 }, { width: 12 }, { width: 12 },
+          { width: 4 }, { width: 25 }, { width: 12 }, { width: 12 },
+          { width: 4 }, { width: 25 }
+        ];
+
+        // Set up Data sheet structure (2 GPs per row block, matching template)
+        let dataRow = 9;
+        
+        for (let i = 0; i < gpEvaluationsData.length; i += 2) {
+          const gp1 = gpEvaluationsData[i];
+          const gp2 = gpEvaluationsData[i + 1];
+
+          // GP 1 (columns B-D)
+          if (gp1 && gp1.evaluations.length > 0) {
+            // Merge GP name cell
+            dataSheet.mergeCells(`B${dataRow}:B${dataRow + 3}`);
+            dataSheet.getCell(`B${dataRow}`).value = gp1.gpName;
+            dataSheet.getCell(`B${dataRow}`).alignment = { vertical: "middle" };
+            dataSheet.getCell(`C${dataRow}`).value = "GAME PERF.";
+            dataSheet.getCell(`D${dataRow}`).value = "APPEARANCE";
+            dataSheet.getCell(`C${dataRow}`).font = { bold: true };
+            dataSheet.getCell(`D${dataRow}`).font = { bold: true };
+
+            // Individual evaluation scores (up to 4)
+            for (let j = 0; j < Math.min(4, gp1.evaluations.length); j++) {
+              const eval1 = gp1.evaluations[j];
+              dataSheet.getCell(`C${dataRow + 1 + j}`).value = eval1.gamePerformanceScore || "";
+              dataSheet.getCell(`D${dataRow + 1 + j}`).value = eval1.appearanceScore || "";
+            }
+
+            // Total average row
+            dataSheet.getCell(`B${dataRow + 5}`).value = "Total average:";
+            dataSheet.getCell(`C${dataRow + 5}`).value = { formula: `AVERAGE(C${dataRow + 1}:C${dataRow + 4})` };
+            dataSheet.getCell(`D${dataRow + 5}`).value = { formula: `AVERAGE(D${dataRow + 1}:D${dataRow + 4})` };
+          }
+
+          // GP 2 (columns F-H)
+          if (gp2 && gp2.evaluations.length > 0) {
+            dataSheet.mergeCells(`F${dataRow}:F${dataRow + 3}`);
+            dataSheet.getCell(`F${dataRow}`).value = gp2.gpName;
+            dataSheet.getCell(`F${dataRow}`).alignment = { vertical: "middle" };
+            dataSheet.getCell(`G${dataRow}`).value = "GAME PERF.";
+            dataSheet.getCell(`H${dataRow}`).value = "APPEARANCE";
+            dataSheet.getCell(`G${dataRow}`).font = { bold: true };
+            dataSheet.getCell(`H${dataRow}`).font = { bold: true };
+
+            for (let j = 0; j < Math.min(4, gp2.evaluations.length); j++) {
+              const eval2 = gp2.evaluations[j];
+              dataSheet.getCell(`G${dataRow + 1 + j}`).value = eval2.gamePerformanceScore || "";
+              dataSheet.getCell(`H${dataRow + 1 + j}`).value = eval2.appearanceScore || "";
+            }
+
+            dataSheet.getCell(`F${dataRow + 5}`).value = "Total average:";
+            dataSheet.getCell(`G${dataRow + 5}`).value = { formula: `AVERAGE(G${dataRow + 1}:G${dataRow + 4})` };
+            dataSheet.getCell(`H${dataRow + 5}`).value = { formula: `AVERAGE(H${dataRow + 1}:H${dataRow + 4})` };
+          }
+
+          dataRow += 7;
+        }
+
+        // ===== Sheet 2: Monthly Report (matching template format) =====
         const mainSheet = workbook.addWorksheet(`${monthName} ${report.reportYear}`);
         
-        // Set column widths to match template
+        // Set column widths to match template exactly
         mainSheet.columns = [
-          { width: 4 }, { width: 12 }, { width: 12 }, { width: 12 }, 
-          { width: 12 }, { width: 12 }, { width: 12 }, { width: 12 },
-          { width: 4 }, { width: 12 }, { width: 12 }, { width: 12 },
-          { width: 4 }, { width: 18 }, { width: 4 }, { width: 4 },
-          { width: 10 }, { width: 4 }, { width: 10 }, { width: 4 },
-          { width: 10 }, { width: 4 }, { width: 10 }, { width: 4 },
-          { width: 10 }, { width: 4 }, { width: 25 }, { width: 4 },
-          { width: 4 }, { width: 4 }, { width: 4 }
+          { width: 9 }, { width: 13 }, { width: 13 }, { width: 13 }, 
+          { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 },
+          { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 },
+          { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 },
+          { width: 13 }, { width: 13 }, { width: 13 }, { width: 12.25 },
+          { width: 9 }, { width: 13 }, { width: 13 }, { width: 13 },
+          { width: 13 }, { width: 13 }, { width: 9 }, { width: 13 },
+          { width: 13 }, { width: 25.5 }, { width: 29.5 }
         ];
 
         // Row 2: Title headers
@@ -458,9 +530,14 @@ export const appRouter = router({
         mainSheet.getCell("A4").font = { bold: true };
         mainSheet.getCell("A4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
 
+        // Instruction text
+        mainSheet.mergeCells("I4:L9");
+        mainSheet.getCell("I4").value = "Please evaluate your performance as a Floor Manager - your studio operations, teamwork with colleagues, and if there are any issues etc)";
+        mainSheet.getCell("I4").alignment = { wrapText: true, vertical: "top" };
+
         // GP Attendance table headers
         mainSheet.mergeCells("N4:P5");
-        mainSheet.getCell("N4").value = "Name";
+        mainSheet.getCell("N4").value = "Name ";
         mainSheet.getCell("N4").font = { bold: true };
         mainSheet.getCell("N4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
         mainSheet.getCell("N4").alignment = { horizontal: "center", vertical: "middle" };
@@ -490,7 +567,7 @@ export const appRouter = router({
         mainSheet.getCell("W4").alignment = { horizontal: "center", vertical: "middle", wrapText: true };
 
         mainSheet.mergeCells("Y4:Z5");
-        mainSheet.getCell("Y4").value = "Sick leaves";
+        mainSheet.getCell("Y4").value = "Sick leaves ";
         mainSheet.getCell("Y4").font = { bold: true };
         mainSheet.getCell("Y4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
         mainSheet.getCell("Y4").alignment = { horizontal: "center", vertical: "middle", wrapText: true };
@@ -510,13 +587,13 @@ export const appRouter = router({
           bottom: { style: "thin" }, right: { style: "thin" }
         };
 
-        // Populate GP attendance data
+        // Populate GP attendance data (rows 6-35, 2 rows per GP)
         const reportData = report.reportData as { stats?: any[], attendance?: any[] } || {};
         const attendanceData = reportData.attendance || [];
         let gpRow = 6;
         
         for (const item of attendanceData) {
-          if (gpRow > 35) break;
+          if (gpRow > 34) break; // Max 15 GPs (rows 6-35)
           
           mainSheet.mergeCells(`N${gpRow}:P${gpRow + 1}`);
           mainSheet.getCell(`N${gpRow}`).value = item.gamePresenter?.name || "";
@@ -555,6 +632,11 @@ export const appRouter = router({
         mainSheet.getCell("A21").font = { bold: true };
         mainSheet.getCell("A21").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
 
+        // Instruction text for Team Management
+        mainSheet.mergeCells("I21:L25");
+        mainSheet.getCell("I21").value = "Please write about your team - what were your goals for this month, did you achieve your set goals, did you have enough time to finish everything, etc.)";
+        mainSheet.getCell("I21").alignment = { wrapText: true, vertical: "top" };
+
         mainSheet.mergeCells("A23:D23");
         mainSheet.getCell("A23").value = "Goals this month:";
         mainSheet.getCell("A23").font = { bold: true };
@@ -579,32 +661,32 @@ export const appRouter = router({
           bottom: { style: "thin" }, right: { style: "thin" }
         };
 
-        // TOTAL row for attendance
+        // TOTAL row for attendance (row 36-37)
         mainSheet.mergeCells("N36:P37");
         mainSheet.getCell("N36").value = "TOTAL";
         mainSheet.getCell("N36").font = { bold: true };
         mainSheet.getCell("N36").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
         mainSheet.getCell("N36").alignment = { horizontal: "center", vertical: "middle" };
 
-        // Sum formulas for totals
+        // Sum formulas for totals (matching template: =SUM(Q4:R35))
         mainSheet.mergeCells("Q36:R37");
-        mainSheet.getCell("Q36").value = { formula: "SUM(Q6:R35)" };
+        mainSheet.getCell("Q36").value = { formula: "SUM(Q4:R35)" };
         mainSheet.getCell("Q36").alignment = { horizontal: "center", vertical: "middle" };
 
         mainSheet.mergeCells("S36:T37");
-        mainSheet.getCell("S36").value = { formula: "SUM(S6:T35)" };
+        mainSheet.getCell("S36").value = { formula: "SUM(S4:T35)" };
         mainSheet.getCell("S36").alignment = { horizontal: "center", vertical: "middle" };
 
         mainSheet.mergeCells("U36:V37");
-        mainSheet.getCell("U36").value = { formula: "SUM(U6:V35)" };
+        mainSheet.getCell("U36").value = { formula: "SUM(U4:V35)" };
         mainSheet.getCell("U36").alignment = { horizontal: "center", vertical: "middle" };
 
         mainSheet.mergeCells("W36:X37");
-        mainSheet.getCell("W36").value = { formula: "SUM(W6:X35)" };
+        mainSheet.getCell("W36").value = { formula: "SUM(W4:X35)" };
         mainSheet.getCell("W36").alignment = { horizontal: "center", vertical: "middle" };
 
         mainSheet.mergeCells("Y36:Z37");
-        mainSheet.getCell("Y36").value = { formula: "SUM(Y6:Z35)" };
+        mainSheet.getCell("Y36").value = { formula: "SUM(Y4:Z35)" };
         mainSheet.getCell("Y36").alignment = { horizontal: "center", vertical: "middle" };
 
         // Additional Notes section
@@ -613,6 +695,16 @@ export const appRouter = router({
         mainSheet.getCell("A38").font = { bold: true };
         mainSheet.getCell("A38").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
 
+        // Instruction text for Additional Notes
+        mainSheet.mergeCells("I38:K40");
+        mainSheet.getCell("I38").value = "Are there any additional comments from the previous month you would like to add?";
+        mainSheet.getCell("I38").alignment = { wrapText: true, vertical: "top" };
+
+        // Reference to Data sheet
+        mainSheet.mergeCells("N39:P39");
+        mainSheet.getCell("N39").value = "Paste the table here (delete old): (from Data)";
+        mainSheet.getCell("N39").font = { italic: true, color: { argb: "FF808080" } };
+
         mainSheet.mergeCells("A40:H53");
         mainSheet.getCell("A40").value = report.additionalComments || "";
         mainSheet.getCell("A40").alignment = { wrapText: true, vertical: "top" };
@@ -620,64 +712,6 @@ export const appRouter = router({
           top: { style: "thin" }, left: { style: "thin" },
           bottom: { style: "thin" }, right: { style: "thin" }
         };
-
-        // Sheet 2: Data (GP Performance scores)
-        const dataSheet = workbook.addWorksheet("Data");
-        
-        // Set up Data sheet structure (2 GPs per row block)
-        const statsData = reportData.stats || [];
-        let dataRow = 9;
-        
-        for (let i = 0; i < statsData.length; i += 2) {
-          const gp1 = statsData[i];
-          const gp2 = statsData[i + 1];
-
-          // GP 1 (columns B-D)
-          if (gp1) {
-            dataSheet.getCell(`B${dataRow}`).value = gp1.gpName;
-            dataSheet.getCell(`C${dataRow}`).value = "GAME PERF.";
-            dataSheet.getCell(`D${dataRow}`).value = "APPEARANCE";
-            dataSheet.getCell(`C${dataRow}`).font = { bold: true };
-            dataSheet.getCell(`D${dataRow}`).font = { bold: true };
-
-            // Individual scores (up to 4 evaluations)
-            for (let j = 0; j < 4; j++) {
-              dataSheet.getCell(`C${dataRow + 1 + j}`).value = gp1.avgGamePerfScore ? Number(gp1.avgGamePerfScore).toFixed(0) : "";
-              dataSheet.getCell(`D${dataRow + 1 + j}`).value = gp1.avgAppearanceScore ? Number(gp1.avgAppearanceScore).toFixed(0) : "";
-            }
-
-            // Total average row
-            dataSheet.getCell(`B${dataRow + 5}`).value = "Total average:";
-            dataSheet.getCell(`C${dataRow + 5}`).value = { formula: `AVERAGE(C${dataRow + 1}:C${dataRow + 4})` };
-            dataSheet.getCell(`D${dataRow + 5}`).value = { formula: `AVERAGE(D${dataRow + 1}:D${dataRow + 4})` };
-          }
-
-          // GP 2 (columns F-H)
-          if (gp2) {
-            dataSheet.getCell(`F${dataRow}`).value = gp2.gpName;
-            dataSheet.getCell(`G${dataRow}`).value = "GAME PERF.";
-            dataSheet.getCell(`H${dataRow}`).value = "APPEARANCE";
-            dataSheet.getCell(`G${dataRow}`).font = { bold: true };
-            dataSheet.getCell(`H${dataRow}`).font = { bold: true };
-
-            for (let j = 0; j < 4; j++) {
-              dataSheet.getCell(`G${dataRow + 1 + j}`).value = gp2.avgGamePerfScore ? Number(gp2.avgGamePerfScore).toFixed(0) : "";
-              dataSheet.getCell(`H${dataRow + 1 + j}`).value = gp2.avgAppearanceScore ? Number(gp2.avgAppearanceScore).toFixed(0) : "";
-            }
-
-            dataSheet.getCell(`F${dataRow + 5}`).value = "Total average:";
-            dataSheet.getCell(`G${dataRow + 5}`).value = { formula: `AVERAGE(G${dataRow + 1}:G${dataRow + 4})` };
-            dataSheet.getCell(`H${dataRow + 5}`).value = { formula: `AVERAGE(H${dataRow + 1}:H${dataRow + 4})` };
-          }
-
-          dataRow += 7;
-        }
-
-        // Set column widths for Data sheet
-        dataSheet.columns = [
-          { width: 4 }, { width: 25 }, { width: 12 }, { width: 12 },
-          { width: 4 }, { width: 25 }, { width: 12 }, { width: 12 }
-        ];
 
         // Generate buffer and upload to S3
         const buffer = await workbook.xlsx.writeBuffer();
@@ -723,16 +757,57 @@ export const appRouter = router({
         const fileKey = `error-files/${input.year}/${input.month}/${input.errorType}-${nanoid()}.xlsx`;
         const { url: fileUrl } = await storagePut(fileKey, fileBuffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
-        // Parse Excel file to count errors
+        // Parse Excel file to extract GP errors
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(fileBuffer as any);
         
-        let errorsCount = 0;
-        workbook.eachSheet((worksheet) => {
-          errorsCount += Math.max(0, worksheet.rowCount - 1); // Exclude header row
-        });
+        const gpErrorCounts: Record<string, number> = {};
+        let totalErrorsCount = 0;
 
-        // Save to database
+        // Find the Errors sheet (both Playgon and MG files have this sheet)
+        const errorsSheet = workbook.getWorksheet('Errors');
+        if (errorsSheet) {
+          // GP Name is in column B (index 2), starting from row 3
+          // Headers are in row 2: Nr, GP Name, GP Alias, Date, etc.
+          errorsSheet.eachRow((row, rowNumber) => {
+            if (rowNumber >= 3) { // Skip header rows (row 1 and 2)
+              const gpNameCell = row.getCell(2);
+              let gpName: string | null = null;
+              
+              // Handle different cell value types
+              if (gpNameCell.value) {
+                if (typeof gpNameCell.value === 'string') {
+                  gpName = gpNameCell.value.trim();
+                } else if (typeof gpNameCell.value === 'object' && 'text' in gpNameCell.value) {
+                  // Rich text
+                  gpName = (gpNameCell.value as any).text?.trim();
+                } else if (typeof gpNameCell.value === 'object' && 'result' in gpNameCell.value) {
+                  // Formula with cached result
+                  const result = (gpNameCell.value as any).result;
+                  if (typeof result === 'string') {
+                    gpName = result.trim();
+                  }
+                }
+              }
+              
+              // Validate that it looks like a name (not a formula, not empty)
+              if (gpName && gpName.length > 0 && !gpName.startsWith('=') && gpName !== 'GP Name') {
+                // Check if it looks like a real name (contains letters, possibly space)
+                if (/^[A-Za-z\u00C0-\u024F\s'-]+$/.test(gpName) && gpName.length < 100) {
+                  gpErrorCounts[gpName] = (gpErrorCounts[gpName] || 0) + 1;
+                  totalErrorsCount++;
+                }
+              }
+            }
+          });
+        } else {
+          // Fallback: try to find GP names in any sheet
+          workbook.eachSheet((worksheet) => {
+            totalErrorsCount += Math.max(0, worksheet.rowCount - 1);
+          });
+        }
+
+        // Save error file to database
         const errorFile = await db.createErrorFile({
           fileName: input.filename,
           fileUrl,
@@ -743,7 +818,22 @@ export const appRouter = router({
           uploadedById: ctx.user.id,
         });
 
-        return errorFile;
+        // Save individual GP errors to database and update attendance
+        for (const [gpName, count] of Object.entries(gpErrorCounts)) {
+          // Create GP error records
+          for (let i = 0; i < count; i++) {
+            await db.createGpError({
+              gpName,
+              errorFileId: errorFile.id,
+              errorDate: new Date(input.year, input.month - 1, 15), // Middle of month
+            });
+          }
+        }
+
+        // Update GP attendance with mistake counts
+        await db.updateGPMistakesFromErrors(input.month, input.year);
+
+        return { ...errorFile, parsedErrors: totalErrorsCount, gpErrorCounts };
       }),
 
     list: protectedProcedure.query(async () => {
