@@ -821,6 +821,135 @@ export const appRouter = router({
           bottom: { style: "thin" }, right: { style: "thin" }
         };
 
+        // ===== PERFORMANCE ANALYSIS SECTION =====
+        // Calculate team performance statistics from evaluations
+        let totalEvaluations = 0;
+        let totalAppearance = 0;
+        let totalGamePerf = 0;
+        let topPerformers: { name: string; score: number }[] = [];
+        let needsImprovement: { name: string; score: number }[] = [];
+
+        for (const gp of gpEvaluationsData) {
+          if (gp.evaluations.length > 0) {
+            const avgAppearance = gp.evaluations.reduce((sum, e) => sum + (e.appearanceScore || 0), 0) / gp.evaluations.length;
+            const avgGamePerf = gp.evaluations.reduce((sum, e) => sum + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
+            const avgTotal = avgAppearance + avgGamePerf;
+            
+            totalEvaluations += gp.evaluations.length;
+            totalAppearance += avgAppearance * gp.evaluations.length;
+            totalGamePerf += avgGamePerf * gp.evaluations.length;
+            
+            topPerformers.push({ name: gp.gpName, score: avgTotal });
+          }
+        }
+
+        // Sort and get top 3 and bottom 3
+        topPerformers.sort((a, b) => b.score - a.score);
+        const top3 = topPerformers.slice(0, 3);
+        const bottom3 = topPerformers.slice(-3).reverse();
+        
+        const teamAvgAppearance = totalEvaluations > 0 ? (totalAppearance / totalEvaluations).toFixed(1) : 'N/A';
+        const teamAvgGamePerf = totalEvaluations > 0 ? (totalGamePerf / totalEvaluations).toFixed(1) : 'N/A';
+
+        // Add Performance Analysis section to Monthly sheet (rows 55-65)
+        mainSheet.mergeCells("A55:H56");
+        mainSheet.getCell("A55").value = "Performance Analysis (Auto-generated)";
+        mainSheet.getCell("A55").font = { bold: true };
+        mainSheet.getCell("A55").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
+        mainSheet.getCell("A55").font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+        // Team Statistics
+        mainSheet.mergeCells("A57:D57");
+        mainSheet.getCell("A57").value = "Team Statistics";
+        mainSheet.getCell("A57").font = { bold: true };
+
+        mainSheet.getCell("A58").value = "Total Evaluations:";
+        mainSheet.getCell("B58").value = totalEvaluations;
+        mainSheet.getCell("A59").value = "Avg Appearance:";
+        mainSheet.getCell("B59").value = teamAvgAppearance;
+        mainSheet.getCell("A60").value = "Avg Game Performance:";
+        mainSheet.getCell("B60").value = teamAvgGamePerf;
+
+        // Top Performers
+        mainSheet.mergeCells("E57:H57");
+        mainSheet.getCell("E57").value = "Top Performers";
+        mainSheet.getCell("E57").font = { bold: true };
+        mainSheet.getCell("E57").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF92D050" } };
+
+        for (let i = 0; i < Math.min(3, top3.length); i++) {
+          mainSheet.getCell(`E${58 + i}`).value = `${i + 1}. ${top3[i].name}`;
+          mainSheet.getCell(`H${58 + i}`).value = top3[i].score.toFixed(1);
+        }
+
+        // Needs Improvement
+        mainSheet.mergeCells("A62:D62");
+        mainSheet.getCell("A62").value = "Needs Improvement";
+        mainSheet.getCell("A62").font = { bold: true };
+        mainSheet.getCell("A62").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF6B6B" } };
+
+        for (let i = 0; i < Math.min(3, bottom3.length); i++) {
+          mainSheet.getCell(`A${63 + i}`).value = `${i + 1}. ${bottom3[i].name}`;
+          mainSheet.getCell(`D${63 + i}`).value = bottom3[i].score.toFixed(1);
+        }
+
+        // ===== PERFORMANCE CHART DATA (rows 67-80) =====
+        // Add a data table that can be used to create a chart in Excel
+        mainSheet.mergeCells("A67:H68");
+        mainSheet.getCell("A67").value = "Monthly Performance Data (for Chart)";
+        mainSheet.getCell("A67").font = { bold: true };
+        mainSheet.getCell("A67").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
+        mainSheet.getCell("A67").font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+        // Chart data headers
+        mainSheet.getCell("A69").value = "GP Name";
+        mainSheet.getCell("A69").font = { bold: true };
+        mainSheet.getCell("B69").value = "Appearance";
+        mainSheet.getCell("B69").font = { bold: true };
+        mainSheet.getCell("C69").value = "Game Perf";
+        mainSheet.getCell("C69").font = { bold: true };
+        mainSheet.getCell("D69").value = "Total";
+        mainSheet.getCell("D69").font = { bold: true };
+
+        // Add GP performance data for chart
+        let chartRow = 70;
+        for (const gp of gpEvaluationsData) {
+          if (gp.evaluations.length > 0 && chartRow <= 85) {
+            const avgAppearance = gp.evaluations.reduce((sum, e) => sum + (e.appearanceScore || 0), 0) / gp.evaluations.length;
+            const avgGamePerf = gp.evaluations.reduce((sum, e) => sum + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
+            
+            mainSheet.getCell(`A${chartRow}`).value = gp.gpName;
+            mainSheet.getCell(`B${chartRow}`).value = Number(avgAppearance.toFixed(1));
+            mainSheet.getCell(`C${chartRow}`).value = Number(avgGamePerf.toFixed(1));
+            mainSheet.getCell(`D${chartRow}`).value = Number((avgAppearance + avgGamePerf).toFixed(1));
+            
+            // Add conditional formatting colors
+            const total = avgAppearance + avgGamePerf;
+            if (total >= 18) {
+              mainSheet.getCell(`D${chartRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF92D050" } };
+            } else if (total >= 15) {
+              mainSheet.getCell(`D${chartRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+            } else {
+              mainSheet.getCell(`D${chartRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF6B6B" } };
+            }
+            
+            chartRow++;
+          }
+        }
+
+        // Add team average row
+        mainSheet.getCell(`A${chartRow}`).value = "TEAM AVERAGE";
+        mainSheet.getCell(`A${chartRow}`).font = { bold: true };
+        mainSheet.getCell(`B${chartRow}`).value = teamAvgAppearance;
+        mainSheet.getCell(`B${chartRow}`).font = { bold: true };
+        mainSheet.getCell(`C${chartRow}`).value = teamAvgGamePerf;
+        mainSheet.getCell(`C${chartRow}`).font = { bold: true };
+        if (typeof teamAvgAppearance === 'string' || typeof teamAvgGamePerf === 'string') {
+          mainSheet.getCell(`D${chartRow}`).value = 'N/A';
+        } else {
+          mainSheet.getCell(`D${chartRow}`).value = (parseFloat(teamAvgAppearance) + parseFloat(teamAvgGamePerf)).toFixed(1);
+        }
+        mainSheet.getCell(`D${chartRow}`).font = { bold: true };
+
         // Generate buffer and upload to S3
         const buffer = await workbook.xlsx.writeBuffer();
         const fileKey = `reports/${report.id}/${nanoid()}-TeamOverview_${teamName.replace(/\s+/g, '_')}_${monthName}${report.reportYear}.xlsx`;

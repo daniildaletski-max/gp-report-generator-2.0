@@ -270,3 +270,16 @@
 - [x] Include ALL GPs from team in report (not just those with attendance records)
 - [x] Merge attendance and monthly stats data for complete GP information
 - [x] All 50 tests passing
+
+
+## Excel Report Content Improvements (v16)
+
+- [x] Fix FM Performance text not appearing in Excel (from form input) - already working
+- [x] Fix Goals this month text not appearing in Excel (from form input) - already working
+- [x] Fix Team Overview text not appearing in Excel (from form input) - already working
+- [x] Add automatic analysis of GP evaluations based on scores (Performance Analysis section)
+- [x] Add performance chart/graph data to Excel report (Monthly Performance Data table with colors)
+- [x] Additional Notes text from form input - already working
+- [x] Top 3 Performers and Needs Improvement sections
+- [x] Team Statistics (Total Evaluations, Avg Appearance, Avg Game Performance)
+- [x] Color-coded performance indicators (green >=18, yellow >=15, red <15)
