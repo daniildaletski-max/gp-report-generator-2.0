@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
-import { Star, Calendar, User, Gamepad2, Eye, Sparkles, Scissors, Palette, Shirt, PersonStanding, Loader2, AlertCircle } from "lucide-react";
+import { Star, Calendar, User, Gamepad2, Eye, Sparkles, Scissors, Palette, Shirt, PersonStanding, Loader2, AlertCircle, TrendingUp, AlertTriangle, Trophy, Target, Gift, ThumbsUp } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 
 export default function GPPortal() {
   const { token } = useParams<{ token: string }>();
@@ -118,6 +119,171 @@ export default function GPPortal() {
           </Card>
         </div>
 
+        {/* Monthly Stats & Bonus Section */}
+        {data.monthlyStats && (
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-yellow-500" />
+              Monthly Performance & Bonus Status
+            </h2>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Current Month Stats */}
+              {data.monthlyStats.current && (
+                <Card className="border-2 border-blue-200">
+                  <CardHeader className="bg-blue-50">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Target className="h-5 w-5 text-blue-600" />
+                      Current Month
+                    </CardTitle>
+                    <CardDescription>
+                      {new Date(data.monthlyStats.current.year, data.monthlyStats.current.month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4 space-y-4">
+                    {/* Attitude */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ThumbsUp className="h-4 w-4 text-green-600" />
+                        <span className="text-sm font-medium">Attitude Score</span>
+                      </div>
+                      <Badge variant={data.monthlyStats.current.attitude && data.monthlyStats.current.attitude >= 4 ? "default" : data.monthlyStats.current.attitude && data.monthlyStats.current.attitude >= 3 ? "secondary" : "destructive"}
+                             className={data.monthlyStats.current.attitude && data.monthlyStats.current.attitude >= 4 ? "bg-green-600" : ""}>
+                        {data.monthlyStats.current.attitude ?? "Not set"}/5
+                      </Badge>
+                    </div>
+                    
+                    {/* Mistakes */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-orange-500" />
+                        <span className="text-sm font-medium">Mistakes</span>
+                      </div>
+                      <Badge variant={data.monthlyStats.current.mistakes === 0 ? "default" : data.monthlyStats.current.mistakes === 1 ? "secondary" : "destructive"}
+                             className={data.monthlyStats.current.mistakes === 0 ? "bg-green-600" : data.monthlyStats.current.mistakes === 1 ? "bg-yellow-500" : ""}>
+                        {data.monthlyStats.current.mistakes ?? 0}
+                        {data.monthlyStats.current.mistakes === 1 && " (free)"}
+                      </Badge>
+                    </div>
+                    
+                    {/* Total Games */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Gamepad2 className="h-4 w-4 text-purple-600" />
+                        <span className="text-sm font-medium">Total Games</span>
+                      </div>
+                      <span className="font-bold">{data.monthlyStats.current.totalGames?.toLocaleString() ?? 0}</span>
+                    </div>
+                    
+                    {/* Bonus Status */}
+                    <Separator />
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Gift className="h-5 w-5 text-yellow-500" />
+                        <span className="font-semibold">Bonus Status</span>
+                      </div>
+                      
+                      <div className={`p-3 rounded-lg ${data.monthlyStats.current.bonus.eligible ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm">
+                            {data.monthlyStats.current.bonus.eligible ? (
+                              <span className="text-green-700 font-semibold">
+                                ✓ Eligible - Level {data.monthlyStats.current.bonus.level}
+                              </span>
+                            ) : (
+                              <span className="text-gray-600">
+                                Not yet eligible
+                              </span>
+                            )}
+                          </span>
+                          {data.monthlyStats.current.bonus.eligible && (
+                            <Badge className="bg-yellow-500">
+                              €{data.monthlyStats.current.bonus.rate}/hour
+                            </Badge>
+                          )}
+                        </div>
+                        
+                        <div className="text-xs text-gray-600 mb-2">
+                          Good Games (GGs): <strong>{data.monthlyStats.current.bonus.ggs?.toLocaleString() ?? 0}</strong>
+                        </div>
+                        
+                        {/* Progress to next level */}
+                        {!data.monthlyStats.current.bonus.eligible && (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span>Progress to Level 1</span>
+                              <span>{Math.min(100, Math.round((data.monthlyStats.current.bonus.ggs / 2500) * 100))}%</span>
+                            </div>
+                            <Progress value={Math.min(100, (data.monthlyStats.current.bonus.ggs / 2500) * 100)} className="h-2" />
+                          </div>
+                        )}
+                        {data.monthlyStats.current.bonus.eligible && data.monthlyStats.current.bonus.level === 1 && (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span>Progress to Level 2</span>
+                              <span>{Math.min(100, Math.round((data.monthlyStats.current.bonus.ggs / 5000) * 100))}%</span>
+                            </div>
+                            <Progress value={Math.min(100, (data.monthlyStats.current.bonus.ggs / 5000) * 100)} className="h-2" />
+                          </div>
+                        )}
+                        
+                        <p className="text-xs text-gray-500 mt-2">
+                          {data.monthlyStats.current.bonus.reason}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              
+              {/* Previous Month Stats */}
+              {data.monthlyStats.previous && (
+                <Card>
+                  <CardHeader className="bg-gray-50">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-gray-600" />
+                      Previous Month
+                    </CardTitle>
+                    <CardDescription>
+                      {new Date(data.monthlyStats.previous.year, data.monthlyStats.previous.month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Attitude</span>
+                      <Badge variant="secondary">{data.monthlyStats.previous.attitude ?? "—"}/5</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Mistakes</span>
+                      <Badge variant="secondary">{data.monthlyStats.previous.mistakes ?? 0}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Total Games</span>
+                      <span className="font-medium">{data.monthlyStats.previous.totalGames?.toLocaleString() ?? 0}</span>
+                    </div>
+                    <Separator />
+                    <div className={`p-2 rounded text-center text-sm ${data.monthlyStats.previous.bonus.eligible ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                      {data.monthlyStats.previous.bonus.eligible 
+                        ? `✓ Level ${data.monthlyStats.previous.bonus.level} Bonus (€${data.monthlyStats.previous.bonus.rate}/hr)`
+                        : 'No bonus earned'}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              
+              {/* No stats available message */}
+              {!data.monthlyStats.current && !data.monthlyStats.previous && (
+                <Card className="col-span-2">
+                  <CardContent className="py-8 text-center">
+                    <Trophy className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500">No monthly stats available yet. Your FM will update your performance data.</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Evaluations List */}
         <h2 className="text-xl font-semibold mb-4">Evaluation History</h2>
         
@@ -143,12 +309,7 @@ export default function GPPortal() {
                             : "Date unknown"}
                         </span>
                       </div>
-                      {evaluation.evaluatorName && (
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <User className="h-4 w-4" />
-                          <span>{evaluation.evaluatorName}</span>
-                        </div>
-                      )}
+                      {/* Evaluator name hidden for privacy */}
                       {evaluation.game && (
                         <Badge variant="outline">{evaluation.game}</Badge>
                       )}

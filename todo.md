@@ -320,3 +320,26 @@
 
 ### Mobile-Friendly
 - [ ] Responsive design improvements for tablet/phone use
+
+
+## GP Interface Improvements (v18)
+
+### Privacy & Access Control
+- [x] Hide evaluator name from GP view (privacy protection) - removed from both frontend and backend
+- [x] GP should only see their own data (token-based access)
+
+### GP Stats Display
+- [x] Show mistakes count to GP in their dashboard (Monthly Performance section)
+- [x] Show attitude score to GP in their dashboard (with color-coded badges)
+- [x] Monthly stats summary for GP (current and previous month)
+
+### Bonus Calculation & Status
+- [x] Add totalGames field to monthly_gp_stats table
+- [x] Calculate Good Games (GGs) = totalGames / mistakes (first mistake is free)
+- [x] Determine bonus level based on GGs:
+  - Level 1: minimum 2,500 GGs → €1.50/hour
+  - Level 2: minimum 5,000 GGs → €2.50/hour
+- [x] Display bonus status to GP (eligible/not eligible, level, rate)
+- [x] Show progress bar toward bonus threshold
+- [x] Add Total Games and GGs columns to Admin GP Stats table
+- [x] FM can edit Total Games for each GP

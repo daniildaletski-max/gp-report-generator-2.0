@@ -1029,7 +1029,7 @@ export async function getGpEvaluationsForPortal(gpId: number) {
   return await db.select({
     id: evaluations.id,
     evaluationDate: evaluations.evaluationDate,
-    evaluatorName: evaluations.evaluatorName,
+    // evaluatorName removed for privacy - GP should not see who evaluated them
     game: evaluations.game,
     totalScore: evaluations.totalScore,
     hairScore: evaluations.hairScore,

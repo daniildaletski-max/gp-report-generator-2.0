@@ -219,6 +219,7 @@ export const monthlyGpStats = mysqlTable("monthly_gp_stats", {
   year: int("year").notNull(),
   attitude: int("attitude"), // Score 1-5 or similar
   mistakes: int("mistakes").default(0), // Count of mistakes
+  totalGames: int("totalGames").default(0), // Total games played for bonus calculation
   notes: text("notes"), // Optional notes
   updatedById: int("updatedById"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

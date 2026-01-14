@@ -1,0 +1,1 @@
+ALTER TABLE `monthly_gp_stats` ADD `totalGames` int DEFAULT 0;

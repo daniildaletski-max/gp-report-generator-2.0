@@ -408,6 +408,7 @@ export const appRouter = router({
         year: z.number(),
         attitude: z.number().min(1).max(5).nullable().optional(),
         mistakes: z.number().min(0).optional(),
+        totalGames: z.number().min(0).optional(),
         notes: z.string().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -1160,10 +1161,63 @@ export const appRouter = router({
         // Get all evaluations for this GP
         const evaluations = await db.getGpEvaluationsForPortal(accessToken.gamePresenterId);
 
+        // Get monthly stats for current month
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        
+        // Get stats for current and previous month
+        const currentMonthStats = await db.getMonthlyGpStats(accessToken.gamePresenterId, currentMonth, currentYear);
+        const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+        const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+        const prevMonthStats = await db.getMonthlyGpStats(accessToken.gamePresenterId, prevMonth, prevYear);
+
+        // Calculate bonus status based on GGs (Good Games)
+        // GGs = Total games / mistakes (first mistake is free)
+        const calculateBonusStatus = (stats: typeof currentMonthStats) => {
+          if (!stats) return { eligible: false, level: 0, ggs: 0, reason: 'No data available' };
+          
+          const totalGames = stats.totalGames || 0;
+          const mistakes = stats.mistakes || 0;
+          
+          // First mistake is free: 0 or 1 mistake = all games count
+          const effectiveMistakes = mistakes <= 1 ? 1 : mistakes;
+          const ggs = Math.floor(totalGames / effectiveMistakes);
+          
+          // Level 2: minimum 5,000 GGs → €2.50/hour
+          // Level 1: minimum 2,500 GGs → €1.50/hour
+          if (ggs >= 5000) {
+            return { eligible: true, level: 2, ggs, rate: 2.50, reason: 'Level 2 - Excellent performance!' };
+          } else if (ggs >= 2500) {
+            return { eligible: true, level: 1, ggs, rate: 1.50, reason: 'Level 1 - Good performance!' };
+          } else {
+            const needed = 2500 - ggs;
+            return { eligible: false, level: 0, ggs, rate: 0, reason: `Need ${needed} more GGs for Level 1` };
+          }
+        };
+
         return {
           gpName: gp.name,
           gpId: gp.id,
           evaluations,
+          monthlyStats: {
+            current: currentMonthStats ? {
+              month: currentMonth,
+              year: currentYear,
+              attitude: currentMonthStats.attitude,
+              mistakes: currentMonthStats.mistakes,
+              totalGames: currentMonthStats.totalGames,
+              bonus: calculateBonusStatus(currentMonthStats),
+            } : null,
+            previous: prevMonthStats ? {
+              month: prevMonth,
+              year: prevYear,
+              attitude: prevMonthStats.attitude,
+              mistakes: prevMonthStats.mistakes,
+              totalGames: prevMonthStats.totalGames,
+              bonus: calculateBonusStatus(prevMonthStats),
+            } : null,
+          },
         };
       }),
   }),

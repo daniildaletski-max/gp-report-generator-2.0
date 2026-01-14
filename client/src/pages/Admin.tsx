@@ -691,6 +691,7 @@ function GPStatsTab({
   const [editingGpId, setEditingGpId] = useState<number | null>(null);
   const [editAttitude, setEditAttitude] = useState<number | null>(null);
   const [editMistakes, setEditMistakes] = useState<number>(0);
+  const [editTotalGames, setEditTotalGames] = useState<number>(0);
 
   const { data: gpsWithStats, isLoading, refetch } = trpc.gamePresenter.listWithStats.useQuery({
     teamId: selectedTeamId || undefined,
@@ -708,6 +709,7 @@ function GPStatsTab({
         year: selectedYear,
         attitude: editAttitude,
         mistakes: editMistakes,
+        totalGames: editTotalGames,
       });
       toast.success("Stats updated successfully");
       setEditingGpId(null);
@@ -721,6 +723,7 @@ function GPStatsTab({
     setEditingGpId(gp.id);
     setEditAttitude(gp.stats?.attitude ?? null);
     setEditMistakes(gp.stats?.mistakes ?? 0);
+    setEditTotalGames(gp.stats?.totalGames ?? 0);
   };
 
   return (
@@ -810,6 +813,8 @@ function GPStatsTab({
                   <TableHead>Team</TableHead>
                   <TableHead className="text-center">Attitude (1-5)</TableHead>
                   <TableHead className="text-center">Mistakes</TableHead>
+                  <TableHead className="text-center">Total Games</TableHead>
+                  <TableHead className="text-center">GGs</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -864,6 +869,42 @@ function GPStatsTab({
                             {gp.stats?.mistakes ?? 0}
                           </span>
                         )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            min="0"
+                            value={editTotalGames}
+                            onChange={(e) => setEditTotalGames(Number(e.target.value) || 0)}
+                            className="w-24 mx-auto text-center"
+                            placeholder="0"
+                          />
+                        ) : (
+                          <span className="font-medium">
+                            {(gp.stats?.totalGames ?? 0).toLocaleString()}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {(() => {
+                          const totalGames = gp.stats?.totalGames ?? 0;
+                          const mistakes = gp.stats?.mistakes ?? 0;
+                          const effectiveMistakes = mistakes <= 1 ? 1 : mistakes;
+                          const ggs = totalGames > 0 ? Math.floor(totalGames / effectiveMistakes) : 0;
+                          const isLevel2 = ggs >= 5000;
+                          const isLevel1 = ggs >= 2500;
+                          return (
+                            <Badge 
+                              variant={isLevel2 ? "default" : isLevel1 ? "secondary" : "outline"}
+                              className={isLevel2 ? "bg-green-600" : isLevel1 ? "bg-yellow-500 text-black" : ""}
+                            >
+                              {ggs.toLocaleString()}
+                              {isLevel2 && " L2"}
+                              {isLevel1 && !isLevel2 && " L1"}
+                            </Badge>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-right">
                         {isEditing ? (
