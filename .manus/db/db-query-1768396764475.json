@@ -1,0 +1,31 @@
+{
+  "query": "SELECT * FROM fm_teams ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT * FROM fm_teams ORDER BY id;",
+  "rows": [
+    {
+      "id": "1",
+      "teamName": "Team Omnicron",
+      "floorManagerName": "Andri Saaret",
+      "createdAt": "2026-01-14 11:04:54",
+      "updatedAt": "2026-01-14 11:04:54"
+    },
+    {
+      "id": "2",
+      "teamName": "Team Alpha",
+      "floorManagerName": "Kristina Bobrovskaja",
+      "createdAt": "2026-01-14 11:04:54",
+      "updatedAt": "2026-01-14 11:04:54"
+    },
+    {
+      "id": "3",
+      "teamName": "Team Zeta",
+      "floorManagerName": "Alissa Gujevskaja",
+      "createdAt": "2026-01-14 11:04:54",
+      "updatedAt": "2026-01-14 11:04:54"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tteamName\tfloorManagerName\tcreatedAt\tupdatedAt\n1\tTeam Omnicron\tAndri Saaret\t2026-01-14 11:04:54\t2026-01-14 11:04:54\n2\tTeam Alpha\tKristina Bobrovskaja\t2026-01-14 11:04:54\t2026-01-14 11:04:54\n3\tTeam Zeta\tAlissa Gujevskaja\t2026-01-14 11:04:54\t2026-01-14 11:04:54\n",
+  "stderr": "",
+  "execution_time_ms": 447
+}

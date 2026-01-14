@@ -131,3 +131,11 @@
 - [x] Show link status (Active/No Link)
 - [x] Show last accessed timestamp
 - [x] Open link in new tab button
+
+
+## Team Data Import (v5) - COMPLETED
+
+- [x] Add Team Omicron with Team Leader Andri Saaret (13 GPs)
+- [x] Add Team Zeta with Team Leader Alissa Gujevskaja (10 GPs)
+- [x] Add Team Alpha with Team Leader Kristina Bobrovskaja (13 GPs)
+- [x] Verify all 36 Game Presenters are in the database (35 added + 1 updated)
