@@ -300,9 +300,14 @@ export const appRouter = router({
 
   // Dashboard stats
   dashboard: router({
-    stats: protectedProcedure.query(async () => {
-      return await db.getDashboardStats();
-    }),
+    stats: protectedProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12).optional(),
+        year: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return await db.getDashboardStats(input?.month, input?.year);
+      }),
   }),
 
   // Report generation

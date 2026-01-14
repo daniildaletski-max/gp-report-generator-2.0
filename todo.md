@@ -45,3 +45,11 @@
 - [x] Restore Dashboard with statistics cards (total GPs, evaluations, reports)
 - [x] Add monthly evaluation chart to Dashboard
 - [x] Add recent evaluations list to Dashboard
+
+
+## Dashboard Redesign (matching screenshot)
+
+- [x] Update stats cards: Game Presenters, Evaluations, This Month (GPs evaluated), Reports
+- [x] Add Monthly Performance Overview chart with Total Score, Appearance, Performance per GP
+- [x] Add Monthly Statistics table with detailed breakdown (Evaluations, Avg Total, Hair, Makeup, Outfit, Posture, Dealing, Game Perf)
+- [x] Add month selector for filtering data

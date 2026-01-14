@@ -60,16 +60,18 @@ describe("dashboard.stats", () => {
     const { ctx } = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
-    const result = await caller.dashboard.stats();
+    const result = await caller.dashboard.stats({ month: 1, year: 2026 });
 
     expect(result).toHaveProperty("totalGPs");
     expect(result).toHaveProperty("totalEvaluations");
     expect(result).toHaveProperty("totalReports");
-    expect(result).toHaveProperty("recentEvaluations");
+    expect(result).toHaveProperty("thisMonthGPs");
+    expect(result).toHaveProperty("gpStats");
     expect(typeof result.totalGPs).toBe("number");
     expect(typeof result.totalEvaluations).toBe("number");
     expect(typeof result.totalReports).toBe("number");
-    expect(Array.isArray(result.recentEvaluations)).toBe(true);
+    expect(typeof result.thisMonthGPs).toBe("number");
+    expect(Array.isArray(result.gpStats)).toBe(true);
   });
 });
 

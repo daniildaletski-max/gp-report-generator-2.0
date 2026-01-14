@@ -574,53 +574,87 @@ export async function getGPMonthlyStats(teamId: number, year: number, month: num
   return result;
 }
 
-export async function getDashboardStats() {
+export async function getDashboardStats(month?: number, year?: number) {
   const db = await getDb();
-  if (!db) return { totalGPs: 0, totalEvaluations: 0, totalReports: 0, recentEvaluations: [], monthlyStats: [], avgScore: 0 };
+  if (!db) return { 
+    totalGPs: 0, 
+    totalEvaluations: 0, 
+    totalReports: 0, 
+    thisMonthGPs: 0,
+    gpStats: [],
+    recentEvaluations: [] 
+  };
 
   const [gpCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(gamePresenters);
   const [evalCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(evaluations);
   const [reportCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(reports);
 
-  const recentEvals = await db.select({
-    evaluation: evaluations,
-    gamePresenter: gamePresenters,
+  // Use current month/year if not provided
+  const targetMonth = month || new Date().getMonth() + 1;
+  const targetYear = year || new Date().getFullYear();
+
+  // Count unique GPs evaluated this month
+  const thisMonthGPsResult = await db.select({
+    count: sql<number>`COUNT(DISTINCT gamePresenterId)`,
   })
   .from(evaluations)
-  .leftJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
-  .orderBy(desc(evaluations.createdAt))
-  .limit(5);
+  .where(and(
+    sql`MONTH(evaluationDate) = ${targetMonth}`,
+    sql`YEAR(evaluationDate) = ${targetYear}`
+  ));
+  const thisMonthGPs = thisMonthGPsResult[0]?.count || 0;
 
-  // Get monthly evaluation counts for the last 6 months
-  let monthlyData: { month: number; year: number; count: number; avgScore: number }[] = [];
-  try {
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    
-    monthlyData = await db.select({
-      month: sql<number>`MONTH(evaluationDate)`,
-      year: sql<number>`YEAR(evaluationDate)`,
-      count: sql<number>`COUNT(*)`,
-      avgScore: sql<number>`AVG(totalScore)`,
-    })
-    .from(evaluations)
-    .where(gte(evaluations.evaluationDate, sixMonthsAgo))
-    .groupBy(sql`YEAR(evaluationDate)`, sql`MONTH(evaluationDate)`)
-    .orderBy(sql`YEAR(evaluationDate)`, sql`MONTH(evaluationDate)`);
-  } catch (e) {
-    console.warn("Failed to get monthly stats:", e);
-    monthlyData = [];
-  }
+  // Get detailed stats per GP for the selected month
+  const gpStatsRaw = await db.select({
+    gpId: gamePresenters.id,
+    gpName: gamePresenters.name,
+    evalCount: sql<number>`COUNT(*)`,
+    avgTotal: sql<number>`AVG(${evaluations.totalScore})`,
+    avgHair: sql<number>`AVG(${evaluations.hairScore})`,
+    avgMakeup: sql<number>`AVG(${evaluations.makeupScore})`,
+    avgOutfit: sql<number>`AVG(${evaluations.outfitScore})`,
+    avgPosture: sql<number>`AVG(${evaluations.postureScore})`,
+    avgDealing: sql<number>`AVG(${evaluations.dealingStyleScore})`,
+    avgGamePerf: sql<number>`AVG(${evaluations.gamePerformanceScore})`,
+  })
+  .from(evaluations)
+  .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+  .where(and(
+    sql`MONTH(${evaluations.evaluationDate}) = ${targetMonth}`,
+    sql`YEAR(${evaluations.evaluationDate}) = ${targetYear}`
+  ))
+  .groupBy(gamePresenters.id, gamePresenters.name)
+  .orderBy(gamePresenters.name);
 
-  // Calculate overall average score
-  const [avgScoreResult] = await db.select({ avg: sql<number>`AVG(${evaluations.totalScore})` }).from(evaluations);
+  const gpStats = gpStatsRaw.map(gp => ({
+    gpId: gp.gpId,
+    gpName: gp.gpName,
+    evalCount: gp.evalCount,
+    avgTotal: gp.avgTotal ? Number(gp.avgTotal).toFixed(1) : "0.0",
+    avgHair: gp.avgHair ? Number(gp.avgHair).toFixed(1) : "0.0",
+    avgMakeup: gp.avgMakeup ? Number(gp.avgMakeup).toFixed(1) : "0.0",
+    avgOutfit: gp.avgOutfit ? Number(gp.avgOutfit).toFixed(1) : "0.0",
+    avgPosture: gp.avgPosture ? Number(gp.avgPosture).toFixed(1) : "0.0",
+    avgDealing: gp.avgDealing ? Number(gp.avgDealing).toFixed(1) : "0.0",
+    avgGamePerf: gp.avgGamePerf ? Number(gp.avgGamePerf).toFixed(1) : "0.0",
+    // Calculate appearance (Hair + Makeup + Outfit + Posture) / 4 * 3 to normalize to ~12 max
+    avgAppearance: gp.avgHair && gp.avgMakeup && gp.avgOutfit && gp.avgPosture 
+      ? ((Number(gp.avgHair) + Number(gp.avgMakeup) + Number(gp.avgOutfit) + Number(gp.avgPosture))).toFixed(1)
+      : "0.0",
+    // Performance is Dealing + Game Perf
+    avgPerformance: gp.avgDealing && gp.avgGamePerf
+      ? (Number(gp.avgDealing) + Number(gp.avgGamePerf)).toFixed(1)
+      : "0.0",
+  }));
 
   return {
     totalGPs: gpCount.count,
     totalEvaluations: evalCount.count,
     totalReports: reportCount.count,
-    recentEvaluations: recentEvals,
-    monthlyStats: monthlyData,
-    avgScore: avgScoreResult?.avg || 0,
+    thisMonthGPs,
+    gpStats,
+    recentEvaluations: [],
+    selectedMonth: targetMonth,
+    selectedYear: targetYear,
   };
 }
