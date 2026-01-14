@@ -279,6 +279,65 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return await db.getEvaluationsByMonth(input.year, input.month);
       }),
+
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getEvaluationWithGP(input.id);
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        evaluatorName: z.string().optional(),
+        evaluationDate: z.date().optional(),
+        game: z.string().optional(),
+        totalScore: z.number().optional(),
+        hairScore: z.number().optional(),
+        makeupScore: z.number().optional(),
+        outfitScore: z.number().optional(),
+        postureScore: z.number().optional(),
+        dealingStyleScore: z.number().optional(),
+        gamePerformanceScore: z.number().optional(),
+        hairComment: z.string().optional(),
+        makeupComment: z.string().optional(),
+        outfitComment: z.string().optional(),
+        postureComment: z.string().optional(),
+        dealingStyleComment: z.string().optional(),
+        gamePerformanceComment: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        const updated = await db.updateEvaluation(id, data);
+        return { success: true, evaluation: updated };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteEvaluation(input.id);
+        return { success: true };
+      }),
+
+    deleteByMonth: protectedProcedure
+      .input(z.object({
+        year: z.number(),
+        month: z.number().min(1).max(12),
+      }))
+      .mutation(async ({ input }) => {
+        const count = await db.deleteEvaluationsByMonth(input.year, input.month);
+        return { success: true, deletedCount: count };
+      }),
+
+    deleteByDateRange: protectedProcedure
+      .input(z.object({
+        startDate: z.date(),
+        endDate: z.date(),
+      }))
+      .mutation(async ({ input }) => {
+        const count = await db.deleteEvaluationsByDateRange(input.startDate, input.endDate);
+        return { success: true, deletedCount: count };
+      }),
   }),
 
   // Game Presenters management

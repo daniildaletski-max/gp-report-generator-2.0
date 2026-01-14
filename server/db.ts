@@ -658,3 +658,89 @@ export async function getDashboardStats(month?: number, year?: number) {
     selectedYear: targetYear,
   };
 }
+
+
+// ============================================
+// EVALUATION CRUD FUNCTIONS
+// ============================================
+
+export async function updateEvaluation(id: number, data: Partial<InsertEvaluation>): Promise<Evaluation | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Recalculate composite scores if individual scores are updated
+  const updateData: Record<string, unknown> = { ...data };
+  
+  if (data.hairScore !== undefined || data.makeupScore !== undefined || 
+      data.outfitScore !== undefined || data.postureScore !== undefined) {
+    // Get current values to calculate new appearance score
+    const current = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
+    if (current.length > 0) {
+      const hair = data.hairScore ?? current[0].hairScore ?? 0;
+      const makeup = data.makeupScore ?? current[0].makeupScore ?? 0;
+      const outfit = data.outfitScore ?? current[0].outfitScore ?? 0;
+      const posture = data.postureScore ?? current[0].postureScore ?? 0;
+      updateData.appearanceScore = hair + makeup + outfit + posture;
+    }
+  }
+
+  if (data.dealingStyleScore !== undefined || data.gamePerformanceScore !== undefined) {
+    const current = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
+    if (current.length > 0) {
+      const dealing = data.dealingStyleScore ?? current[0].dealingStyleScore ?? 0;
+      const gamePerf = data.gamePerformanceScore ?? current[0].gamePerformanceScore ?? 0;
+      updateData.gamePerformanceTotalScore = dealing + gamePerf;
+    }
+  }
+
+  // Recalculate total score
+  if (updateData.appearanceScore !== undefined || updateData.gamePerformanceTotalScore !== undefined) {
+    const current = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
+    if (current.length > 0) {
+      const appearance = (updateData.appearanceScore as number) ?? current[0].appearanceScore ?? 0;
+      const gamePerf = (updateData.gamePerformanceTotalScore as number) ?? current[0].gamePerformanceTotalScore ?? 0;
+      updateData.totalScore = appearance + gamePerf;
+    }
+  }
+
+  await db.update(evaluations).set(updateData as any).where(eq(evaluations.id, id));
+  
+  const updated = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
+  return updated.length > 0 ? updated[0] : null;
+}
+
+export async function deleteEvaluation(id: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(evaluations).where(eq(evaluations.id, id));
+  return true;
+}
+
+export async function deleteEvaluationsByDateRange(startDate: Date, endDate: Date): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.delete(evaluations).where(
+    and(
+      gte(evaluations.evaluationDate, startDate),
+      lte(evaluations.evaluationDate, endDate)
+    )
+  );
+  
+  return (result as any)[0]?.affectedRows || 0;
+}
+
+export async function deleteEvaluationsByMonth(year: number, month: number): Promise<number> {
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
+  return await deleteEvaluationsByDateRange(startDate, endDate);
+}
+
+export async function getEvaluationById(id: number): Promise<Evaluation | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}

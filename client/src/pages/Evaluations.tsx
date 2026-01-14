@@ -1,15 +1,101 @@
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Eye, Image } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Eye, Pencil, Trash2, Image, Trash } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
 
 export default function EvaluationsPage() {
+  const utils = trpc.useUtils();
   const { data: evaluations, isLoading } = trpc.evaluation.list.useQuery();
+  
+  const [editingEval, setEditingEval] = useState<any>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [clearMonth, setClearMonth] = useState(new Date().getMonth() + 1);
+  const [clearYear, setClearYear] = useState(new Date().getFullYear());
+  
+  const deleteMutation = trpc.evaluation.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Evaluation deleted");
+      utils.evaluation.list.invalidate();
+      utils.dashboard.stats.invalidate();
+    },
+    onError: (error) => {
+      toast.error("Failed to delete: " + error.message);
+    },
+  });
+
+  const updateMutation = trpc.evaluation.update.useMutation({
+    onSuccess: () => {
+      toast.success("Evaluation updated");
+      setEditDialogOpen(false);
+      setEditingEval(null);
+      utils.evaluation.list.invalidate();
+      utils.dashboard.stats.invalidate();
+    },
+    onError: (error) => {
+      toast.error("Failed to update: " + error.message);
+    },
+  });
+
+  const deleteByMonthMutation = trpc.evaluation.deleteByMonth.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Deleted ${data.deletedCount} evaluations`);
+      utils.evaluation.list.invalidate();
+      utils.dashboard.stats.invalidate();
+    },
+    onError: (error) => {
+      toast.error("Failed to clear: " + error.message);
+    },
+  });
+
+  const handleEdit = (evaluation: any) => {
+    setEditingEval({
+      id: evaluation.id,
+      evaluatorName: evaluation.evaluatorName || "",
+      game: evaluation.game || "",
+      hairScore: evaluation.hairScore || 0,
+      makeupScore: evaluation.makeupScore || 0,
+      outfitScore: evaluation.outfitScore || 0,
+      postureScore: evaluation.postureScore || 0,
+      dealingStyleScore: evaluation.dealingStyleScore || 0,
+      gamePerformanceScore: evaluation.gamePerformanceScore || 0,
+      hairComment: evaluation.hairComment || "",
+      makeupComment: evaluation.makeupComment || "",
+      outfitComment: evaluation.outfitComment || "",
+      postureComment: evaluation.postureComment || "",
+      dealingStyleComment: evaluation.dealingStyleComment || "",
+      gamePerformanceComment: evaluation.gamePerformanceComment || "",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingEval) return;
+    updateMutation.mutate(editingEval);
+  };
+
+  const handleDelete = (id: number) => {
+    deleteMutation.mutate({ id });
+  };
+
+  const handleClearMonth = () => {
+    deleteByMonthMutation.mutate({ year: clearYear, month: clearMonth });
+  };
 
   if (isLoading) {
     return (
@@ -33,18 +119,72 @@ export default function EvaluationsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Evaluations</h1>
-        <p className="text-muted-foreground">
-          View all uploaded evaluation data ({evaluations?.length || 0} total)
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Evaluations</h1>
+          <p className="text-muted-foreground">
+            View and manage evaluation data ({evaluations?.length || 0} total)
+          </p>
+        </div>
+        
+        {/* Clear by Month */}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" size="sm">
+              <Trash className="h-4 w-4 mr-2" />
+              Clear Month
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear Evaluations by Month</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete all evaluations for the selected month. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="grid grid-cols-2 gap-4 py-4">
+              <div>
+                <Label>Month</Label>
+                <Select value={String(clearMonth)} onValueChange={(v) => setClearMonth(Number(v))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTHS.map((month, i) => (
+                      <SelectItem key={i} value={String(i + 1)}>{month}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Year</Label>
+                <Select value={String(clearYear)} onValueChange={(v) => setClearYear(Number(v))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[2024, 2025, 2026, 2027].map((year) => (
+                      <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleClearMonth} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Delete All
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>All Evaluations</CardTitle>
           <CardDescription>
-            Extracted data from uploaded evaluation screenshots
+            Extracted data from uploaded evaluation screenshots. Click Edit to modify or Delete to remove.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -122,129 +262,114 @@ export default function EvaluationsPage() {
                           : "-"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-3xl">
-                            <DialogHeader>
-                              <DialogTitle>
-                                Evaluation Details - {gamePresenter?.name}
-                              </DialogTitle>
-                              <DialogDescription>
-                                {evaluation.evaluationDate
-                                  ? format(new Date(evaluation.evaluationDate), "dd MMMM yyyy")
-                                  : "No date"}{" "}
-                                | {evaluation.game || "No game"}
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-4">
-                                <div>
-                                  <h4 className="font-semibold mb-2">Scores</h4>
-                                  <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between">
-                                      <span>Hair:</span>
-                                      <span>
-                                        {evaluation.hairScore}/{evaluation.hairMaxScore}
-                                      </span>
+                        <div className="flex items-center justify-end gap-1">
+                          {/* View Dialog */}
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-3xl">
+                              <DialogHeader>
+                                <DialogTitle>
+                                  Evaluation Details - {gamePresenter?.name}
+                                </DialogTitle>
+                                <DialogDescription>
+                                  {evaluation.evaluationDate
+                                    ? format(new Date(evaluation.evaluationDate), "dd MMMM yyyy")
+                                    : "No date"}{" "}
+                                  | {evaluation.game || "No game"}
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-4">
+                                  <div>
+                                    <h4 className="font-semibold mb-2">Scores</h4>
+                                    <div className="space-y-2 text-sm">
+                                      <div className="flex justify-between">
+                                        <span>Hair:</span>
+                                        <span>{evaluation.hairScore}/{evaluation.hairMaxScore}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>Makeup:</span>
+                                        <span>{evaluation.makeupScore}/{evaluation.makeupMaxScore}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>Outfit:</span>
+                                        <span>{evaluation.outfitScore}/{evaluation.outfitMaxScore}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>Posture:</span>
+                                        <span>{evaluation.postureScore}/{evaluation.postureMaxScore}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>Dealing Style:</span>
+                                        <span>{evaluation.dealingStyleScore}/{evaluation.dealingStyleMaxScore}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>Game Performance:</span>
+                                        <span>{evaluation.gamePerformanceScore}/{evaluation.gamePerformanceMaxScore}</span>
+                                      </div>
+                                      <div className="flex justify-between font-bold pt-2 border-t">
+                                        <span>Total:</span>
+                                        <span>{evaluation.totalScore}</span>
+                                      </div>
                                     </div>
-                                    <div className="flex justify-between">
-                                      <span>Makeup:</span>
-                                      <span>
-                                        {evaluation.makeupScore}/{evaluation.makeupMaxScore}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Outfit:</span>
-                                      <span>
-                                        {evaluation.outfitScore}/{evaluation.outfitMaxScore}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Posture:</span>
-                                      <span>
-                                        {evaluation.postureScore}/{evaluation.postureMaxScore}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Dealing Style:</span>
-                                      <span>
-                                        {evaluation.dealingStyleScore}/{evaluation.dealingStyleMaxScore}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Game Performance:</span>
-                                      <span>
-                                        {evaluation.gamePerformanceScore}/{evaluation.gamePerformanceMaxScore}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between font-bold pt-2 border-t">
-                                      <span>Total:</span>
-                                      <span>{evaluation.totalScore}</span>
+                                  </div>
+                                  <div>
+                                    <h4 className="font-semibold mb-2">Comments</h4>
+                                    <div className="space-y-2 text-sm text-muted-foreground">
+                                      {evaluation.hairComment && <p><span className="font-medium">Hair:</span> {evaluation.hairComment}</p>}
+                                      {evaluation.makeupComment && <p><span className="font-medium">Makeup:</span> {evaluation.makeupComment}</p>}
+                                      {evaluation.outfitComment && <p><span className="font-medium">Outfit:</span> {evaluation.outfitComment}</p>}
+                                      {evaluation.postureComment && <p><span className="font-medium">Posture:</span> {evaluation.postureComment}</p>}
+                                      {evaluation.dealingStyleComment && <p><span className="font-medium">Dealing:</span> {evaluation.dealingStyleComment}</p>}
+                                      {evaluation.gamePerformanceComment && <p><span className="font-medium">Game Perf:</span> {evaluation.gamePerformanceComment}</p>}
                                     </div>
                                   </div>
                                 </div>
                                 <div>
-                                  <h4 className="font-semibold mb-2">Comments</h4>
-                                  <div className="space-y-2 text-sm text-muted-foreground">
-                                    {evaluation.hairComment && (
-                                      <p>
-                                        <span className="font-medium">Hair:</span>{" "}
-                                        {evaluation.hairComment}
-                                      </p>
-                                    )}
-                                    {evaluation.makeupComment && (
-                                      <p>
-                                        <span className="font-medium">Makeup:</span>{" "}
-                                        {evaluation.makeupComment}
-                                      </p>
-                                    )}
-                                    {evaluation.outfitComment && (
-                                      <p>
-                                        <span className="font-medium">Outfit:</span>{" "}
-                                        {evaluation.outfitComment}
-                                      </p>
-                                    )}
-                                    {evaluation.postureComment && (
-                                      <p>
-                                        <span className="font-medium">Posture:</span>{" "}
-                                        {evaluation.postureComment}
-                                      </p>
-                                    )}
-                                    {evaluation.dealingStyleComment && (
-                                      <p>
-                                        <span className="font-medium">Dealing:</span>{" "}
-                                        {evaluation.dealingStyleComment}
-                                      </p>
-                                    )}
-                                    {evaluation.gamePerformanceComment && (
-                                      <p>
-                                        <span className="font-medium">Game Perf:</span>{" "}
-                                        {evaluation.gamePerformanceComment}
-                                      </p>
-                                    )}
-                                  </div>
+                                  {evaluation.screenshotUrl ? (
+                                    <img src={evaluation.screenshotUrl} alt="Evaluation screenshot" className="w-full rounded-lg border" />
+                                  ) : (
+                                    <div className="w-full aspect-[3/4] bg-muted rounded-lg flex items-center justify-center">
+                                      <Image className="h-12 w-12 text-muted-foreground" />
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                              <div>
-                                {evaluation.screenshotUrl ? (
-                                  <img
-                                    src={evaluation.screenshotUrl}
-                                    alt="Evaluation screenshot"
-                                    className="w-full rounded-lg border"
-                                  />
-                                ) : (
-                                  <div className="w-full aspect-[3/4] bg-muted rounded-lg flex items-center justify-center">
-                                    <Image className="h-12 w-12 text-muted-foreground" />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
+                            </DialogContent>
+                          </Dialog>
+
+                          {/* Edit Button */}
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(evaluation)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+
+                          {/* Delete Button */}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Evaluation</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this evaluation for {gamePresenter?.name}? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(evaluation.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -255,13 +380,166 @@ export default function EvaluationsPage() {
             <div className="text-center py-12">
               <Image className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="font-semibold mb-1">No evaluations yet</h3>
-              <p className="text-muted-foreground">
-                Upload evaluation screenshots to get started
-              </p>
+              <p className="text-muted-foreground">Upload evaluation screenshots to get started</p>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Evaluation</DialogTitle>
+            <DialogDescription>
+              Modify the evaluation scores and comments. Changes will be saved immediately.
+            </DialogDescription>
+          </DialogHeader>
+          {editingEval && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Evaluator Name</Label>
+                  <Input
+                    value={editingEval.evaluatorName}
+                    onChange={(e) => setEditingEval({ ...editingEval, evaluatorName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Game</Label>
+                  <Input
+                    value={editingEval.game}
+                    onChange={(e) => setEditingEval({ ...editingEval, game: e.target.value })}
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label>Hair (0-3)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="3"
+                    value={editingEval.hairScore}
+                    onChange={(e) => setEditingEval({ ...editingEval, hairScore: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label>Makeup (0-3)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="3"
+                    value={editingEval.makeupScore}
+                    onChange={(e) => setEditingEval({ ...editingEval, makeupScore: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label>Outfit (0-3)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="3"
+                    value={editingEval.outfitScore}
+                    onChange={(e) => setEditingEval({ ...editingEval, outfitScore: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label>Posture (0-3)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="3"
+                    value={editingEval.postureScore}
+                    onChange={(e) => setEditingEval({ ...editingEval, postureScore: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label>Dealing Style (0-5)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="5"
+                    value={editingEval.dealingStyleScore}
+                    onChange={(e) => setEditingEval({ ...editingEval, dealingStyleScore: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label>Game Perf (0-5)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="5"
+                    value={editingEval.gamePerformanceScore}
+                    onChange={(e) => setEditingEval({ ...editingEval, gamePerformanceScore: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Hair Comment</Label>
+                  <Input
+                    value={editingEval.hairComment}
+                    onChange={(e) => setEditingEval({ ...editingEval, hairComment: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Makeup Comment</Label>
+                  <Input
+                    value={editingEval.makeupComment}
+                    onChange={(e) => setEditingEval({ ...editingEval, makeupComment: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Outfit Comment</Label>
+                  <Input
+                    value={editingEval.outfitComment}
+                    onChange={(e) => setEditingEval({ ...editingEval, outfitComment: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Posture Comment</Label>
+                  <Input
+                    value={editingEval.postureComment}
+                    onChange={(e) => setEditingEval({ ...editingEval, postureComment: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Dealing Style Comment</Label>
+                  <Input
+                    value={editingEval.dealingStyleComment}
+                    onChange={(e) => setEditingEval({ ...editingEval, dealingStyleComment: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Game Performance Comment</Label>
+                  <Input
+                    value={editingEval.gamePerformanceComment}
+                    onChange={(e) => setEditingEval({ ...editingEval, gamePerformanceComment: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

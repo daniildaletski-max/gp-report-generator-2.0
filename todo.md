@@ -58,3 +58,24 @@
 ## Bug Fixes
 
 - [x] Fix report generation error - Failed query insert into reports (synced DB schema with drizzle)
+
+
+## Full FM Functionality (v2)
+
+### CRUD for Evaluations
+- [x] Edit evaluation - update scores and comments
+- [x] Delete single evaluation
+- [x] Bulk delete evaluations by date range
+- [x] Clear all evaluations for a month
+
+### Excel Report Matching Template
+- [ ] Monthly Report sheet with FM Performance, Goals, Team Overview sections
+- [ ] Attendance table with Mistakes, Extra shifts, Late, Missed days, Sick leaves, Remarks
+- [ ] Data sheet with GAME PERF. and APPEARANCE scores per GP
+- [ ] Proper formatting matching template (colors, fonts, borders)
+
+### UI Improvements
+- [x] Evaluation edit modal with all fields
+- [x] Delete confirmation dialog
+- [x] Bulk actions toolbar in Evaluations page
+- [x] Month/year filter for clearing old data
