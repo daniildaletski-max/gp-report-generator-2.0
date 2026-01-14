@@ -250,3 +250,10 @@
 ### FM User Setup
 - [x] Teams configured: Omnicron (id=1), Alpha (id=2), Zeta (id=3)
 - [x] FM users created when they log in, admin assigns teams via User Management tab
+
+
+## UI Improvements & Dashboard Team Filter (v14)
+
+- [x] Add team-based filtering to Dashboard API (stats.getDashboardStats)
+- [x] Fix tab alignment in Admin panel (icons and text misaligned)
+- [x] General UI improvements (color-coded chart, improved table with visual indicators)

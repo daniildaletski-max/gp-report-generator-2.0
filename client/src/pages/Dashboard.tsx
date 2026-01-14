@@ -163,9 +163,9 @@ export default function Dashboard() {
                   labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
                 />
                 <Legend verticalAlign="bottom" wrapperStyle={{ paddingTop: 20 }} />
-                <Bar dataKey="totalScore" name="Total Score" fill="#1a1a1a" />
-                <Bar dataKey="appearance" name="Appearance" fill="#4a4a4a" />
-                <Bar dataKey="performance" name="Performance" fill="#7a7a7a" />
+                <Bar dataKey="totalScore" name="Total Score" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="appearance" name="Appearance" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="performance" name="Performance" fill="#f59e0b" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -201,19 +201,43 @@ export default function Dashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {stats.gpStats.map((gp) => (
-                  <TableRow key={gp.gpId}>
-                    <TableCell className="font-medium">{gp.gpName}</TableCell>
-                    <TableCell className="text-center">{gp.evalCount}</TableCell>
-                    <TableCell className="text-center font-bold">{gp.avgTotal}</TableCell>
-                    <TableCell className="text-center">{gp.avgHair}</TableCell>
-                    <TableCell className="text-center">{gp.avgMakeup}</TableCell>
-                    <TableCell className="text-center">{gp.avgOutfit}</TableCell>
-                    <TableCell className="text-center">{gp.avgPosture}</TableCell>
-                    <TableCell className="text-center">{gp.avgDealing}</TableCell>
-                    <TableCell className="text-center">{gp.avgGamePerf}</TableCell>
-                  </TableRow>
-                ))}
+                {stats.gpStats.map((gp) => {
+                  const total = Number(gp.avgTotal);
+                  const getScoreColor = (score: string, max: number = 3) => {
+                    const val = Number(score);
+                    const pct = val / max;
+                    if (pct >= 0.8) return "text-green-600 font-medium";
+                    if (pct >= 0.6) return "text-yellow-600";
+                    if (pct < 0.4) return "text-red-600";
+                    return "";
+                  };
+                  const getTotalColor = () => {
+                    if (total >= 20) return "bg-green-100 text-green-800";
+                    if (total >= 16) return "bg-yellow-100 text-yellow-800";
+                    return "bg-red-100 text-red-800";
+                  };
+                  return (
+                    <TableRow key={gp.gpId} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{gp.gpName}</TableCell>
+                      <TableCell className="text-center">
+                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-800 font-medium">
+                          {gp.evalCount}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={`inline-flex items-center justify-center px-2 py-1 rounded font-bold ${getTotalColor()}`}>
+                          {gp.avgTotal}
+                        </span>
+                      </TableCell>
+                      <TableCell className={`text-center ${getScoreColor(gp.avgHair)}`}>{gp.avgHair}</TableCell>
+                      <TableCell className={`text-center ${getScoreColor(gp.avgMakeup)}`}>{gp.avgMakeup}</TableCell>
+                      <TableCell className={`text-center ${getScoreColor(gp.avgOutfit)}`}>{gp.avgOutfit}</TableCell>
+                      <TableCell className={`text-center ${getScoreColor(gp.avgPosture)}`}>{gp.avgPosture}</TableCell>
+                      <TableCell className={`text-center ${getScoreColor(gp.avgDealing, 6)}`}>{gp.avgDealing}</TableCell>
+                      <TableCell className={`text-center ${getScoreColor(gp.avgGamePerf, 6)}`}>{gp.avgGamePerf}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           ) : (

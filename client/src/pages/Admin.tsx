@@ -162,26 +162,26 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="stats" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="stats" className="flex items-center gap-2">
-            <Star className="h-4 w-4" />
-            GP Stats
+        <TabsList className="grid w-full grid-cols-5 h-auto p-1">
+          <TabsTrigger value="stats" className="flex items-center justify-center gap-2 py-2">
+            <Star className="h-4 w-4 shrink-0" />
+            <span>GP Stats</span>
           </TabsTrigger>
-          <TabsTrigger value="access" className="flex items-center gap-2">
-            <Link className="h-4 w-4" />
-            GP Access Links
+          <TabsTrigger value="access" className="flex items-center justify-center gap-2 py-2">
+            <Link className="h-4 w-4 shrink-0" />
+            <span>GP Access Links</span>
           </TabsTrigger>
-          <TabsTrigger value="teams" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Teams
+          <TabsTrigger value="teams" className="flex items-center justify-center gap-2 py-2">
+            <Users className="h-4 w-4 shrink-0" />
+            <span>Teams</span>
           </TabsTrigger>
-          <TabsTrigger value="errors" className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
-            Error Files
+          <TabsTrigger value="errors" className="flex items-center justify-center gap-2 py-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>Error Files</span>
           </TabsTrigger>
-          <TabsTrigger value="users" className="flex items-center gap-2">
-            <UserCog className="h-4 w-4" />
-            User Management
+          <TabsTrigger value="users" className="flex items-center justify-center gap-2 py-2">
+            <UserCog className="h-4 w-4 shrink-0" />
+            <span>User Management</span>
           </TabsTrigger>
         </TabsList>
 

@@ -459,8 +459,10 @@ export const appRouter = router({
         month: z.number().min(1).max(12).optional(),
         year: z.number().optional(),
       }).optional())
-      .query(async ({ input }) => {
-        return await db.getDashboardStats(input?.month, input?.year);
+      .query(async ({ ctx, input }) => {
+        // If user has a team assigned, filter stats by their team
+        const teamId = ctx.user.teamId || undefined;
+        return await db.getDashboardStats(input?.month, input?.year, teamId);
       }),
   }),
 

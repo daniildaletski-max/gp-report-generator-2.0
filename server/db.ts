@@ -668,7 +668,7 @@ export async function getGPMonthlyStats(teamId: number, year: number, month: num
   return result;
 }
 
-export async function getDashboardStats(month?: number, year?: number) {
+export async function getDashboardStats(month?: number, year?: number, teamId?: number) {
   const db = await getDb();
   if (!db) return { 
     totalGPs: 0, 
@@ -679,26 +679,62 @@ export async function getDashboardStats(month?: number, year?: number) {
     recentEvaluations: [] 
   };
 
-  const [gpCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(gamePresenters);
-  const [evalCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(evaluations);
-  const [reportCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(reports);
+  // Build team filter condition
+  const teamCondition = teamId ? eq(gamePresenters.teamId, teamId) : undefined;
+
+  // Count GPs (filtered by team if specified)
+  const gpCountQuery = teamId 
+    ? await db.select({ count: sql<number>`COUNT(*)` }).from(gamePresenters).where(eq(gamePresenters.teamId, teamId))
+    : await db.select({ count: sql<number>`COUNT(*)` }).from(gamePresenters);
+  const [gpCount] = gpCountQuery;
+
+  // Count evaluations (filtered by team if specified)
+  const evalCountQuery = teamId
+    ? await db.select({ count: sql<number>`COUNT(*)` })
+        .from(evaluations)
+        .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+        .where(eq(gamePresenters.teamId, teamId))
+    : await db.select({ count: sql<number>`COUNT(*)` }).from(evaluations);
+  const [evalCount] = evalCountQuery;
+
+  // Count reports (filtered by team if specified)
+  const reportCountQuery = teamId
+    ? await db.select({ count: sql<number>`COUNT(*)` }).from(reports).where(eq(reports.teamId, teamId))
+    : await db.select({ count: sql<number>`COUNT(*)` }).from(reports);
+  const [reportCount] = reportCountQuery;
 
   // Use current month/year if not provided
   const targetMonth = month || new Date().getMonth() + 1;
   const targetYear = year || new Date().getFullYear();
 
-  // Count unique GPs evaluated this month
-  const thisMonthGPsResult = await db.select({
-    count: sql<number>`COUNT(DISTINCT gamePresenterId)`,
+  // Count unique GPs evaluated this month (filtered by team if specified)
+  const thisMonthConditions = [
+    sql`MONTH(${evaluations.evaluationDate}) = ${targetMonth}`,
+    sql`YEAR(${evaluations.evaluationDate}) = ${targetYear}`
+  ];
+  if (teamId) {
+    thisMonthConditions.push(eq(gamePresenters.teamId, teamId));
+  }
+  
+  const thisMonthGPsQuery = db.select({
+    count: sql<number>`COUNT(DISTINCT ${evaluations.gamePresenterId})`,
   })
   .from(evaluations)
-  .where(and(
-    sql`MONTH(evaluationDate) = ${targetMonth}`,
-    sql`YEAR(evaluationDate) = ${targetYear}`
-  ));
+  .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+  .where(and(...thisMonthConditions));
+  
+  const thisMonthGPsResult = await thisMonthGPsQuery;
   const thisMonthGPs = thisMonthGPsResult[0]?.count || 0;
 
-  // Get detailed stats per GP for the selected month
+  // Get detailed stats per GP for the selected month (filtered by team if specified)
+  const gpStatsConditions = [
+    sql`MONTH(${evaluations.evaluationDate}) = ${targetMonth}`,
+    sql`YEAR(${evaluations.evaluationDate}) = ${targetYear}`
+  ];
+  if (teamId) {
+    gpStatsConditions.push(eq(gamePresenters.teamId, teamId));
+  }
+  
   const gpStatsRaw = await db.select({
     gpId: gamePresenters.id,
     gpName: gamePresenters.name,
@@ -713,10 +749,7 @@ export async function getDashboardStats(month?: number, year?: number) {
   })
   .from(evaluations)
   .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
-  .where(and(
-    sql`MONTH(${evaluations.evaluationDate}) = ${targetMonth}`,
-    sql`YEAR(${evaluations.evaluationDate}) = ${targetYear}`
-  ))
+  .where(and(...gpStatsConditions))
   .groupBy(gamePresenters.id, gamePresenters.name)
   .orderBy(gamePresenters.name);
 
