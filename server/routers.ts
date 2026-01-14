@@ -519,6 +519,13 @@ export const appRouter = router({
         const fmName = team?.floorManagerName || "Unknown FM";
         const monthName = MONTH_NAMES[report.reportMonth - 1];
 
+        // ALWAYS fetch fresh data from database for the most up-to-date information
+        const freshAttendance = await db.getAttendanceByTeamMonth(
+          report.teamId, 
+          report.reportMonth, 
+          report.reportYear
+        );
+
         // Get detailed GP evaluations for Data sheet
         const gpEvaluationsData = await db.getGPEvaluationsForDataSheet(
           report.teamId, 
@@ -685,8 +692,8 @@ export const appRouter = router({
         };
 
         // Populate GP attendance data (rows 6-35, 2 rows per GP)
-        const reportData = report.reportData as { stats?: any[], attendance?: any[] } || {};
-        const attendanceData = reportData.attendance || [];
+        // Use freshAttendance from database for the most current data
+        const attendanceData = freshAttendance;
         let gpRow = 6;
         
         for (const item of attendanceData) {

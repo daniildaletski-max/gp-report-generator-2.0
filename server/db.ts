@@ -375,6 +375,11 @@ export async function getAttendanceByTeamMonth(teamId: number, month: number, ye
   const db = await getDb();
   if (!db) return [];
 
+  // Get ALL GPs in the team (not just those with attendance records)
+  const teamGPs = await db.select().from(gamePresenters)
+    .where(eq(gamePresenters.teamId, teamId))
+    .orderBy(gamePresenters.name);
+
   // Get attendance data
   const attendanceData = await db.select({
     attendance: gpMonthlyAttendance,
@@ -401,11 +406,14 @@ export async function getAttendanceByTeamMonth(teamId: number, month: number, ye
     eq(monthlyGpStats.year, year)
   ));
 
-  // Merge stats into attendance data
-  return attendanceData.map(item => {
-    const gpStats = statsData.find(s => s.gamePresenter.id === item.gamePresenter.id);
+  // Build result for ALL GPs in team, merging attendance and stats data
+  return teamGPs.map(gp => {
+    const gpAttendance = attendanceData.find(a => a.gamePresenter.id === gp.id);
+    const gpStats = statsData.find(s => s.gamePresenter.id === gp.id);
+    
     return {
-      ...item,
+      gamePresenter: gp,
+      attendance: gpAttendance?.attendance || null,
       monthlyStats: gpStats?.stats || null,
     };
   });

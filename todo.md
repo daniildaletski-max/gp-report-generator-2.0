@@ -257,3 +257,16 @@
 - [x] Add team-based filtering to Dashboard API (stats.getDashboardStats)
 - [x] Fix tab alignment in Admin panel (icons and text misaligned)
 - [x] General UI improvements (color-coded chart, improved table with visual indicators)
+
+
+## Monthly Team Overview Improvement (v15)
+
+- [x] Автоматический сбор всех оценок GP за выбранный месяц из БД
+- [x] Автоматический сбор данных об ошибках из monthly_gp_stats
+- [x] Генерация отчёта в формате FM Team Report (Data + Monthly листы)
+- [x] Проверка корректности формул AVERAGE и SUM
+- [x] Тестирование генерации с реальными данными
+- [x] Auto-fetch fresh data from database when exporting Excel
+- [x] Include ALL GPs from team in report (not just those with attendance records)
+- [x] Merge attendance and monthly stats data for complete GP information
+- [x] All 50 tests passing
