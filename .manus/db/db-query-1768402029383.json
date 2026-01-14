@@ -1,0 +1,90 @@
+{
+  "query": "SELECT gpName, COUNT(*) as count FROM gp_errors GROUP BY gpName LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT gpName, COUNT(*) as count FROM gp_errors GROUP BY gpName LIMIT 20;",
+  "rows": [
+    {
+      "gpName": "Sanita Dolovac",
+      "count": "10"
+    },
+    {
+      "gpName": "Vitaly Bayushkin",
+      "count": "4"
+    },
+    {
+      "gpName": "Angelina Tuluša",
+      "count": "2"
+    },
+    {
+      "gpName": "Jelizaveta Venkova",
+      "count": "8"
+    },
+    {
+      "gpName": "Valeria Pomerants",
+      "count": "8"
+    },
+    {
+      "gpName": "Karetti Sakala",
+      "count": "2"
+    },
+    {
+      "gpName": "Evita Limareva",
+      "count": "2"
+    },
+    {
+      "gpName": "Milena Kõiv",
+      "count": "8"
+    },
+    {
+      "gpName": "Emilia Laanjärv",
+      "count": "2"
+    },
+    {
+      "gpName": "Alina Kudashova",
+      "count": "8"
+    },
+    {
+      "gpName": "Anneli Zaitseva",
+      "count": "4"
+    },
+    {
+      "gpName": "Elina Varivoda",
+      "count": "2"
+    },
+    {
+      "gpName": "Elizaveta Sofia Reemet",
+      "count": "2"
+    },
+    {
+      "gpName": "Alisa Alokhina",
+      "count": "4"
+    },
+    {
+      "gpName": "Inna Tarakanova",
+      "count": "2"
+    },
+    {
+      "gpName": "Louise Scarlett Vips",
+      "count": "4"
+    },
+    {
+      "gpName": "Laurit Kurm",
+      "count": "2"
+    },
+    {
+      "gpName": "Arabella Pastak",
+      "count": "2"
+    },
+    {
+      "gpName": "Heili Liis Kallasse",
+      "count": "2"
+    },
+    {
+      "gpName": "Mariia Kolbasova",
+      "count": "2"
+    }
+  ],
+  "messages": [],
+  "stdout": "gpName\tcount\nSanita Dolovac\t10\nVitaly Bayushkin\t4\nAngelina Tuluša\t2\nJelizaveta Venkova\t8\nValeria Pomerants\t8\nKaretti Sakala\t2\nEvita Limareva\t2\nMilena Kõiv\t8\nEmilia Laanjärv\t2\nAlina Kudashova\t8\nAnneli Zaitseva\t4\nElina Varivoda\t2\nElizaveta Sofia Reemet\t2\nAlisa Alokhina\t4\nInna Tarakanova\t2\nLouise Scarlett Vips\t4\nLaurit Kurm\t2\nArabella Pastak\t2\nHeili Liis Kallasse\t2\nMariia Kolbasova\t2\n",
+  "stderr": "",
+  "execution_time_ms": 409
+}

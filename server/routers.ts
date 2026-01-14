@@ -362,9 +362,14 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const teamId = input.teamId || ctx.user.teamId;
         if (!teamId) {
-          // Admin without specific team - return all GPs
+          // Admin without specific team - return all GPs with their stats
           const allGPs = await db.getAllGamePresenters();
-          return allGPs.map(gp => ({ ...gp, stats: null }));
+          // Get stats for each GP
+          const result = await Promise.all(allGPs.map(async (gp) => {
+            const stats = await db.getMonthlyGpStats(gp.id, input.month, input.year);
+            return { ...gp, stats };
+          }));
+          return result;
         }
         return await db.getGamePresentersByTeamWithStats(teamId, input.month, input.year);
       }),

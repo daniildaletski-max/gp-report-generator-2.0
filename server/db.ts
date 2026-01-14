@@ -1124,3 +1124,20 @@ export async function getGamePresentersByTeamWithStats(teamId: number, month: nu
 
   return result;
 }
+
+
+// Get monthly stats for a single GP
+export async function getMonthlyGpStats(gpId: number, month: number, year: number): Promise<MonthlyGpStats | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(monthlyGpStats)
+    .where(and(
+      eq(monthlyGpStats.gamePresenterId, gpId),
+      eq(monthlyGpStats.month, month),
+      eq(monthlyGpStats.year, year)
+    ))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}

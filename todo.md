@@ -184,3 +184,10 @@
 - [x] Include attitude score in Monthly Report remarks column
 - [x] Include mistakes count from monthly_gp_stats in report
 - [x] Auto-populate from monthly_gp_stats when generating report
+
+
+## Bug Fixes (v9) - COMPLETED
+
+- [x] Fix: Mistakes not loading for presenters after error file upload
+  - Root cause: listWithStats returned stats: null for all GPs when no teamId specified
+  - Solution: Added getMonthlyGpStats function and updated listWithStats to fetch stats for each GP
