@@ -147,3 +147,17 @@
 - [x] Add delete button in Admin GP Access Links table
 - [x] Add confirmation dialog before deletion
 - [x] Handle cascade deletion of related data (evaluations, tokens)
+
+
+## GP Attitude/Mistakes & FM Team Access (v7) - COMPLETED
+
+### Attitude & Mistakes
+- [x] Add monthly_gp_stats table (gpId, month, year, attitude, mistakes)
+- [x] Create API to update attitude/mistakes for GP (gamePresenter.updateStats)
+- [x] Add UI to edit attitude/mistakes in Admin panel (new GP Stats tab)
+
+### FM Team Access Control
+- [x] Link users to teams (add teamId to users table)
+- [x] Filter GP list by FM's team (gamePresenter.list checks ctx.user.teamId)
+- [x] Add user.assignToTeam API for admin to assign FM to teams
+- [x] Add gamePresenter.listWithStats API for filtered stats view

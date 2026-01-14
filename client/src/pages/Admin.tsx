@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { FileSpreadsheet, Loader2, Users, AlertTriangle, Trash2, Link, Copy, Check, RefreshCw, ExternalLink } from "lucide-react";
+import { FileSpreadsheet, Loader2, Users, AlertTriangle, Trash2, Link, Copy, Check, RefreshCw, ExternalLink, Star, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -159,8 +159,12 @@ export default function AdminPage() {
         <p className="text-muted-foreground">Manage teams, error files, and GP access</p>
       </div>
 
-      <Tabs defaultValue="access" className="space-y-4">
+      <Tabs defaultValue="stats" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="stats" className="flex items-center gap-2">
+            <Star className="h-4 w-4" />
+            GP Stats
+          </TabsTrigger>
           <TabsTrigger value="access" className="flex items-center gap-2">
             <Link className="h-4 w-4" />
             GP Access Links
@@ -174,6 +178,15 @@ export default function AdminPage() {
             Error Files
           </TabsTrigger>
         </TabsList>
+
+        {/* GP Stats Tab */}
+        <GPStatsTab 
+          teams={teams || []} 
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+          setSelectedMonth={setSelectedMonth}
+          setSelectedYear={setSelectedYear}
+        />
 
         {/* GP Access Links Tab */}
         <TabsContent value="access" className="space-y-4">
@@ -550,5 +563,242 @@ export default function AdminPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+// GP Stats Tab Component
+function GPStatsTab({ 
+  teams, 
+  selectedMonth, 
+  selectedYear, 
+  setSelectedMonth, 
+  setSelectedYear 
+}: { 
+  teams: { id: number; teamName: string; floorManagerName: string }[];
+  selectedMonth: number;
+  selectedYear: number;
+  setSelectedMonth: (m: number) => void;
+  setSelectedYear: (y: number) => void;
+}) {
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
+  const [editingGpId, setEditingGpId] = useState<number | null>(null);
+  const [editAttitude, setEditAttitude] = useState<number | null>(null);
+  const [editMistakes, setEditMistakes] = useState<number>(0);
+
+  const { data: gpsWithStats, isLoading, refetch } = trpc.gamePresenter.listWithStats.useQuery({
+    teamId: selectedTeamId || undefined,
+    month: selectedMonth,
+    year: selectedYear,
+  });
+
+  const updateStatsMutation = trpc.gamePresenter.updateStats.useMutation();
+
+  const handleSaveStats = useCallback(async (gpId: number) => {
+    try {
+      await updateStatsMutation.mutateAsync({
+        gpId,
+        month: selectedMonth,
+        year: selectedYear,
+        attitude: editAttitude,
+        mistakes: editMistakes,
+      });
+      toast.success("Stats updated successfully");
+      setEditingGpId(null);
+      refetch();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update stats");
+    }
+  }, [updateStatsMutation, selectedMonth, selectedYear, editAttitude, editMistakes, refetch]);
+
+  const startEditing = (gp: any) => {
+    setEditingGpId(gp.id);
+    setEditAttitude(gp.stats?.attitude ?? null);
+    setEditMistakes(gp.stats?.mistakes ?? 0);
+  };
+
+  return (
+    <TabsContent value="stats" className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Star className="h-5 w-5" />
+            GP Monthly Stats
+          </CardTitle>
+          <CardDescription>
+            Set attitude scores and mistake counts for each Game Presenter
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Filters */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Team</Label>
+              <Select
+                value={selectedTeamId ? String(selectedTeamId) : "all"}
+                onValueChange={(v) => setSelectedTeamId(v === "all" ? null : Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All Teams" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Teams</SelectItem>
+                  {teams.map((team) => (
+                    <SelectItem key={team.id} value={String(team.id)}>
+                      {team.teamName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Month</Label>
+              <Select
+                value={String(selectedMonth)}
+                onValueChange={(v) => setSelectedMonth(Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTHS.map((month, idx) => (
+                    <SelectItem key={month} value={String(idx + 1)}>
+                      {month}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Year</Label>
+              <Select
+                value={String(selectedYear)}
+                onValueChange={(v) => setSelectedYear(Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[2024, 2025, 2026].map((year) => (
+                    <SelectItem key={year} value={String(year)}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* GP Stats Table */}
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : gpsWithStats && gpsWithStats.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Game Presenter</TableHead>
+                  <TableHead>Team</TableHead>
+                  <TableHead className="text-center">Attitude (1-5)</TableHead>
+                  <TableHead className="text-center">Mistakes</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {gpsWithStats.map((gp: any) => {
+                  const isEditing = editingGpId === gp.id;
+                  const team = teams.find(t => t.id === gp.teamId);
+                  
+                  return (
+                    <TableRow key={gp.id}>
+                      <TableCell className="font-medium">{gp.name}</TableCell>
+                      <TableCell>
+                        {team?.teamName || <span className="text-muted-foreground">Unassigned</span>}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {isEditing ? (
+                          <Select
+                            value={editAttitude ? String(editAttitude) : "none"}
+                            onValueChange={(v) => setEditAttitude(v === "none" ? null : Number(v))}
+                          >
+                            <SelectTrigger className="w-20 mx-auto">
+                              <SelectValue placeholder="-" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">-</SelectItem>
+                              {[1, 2, 3, 4, 5].map((n) => (
+                                <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className={gp.stats?.attitude ? "" : "text-muted-foreground"}>
+                            {gp.stats?.attitude ?? "-"}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            min="0"
+                            value={editMistakes}
+                            onChange={(e) => setEditMistakes(Number(e.target.value) || 0)}
+                            className="w-20 mx-auto text-center"
+                          />
+                        ) : (
+                          <span className={gp.stats?.mistakes ? "text-destructive font-medium" : "text-muted-foreground"}>
+                            {gp.stats?.mistakes ?? 0}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isEditing ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleSaveStats(gp.id)}
+                              disabled={updateStatsMutation.isPending}
+                            >
+                              {updateStatsMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Check className="h-4 w-4" />
+                              )}
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setEditingGpId(null)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => startEditing(gp)}
+                          >
+                            Edit
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              {selectedTeamId ? "No Game Presenters in this team" : "No Game Presenters found"}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </TabsContent>
   );
 }

@@ -342,9 +342,32 @@ export const appRouter = router({
 
   // Game Presenters management
   gamePresenter: router({
-    list: protectedProcedure.query(async () => {
+    // List all GPs (admin) or only team GPs (FM)
+    list: protectedProcedure.query(async ({ ctx }) => {
+      // If user has a team assigned, only show their team's GPs
+      if (ctx.user.teamId) {
+        return await db.getGamePresentersByTeam(ctx.user.teamId);
+      }
+      // Admin sees all
       return await db.getAllGamePresenters();
     }),
+
+    // List GPs with monthly stats for a specific team
+    listWithStats: protectedProcedure
+      .input(z.object({
+        teamId: z.number().optional(),
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const teamId = input.teamId || ctx.user.teamId;
+        if (!teamId) {
+          // Admin without specific team - return all GPs
+          const allGPs = await db.getAllGamePresenters();
+          return allGPs.map(gp => ({ ...gp, stats: null }));
+        }
+        return await db.getGamePresentersByTeamWithStats(teamId, input.month, input.year);
+      }),
     
     assignToTeam: protectedProcedure
       .input(z.object({
@@ -365,6 +388,49 @@ export const appRouter = router({
         }
         await db.deleteGamePresenter(input.gpId);
         return { success: true, deletedName: gp.name };
+      }),
+
+    // Update attitude and mistakes for a GP
+    updateStats: protectedProcedure
+      .input(z.object({
+        gpId: z.number(),
+        month: z.number().min(1).max(12),
+        year: z.number(),
+        attitude: z.number().min(1).max(5).nullable().optional(),
+        mistakes: z.number().min(0).optional(),
+        notes: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { gpId, month, year, ...data } = input;
+        const stats = await db.updateMonthlyGpStats(gpId, month, year, {
+          ...data,
+          updatedById: ctx.user.id,
+        });
+        return { success: true, stats };
+      }),
+  }),
+
+  // User/FM management
+  user: router({
+    // Get current user with team info
+    me: protectedProcedure.query(async ({ ctx }) => {
+      const userWithTeam = await db.getUserWithTeam(ctx.user.id);
+      return userWithTeam;
+    }),
+
+    // Assign user to team (admin only)
+    assignToTeam: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        teamId: z.number().nullable(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Only admin can assign teams
+        if (ctx.user.role !== 'admin') {
+          throw new Error("Only admins can assign teams");
+        }
+        await db.updateUserTeam(input.userId, input.teamId);
+        return { success: true };
       }),
   }),
 

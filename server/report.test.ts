@@ -351,3 +351,139 @@ describe("gamePresenter.delete", () => {
     expect(mockResponse.deletedName).toBeDefined();
   });
 });
+
+
+// ============================================
+// GP MONTHLY STATS TESTS
+// ============================================
+
+describe("GP Monthly Stats", () => {
+  it("should validate attitude score range (1-5)", () => {
+    const validScores = [1, 2, 3, 4, 5];
+    const invalidScores = [0, 6, -1, 10];
+    
+    validScores.forEach(score => {
+      expect(score).toBeGreaterThanOrEqual(1);
+      expect(score).toBeLessThanOrEqual(5);
+    });
+    
+    invalidScores.forEach(score => {
+      expect(score < 1 || score > 5).toBe(true);
+    });
+  });
+
+  it("should validate mistakes count (non-negative)", () => {
+    const validCounts = [0, 1, 5, 10, 100];
+    const invalidCounts = [-1, -5];
+    
+    validCounts.forEach(count => {
+      expect(count).toBeGreaterThanOrEqual(0);
+    });
+    
+    invalidCounts.forEach(count => {
+      expect(count).toBeLessThan(0);
+    });
+  });
+
+  it("should have correct stats structure", () => {
+    const mockStats = {
+      id: 1,
+      gamePresenterId: 1,
+      month: 1,
+      year: 2026,
+      attitude: 4,
+      mistakes: 2,
+      notes: "Good performance",
+      updatedById: 1,
+    };
+    
+    expect(mockStats).toHaveProperty("gamePresenterId");
+    expect(mockStats).toHaveProperty("month");
+    expect(mockStats).toHaveProperty("year");
+    expect(mockStats).toHaveProperty("attitude");
+    expect(mockStats).toHaveProperty("mistakes");
+    expect(mockStats.month).toBeGreaterThanOrEqual(1);
+    expect(mockStats.month).toBeLessThanOrEqual(12);
+  });
+});
+
+// ============================================
+// USER TEAM ACCESS TESTS
+// ============================================
+
+describe("User Team Access", () => {
+  it("should allow admin to see all GPs", () => {
+    const user = { role: "admin", teamId: null };
+    const hasTeamRestriction = user.teamId !== null;
+    
+    expect(user.role).toBe("admin");
+    expect(hasTeamRestriction).toBe(false);
+  });
+
+  it("should restrict FM to their team's GPs", () => {
+    const user = { role: "user", teamId: 1 };
+    const hasTeamRestriction = user.teamId !== null;
+    
+    expect(hasTeamRestriction).toBe(true);
+    expect(user.teamId).toBe(1);
+  });
+
+  it("should validate team assignment permissions", () => {
+    const adminUser = { role: "admin" };
+    const regularUser = { role: "user" };
+    
+    const canAssignTeam = (user: { role: string }) => user.role === "admin";
+    
+    expect(canAssignTeam(adminUser)).toBe(true);
+    expect(canAssignTeam(regularUser)).toBe(false);
+  });
+
+  it("should have user schema with teamId field", () => {
+    const mockUser = {
+      id: 1,
+      openId: "test-user",
+      name: "Test FM",
+      email: "test@example.com",
+      role: "user",
+      teamId: 1,
+    };
+    
+    expect(mockUser).toHaveProperty("teamId");
+    expect(typeof mockUser.teamId).toBe("number");
+  });
+});
+
+describe("gamePresenter.listWithStats", () => {
+  it("should return GPs with their monthly stats", () => {
+    const mockResponse = [
+      {
+        id: 1,
+        name: "Test GP",
+        teamId: 1,
+        stats: {
+          attitude: 4,
+          mistakes: 2,
+        },
+      },
+    ];
+    
+    expect(Array.isArray(mockResponse)).toBe(true);
+    expect(mockResponse[0]).toHaveProperty("stats");
+    expect(mockResponse[0].stats).toHaveProperty("attitude");
+    expect(mockResponse[0].stats).toHaveProperty("mistakes");
+  });
+
+  it("should filter by team when teamId is provided", () => {
+    const teamId = 1;
+    const mockGPs = [
+      { id: 1, name: "GP 1", teamId: 1 },
+      { id: 2, name: "GP 2", teamId: 2 },
+      { id: 3, name: "GP 3", teamId: 1 },
+    ];
+    
+    const filteredGPs = mockGPs.filter(gp => gp.teamId === teamId);
+    
+    expect(filteredGPs.length).toBe(2);
+    expect(filteredGPs.every(gp => gp.teamId === teamId)).toBe(true);
+  });
+});

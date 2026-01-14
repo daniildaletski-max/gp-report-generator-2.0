@@ -1,7 +1,7 @@
 import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
-  InsertUser, users, 
+  InsertUser, users, User,
   gamePresenters, InsertGamePresenter, GamePresenter,
   evaluations, InsertEvaluation, Evaluation,
   reports, InsertReport, Report,
@@ -10,7 +10,8 @@ import {
   gpMonthlyAttendance, InsertGpMonthlyAttendance, GpMonthlyAttendance,
   errorFiles, InsertErrorFile, ErrorFile,
   gpErrors, InsertGpError, GpError,
-  gpAccessTokens, InsertGpAccessToken, GpAccessToken
+  gpAccessTokens, InsertGpAccessToken, GpAccessToken,
+  monthlyGpStats, InsertMonthlyGpStats, MonthlyGpStats
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -931,4 +932,152 @@ export async function getGpEvaluationsForPortal(gpId: number) {
   .from(evaluations)
   .where(eq(evaluations.gamePresenterId, gpId))
   .orderBy(desc(evaluations.evaluationDate));
+}
+
+
+// ============================================
+// MONTHLY GP STATS FUNCTIONS (Attitude & Mistakes)
+// ============================================
+
+export async function getOrCreateMonthlyGpStats(gpId: number, month: number, year: number): Promise<MonthlyGpStats> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await db.select().from(monthlyGpStats)
+    .where(and(
+      eq(monthlyGpStats.gamePresenterId, gpId),
+      eq(monthlyGpStats.month, month),
+      eq(monthlyGpStats.year, year)
+    ))
+    .limit(1);
+
+  if (existing.length > 0) {
+    return existing[0];
+  }
+
+  const result = await db.insert(monthlyGpStats).values({
+    gamePresenterId: gpId,
+    month,
+    year,
+    attitude: null,
+    mistakes: 0,
+  });
+
+  const newStats = await db.select().from(monthlyGpStats)
+    .where(eq(monthlyGpStats.id, Number(result[0].insertId)))
+    .limit(1);
+
+  return newStats[0];
+}
+
+export async function updateMonthlyGpStats(
+  gpId: number, 
+  month: number, 
+  year: number, 
+  data: { attitude?: number | null; mistakes?: number; notes?: string | null; updatedById?: number }
+): Promise<MonthlyGpStats | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Get or create the stats record
+  const stats = await getOrCreateMonthlyGpStats(gpId, month, year);
+
+  await db.update(monthlyGpStats)
+    .set(data)
+    .where(eq(monthlyGpStats.id, stats.id));
+
+  const updated = await db.select().from(monthlyGpStats)
+    .where(eq(monthlyGpStats.id, stats.id))
+    .limit(1);
+
+  return updated.length > 0 ? updated[0] : null;
+}
+
+export async function getMonthlyGpStatsByTeam(teamId: number, month: number, year: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    stats: monthlyGpStats,
+    gp: gamePresenters,
+  })
+  .from(monthlyGpStats)
+  .innerJoin(gamePresenters, eq(monthlyGpStats.gamePresenterId, gamePresenters.id))
+  .where(and(
+    eq(gamePresenters.teamId, teamId),
+    eq(monthlyGpStats.month, month),
+    eq(monthlyGpStats.year, year)
+  ));
+}
+
+export async function getAllMonthlyGpStats(month: number, year: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    stats: monthlyGpStats,
+    gp: gamePresenters,
+  })
+  .from(monthlyGpStats)
+  .innerJoin(gamePresenters, eq(monthlyGpStats.gamePresenterId, gamePresenters.id))
+  .where(and(
+    eq(monthlyGpStats.month, month),
+    eq(monthlyGpStats.year, year)
+  ));
+}
+
+// ============================================
+// USER TEAM FUNCTIONS
+// ============================================
+
+export async function updateUserTeam(userId: number, teamId: number | null): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users)
+    .set({ teamId })
+    .where(eq(users.id, userId));
+}
+
+export async function getUserWithTeam(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select({
+    user: users,
+    team: fmTeams,
+  })
+  .from(users)
+  .leftJoin(fmTeams, eq(users.teamId, fmTeams.id))
+  .where(eq(users.id, userId))
+  .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getGamePresentersByTeamWithStats(teamId: number, month: number, year: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const gps = await db.select().from(gamePresenters)
+    .where(eq(gamePresenters.teamId, teamId))
+    .orderBy(gamePresenters.name);
+
+  // Get stats for each GP
+  const result = await Promise.all(gps.map(async (gp) => {
+    const statsResult = await db.select().from(monthlyGpStats)
+      .where(and(
+        eq(monthlyGpStats.gamePresenterId, gp.id),
+        eq(monthlyGpStats.month, month),
+        eq(monthlyGpStats.year, year)
+      ))
+      .limit(1);
+
+    return {
+      ...gp,
+      stats: statsResult.length > 0 ? statsResult[0] : null,
+    };
+  }));
+
+  return result;
 }

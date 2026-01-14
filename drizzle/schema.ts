@@ -10,6 +10,7 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  teamId: int("teamId"), // Link FM to their team
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -207,3 +208,22 @@ export const gpAccessTokens = mysqlTable("gp_access_tokens", {
 
 export type GpAccessToken = typeof gpAccessTokens.$inferSelect;
 export type InsertGpAccessToken = typeof gpAccessTokens.$inferInsert;
+
+/**
+ * Monthly GP Stats - stores attitude and mistakes per GP per month
+ */
+export const monthlyGpStats = mysqlTable("monthly_gp_stats", {
+  id: int("id").autoincrement().primaryKey(),
+  gamePresenterId: int("gamePresenterId").notNull(),
+  month: int("month").notNull(), // 1-12
+  year: int("year").notNull(),
+  attitude: int("attitude"), // Score 1-5 or similar
+  mistakes: int("mistakes").default(0), // Count of mistakes
+  notes: text("notes"), // Optional notes
+  updatedById: int("updatedById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type MonthlyGpStats = typeof monthlyGpStats.$inferSelect;
+export type InsertMonthlyGpStats = typeof monthlyGpStats.$inferInsert;
