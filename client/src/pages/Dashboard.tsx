@@ -2,7 +2,8 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, FileCheck, TrendingUp, FileSpreadsheet, AlertCircle, CheckCircle2, Clock, ArrowRight } from "lucide-react";
+import { Users, FileCheck, TrendingUp, FileSpreadsheet, AlertCircle, CheckCircle2, Clock, ArrowRight, AlertTriangle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useLocation } from "wouter";
@@ -56,6 +57,9 @@ export default function Dashboard() {
     appearance: Number(gp.avgAppearance),
     performance: Number(gp.avgPerformance),
   })) || [];
+
+  // Find GPs needing attention (score < 15)
+  const lowPerformers = chartData.filter(gp => gp.totalScore > 0 && gp.totalScore < 15);
 
   return (
     <div className="p-6 space-y-6">
@@ -124,6 +128,30 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Low Performance Alert */}
+      {lowPerformers.length > 0 && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2 text-orange-700">
+              <AlertTriangle className="h-4 w-4" />
+              Attention Required - {lowPerformers.length} GP{lowPerformers.length > 1 ? 's' : ''} Below Target
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {lowPerformers.map((gp, idx) => (
+                <Badge key={idx} variant="outline" className="bg-white border-orange-300 text-orange-700">
+                  {gp.fullName}: {gp.totalScore.toFixed(1)}/22
+                </Badge>
+              ))}
+            </div>
+            <p className="text-xs text-orange-600 mt-2">
+              These GPs scored below 15 this month and may need additional support or training.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

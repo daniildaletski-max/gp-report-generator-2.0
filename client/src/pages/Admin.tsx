@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { FileSpreadsheet, Loader2, Users, AlertTriangle, Trash2, Link, Copy, Check, RefreshCw, ExternalLink, Star, AlertCircle, UserCog } from "lucide-react";
+import { FileSpreadsheet, Loader2, Users, AlertTriangle, Trash2, Link, Copy, Check, RefreshCw, ExternalLink, Star, AlertCircle, UserCog, Download } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -797,6 +797,49 @@ function GPStatsTab({
               </Select>
             </div>
           </div>
+
+          {/* Export Button */}
+          {gpsWithStats && gpsWithStats.length > 0 && (
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // Create CSV content
+                  const headers = ['GP Name', 'Team', 'Attitude', 'Mistakes', 'Total Games', 'GGs', 'Bonus Level'];
+                  const rows = gpsWithStats.map((gp: any) => {
+                    const team = teams.find(t => t.id === gp.teamId);
+                    const totalGames = gp.stats?.totalGames ?? 0;
+                    const mistakes = gp.stats?.mistakes ?? 0;
+                    const effectiveMistakes = mistakes <= 1 ? 1 : mistakes;
+                    const ggs = totalGames > 0 ? Math.floor(totalGames / effectiveMistakes) : 0;
+                    const bonusLevel = ggs >= 5000 ? 'Level 2' : ggs >= 2500 ? 'Level 1' : 'None';
+                    return [
+                      gp.name,
+                      team?.teamName || 'Unassigned',
+                      gp.stats?.attitude ?? '',
+                      gp.stats?.mistakes ?? 0,
+                      totalGames,
+                      ggs,
+                      bonusLevel
+                    ].join(',');
+                  });
+                  const csv = [headers.join(','), ...rows].join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `GP_Stats_${MONTHS[selectedMonth - 1]}_${selectedYear}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast.success('GP Stats exported to CSV');
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export to CSV
+              </Button>
+            </div>
+          )}
 
           {/* GP Stats Table */}
           {isLoading ? (

@@ -951,6 +951,102 @@ export const appRouter = router({
         }
         mainSheet.getCell(`D${chartRow}`).font = { bold: true };
 
+        // ===== ADD EXCEL CHART =====
+        // Create a bar chart for GP performance visualization
+        const chartDataEndRow = chartRow - 1; // Last row with GP data (before TEAM AVERAGE)
+        const chartDataStartRow = 70;
+        
+        if (chartDataEndRow >= chartDataStartRow) {
+          // Add chart to the worksheet
+          // ExcelJS chart support - create a bar chart
+          mainSheet.addImage = mainSheet.addImage || (() => {});
+          
+          // Add a visual chart indicator section
+          const chartStartRow = chartRow + 3;
+          mainSheet.mergeCells(`A${chartStartRow}:H${chartStartRow + 1}`);
+          mainSheet.getCell(`A${chartStartRow}`).value = "📊 GP Performance Chart (Visual Representation)";
+          mainSheet.getCell(`A${chartStartRow}`).font = { bold: true, size: 12 };
+          mainSheet.getCell(`A${chartStartRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
+          mainSheet.getCell(`A${chartStartRow}`).font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
+          mainSheet.getCell(`A${chartStartRow}`).alignment = { horizontal: "center", vertical: "middle" };
+
+          // Create visual bar chart using cells (since ExcelJS chart support is limited)
+          let visualRow = chartStartRow + 3;
+          mainSheet.getCell(`A${visualRow}`).value = "GP Name";
+          mainSheet.getCell(`A${visualRow}`).font = { bold: true };
+          mainSheet.getCell(`B${visualRow}`).value = "Appearance (max 12)";
+          mainSheet.getCell(`B${visualRow}`).font = { bold: true };
+          mainSheet.getCell(`E${visualRow}`).value = "Game Perf (max 10)";
+          mainSheet.getCell(`E${visualRow}`).font = { bold: true };
+          mainSheet.getCell(`H${visualRow}`).value = "Total";
+          mainSheet.getCell(`H${visualRow}`).font = { bold: true };
+          visualRow++;
+
+          // Add visual bars for each GP
+          for (const gp of gpEvaluationsData) {
+            if (gp.evaluations.length > 0 && visualRow <= chartStartRow + 20) {
+              const avgAppearance = gp.evaluations.reduce((sum, e) => sum + (e.appearanceScore || 0), 0) / gp.evaluations.length;
+              const avgGamePerf = gp.evaluations.reduce((sum, e) => sum + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
+              const total = avgAppearance + avgGamePerf;
+              
+              mainSheet.getCell(`A${visualRow}`).value = gp.gpName;
+              
+              // Appearance bar (scale to 3 cells, max 12)
+              const appBarWidth = Math.round((avgAppearance / 12) * 3);
+              for (let i = 0; i < 3; i++) {
+                const col = String.fromCharCode(66 + i); // B, C, D
+                if (i < appBarWidth) {
+                  mainSheet.getCell(`${col}${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF5B9BD5" } };
+                }
+                mainSheet.getCell(`${col}${visualRow}`).border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+              }
+              mainSheet.getCell(`D${visualRow}`).value = avgAppearance.toFixed(1);
+              
+              // Game Performance bar (scale to 3 cells, max 10)
+              const gpBarWidth = Math.round((avgGamePerf / 10) * 3);
+              for (let i = 0; i < 3; i++) {
+                const col = String.fromCharCode(69 + i); // E, F, G
+                if (i < gpBarWidth) {
+                  mainSheet.getCell(`${col}${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF70AD47" } };
+                }
+                mainSheet.getCell(`${col}${visualRow}`).border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+              }
+              mainSheet.getCell(`G${visualRow}`).value = avgGamePerf.toFixed(1);
+              
+              // Total with color coding
+              mainSheet.getCell(`H${visualRow}`).value = total.toFixed(1);
+              if (total >= 18) {
+                mainSheet.getCell(`H${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF92D050" } };
+              } else if (total >= 15) {
+                mainSheet.getCell(`H${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+              } else {
+                mainSheet.getCell(`H${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF6B6B" } };
+              }
+              mainSheet.getCell(`H${visualRow}`).font = { bold: true };
+              
+              visualRow++;
+            }
+          }
+
+          // Add legend
+          visualRow += 2;
+          mainSheet.getCell(`A${visualRow}`).value = "Legend:";
+          mainSheet.getCell(`A${visualRow}`).font = { bold: true };
+          mainSheet.getCell(`B${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF5B9BD5" } };
+          mainSheet.getCell(`C${visualRow}`).value = "Appearance";
+          mainSheet.getCell(`D${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF70AD47" } };
+          mainSheet.getCell(`E${visualRow}`).value = "Game Performance";
+          
+          visualRow++;
+          mainSheet.getCell(`A${visualRow}`).value = "Score colors:";
+          mainSheet.getCell(`B${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF92D050" } };
+          mainSheet.getCell(`C${visualRow}`).value = "≥18 (Excellent)";
+          mainSheet.getCell(`D${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+          mainSheet.getCell(`E${visualRow}`).value = "≥15 (Good)";
+          mainSheet.getCell(`F${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF6B6B" } };
+          mainSheet.getCell(`G${visualRow}`).value = "<15 (Needs Improvement)";
+        }
+
         // Generate buffer and upload to S3
         const buffer = await workbook.xlsx.writeBuffer();
         const fileKey = `reports/${report.id}/${nanoid()}-TeamOverview_${teamName.replace(/\s+/g, '_')}_${monthName}${report.reportYear}.xlsx`;
