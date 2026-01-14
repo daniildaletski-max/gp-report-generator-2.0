@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { FileSpreadsheet, Loader2, Users, AlertTriangle, Trash2, Link, Copy, Check, RefreshCw, ExternalLink, Star, AlertCircle, UserCog } from "lucide-react";
+import { FileSpreadsheet, Loader2, Users, AlertTriangle, Trash2, Link, Copy, Check, RefreshCw, ExternalLink, Star, AlertCircle, UserCog, Cloud, CloudDownload } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -27,6 +27,9 @@ export default function AdminPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [generatingForGp, setGeneratingForGp] = useState<number | null>(null);
+  const [isSyncingGoogleSheets, setIsSyncingGoogleSheets] = useState(false);
+  const [selectedGoogleFile, setSelectedGoogleFile] = useState<string>("");
+  const [lastSyncResult, setLastSyncResult] = useState<{ updated: number; notFound: string[]; syncedAt: string } | null>(null);
   
   const { data: teams, isLoading: teamsLoading } = trpc.fmTeam.list.useQuery();
   const { data: errorFiles, isLoading: filesLoading, refetch: refetchFiles } = trpc.errorFile.list.useQuery();
@@ -39,6 +42,8 @@ export default function AdminPage() {
   const generateTokenMutation = trpc.gpAccess.generateToken.useMutation();
   const deactivateTokenMutation = trpc.gpAccess.deactivate.useMutation();
   const deleteGpMutation = trpc.gamePresenter.delete.useMutation();
+  const { data: googleFiles, isLoading: googleFilesLoading, refetch: refetchGoogleFiles } = trpc.googleSheets.listFiles.useQuery();
+  const syncGoogleSheetsMutation = trpc.googleSheets.sync.useMutation();
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -478,6 +483,145 @@ export default function AdminPage() {
                   {isUploading && <Loader2 className="h-6 w-6 animate-spin" />}
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Google Sheets Live Sync */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Cloud className="h-5 w-5 text-blue-500" />
+                Google Sheets Live Sync
+              </CardTitle>
+              <CardDescription>
+                Sync error counts directly from Google Sheets in real-time
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Google Drive File</Label>
+                  <Select
+                    value={selectedGoogleFile}
+                    onValueChange={setSelectedGoogleFile}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select file..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {googleFiles?.map((file) => (
+                        <SelectItem key={file} value={file}>
+                          {file}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Month</Label>
+                  <Select
+                    value={String(selectedMonth)}
+                    onValueChange={(v) => setSelectedMonth(Number(v))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map((month, idx) => (
+                        <SelectItem key={month} value={String(idx + 1)}>
+                          {month}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Year</Label>
+                  <Select
+                    value={String(selectedYear)}
+                    onValueChange={(v) => setSelectedYear(Number(v))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[2024, 2025, 2026].map((year) => (
+                        <SelectItem key={year} value={String(year)}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={async () => {
+                    if (!selectedGoogleFile) {
+                      toast.error("Please select a Google Drive file");
+                      return;
+                    }
+                    setIsSyncingGoogleSheets(true);
+                    try {
+                      const result = await syncGoogleSheetsMutation.mutateAsync({
+                        filePath: selectedGoogleFile,
+                        sheetName: "Error Count",
+                        gpNameColumn: 2,
+                        errorCountColumn: 4,
+                        startRow: 2,
+                        month: selectedMonth,
+                        year: selectedYear,
+                      });
+                      setLastSyncResult({
+                        updated: result.updated,
+                        notFound: result.notFound,
+                        syncedAt: result.syncedAt,
+                      });
+                      toast.success(`Synced ${result.updated} GP error counts`);
+                      refetchGPs();
+                    } catch (error: any) {
+                      toast.error(error.message || "Sync failed");
+                    } finally {
+                      setIsSyncingGoogleSheets(false);
+                    }
+                  }}
+                  disabled={isSyncingGoogleSheets || !selectedGoogleFile}
+                  className="gap-2"
+                >
+                  {isSyncingGoogleSheets ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CloudDownload className="h-4 w-4" />
+                  )}
+                  Sync from Google Sheets
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => refetchGoogleFiles()}
+                  disabled={googleFilesLoading}
+                >
+                  <RefreshCw className={`h-4 w-4 ${googleFilesLoading ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
+
+              {lastSyncResult && (
+                <div className="rounded-lg border p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-green-600">
+                    <Check className="h-4 w-4" />
+                    Last sync: {format(new Date(lastSyncResult.syncedAt), "PPp")}
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-medium">{lastSyncResult.updated}</span> GP error counts updated
+                  </div>
+                  {lastSyncResult.notFound.length > 0 && (
+                    <div className="text-sm text-amber-600">
+                      <span className="font-medium">Not found:</span> {lastSyncResult.notFound.slice(0, 5).join(", ")}
+                      {lastSyncResult.notFound.length > 5 && ` +${lastSyncResult.notFound.length - 5} more`}
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 

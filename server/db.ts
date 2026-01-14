@@ -1141,3 +1141,60 @@ export async function getMonthlyGpStats(gpId: number, month: number, year: numbe
 
   return result.length > 0 ? result[0] : null;
 }
+
+
+// ============================================
+// GOOGLE SHEETS SYNC FUNCTIONS
+// ============================================
+
+export interface GoogleSheetsErrorData {
+  gpName: string;
+  errorCount: number;
+}
+
+export async function syncErrorsFromGoogleSheets(
+  errors: GoogleSheetsErrorData[], 
+  month: number, 
+  year: number
+): Promise<{ updated: number; notFound: string[] }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  let updated = 0;
+  const notFound: string[] = [];
+
+  for (const { gpName, errorCount } of errors) {
+    // Find GP by name (case-insensitive partial match)
+    const gps = await db.select().from(gamePresenters)
+      .where(sql`LOWER(${gamePresenters.name}) LIKE LOWER(${'%' + gpName + '%'})`)
+      .limit(1);
+    
+    if (gps.length > 0) {
+      const gp = gps[0];
+      // Update or create monthly stats
+      const stats = await getOrCreateMonthlyGpStats(gp.id, month, year);
+      await db.update(monthlyGpStats)
+        .set({ mistakes: errorCount })
+        .where(eq(monthlyGpStats.id, stats.id));
+      updated++;
+    } else {
+      // Try exact match
+      const exactMatch = await db.select().from(gamePresenters)
+        .where(eq(gamePresenters.name, gpName))
+        .limit(1);
+      
+      if (exactMatch.length > 0) {
+        const gp = exactMatch[0];
+        const stats = await getOrCreateMonthlyGpStats(gp.id, month, year);
+        await db.update(monthlyGpStats)
+          .set({ mistakes: errorCount })
+          .where(eq(monthlyGpStats.id, stats.id));
+        updated++;
+      } else {
+        notFound.push(gpName);
+      }
+    }
+  }
+
+  return { updated, notFound };
+}

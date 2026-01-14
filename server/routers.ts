@@ -1013,6 +1013,117 @@ export const appRouter = router({
         };
       }),
   }),
+
+  // Google Sheets sync
+  googleSheets: router({
+    sync: protectedProcedure
+      .input(z.object({
+        filePath: z.string(), // Path in Google Drive
+        sheetName: z.string().default("Error Count"),
+        gpNameColumn: z.number().default(2), // Column B
+        errorCountColumn: z.number().default(4), // Column D
+        startRow: z.number().default(2), // Skip header
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        const { execSync } = await import('child_process');
+        const ExcelJS = await import('exceljs');
+        const fs = await import('fs');
+        const path = await import('path');
+        
+        // Download file from Google Drive using rclone
+        const tempDir = '/tmp/gsheets-sync';
+        if (!fs.existsSync(tempDir)) {
+          fs.mkdirSync(tempDir, { recursive: true });
+        }
+        
+        const tempFile = path.join(tempDir, `sync-${Date.now()}.xlsx`);
+        
+        try {
+          // Copy file from Google Drive
+          execSync(
+            `rclone copy "manus_google_drive:${input.filePath}" "${tempDir}/" --config /home/ubuntu/.gdrive-rclone.ini`,
+            { timeout: 30000 }
+          );
+          
+          // Find the downloaded file
+          const files = fs.readdirSync(tempDir);
+          const xlsxFile = files.find(f => f.endsWith('.xlsx'));
+          if (!xlsxFile) {
+            throw new Error('Failed to download Excel file from Google Drive');
+          }
+          
+          const filePath = path.join(tempDir, xlsxFile);
+          
+          // Parse Excel file
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.readFile(filePath);
+          
+          const worksheet = workbook.getWorksheet(input.sheetName);
+          if (!worksheet) {
+            throw new Error(`Sheet "${input.sheetName}" not found`);
+          }
+          
+          // Extract GP names and error counts
+          const errors: { gpName: string; errorCount: number }[] = [];
+          
+          worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber < input.startRow) return; // Skip header
+            
+            const gpName = row.getCell(input.gpNameColumn).value?.toString()?.trim();
+            const errorCountValue = row.getCell(input.errorCountColumn).value;
+            
+            if (gpName && errorCountValue) {
+              const errorCount = typeof errorCountValue === 'number' 
+                ? errorCountValue 
+                : parseInt(String(errorCountValue), 10);
+              
+              if (!isNaN(errorCount) && errorCount > 0) {
+                errors.push({ gpName, errorCount });
+              }
+            }
+          });
+          
+          // Sync to database
+          const result = await db.syncErrorsFromGoogleSheets(errors, input.month, input.year);
+          
+          // Cleanup
+          fs.rmSync(tempDir, { recursive: true, force: true });
+          
+          return {
+            success: true,
+            totalErrors: errors.length,
+            updated: result.updated,
+            notFound: result.notFound,
+            syncedAt: new Date().toISOString(),
+          };
+        } catch (error: any) {
+          // Cleanup on error
+          if (fs.existsSync(tempDir)) {
+            fs.rmSync(tempDir, { recursive: true, force: true });
+          }
+          throw new Error(`Sync failed: ${error.message}`);
+        }
+      }),
+
+    // List available files in Google Drive
+    listFiles: protectedProcedure.query(async () => {
+      const { execSync } = await import('child_process');
+      
+      try {
+        const output = execSync(
+          'rclone lsf "manus_google_drive:/" --config /home/ubuntu/.gdrive-rclone.ini --include "*.xlsx"',
+          { timeout: 30000 }
+        ).toString();
+        
+        const files = output.split('\n').filter(f => f.trim());
+        return files;
+      } catch (error: any) {
+        throw new Error(`Failed to list files: ${error.message}`);
+      }
+    }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

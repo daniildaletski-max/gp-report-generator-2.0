@@ -191,3 +191,21 @@
 - [x] Fix: Mistakes not loading for presenters after error file upload
   - Root cause: listWithStats returned stats: null for all GPs when no teamId specified
   - Solution: Added getMonthlyGpStats function and updated listWithStats to fetch stats for each GP
+
+
+## Google Sheets Live Sync (v10) - COMPLETED
+
+### Setup
+- [x] Access Google Sheets via rclone (downloads xlsx from Google Drive)
+- [x] Read "Error Count" tab structure (column B = GP name, column D = error count)
+
+### Backend
+- [x] Create googleSheets.sync endpoint
+- [x] Parse Google Sheets data and update monthly_gp_stats
+- [x] googleSheets.listFiles endpoint to list available xlsx files
+
+### Frontend
+- [x] Add "Sync from Google Sheets" button in Admin Error Files tab
+- [x] Show last sync timestamp and results
+- [x] Display count of updated GPs and not found names
+- [x] File selector dropdown for Google Drive files
