@@ -509,8 +509,8 @@ export default function AdminPage() {
                       <SelectValue placeholder="Select file..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {googleFiles?.map((file) => (
-                        <SelectItem key={file} value={file}>
+                      {googleFiles?.filter((file, index, self) => self.indexOf(file) === index).map((file, index) => (
+                        <SelectItem key={`${file}-${index}`} value={file}>
                           {file}
                         </SelectItem>
                       ))}

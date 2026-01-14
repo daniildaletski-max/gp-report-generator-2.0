@@ -209,3 +209,9 @@
 - [x] Show last sync timestamp and results
 - [x] Display count of updated GPs and not found names
 - [x] File selector dropdown for Google Drive files
+
+
+## Bug Fixes (v11) - COMPLETED
+
+- [x] Fix: Duplicate keys in Google Drive file selector (files with same name cause React key error)
+  - Solution: Filter out duplicate filenames and use index in key
