@@ -355,6 +355,17 @@ export const appRouter = router({
         await db.updateGamePresenterTeam(input.gpId, input.teamId);
         return { success: true };
       }),
+
+    delete: protectedProcedure
+      .input(z.object({ gpId: z.number() }))
+      .mutation(async ({ input }) => {
+        const gp = await db.getGamePresenterById(input.gpId);
+        if (!gp) {
+          throw new Error("Game Presenter not found");
+        }
+        await db.deleteGamePresenter(input.gpId);
+        return { success: true, deletedName: gp.name };
+      }),
   }),
 
   // Dashboard stats

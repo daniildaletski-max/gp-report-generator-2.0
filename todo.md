@@ -139,3 +139,11 @@
 - [x] Add Team Zeta with Team Leader Alissa Gujevskaja (10 GPs)
 - [x] Add Team Alpha with Team Leader Kristina Bobrovskaja (13 GPs)
 - [x] Verify all 36 Game Presenters are in the database (35 added + 1 updated)
+
+
+## GP Management Improvements (v6) - COMPLETED
+
+- [x] Add API endpoint to delete Game Presenter (gamePresenter.delete)
+- [x] Add delete button in Admin GP Access Links table
+- [x] Add confirmation dialog before deletion
+- [x] Handle cascade deletion of related data (evaluations, tokens)

@@ -30,13 +30,15 @@ export default function AdminPage() {
   
   const { data: teams, isLoading: teamsLoading } = trpc.fmTeam.list.useQuery();
   const { data: errorFiles, isLoading: filesLoading, refetch: refetchFiles } = trpc.errorFile.list.useQuery();
-  const { data: gamePresenters, isLoading: gpsLoading } = trpc.gamePresenter.list.useQuery();
+  const { data: gamePresenters, isLoading: gpsLoading, refetch: refetchGPs } = trpc.gamePresenter.list.useQuery();
   const { data: accessTokens, isLoading: tokensLoading, refetch: refetchTokens } = trpc.gpAccess.list.useQuery();
+  const [deletingGpId, setDeletingGpId] = useState<number | null>(null);
   
   const uploadErrorsMutation = trpc.errorFile.upload.useMutation();
   const deleteErrorsMutation = trpc.errorFile.delete.useMutation();
   const generateTokenMutation = trpc.gpAccess.generateToken.useMutation();
   const deactivateTokenMutation = trpc.gpAccess.deactivate.useMutation();
+  const deleteGpMutation = trpc.gamePresenter.delete.useMutation();
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -120,6 +122,20 @@ export default function AdminPage() {
   const getTokenForGp = (gpId: number) => {
     return accessTokens?.find(t => t.token.gamePresenterId === gpId && t.token.isActive === 1);
   };
+
+  const handleDeleteGp = useCallback(async (gpId: number, gpName: string) => {
+    setDeletingGpId(gpId);
+    try {
+      await deleteGpMutation.mutateAsync({ gpId });
+      toast.success(`${gpName} has been removed`);
+      refetchGPs();
+      refetchTokens();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete Game Presenter");
+    } finally {
+      setDeletingGpId(null);
+    }
+  }, [deleteGpMutation, refetchGPs, refetchTokens]);
 
   if (teamsLoading || filesLoading || gpsLoading || tokensLoading) {
     return (
@@ -281,6 +297,41 @@ export default function AdminPage() {
                                 )}
                                 {hasActiveLink ? "Regenerate" : "Generate Link"}
                               </Button>
+                              
+                              {/* Delete GP Button */}
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    disabled={deletingGpId === gp.id}
+                                  >
+                                    {deletingGpId === gp.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Game Presenter</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete <strong>{gp.name}</strong>? This will also delete all their evaluations and access links. This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteGp(gp.id, gp.name)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </div>
                           </TableCell>
                         </TableRow>

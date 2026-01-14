@@ -200,6 +200,20 @@ export async function updateGamePresenterTeam(gpId: number, teamId: number): Pro
   await db.update(gamePresenters).set({ teamId }).where(eq(gamePresenters.id, gpId));
 }
 
+export async function deleteGamePresenter(gpId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  // Delete related records first (cascade)
+  await db.delete(evaluations).where(eq(evaluations.gamePresenterId, gpId));
+  await db.delete(gpAccessTokens).where(eq(gpAccessTokens.gamePresenterId, gpId));
+  
+  // Delete the GP
+  await db.delete(gamePresenters).where(eq(gamePresenters.id, gpId));
+  
+  return true;
+}
+
 // ============================================
 // EVALUATION FUNCTIONS
 // ============================================

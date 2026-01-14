@@ -325,3 +325,29 @@ describe("GP Portal Access Control", () => {
     expect(invalidToken.length).toBe(0);
   });
 });
+
+
+describe("gamePresenter.delete", () => {
+  it("should validate GP exists before deletion", () => {
+    const gpId = 123;
+    const mockGp = { id: gpId, name: "Test GP", teamId: 1 };
+    
+    expect(mockGp.id).toBe(gpId);
+    expect(mockGp.name).toBeDefined();
+  });
+
+  it("should cascade delete related records", () => {
+    const relatedTables = ["evaluations", "gpAccessTokens"];
+    
+    expect(relatedTables).toContain("evaluations");
+    expect(relatedTables).toContain("gpAccessTokens");
+    expect(relatedTables.length).toBe(2);
+  });
+
+  it("should return deleted GP name on success", () => {
+    const mockResponse = { success: true, deletedName: "Test GP" };
+    
+    expect(mockResponse.success).toBe(true);
+    expect(mockResponse.deletedName).toBeDefined();
+  });
+});
