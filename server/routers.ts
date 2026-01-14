@@ -685,6 +685,13 @@ export const appRouter = router({
     list: protectedProcedure.query(async () => {
       return await db.getAllErrorFiles();
     }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteErrorFile(input.id);
+        return { success: true };
+      }),
   }),
 });
 

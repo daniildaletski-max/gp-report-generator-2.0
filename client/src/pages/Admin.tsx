@@ -8,8 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Upload, FileSpreadsheet, Loader2, Users, AlertTriangle } from "lucide-react";
+import { FileSpreadsheet, Loader2, Users, AlertTriangle, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -22,11 +23,13 @@ export default function AdminPage() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [errorType, setErrorType] = useState<"playgon" | "mg">("playgon");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   
-  const { data: teams, isLoading: teamsLoading, refetch: refetchTeams } = trpc.fmTeam.list.useQuery();
+  const { data: teams, isLoading: teamsLoading } = trpc.fmTeam.list.useQuery();
   const { data: errorFiles, isLoading: filesLoading, refetch: refetchFiles } = trpc.errorFile.list.useQuery();
   
   const uploadErrorsMutation = trpc.errorFile.upload.useMutation();
+  const deleteErrorsMutation = trpc.errorFile.delete.useMutation();
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -62,6 +65,19 @@ export default function AdminPage() {
       setIsUploading(false);
     }
   }, [selectedMonth, selectedYear, errorType, uploadErrorsMutation, refetchFiles]);
+
+  const handleDeleteFile = useCallback(async (id: number) => {
+    setDeletingId(id);
+    try {
+      await deleteErrorsMutation.mutateAsync({ id });
+      toast.success("File deleted successfully");
+      refetchFiles();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete file");
+    } finally {
+      setDeletingId(null);
+    }
+  }, [deleteErrorsMutation, refetchFiles]);
 
   if (teamsLoading || filesLoading) {
     return (
@@ -220,8 +236,8 @@ export default function AdminPage() {
                   <TableHead>Filename</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Period</TableHead>
-                  <TableHead>Errors Count</TableHead>
                   <TableHead>Uploaded</TableHead>
+                  <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -236,9 +252,43 @@ export default function AdminPage() {
                     <TableCell>
                       {MONTHS[file.month - 1]} {file.year}
                     </TableCell>
-                    <TableCell>-</TableCell>
                     <TableCell>
                       {format(new Date(file.createdAt), "dd MMM yyyy HH:mm")}
+                    </TableCell>
+                    <TableCell>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            disabled={deletingId === file.id}
+                          >
+                            {deletingId === file.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Error File</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete "{file.fileName}"? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteFile(file.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </TableCell>
                   </TableRow>
                 ))}

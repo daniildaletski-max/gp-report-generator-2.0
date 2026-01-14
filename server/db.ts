@@ -360,6 +360,12 @@ export async function getAllErrorFiles(): Promise<ErrorFile[]> {
   return await db.select().from(errorFiles).orderBy(desc(errorFiles.createdAt));
 }
 
+export async function deleteErrorFile(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(errorFiles).where(eq(errorFiles.id, id));
+}
+
 // ============================================
 // GP ERRORS FUNCTIONS
 // ============================================
@@ -570,7 +576,7 @@ export async function getGPMonthlyStats(teamId: number, year: number, month: num
 
 export async function getDashboardStats() {
   const db = await getDb();
-  if (!db) return { totalGPs: 0, totalEvaluations: 0, totalReports: 0, recentEvaluations: [] };
+  if (!db) return { totalGPs: 0, totalEvaluations: 0, totalReports: 0, recentEvaluations: [], monthlyStats: [], avgScore: 0 };
 
   const [gpCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(gamePresenters);
   const [evalCount] = await db.select({ count: sql<number>`COUNT(*)` }).from(evaluations);
@@ -585,10 +591,36 @@ export async function getDashboardStats() {
   .orderBy(desc(evaluations.createdAt))
   .limit(5);
 
+  // Get monthly evaluation counts for the last 6 months
+  let monthlyData: { month: number; year: number; count: number; avgScore: number }[] = [];
+  try {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    monthlyData = await db.select({
+      month: sql<number>`MONTH(evaluationDate)`,
+      year: sql<number>`YEAR(evaluationDate)`,
+      count: sql<number>`COUNT(*)`,
+      avgScore: sql<number>`AVG(totalScore)`,
+    })
+    .from(evaluations)
+    .where(gte(evaluations.evaluationDate, sixMonthsAgo))
+    .groupBy(sql`YEAR(evaluationDate)`, sql`MONTH(evaluationDate)`)
+    .orderBy(sql`YEAR(evaluationDate)`, sql`MONTH(evaluationDate)`);
+  } catch (e) {
+    console.warn("Failed to get monthly stats:", e);
+    monthlyData = [];
+  }
+
+  // Calculate overall average score
+  const [avgScoreResult] = await db.select({ avg: sql<number>`AVG(${evaluations.totalScore})` }).from(evaluations);
+
   return {
     totalGPs: gpCount.count,
     totalEvaluations: evalCount.count,
     totalReports: reportCount.count,
     recentEvaluations: recentEvals,
+    monthlyStats: monthlyData,
+    avgScore: avgScoreResult?.avg || 0,
   };
 }

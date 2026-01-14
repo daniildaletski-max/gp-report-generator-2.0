@@ -36,3 +36,12 @@
 - [x] Store error data in database linked to GP names
 - [ ] Auto-match GP names from error files with evaluation data
 - [x] Pre-configure FM teams: Andri Saaret - Team Omnicron, Kristina Bobrovskaja - Team Alpha, Alissa Gujevskaja - Team Zeta
+
+
+## Admin & Dashboard Improvements
+
+- [x] Add delete button for uploaded error files in Admin
+- [x] Backend API for deleting error files
+- [x] Restore Dashboard with statistics cards (total GPs, evaluations, reports)
+- [x] Add monthly evaluation chart to Dashboard
+- [x] Add recent evaluations list to Dashboard
