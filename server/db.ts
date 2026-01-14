@@ -315,6 +315,20 @@ export async function getEvaluationsWithGP() {
   .orderBy(desc(evaluations.createdAt));
 }
 
+export async function getEvaluationsByTeam(teamId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    evaluation: evaluations,
+    gamePresenter: gamePresenters,
+  })
+  .from(evaluations)
+  .leftJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+  .where(eq(gamePresenters.teamId, teamId))
+  .orderBy(desc(evaluations.createdAt));
+}
+
 // ============================================
 // GP MONTHLY ATTENDANCE FUNCTIONS
 // ============================================
@@ -557,6 +571,20 @@ export async function getReportsWithTeams() {
   })
   .from(reports)
   .leftJoin(fmTeams, eq(reports.teamId, fmTeams.id))
+  .orderBy(desc(reports.createdAt));
+}
+
+export async function getReportsByTeam(teamId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    report: reports,
+    team: fmTeams,
+  })
+  .from(reports)
+  .leftJoin(fmTeams, eq(reports.teamId, fmTeams.id))
+  .where(eq(reports.teamId, teamId))
   .orderBy(desc(reports.createdAt));
 }
 
@@ -916,6 +944,20 @@ export async function getAllGpAccessTokens() {
   })
   .from(gpAccessTokens)
   .leftJoin(gamePresenters, eq(gpAccessTokens.gamePresenterId, gamePresenters.id))
+  .orderBy(desc(gpAccessTokens.createdAt));
+}
+
+export async function getGpAccessTokensByTeam(teamId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    token: gpAccessTokens,
+    gp: gamePresenters,
+  })
+  .from(gpAccessTokens)
+  .leftJoin(gamePresenters, eq(gpAccessTokens.gamePresenterId, gamePresenters.id))
+  .where(eq(gamePresenters.teamId, teamId))
   .orderBy(desc(gpAccessTokens.createdAt));
 }
 

@@ -215,3 +215,38 @@
 
 - [x] Fix: Duplicate keys in Google Drive file selector (files with same name cause React key error)
   - Solution: Filter out duplicate filenames and use index in key
+
+
+## Team-based Access Control Improvement (v13)
+
+- [ ] Remove Google Sheets sync feature (keep file upload only)
+- [ ] Enforce team filtering in all modules:
+  - [ ] Evaluations - FM sees only their team's evaluations
+  - [ ] GP Stats - FM sees only their team's GP stats
+  - [ ] GP Access Links - FM sees only their team's GPs
+  - [ ] Reports - FM generates reports only for their team
+  - [ ] Error Files - FM uploads errors only for their team
+- [ ] Add FM users to database with team assignments:
+  - [ ] Andri Saaret → Team Omnicron
+  - [ ] Alissa Gujevskaja → Team Zeta
+  - [ ] Kristina Bobrovskaja → Team Alpha
+- [ ] Admin sees all teams, FM sees only their team
+
+
+## Team-based Access Control (v13) - COMPLETED
+
+### Remove Google Sheets Sync
+- [x] Remove Google Sheets sync UI from Admin
+- [x] Remove googleSheets router from backend
+- [x] Keep only manual file upload
+
+### Team-based Filtering
+- [x] Filter evaluations by FM's team (evaluation.list)
+- [x] Filter reports by FM's team (report.list)
+- [x] Filter GP Access Links by FM's team (gpAccess.list)
+- [x] Filter GP list by FM's team (gamePresenter.list)
+- [x] Ensure all modules respect teamId
+
+### FM User Setup
+- [x] Teams configured: Omnicron (id=1), Alpha (id=2), Zeta (id=3)
+- [x] FM users created when they log in, admin assigns teams via User Management tab
