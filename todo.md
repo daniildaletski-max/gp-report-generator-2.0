@@ -425,3 +425,10 @@
 
 - [x] Move chart from "Chart Data" sheet to the month sheet (e.g., "December 2025")
 - [x] Position chart on the right side of the month sheet (column I, row 1)
+
+
+## Chart Improvements (v27)
+
+- [x] Move chart below attendance table (row 40, column N)
+- [x] Remove Chart Data sheet completely
+- [x] Add comparison chart with previous month data (row 62, column N)

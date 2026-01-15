@@ -95,6 +95,84 @@ async function generateChartImage(
   }
 }
 
+// Generate comparison chart between current and previous month
+async function generateComparisonChart(
+  labels: string[],
+  currentScores: number[],
+  previousScores: number[],
+  currentMonthName: string,
+  previousMonthName: string,
+  title: string
+): Promise<Buffer | null> {
+  try {
+    const chartConfig = {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: currentMonthName,
+            data: currentScores,
+            backgroundColor: 'rgba(54, 162, 235, 0.8)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+          },
+          {
+            label: previousMonthName,
+            data: previousScores,
+            backgroundColor: 'rgba(255, 159, 64, 0.6)',
+            borderColor: 'rgba(255, 159, 64, 1)',
+            borderWidth: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: title,
+            font: { size: 16 }
+          },
+          legend: {
+            position: 'bottom'
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 24,
+            title: {
+              display: true,
+              text: 'Total Score'
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: 'Game Presenters'
+            }
+          }
+        }
+      }
+    };
+
+    const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=700&h=350&bkg=white`;
+    
+    const response = await fetch(chartUrl);
+    if (!response.ok) {
+      console.error('[generateComparisonChart] QuickChart API error:', response.status);
+      return null;
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (error) {
+    console.error('[generateComparisonChart] Error:', error);
+    return null;
+  }
+}
+
 // Month names for report formatting
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", 
                      "July", "August", "September", "October", "November", "December"];
@@ -802,6 +880,16 @@ Attendance Summary:
           report.reportMonth
         );
 
+        // Get previous month data for comparison chart
+        const prevMonth = report.reportMonth === 1 ? 12 : report.reportMonth - 1;
+        const prevYear = report.reportMonth === 1 ? report.reportYear - 1 : report.reportYear;
+        const prevMonthEvaluations = await db.getGPEvaluationsForDataSheet(
+          report.teamId,
+          prevYear,
+          prevMonth
+        );
+        console.log(`[exportToExcel] Previous month (${prevMonth}/${prevYear}) evaluations: ${prevMonthEvaluations.length} GPs`);
+
         const workbook = new ExcelJS.Workbook();
         
         // ===== Sheet 1: Data (GP Performance scores) - FIRST =====
@@ -1337,54 +1425,8 @@ Attendance Summary:
 
         console.log("[exportToExcel] Chart labels:", chartLabels.length, chartLabels);
 
-        // ===== CREATE CHART SHEET WITH DATA FOR EXCEL CHART =====
-        // Add a dedicated Chart sheet with data formatted for Excel's built-in chart feature
+        // ===== GENERATE CHART IMAGE AND ADD TO MONTH SHEET =====
         if (chartLabels.length > 0) {
-          const chartSheet = workbook.addWorksheet("Chart Data");
-          
-          // Set column widths
-          chartSheet.columns = [
-            { width: 20 }, { width: 15 }, { width: 15 }, { width: 15 }
-          ];
-
-          // Title
-          chartSheet.mergeCells("A1:D1");
-          chartSheet.getCell("A1").value = `${teamName} Performance - ${monthName} ${report.reportYear}`;
-          chartSheet.getCell("A1").font = { bold: true, size: 14 };
-          chartSheet.getCell("A1").alignment = { horizontal: "center" };
-          chartSheet.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
-          chartSheet.getCell("A1").font = { bold: true, size: 14, color: { argb: "FFFFFFFF" } };
-
-          // Headers
-          chartSheet.getCell("A3").value = "GP Name";
-          chartSheet.getCell("B3").value = "Total Score";
-          chartSheet.getCell("C3").value = "Appearance";
-          chartSheet.getCell("D3").value = "Game Perf";
-          ["A3", "B3", "C3", "D3"].forEach(cell => {
-            chartSheet.getCell(cell).font = { bold: true };
-            chartSheet.getCell(cell).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
-            chartSheet.getCell(cell).border = { bottom: { style: "thin" } };
-          });
-
-          // Data rows
-          for (let i = 0; i < chartLabels.length; i++) {
-            const row = 4 + i;
-            chartSheet.getCell(`A${row}`).value = chartLabels[i];
-            chartSheet.getCell(`B${row}`).value = totalScores[i];
-            chartSheet.getCell(`C${row}`).value = appearanceScores[i];
-            chartSheet.getCell(`D${row}`).value = gamePerformanceScores[i];
-            
-            // Color code total score
-            const total = totalScores[i];
-            if (total >= 18) {
-              chartSheet.getCell(`B${row}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF92D050" } };
-            } else if (total >= 15) {
-              chartSheet.getCell(`B${row}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
-            } else {
-              chartSheet.getCell(`B${row}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF6B6B" } };
-            }
-          }
-
           // Generate chart image using QuickChart API
           const chartTitle = `${teamName} Performance - ${monthName} ${report.reportYear}`;
           const chartImageBuffer = await generateChartImage(
@@ -1396,31 +1438,90 @@ Attendance Summary:
           );
 
           if (chartImageBuffer) {
-            // Add chart image to the main month sheet (not Chart Data sheet)
+            // Add chart image to the main month sheet below attendance table
             const imageId = workbook.addImage({
               buffer: chartImageBuffer as any,
               extension: 'png',
             });
 
-            // Position the chart image on the main month sheet
-            // Place it starting at row 1, column I (column 8, 0-indexed)
+            // Position the chart image below attendance table (row 50)
+            // Column N (13, 0-indexed) to align with attendance section
             mainSheet.addImage(imageId, {
-              tl: { col: 8.5, row: 1 },
-              ext: { width: 550, height: 300 }
+              tl: { col: 13, row: 40 },
+              ext: { width: 700, height: 350 }
             });
 
-            console.log('[exportToExcel] Chart image added to month sheet successfully');
+            console.log('[exportToExcel] Chart image added to month sheet below attendance');
           } else {
-            // Fallback: Add instructions for creating chart manually on Chart Data sheet
-            const instructionRow = 4 + chartLabels.length + 2;
-            chartSheet.mergeCells(`A${instructionRow}:D${instructionRow + 3}`);
-            chartSheet.getCell(`A${instructionRow}`).value = 
-              "Chart image could not be generated. To create a chart manually:\n" +
-              "1. Select cells A3:D" + (3 + chartLabels.length) + "\n" +
-              "2. Go to Insert > Charts > Bar Chart\n" +
-              "3. Choose 'Clustered Bar' style";
-            chartSheet.getCell(`A${instructionRow}`).alignment = { wrapText: true, vertical: "top" };
-            chartSheet.getCell(`A${instructionRow}`).font = { italic: true, color: { argb: "FF666666" } };
+            // Fallback: Add text note if chart generation fails
+            mainSheet.mergeCells("N42:AA45");
+            mainSheet.getCell("N42").value = 
+              "Chart could not be generated. Please check the Data sheet for performance data.";
+            mainSheet.getCell("N42").alignment = { wrapText: true, vertical: "top" };
+            mainSheet.getCell("N42").font = { italic: true, color: { argb: "FF666666" } };
+          }
+
+          // ===== GENERATE COMPARISON CHART WITH PREVIOUS MONTH =====
+          // Build previous month scores map
+          const prevMonthScoresMap = new Map<string, number>();
+          for (const gp of prevMonthEvaluations) {
+            if (gp.evaluations.length > 0) {
+              const avgAppearance = gp.evaluations.reduce((sum, e) => sum + (e.appearanceScore || 0), 0) / gp.evaluations.length;
+              const avgGamePerf = gp.evaluations.reduce((sum, e) => sum + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
+              const gpName = gp.gpName.split(" ")[0]; // First name only
+              prevMonthScoresMap.set(gpName, Number((avgAppearance + avgGamePerf).toFixed(1)));
+            }
+          }
+
+          // Only generate comparison if we have previous month data
+          if (prevMonthScoresMap.size > 0) {
+            // Get scores for GPs that exist in both months
+            const comparisonLabels: string[] = [];
+            const currentMonthScores: number[] = [];
+            const previousMonthScores: number[] = [];
+
+            for (let i = 0; i < chartLabels.length; i++) {
+              const gpName = chartLabels[i];
+              const prevScore = prevMonthScoresMap.get(gpName);
+              if (prevScore !== undefined) {
+                comparisonLabels.push(gpName);
+                currentMonthScores.push(totalScores[i]);
+                previousMonthScores.push(prevScore);
+              }
+            }
+
+            if (comparisonLabels.length > 0) {
+              const prevMonthName = MONTH_NAMES[prevMonth - 1];
+              const comparisonTitle = `Performance Comparison: ${monthName} vs ${prevMonthName}`;
+              
+              const comparisonChartBuffer = await generateComparisonChart(
+                comparisonLabels,
+                currentMonthScores,
+                previousMonthScores,
+                monthName,
+                prevMonthName,
+                comparisonTitle
+              );
+
+              if (comparisonChartBuffer) {
+                const comparisonImageId = workbook.addImage({
+                  buffer: comparisonChartBuffer as any,
+                  extension: 'png',
+                });
+
+                // Position comparison chart below the main chart (row 62)
+                mainSheet.addImage(comparisonImageId, {
+                  tl: { col: 13, row: 62 },
+                  ext: { width: 700, height: 350 }
+                });
+
+                console.log('[exportToExcel] Comparison chart added to month sheet');
+              }
+            } else {
+              console.log('[exportToExcel] No matching GPs between months for comparison chart');
+            }
+          } else {
+            console.log('[exportToExcel] No previous month data available for comparison');
           }
         }
 
