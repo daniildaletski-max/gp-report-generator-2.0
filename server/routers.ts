@@ -1396,22 +1396,22 @@ Attendance Summary:
           );
 
           if (chartImageBuffer) {
-            // Add chart image to the Chart Data sheet
+            // Add chart image to the main month sheet (not Chart Data sheet)
             const imageId = workbook.addImage({
               buffer: chartImageBuffer as any,
               extension: 'png',
             });
 
-            // Position the chart image below the data table
-            const imageStartRow = 4 + chartLabels.length + 2;
-            chartSheet.addImage(imageId, {
-              tl: { col: 0, row: imageStartRow },
-              ext: { width: 800, height: 400 }
+            // Position the chart image on the main month sheet
+            // Place it starting at row 1, column I (column 8, 0-indexed)
+            mainSheet.addImage(imageId, {
+              tl: { col: 8.5, row: 1 },
+              ext: { width: 550, height: 300 }
             });
 
-            console.log('[exportToExcel] Chart image added to Excel successfully');
+            console.log('[exportToExcel] Chart image added to month sheet successfully');
           } else {
-            // Fallback: Add instructions for creating chart manually
+            // Fallback: Add instructions for creating chart manually on Chart Data sheet
             const instructionRow = 4 + chartLabels.length + 2;
             chartSheet.mergeCells(`A${instructionRow}:D${instructionRow + 3}`);
             chartSheet.getCell(`A${instructionRow}`).value = 

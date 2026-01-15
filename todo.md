@@ -419,3 +419,9 @@
 - [x] Add auto-fill button on Reports page to generate text fields ("Auto-fill All Fields with AI" button)
 - [x] Integrate auto-generated text into Excel export
 - [x] Added 7 new tests for auto-fill functionality (76 total tests passing)
+
+
+## Move Chart to Month Sheet (v26)
+
+- [x] Move chart from "Chart Data" sheet to the month sheet (e.g., "December 2025")
+- [x] Position chart on the right side of the month sheet (column I, row 1)
