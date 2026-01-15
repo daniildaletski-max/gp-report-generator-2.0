@@ -402,3 +402,10 @@
 - [x] Add: Chart Data sheet with formatted data for Excel's built-in chart feature
 - [x] Color-coded total scores (green >=18, yellow >=15, red <15)
 - [x] Instructions for creating chart in Excel included
+
+
+## Excel Chart Image (v24)
+
+- [x] Generate chart image using QuickChart API (no canvas dependency)
+- [x] Insert chart image directly into Excel report
+- [x] Chart shows GP names, Total Score, Appearance, Performance (same as Dashboard)

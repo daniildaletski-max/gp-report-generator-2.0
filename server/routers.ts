@@ -11,7 +11,89 @@ import { nanoid } from "nanoid";
 import * as db from "./db";
 import ExcelJS from "exceljs";
 import XLSXChart from "xlsx-chart";
-// Chart generation moved to Excel's built-in chart feature
+// Chart generation via QuickChart API
+async function generateChartImage(
+  labels: string[],
+  appearanceScores: number[],
+  gamePerformanceScores: number[],
+  totalScores: number[],
+  title: string
+): Promise<Buffer | null> {
+  try {
+    const chartConfig = {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Total Score',
+            data: totalScores,
+            backgroundColor: 'rgba(54, 162, 235, 0.8)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+          },
+          {
+            label: 'Appearance',
+            data: appearanceScores,
+            backgroundColor: 'rgba(75, 192, 192, 0.8)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 1
+          },
+          {
+            label: 'Game Performance',
+            data: gamePerformanceScores,
+            backgroundColor: 'rgba(255, 159, 64, 0.8)',
+            borderColor: 'rgba(255, 159, 64, 1)',
+            borderWidth: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: title,
+            font: { size: 16 }
+          },
+          legend: {
+            position: 'bottom'
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 24,
+            title: {
+              display: true,
+              text: 'Score'
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: 'Game Presenters'
+            }
+          }
+        }
+      }
+    };
+
+    const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=800&h=400&bkg=white`;
+    
+    const response = await fetch(chartUrl);
+    if (!response.ok) {
+      console.error('[generateChartImage] QuickChart API error:', response.status);
+      return null;
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (error) {
+    console.error('[generateChartImage] Error:', error);
+    return null;
+  }
+}
 
 // Month names for report formatting
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", 
@@ -1161,16 +1243,43 @@ export const appRouter = router({
             }
           }
 
-          // Add instructions for creating chart
-          const instructionRow = 4 + chartLabels.length + 2;
-          chartSheet.mergeCells(`A${instructionRow}:D${instructionRow + 3}`);
-          chartSheet.getCell(`A${instructionRow}`).value = 
-            "To create a chart in Excel:\n" +
-            "1. Select cells A3:D" + (3 + chartLabels.length) + "\n" +
-            "2. Go to Insert > Charts > Bar Chart\n" +
-            "3. Choose 'Clustered Bar' style";
-          chartSheet.getCell(`A${instructionRow}`).alignment = { wrapText: true, vertical: "top" };
-          chartSheet.getCell(`A${instructionRow}`).font = { italic: true, color: { argb: "FF666666" } };
+          // Generate chart image using QuickChart API
+          const chartTitle = `${teamName} Performance - ${monthName} ${report.reportYear}`;
+          const chartImageBuffer = await generateChartImage(
+            chartLabels,
+            appearanceScores,
+            gamePerformanceScores,
+            totalScores,
+            chartTitle
+          );
+
+          if (chartImageBuffer) {
+            // Add chart image to the Chart Data sheet
+            const imageId = workbook.addImage({
+              buffer: chartImageBuffer as any,
+              extension: 'png',
+            });
+
+            // Position the chart image below the data table
+            const imageStartRow = 4 + chartLabels.length + 2;
+            chartSheet.addImage(imageId, {
+              tl: { col: 0, row: imageStartRow },
+              ext: { width: 800, height: 400 }
+            });
+
+            console.log('[exportToExcel] Chart image added to Excel successfully');
+          } else {
+            // Fallback: Add instructions for creating chart manually
+            const instructionRow = 4 + chartLabels.length + 2;
+            chartSheet.mergeCells(`A${instructionRow}:D${instructionRow + 3}`);
+            chartSheet.getCell(`A${instructionRow}`).value = 
+              "Chart image could not be generated. To create a chart manually:\n" +
+              "1. Select cells A3:D" + (3 + chartLabels.length) + "\n" +
+              "2. Go to Insert > Charts > Bar Chart\n" +
+              "3. Choose 'Clustered Bar' style";
+            chartSheet.getCell(`A${instructionRow}`).alignment = { wrapText: true, vertical: "top" };
+            chartSheet.getCell(`A${instructionRow}`).font = { italic: true, color: { argb: "FF666666" } };
+          }
         }
 
         // Generate main report buffer
