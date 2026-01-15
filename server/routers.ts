@@ -11,7 +11,7 @@ import { nanoid } from "nanoid";
 import * as db from "./db";
 import ExcelJS from "exceljs";
 import XLSXChart from "xlsx-chart";
-import { ChartJSNodeCanvas } from "chartjs-node-canvas";
+// Chart generation moved to Excel's built-in chart feature
 
 // Month names for report formatting
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", 
@@ -1091,11 +1091,12 @@ export const appRouter = router({
           mainSheet.getCell(`G${visualRow}`).value = "<15 (Needs Improvement)";
         }
 
-        // ===== GENERATE CHART IMAGE USING Chart.js =====
+        // ===== GENERATE CHART DATA FOR EXCEL =====
         // Prepare chart data
         const chartLabels: string[] = [];
         const appearanceScores: number[] = [];
         const gamePerformanceScores: number[] = [];
+        const totalScores: number[] = [];
 
         for (const gp of gpEvaluationsData) {
           if (gp.evaluations.length > 0) {
@@ -1106,87 +1107,70 @@ export const appRouter = router({
             chartLabels.push(gpName);
             appearanceScores.push(Number(avgAppearance.toFixed(1)));
             gamePerformanceScores.push(Number(avgGamePerf.toFixed(1)));
+            totalScores.push(Number((avgAppearance + avgGamePerf).toFixed(1)));
           }
         }
 
-        // Generate chart image using Chart.js
         console.log("[exportToExcel] Chart labels:", chartLabels.length, chartLabels);
-        let chartImageBuffer: Buffer | null = null;
+
+        // ===== CREATE CHART SHEET WITH DATA FOR EXCEL CHART =====
+        // Add a dedicated Chart sheet with data formatted for Excel's built-in chart feature
         if (chartLabels.length > 0) {
-          try {
-            const chartJSNodeCanvas = new ChartJSNodeCanvas({ width: 800, height: 400, backgroundColour: 'white' });
-            const chartConfig = {
-              type: 'bar' as const,
-              data: {
-                labels: chartLabels,
-                datasets: [
-                  {
-                    label: 'Appearance (max 12)',
-                    data: appearanceScores,
-                    backgroundColor: 'rgba(91, 155, 213, 0.8)',
-                    borderColor: 'rgba(91, 155, 213, 1)',
-                    borderWidth: 1,
-                  },
-                  {
-                    label: 'Game Performance (max 10)',
-                    data: gamePerformanceScores,
-                    backgroundColor: 'rgba(112, 173, 71, 0.8)',
-                    borderColor: 'rgba(112, 173, 71, 1)',
-                    borderWidth: 1,
-                  },
-                ],
-              },
-              options: {
-                plugins: {
-                  title: {
-                    display: true,
-                    text: `${teamName} Performance - ${monthName} ${report.reportYear}`,
-                    font: { size: 18 },
-                  },
-                  legend: {
-                    display: true,
-                    position: 'top' as const,
-                  },
-                },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    max: 12,
-                    title: {
-                      display: true,
-                      text: 'Score',
-                    },
-                  },
-                  x: {
-                    title: {
-                      display: true,
-                      text: 'Game Presenter',
-                    },
-                  },
-                },
-              },
-            };
-
-            chartImageBuffer = await chartJSNodeCanvas.renderToBuffer(chartConfig as any);
-            console.log("[exportToExcel] Chart image generated, size:", chartImageBuffer.length);
-          } catch (chartErr) {
-            console.error("[exportToExcel] Chart image generation failed:", chartErr);
-            // Continue without chart
-          }
-        }
-
-        // Add chart image to Excel if generated
-        if (chartImageBuffer) {
-          const imageId = workbook.addImage({
-            buffer: chartImageBuffer as any,
-            extension: 'png',
-          });
+          const chartSheet = workbook.addWorksheet("Chart Data");
           
-          // Add image to Monthly sheet at a good position
-          mainSheet.addImage(imageId, {
-            tl: { col: 10, row: 5 },
-            ext: { width: 600, height: 300 },
+          // Set column widths
+          chartSheet.columns = [
+            { width: 20 }, { width: 15 }, { width: 15 }, { width: 15 }
+          ];
+
+          // Title
+          chartSheet.mergeCells("A1:D1");
+          chartSheet.getCell("A1").value = `${teamName} Performance - ${monthName} ${report.reportYear}`;
+          chartSheet.getCell("A1").font = { bold: true, size: 14 };
+          chartSheet.getCell("A1").alignment = { horizontal: "center" };
+          chartSheet.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
+          chartSheet.getCell("A1").font = { bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+
+          // Headers
+          chartSheet.getCell("A3").value = "GP Name";
+          chartSheet.getCell("B3").value = "Total Score";
+          chartSheet.getCell("C3").value = "Appearance";
+          chartSheet.getCell("D3").value = "Game Perf";
+          ["A3", "B3", "C3", "D3"].forEach(cell => {
+            chartSheet.getCell(cell).font = { bold: true };
+            chartSheet.getCell(cell).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+            chartSheet.getCell(cell).border = { bottom: { style: "thin" } };
           });
+
+          // Data rows
+          for (let i = 0; i < chartLabels.length; i++) {
+            const row = 4 + i;
+            chartSheet.getCell(`A${row}`).value = chartLabels[i];
+            chartSheet.getCell(`B${row}`).value = totalScores[i];
+            chartSheet.getCell(`C${row}`).value = appearanceScores[i];
+            chartSheet.getCell(`D${row}`).value = gamePerformanceScores[i];
+            
+            // Color code total score
+            const total = totalScores[i];
+            if (total >= 18) {
+              chartSheet.getCell(`B${row}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF92D050" } };
+            } else if (total >= 15) {
+              chartSheet.getCell(`B${row}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+            } else {
+              chartSheet.getCell(`B${row}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF6B6B" } };
+            }
+          }
+
+          // Add instructions for creating chart
+          const instructionRow = 4 + chartLabels.length + 2;
+          chartSheet.mergeCells(`A${instructionRow}:D${instructionRow + 3}`);
+          chartSheet.getCell(`A${instructionRow}`).value = 
+            "To create a chart in Excel:\n" +
+            "1. Select cells A3:D" + (3 + chartLabels.length) + "\n" +
+            "2. Go to Insert > Charts > Bar Chart\n" +
+            "3. Choose 'Clustered Bar' style";
+          chartSheet.getCell(`A${instructionRow}`).alignment = { wrapText: true, vertical: "top" };
+          chartSheet.getCell(`A${instructionRow}`).font = { italic: true, color: { argb: "FF666666" } };
         }
 
         // Generate main report buffer

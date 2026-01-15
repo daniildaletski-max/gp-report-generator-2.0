@@ -390,3 +390,15 @@
 - [ ] Preview extracted data with edit capability
 - [ ] Confirm and save button
 - [ ] Show success/error status for each screenshot
+
+
+## Bug Fixes (v22)
+
+- [ ] Fix: Monthly Performance Overview chart shows only 1 GP instead of all GPs with evaluations
+
+## Bug Fixes (v23)
+
+- [x] Fix: Excel chart - replaced canvas-based chart with Excel-native Chart Data sheet
+- [x] Add: Chart Data sheet with formatted data for Excel's built-in chart feature
+- [x] Color-coded total scores (green >=18, yellow >=15, red <15)
+- [x] Instructions for creating chart in Excel included
