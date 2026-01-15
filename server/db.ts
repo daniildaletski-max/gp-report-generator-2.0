@@ -164,10 +164,139 @@ export async function initializeDefaultTeams(): Promise<void> {
 // GAME PRESENTER FUNCTIONS
 // ============================================
 
+// Levenshtein distance algorithm for fuzzy string matching
+function levenshteinDistance(str1: string, str2: string): number {
+  const m = str1.length;
+  const n = str2.length;
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (str1[i - 1] === str2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+  }
+  return dp[m][n];
+}
+
+// Calculate similarity score (0-1, where 1 is exact match)
+function calculateSimilarity(str1: string, str2: string): number {
+  const maxLen = Math.max(str1.length, str2.length);
+  if (maxLen === 0) return 1;
+  const distance = levenshteinDistance(str1.toLowerCase(), str2.toLowerCase());
+  return 1 - distance / maxLen;
+}
+
+// Normalize name for comparison (remove extra spaces, handle common variations)
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')  // Multiple spaces to single
+    .replace(/[''`]/g, "'")  // Normalize apostrophes
+    .replace(/[–—]/g, '-');  // Normalize dashes
+}
+
+export interface FuzzyMatchResult {
+  gamePresenter: GamePresenter;
+  similarity: number;
+  isExactMatch: boolean;
+}
+
+// Find best matching GP using fuzzy search
+export async function findBestMatchingGP(name: string, threshold: number = 0.7): Promise<FuzzyMatchResult | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const allGPs = await db.select().from(gamePresenters);
+  const normalizedInput = normalizeName(name);
+
+  let bestMatch: FuzzyMatchResult | null = null;
+
+  for (const gp of allGPs) {
+    const normalizedGPName = normalizeName(gp.name);
+    
+    // Check for exact match first
+    if (normalizedGPName === normalizedInput) {
+      return {
+        gamePresenter: gp,
+        similarity: 1,
+        isExactMatch: true,
+      };
+    }
+
+    // Calculate fuzzy similarity
+    const similarity = calculateSimilarity(normalizedInput, normalizedGPName);
+    
+    // Also check if one name contains the other (for partial matches)
+    const containsMatch = normalizedGPName.includes(normalizedInput) || normalizedInput.includes(normalizedGPName);
+    const adjustedSimilarity = containsMatch ? Math.max(similarity, 0.85) : similarity;
+
+    if (adjustedSimilarity >= threshold && (!bestMatch || adjustedSimilarity > bestMatch.similarity)) {
+      bestMatch = {
+        gamePresenter: gp,
+        similarity: adjustedSimilarity,
+        isExactMatch: false,
+      };
+    }
+  }
+
+  return bestMatch;
+}
+
+// Find all potential matches above threshold
+export async function findAllMatchingGPs(name: string, threshold: number = 0.5): Promise<FuzzyMatchResult[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const allGPs = await db.select().from(gamePresenters);
+  const normalizedInput = normalizeName(name);
+  const matches: FuzzyMatchResult[] = [];
+
+  for (const gp of allGPs) {
+    const normalizedGPName = normalizeName(gp.name);
+    
+    // Check for exact match
+    if (normalizedGPName === normalizedInput) {
+      matches.push({
+        gamePresenter: gp,
+        similarity: 1,
+        isExactMatch: true,
+      });
+      continue;
+    }
+
+    // Calculate fuzzy similarity
+    const similarity = calculateSimilarity(normalizedInput, normalizedGPName);
+    
+    // Also check if one name contains the other
+    const containsMatch = normalizedGPName.includes(normalizedInput) || normalizedInput.includes(normalizedGPName);
+    const adjustedSimilarity = containsMatch ? Math.max(similarity, 0.85) : similarity;
+
+    if (adjustedSimilarity >= threshold) {
+      matches.push({
+        gamePresenter: gp,
+        similarity: adjustedSimilarity,
+        isExactMatch: false,
+      });
+    }
+  }
+
+  // Sort by similarity descending
+  return matches.sort((a, b) => b.similarity - a.similarity);
+}
+
 export async function findOrCreateGamePresenter(name: string, teamId?: number): Promise<GamePresenter> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
+  // First try exact match
   const existing = await db.select().from(gamePresenters)
     .where(eq(gamePresenters.name, name))
     .limit(1);
@@ -176,6 +305,14 @@ export async function findOrCreateGamePresenter(name: string, teamId?: number): 
     return existing[0];
   }
 
+  // Try fuzzy match with high threshold (0.85 = very similar)
+  const fuzzyMatch = await findBestMatchingGP(name, 0.85);
+  if (fuzzyMatch) {
+    console.log(`[Fuzzy Match] "${name}" matched to "${fuzzyMatch.gamePresenter.name}" (similarity: ${(fuzzyMatch.similarity * 100).toFixed(1)}%)`);
+    return fuzzyMatch.gamePresenter;
+  }
+
+  // No match found, create new GP
   const result = await db.insert(gamePresenters).values({
     name,
     teamId: teamId || null,
@@ -185,6 +322,7 @@ export async function findOrCreateGamePresenter(name: string, teamId?: number): 
     .where(eq(gamePresenters.id, Number(result[0].insertId)))
     .limit(1);
 
+  console.log(`[New GP] Created new Game Presenter: "${name}"`);
   return newGP[0];
 }
 
@@ -886,11 +1024,17 @@ export async function getEvaluationById(id: number): Promise<Evaluation | null> 
 // ============================================
 
 export async function getGPEvaluationsForDataSheet(teamId: number, year: number, month: number) {
+  console.log(`[getGPEvaluationsForDataSheet] teamId=${teamId}, year=${year}, month=${month}`);
   const db = await getDb();
-  if (!db) return [];
+  if (!db) {
+    console.log(`[getGPEvaluationsForDataSheet] No database connection`);
+    return [];
+  }
 
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0, 23, 59, 59);
+  // Use UTC dates to avoid timezone issues
+  const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
+  const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59));
+  console.log(`[getGPEvaluationsForDataSheet] Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
   // Get all GPs in the team with their evaluations for the month
   const gps = await db.select({
@@ -901,6 +1045,19 @@ export async function getGPEvaluationsForDataSheet(teamId: number, year: number,
   .where(eq(gamePresenters.teamId, teamId));
 
   const result = [];
+
+  // Debug: check first GP's evaluations without date filter
+  if (gps.length > 0) {
+    const debugEvals = await db.select({
+      id: evaluations.id,
+      gpId: evaluations.gamePresenterId,
+      date: evaluations.evaluationDate,
+    })
+    .from(evaluations)
+    .where(eq(evaluations.gamePresenterId, gps[0].gpId))
+    .limit(5);
+    console.log(`[getGPEvaluationsForDataSheet] Debug - First GP (${gps[0].gpId}) evaluations without date filter:`, debugEvals);
+  }
 
   for (const gp of gps) {
     // Get all evaluations for this GP in the month
@@ -926,6 +1083,7 @@ export async function getGPEvaluationsForDataSheet(teamId: number, year: number,
     });
   }
 
+  console.log(`[getGPEvaluationsForDataSheet] Found ${gps.length} GPs, ${result.filter(r => r.evaluations.length > 0).length} with evaluations`);
   return result;
 }
 

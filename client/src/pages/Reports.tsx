@@ -20,7 +20,7 @@ const MONTHS = [
 export default function ReportsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExporting, setIsExporting] = useState<number | null>(null);
-  const [lastChartUrl, setLastChartUrl] = useState<string | null>(null);
+
   const [showNewReport, setShowNewReport] = useState(false);
   
   const [formData, setFormData] = useState({
@@ -116,18 +116,13 @@ export default function ReportsPage() {
   };
 
   const handleExport = async (reportId: number) => {
+    console.log('[Reports] handleExport called with reportId:', reportId);
     setIsExporting(reportId);
     try {
       const result = await exportMutation.mutateAsync({ reportId });
-      toast.success("Excel file generated" + (result.chartUrl ? " with chart" : ""));
+      console.log('[Reports] exportMutation result:', result);
+      toast.success("Excel file generated with embedded chart");
       window.open(result.excelUrl, "_blank");
-      if (result.chartUrl) {
-        setLastChartUrl(result.chartUrl);
-        // Also open chart in new tab
-        setTimeout(() => {
-          window.open(result.chartUrl!, "_blank");
-        }, 500);
-      }
       refetch();
     } catch (error: any) {
       toast.error(error.message || "Failed to export report");
@@ -364,14 +359,29 @@ export default function ReportsPage() {
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         {item.report.excelFileUrl ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.open(item.report.excelFileUrl!, "_blank")}
-                          >
-                            <Download className="h-4 w-4 mr-1" />
-                            Download
-                          </Button>
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => window.open(item.report.excelFileUrl!, "_blank")}
+                            >
+                              <Download className="h-4 w-4 mr-1" />
+                              Download
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleExport(item.report.id)}
+                              disabled={isExporting === item.report.id}
+                              title="Regenerate Excel with latest data"
+                            >
+                              {isExporting === item.report.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </>
                         ) : (
                           <Button
                             variant="outline"

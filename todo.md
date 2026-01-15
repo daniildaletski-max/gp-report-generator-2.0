@@ -367,3 +367,26 @@
 - [x] Includes Appearance and Game Performance as separate series (column chart)
 - [x] Chart exported as separate Excel file with embedded chart
 - [x] Both main report and chart file download automatically on export
+
+
+## Screenshot Auto-Analysis System (v21)
+
+### AI-Powered Screenshot Analysis
+- [ ] Create LLM vision endpoint to analyze evaluation screenshots
+- [ ] Extract data: Presenter name, Evaluator, Date, Game, Total Score
+- [ ] Extract ratings: Hair, Makeup, Outfit, Posture, Dealing Style, Game Performance
+- [ ] Extract comments for each rating category
+
+### Auto-Create Evaluations
+- [ ] Match extracted GP name with existing GP in database
+- [ ] Auto-create evaluation record with extracted scores
+- [x] Handle fuzzy name matching (e.g., "Sofja Barchan" → "Sofia Barchan") - COMPLETED
+- [ ] Show preview of extracted data before saving
+- [ ] Batch upload: process multiple screenshots at once
+
+### UI for Screenshot Upload
+- [ ] Create new page/tab for screenshot analysis
+- [ ] Drag-and-drop upload area
+- [ ] Preview extracted data with edit capability
+- [ ] Confirm and save button
+- [ ] Show success/error status for each screenshot

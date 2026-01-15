@@ -1,0 +1,9 @@
+{
+  "query": "SELECT e.id, e.gamePresenterId, e.evaluationDate, gp.name, gp.teamId\nFROM evaluations e\nJOIN game_presenters gp ON e.gamePresenterId = gp.id\nWHERE gp.teamId = 1\nLIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT e.id, e.gamePresenterId, e.evaluationDate, gp.name, gp.teamId\nFROM evaluations e\nJOIN game_presenters gp ON e.gamePresenterId = gp.id\nWHERE gp.teamId = 1\nLIMIT 10;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 376
+}

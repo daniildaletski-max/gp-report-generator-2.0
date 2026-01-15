@@ -1,4 +1,5 @@
 import { COOKIE_NAME } from "@shared/const";
+console.log("[routers.ts] LOADED AT", new Date().toISOString());
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
@@ -10,6 +11,7 @@ import { nanoid } from "nanoid";
 import * as db from "./db";
 import ExcelJS from "exceljs";
 import XLSXChart from "xlsx-chart";
+import { ChartJSNodeCanvas } from "chartjs-node-canvas";
 
 // Month names for report formatting
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", 
@@ -401,6 +403,43 @@ export const appRouter = router({
         return { success: true, deletedName: gp.name };
       }),
 
+    // Fuzzy search for GP by name
+    fuzzySearch: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        threshold: z.number().min(0).max(1).default(0.5),
+      }))
+      .query(async ({ input }) => {
+        const matches = await db.findAllMatchingGPs(input.name, input.threshold);
+        return matches.map(m => ({
+          id: m.gamePresenter.id,
+          name: m.gamePresenter.name,
+          teamId: m.gamePresenter.teamId,
+          similarity: m.similarity,
+          similarityPercent: Math.round(m.similarity * 100),
+          isExactMatch: m.isExactMatch,
+        }));
+      }),
+
+    // Find best match for GP name
+    findBestMatch: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        threshold: z.number().min(0).max(1).default(0.7),
+      }))
+      .query(async ({ input }) => {
+        const match = await db.findBestMatchingGP(input.name, input.threshold);
+        if (!match) return null;
+        return {
+          id: match.gamePresenter.id,
+          name: match.gamePresenter.name,
+          teamId: match.gamePresenter.teamId,
+          similarity: match.similarity,
+          similarityPercent: Math.round(match.similarity * 100),
+          isExactMatch: match.isExactMatch,
+        };
+      }),
+
     // Update attitude and mistakes for a GP
     updateStats: protectedProcedure
       .input(z.object({
@@ -513,7 +552,10 @@ export const appRouter = router({
         reportId: z.number(),
       }))
       .mutation(async ({ input }) => {
+        console.log(`\n\n========== [exportToExcel] START ==========`);
+        console.log(`[exportToExcel] Called with input.reportId=${input.reportId}`);
         const reportWithTeam = await db.getReportWithTeam(input.reportId);
+        console.log(`[exportToExcel] getReportWithTeam returned:`, reportWithTeam ? { reportId: reportWithTeam.report.id, teamId: reportWithTeam.report.teamId } : null);
         if (!reportWithTeam) throw new Error("Report not found");
 
         const { report, team } = reportWithTeam;
@@ -529,6 +571,7 @@ export const appRouter = router({
         );
 
         // Get detailed GP evaluations for Data sheet
+        console.log(`[exportToExcel] reportId=${input.reportId}, teamId=${report.teamId}, year=${report.reportYear}, month=${report.reportMonth}`);
         const gpEvaluationsData = await db.getGPEvaluationsForDataSheet(
           report.teamId, 
           report.reportYear, 
@@ -1048,14 +1091,11 @@ export const appRouter = router({
           mainSheet.getCell(`G${visualRow}`).value = "<15 (Needs Improvement)";
         }
 
-        // ===== GENERATE CHART FILE USING xlsx-chart =====
+        // ===== GENERATE CHART IMAGE USING Chart.js =====
         // Prepare chart data
-        const chartTitles = ["Appearance", "Game Performance"];
-        const chartFields: string[] = [];
-        const chartData: Record<string, Record<string, number>> = {
-          "Appearance": {},
-          "Game Performance": {}
-        };
+        const chartLabels: string[] = [];
+        const appearanceScores: number[] = [];
+        const gamePerformanceScores: number[] = [];
 
         for (const gp of gpEvaluationsData) {
           if (gp.evaluations.length > 0) {
@@ -1063,29 +1103,89 @@ export const appRouter = router({
             const avgGamePerf = gp.evaluations.reduce((sum, e) => sum + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
             
             const gpName = gp.gpName.split(" ")[0]; // First name only
-            chartFields.push(gpName);
-            chartData["Appearance"][gpName] = Number(avgAppearance.toFixed(1));
-            chartData["Game Performance"][gpName] = Number(avgGamePerf.toFixed(1));
+            chartLabels.push(gpName);
+            appearanceScores.push(Number(avgAppearance.toFixed(1)));
+            gamePerformanceScores.push(Number(avgGamePerf.toFixed(1)));
           }
         }
 
-        // Generate chart using xlsx-chart
-        let chartBuffer: Buffer | null = null;
-        if (chartFields.length > 0) {
-          const xlsxChart = new XLSXChart();
-          const chartOpts = {
-            chart: "column" as const,
-            titles: chartTitles,
-            fields: chartFields,
-            data: chartData,
-            chartTitle: `${teamName} Performance - ${monthName} ${report.reportYear}`
-          };
+        // Generate chart image using Chart.js
+        console.log("[exportToExcel] Chart labels:", chartLabels.length, chartLabels);
+        let chartImageBuffer: Buffer | null = null;
+        if (chartLabels.length > 0) {
+          try {
+            const chartJSNodeCanvas = new ChartJSNodeCanvas({ width: 800, height: 400, backgroundColour: 'white' });
+            const chartConfig = {
+              type: 'bar' as const,
+              data: {
+                labels: chartLabels,
+                datasets: [
+                  {
+                    label: 'Appearance (max 12)',
+                    data: appearanceScores,
+                    backgroundColor: 'rgba(91, 155, 213, 0.8)',
+                    borderColor: 'rgba(91, 155, 213, 1)',
+                    borderWidth: 1,
+                  },
+                  {
+                    label: 'Game Performance (max 10)',
+                    data: gamePerformanceScores,
+                    backgroundColor: 'rgba(112, 173, 71, 0.8)',
+                    borderColor: 'rgba(112, 173, 71, 1)',
+                    borderWidth: 1,
+                  },
+                ],
+              },
+              options: {
+                plugins: {
+                  title: {
+                    display: true,
+                    text: `${teamName} Performance - ${monthName} ${report.reportYear}`,
+                    font: { size: 18 },
+                  },
+                  legend: {
+                    display: true,
+                    position: 'top' as const,
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    max: 12,
+                    title: {
+                      display: true,
+                      text: 'Score',
+                    },
+                  },
+                  x: {
+                    title: {
+                      display: true,
+                      text: 'Game Presenter',
+                    },
+                  },
+                },
+              },
+            };
 
-          chartBuffer = await new Promise<Buffer>((resolve, reject) => {
-            xlsxChart.generate(chartOpts, (err: Error | null, data: Buffer) => {
-              if (err) reject(err);
-              else resolve(data);
-            });
+            chartImageBuffer = await chartJSNodeCanvas.renderToBuffer(chartConfig as any);
+            console.log("[exportToExcel] Chart image generated, size:", chartImageBuffer.length);
+          } catch (chartErr) {
+            console.error("[exportToExcel] Chart image generation failed:", chartErr);
+            // Continue without chart
+          }
+        }
+
+        // Add chart image to Excel if generated
+        if (chartImageBuffer) {
+          const imageId = workbook.addImage({
+            buffer: chartImageBuffer as any,
+            extension: 'png',
+          });
+          
+          // Add image to Monthly sheet at a good position
+          mainSheet.addImage(imageId, {
+            tl: { col: 10, row: 5 },
+            ext: { width: 600, height: 300 },
           });
         }
 
@@ -1096,13 +1196,8 @@ export const appRouter = router({
         const fileKey = `reports/${report.id}/${nanoid()}-TeamOverview_${teamName.replace(/\s+/g, '_')}_${monthName}${report.reportYear}.xlsx`;
         const { url: excelUrl } = await storagePut(fileKey, Buffer.from(buffer), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
-        // Upload chart file separately if generated
-        let chartUrl: string | null = null;
-        if (chartBuffer) {
-          const chartFileKey = `reports/${report.id}/${nanoid()}-Chart_${teamName.replace(/\s+/g, '_')}_${monthName}${report.reportYear}.xlsx`;
-          const chartResult = await storagePut(chartFileKey, chartBuffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-          chartUrl = chartResult.url;
-        }
+        // Chart is now embedded as image in the main Excel file
+        // No separate chart file needed
 
         await db.updateReport(report.id, {
           excelFileUrl: excelUrl,
@@ -1113,7 +1208,6 @@ export const appRouter = router({
         return {
           success: true,
           excelUrl,
-          chartUrl,
         };
       }),
 

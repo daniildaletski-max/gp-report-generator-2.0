@@ -1,0 +1,9 @@
+{
+  "query": "SELECT id, gamePresenterId, evaluationDate, appearanceScore, gamePerformanceTotalScore\nFROM evaluations\nORDER BY evaluationDate DESC\nLIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT id, gamePresenterId, evaluationDate, appearanceScore, gamePerformanceTotalScore\nFROM evaluations\nORDER BY evaluationDate DESC\nLIMIT 10;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 379
+}
