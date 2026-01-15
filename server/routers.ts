@@ -591,6 +591,148 @@ export const appRouter = router({
 
   // Report generation
   report: router({
+    // Auto-fill text fields based on evaluation data using LLM
+    autoFillFields: protectedProcedure
+      .input(z.object({
+        teamId: z.number(),
+        reportMonth: z.number().min(1).max(12),
+        reportYear: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        const team = await db.getFmTeamById(input.teamId);
+        if (!team) throw new Error("Team not found");
+
+        const monthName = MONTH_NAMES[input.reportMonth - 1];
+        const stats = await db.getGPMonthlyStats(input.teamId, input.reportYear, input.reportMonth);
+        const attendance = await db.getAttendanceByTeamMonth(input.teamId, input.reportMonth, input.reportYear);
+
+        if (stats.length === 0) {
+          throw new Error("No evaluation data available for this month");
+        }
+
+        // Prepare data summary for LLM
+        const avgTotal = stats.reduce((sum, gp) => sum + Number(gp.avgTotalScore || 0), 0) / stats.length;
+        const avgAppearance = stats.reduce((sum, gp) => sum + Number(gp.avgAppearanceScore || 0), 0) / stats.length;
+        const avgGamePerf = stats.reduce((sum, gp) => sum + Number(gp.avgGamePerfScore || 0), 0) / stats.length;
+        
+        const topPerformers = [...stats]
+          .sort((a, b) => Number(b.avgTotalScore || 0) - Number(a.avgTotalScore || 0))
+          .slice(0, 3);
+        
+        const needsImprovement = stats.filter(gp => Number(gp.avgTotalScore || 0) < 18);
+        
+        // Calculate attendance stats
+        const totalMistakes = attendance.reduce((sum, a) => sum + (a.monthlyStats?.mistakes || a.attendance?.mistakes || 0), 0);
+        const totalExtraShifts = attendance.reduce((sum, a) => sum + (a.attendance?.extraShifts || 0), 0);
+        const totalLate = attendance.reduce((sum, a) => sum + (a.attendance?.lateToWork || 0), 0);
+        const totalMissed = attendance.reduce((sum, a) => sum + (a.attendance?.missedDays || 0), 0);
+        const totalSick = attendance.reduce((sum, a) => sum + (a.attendance?.sickLeaves || 0), 0);
+
+        // Build context for LLM
+        const dataContext = `
+Team: ${team.teamName}
+Floor Manager: ${team.floorManagerName}
+Period: ${monthName} ${input.reportYear}
+
+Team Statistics:
+- Total GPs Evaluated: ${stats.length}
+- Average Total Score: ${avgTotal.toFixed(1)}/24
+- Average Appearance Score: ${avgAppearance.toFixed(1)}/12
+- Average Game Performance Score: ${avgGamePerf.toFixed(1)}/10
+
+Top Performers:
+${topPerformers.map((gp, i) => `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/24`).join('\n')}
+
+${needsImprovement.length > 0 ? `GPs Needing Improvement (score < 18):
+${needsImprovement.map(gp => `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/24`).join('\n')}` : 'All GPs are performing well (score >= 18)'}
+
+Attendance Summary:
+- Total Mistakes: ${totalMistakes}
+- Extra Shifts Worked: ${totalExtraShifts}
+- Late Arrivals: ${totalLate}
+- Missed Days: ${totalMissed}
+- Sick Leaves: ${totalSick}
+`;
+
+        // Generate FM Performance text
+        const fmPerformanceResponse = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a Floor Manager writing a self-evaluation for a monthly report. Write in first person, professionally but concisely. Focus on team management, studio operations, and achievements. Keep it to 3-4 sentences. Do not use bullet points.`
+            },
+            {
+              role: "user",
+              content: `Based on this team data, write a brief FM self-evaluation:\n${dataContext}`
+            }
+          ]
+        });
+
+        // Generate Goals text
+        const goalsResponse = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a Floor Manager writing about goals for a monthly report. Write professionally and concisely. Include 2-3 specific goals based on team performance data. Focus on areas that need improvement and maintaining strengths. Keep it to 3-4 sentences.`
+            },
+            {
+              role: "user",
+              content: `Based on this team data, write brief goals for the team:\n${dataContext}`
+            }
+          ]
+        });
+
+        // Generate Team Overview text
+        const teamOverviewResponse = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a Floor Manager writing a team overview for a monthly report. Write professionally and concisely. Summarize team performance, highlight top performers, mention any concerns, and note attendance patterns. Keep it to 4-5 sentences.`
+            },
+            {
+              role: "user",
+              content: `Based on this team data, write a brief team overview:\n${dataContext}`
+            }
+          ]
+        });
+
+        const fmPerformanceContent = fmPerformanceResponse.choices[0]?.message?.content;
+        const goalsContent = goalsResponse.choices[0]?.message?.content;
+        const teamOverviewContent = teamOverviewResponse.choices[0]?.message?.content;
+        
+        // Ensure we extract string content from LLM response
+        const fmPerformance = typeof fmPerformanceContent === 'string' ? fmPerformanceContent : '';
+        const goalsThisMonth = typeof goalsContent === 'string' ? goalsContent : '';
+        const teamOverview = typeof teamOverviewContent === 'string' ? teamOverviewContent : '';
+
+        return {
+          fmPerformance,
+          goalsThisMonth,
+          teamOverview,
+          stats: {
+            totalGPs: stats.length,
+            avgTotal: avgTotal.toFixed(1),
+            avgAppearance: avgAppearance.toFixed(1),
+            avgGamePerf: avgGamePerf.toFixed(1),
+            topPerformers: topPerformers.map(gp => ({
+              name: gp.gpName,
+              score: Number(gp.avgTotalScore || 0).toFixed(1)
+            })),
+            needsImprovement: needsImprovement.map(gp => ({
+              name: gp.gpName,
+              score: Number(gp.avgTotalScore || 0).toFixed(1)
+            })),
+            attendance: {
+              totalMistakes,
+              totalExtraShifts,
+              totalLate,
+              totalMissed,
+              totalSick
+            }
+          }
+        };
+      }),
+
     generate: protectedProcedure
       .input(z.object({
         teamId: z.number(),

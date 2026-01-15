@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, BarChart3 } from "lucide-react";
+import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2 } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -37,8 +37,9 @@ export default function ReportsPage() {
   const { data: teams } = trpc.fmTeam.list.useQuery();
   const generateMutation = trpc.report.generate.useMutation();
   const exportMutation = trpc.report.exportToExcel.useMutation();
+  const autoFillMutation = trpc.report.autoFillFields.useMutation();
   
-  // Query for auto-fill data
+  // Query for auto-fill data (simple stats)
   const { data: teamStats, refetch: refetchStats } = trpc.dashboard.stats.useQuery({
     month: formData.reportMonth || new Date().getMonth() + 1,
     year: formData.reportYear,
@@ -48,43 +49,68 @@ export default function ReportsPage() {
 
   const [isAutoFilling, setIsAutoFilling] = useState(false);
 
-  // Auto-generate Team Overview based on stats
+  // Auto-generate all text fields using LLM
+  const handleAutoFillAll = async () => {
+    if (!formData.teamId || !formData.reportMonth) {
+      toast.error("Please select team and month first");
+      return;
+    }
+
+    setIsAutoFilling(true);
+    try {
+      const result = await autoFillMutation.mutateAsync({
+        teamId: formData.teamId,
+        reportMonth: formData.reportMonth,
+        reportYear: formData.reportYear,
+      });
+
+      setFormData(prev => ({
+        ...prev,
+        fmPerformance: result.fmPerformance,
+        goalsThisMonth: result.goalsThisMonth,
+        teamOverview: result.teamOverview,
+      }));
+
+      toast.success("All fields auto-filled based on evaluation data", {
+        description: `Generated from ${result.stats.totalGPs} GP evaluations`
+      });
+    } catch (error: any) {
+      toast.error(error.message || "Failed to auto-fill fields");
+    } finally {
+      setIsAutoFilling(false);
+    }
+  };
+
+  // Simple auto-fill for Team Overview only (no LLM)
   const handleAutoFillOverview = async () => {
     if (!teamStats || !teamStats.gpStats || teamStats.gpStats.length === 0) {
       toast.error("No evaluation data available for this month");
       return;
     }
 
-    setIsAutoFilling(true);
-    try {
-      const stats = teamStats.gpStats;
-      const avgTotal = stats.reduce((sum, gp) => sum + Number(gp.avgTotal), 0) / stats.length;
-      const topPerformers = [...stats].sort((a, b) => Number(b.avgTotal) - Number(a.avgTotal)).slice(0, 3);
-      const needsImprovement = stats.filter(gp => Number(gp.avgTotal) < 18);
-      
-      let overview = `Team Performance Summary for ${MONTHS[formData.reportMonth - 1]} ${formData.reportYear}:\n\n`;
-      overview += `• Total GPs Evaluated: ${stats.length}\n`;
-      overview += `• Average Team Score: ${avgTotal.toFixed(1)}/24\n\n`;
-      
-      overview += `Top Performers:\n`;
-      topPerformers.forEach((gp, i) => {
-        overview += `${i + 1}. ${gp.gpName} - ${gp.avgTotal}/24\n`;
+    const stats = teamStats.gpStats;
+    const avgTotal = stats.reduce((sum, gp) => sum + Number(gp.avgTotal), 0) / stats.length;
+    const topPerformers = [...stats].sort((a, b) => Number(b.avgTotal) - Number(a.avgTotal)).slice(0, 3);
+    const needsImprovement = stats.filter(gp => Number(gp.avgTotal) < 18);
+    
+    let overview = `Team Performance Summary for ${MONTHS[formData.reportMonth - 1]} ${formData.reportYear}:\n\n`;
+    overview += `• Total GPs Evaluated: ${stats.length}\n`;
+    overview += `• Average Team Score: ${avgTotal.toFixed(1)}/24\n\n`;
+    
+    overview += `Top Performers:\n`;
+    topPerformers.forEach((gp, i) => {
+      overview += `${i + 1}. ${gp.gpName} - ${gp.avgTotal}/24\n`;
+    });
+    
+    if (needsImprovement.length > 0) {
+      overview += `\nNeeds Improvement:\n`;
+      needsImprovement.forEach(gp => {
+        overview += `• ${gp.gpName} (${gp.avgTotal}/24)\n`;
       });
-      
-      if (needsImprovement.length > 0) {
-        overview += `\nNeeds Improvement:\n`;
-        needsImprovement.forEach(gp => {
-          overview += `• ${gp.gpName} (${gp.avgTotal}/24)\n`;
-        });
-      }
-      
-      setFormData(prev => ({ ...prev, teamOverview: overview }));
-      toast.success("Team Overview auto-filled based on evaluation data");
-    } catch (error) {
-      toast.error("Failed to auto-fill");
-    } finally {
-      setIsAutoFilling(false);
     }
+    
+    setFormData(prev => ({ ...prev, teamOverview: overview }));
+    toast.success("Team Overview auto-filled based on evaluation data");
   };
 
   const handleGenerate = async () => {
@@ -234,6 +260,29 @@ export default function ReportsPage() {
                 </Select>
               </div>
 
+              {/* Auto-fill All Button */}
+              <div className="flex justify-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleAutoFillAll}
+                  disabled={isAutoFilling || !formData.teamId || !formData.reportMonth}
+                  className="w-full max-w-md"
+                >
+                  {isAutoFilling ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating content with AI...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="h-4 w-4 mr-2" />
+                      Auto-fill All Fields with AI
+                    </>
+                  )}
+                </Button>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-medium">FM Performance (Self Evaluation)</label>
                 <Textarea
@@ -265,12 +314,8 @@ export default function ReportsPage() {
                       disabled={isAutoFilling || !formData.teamId || !formData.reportMonth}
                       className="text-xs"
                     >
-                      {isAutoFilling ? (
-                        <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-3 w-3 mr-1" />
-                      )}
-                      Auto-fill from data
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      Quick fill
                     </Button>
                   </div>
                   <Textarea

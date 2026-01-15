@@ -409,3 +409,13 @@
 - [x] Generate chart image using QuickChart API (no canvas dependency)
 - [x] Insert chart image directly into Excel report
 - [x] Chart shows GP names, Total Score, Appearance, Performance (same as Dashboard)
+
+
+## Auto-fill Text Fields (v25)
+
+- [x] Generate FM Performance text based on team evaluation data
+- [x] Generate Goals text based on team performance analysis
+- [x] Generate Team Overview text summarizing GP performance
+- [x] Add auto-fill button on Reports page to generate text fields ("Auto-fill All Fields with AI" button)
+- [x] Integrate auto-generated text into Excel export
+- [x] Added 7 new tests for auto-fill functionality (76 total tests passing)

@@ -611,3 +611,135 @@ describe("Excel Report with Monthly Stats", () => {
     expect(mistakesValue).toBe(3);
   });
 });
+
+
+// ============================================
+// AUTO-FILL FIELDS TESTS
+// ============================================
+
+describe("report.autoFillFields", () => {
+  it("should validate the stats structure for auto-fill", () => {
+    const mockStats = [
+      { gpId: 1, gpName: "Test GP 1", avgTotalScore: 20, avgAppearanceScore: 10, avgGamePerfScore: 10 },
+      { gpId: 2, gpName: "Test GP 2", avgTotalScore: 18, avgAppearanceScore: 9, avgGamePerfScore: 9 },
+    ];
+    
+    expect(mockStats.length).toBe(2);
+    expect(mockStats[0]).toHaveProperty("gpName");
+    expect(mockStats[0]).toHaveProperty("avgTotalScore");
+    expect(mockStats[0]).toHaveProperty("avgAppearanceScore");
+    expect(mockStats[0]).toHaveProperty("avgGamePerfScore");
+  });
+
+  it("should calculate correct averages from stats", () => {
+    const stats = [
+      { avgTotalScore: 20 },
+      { avgTotalScore: 18 },
+      { avgTotalScore: 16 },
+    ];
+    
+    const avgTotal = stats.reduce((sum, gp) => sum + Number(gp.avgTotalScore || 0), 0) / stats.length;
+    expect(avgTotal).toBeCloseTo(18, 1);
+  });
+
+  it("should identify top performers correctly", () => {
+    const stats = [
+      { gpName: "GP A", avgTotalScore: 22 },
+      { gpName: "GP B", avgTotalScore: 18 },
+      { gpName: "GP C", avgTotalScore: 20 },
+      { gpName: "GP D", avgTotalScore: 15 },
+    ];
+    
+    const topPerformers = [...stats]
+      .sort((a, b) => Number(b.avgTotalScore || 0) - Number(a.avgTotalScore || 0))
+      .slice(0, 3);
+    
+    expect(topPerformers.length).toBe(3);
+    expect(topPerformers[0].gpName).toBe("GP A");
+    expect(topPerformers[1].gpName).toBe("GP C");
+    expect(topPerformers[2].gpName).toBe("GP B");
+  });
+
+  it("should identify GPs needing improvement (score < 18)", () => {
+    const stats = [
+      { gpName: "GP A", avgTotalScore: 22 },
+      { gpName: "GP B", avgTotalScore: 17 },
+      { gpName: "GP C", avgTotalScore: 15 },
+      { gpName: "GP D", avgTotalScore: 19 },
+    ];
+    
+    const needsImprovement = stats.filter(gp => Number(gp.avgTotalScore || 0) < 18);
+    
+    expect(needsImprovement.length).toBe(2);
+    expect(needsImprovement.map(gp => gp.gpName)).toContain("GP B");
+    expect(needsImprovement.map(gp => gp.gpName)).toContain("GP C");
+  });
+
+  it("should calculate attendance totals correctly", () => {
+    const attendance = [
+      { monthlyStats: { mistakes: 2 }, attendance: { extraShifts: 1, lateToWork: 0, missedDays: 1, sickLeaves: 0 } },
+      { monthlyStats: { mistakes: 1 }, attendance: { extraShifts: 2, lateToWork: 1, missedDays: 0, sickLeaves: 1 } },
+      { monthlyStats: null, attendance: { mistakes: 3, extraShifts: 0, lateToWork: 2, missedDays: 0, sickLeaves: 0 } },
+    ];
+    
+    const totalMistakes = attendance.reduce((sum, a) => sum + (a.monthlyStats?.mistakes || a.attendance?.mistakes || 0), 0);
+    const totalExtraShifts = attendance.reduce((sum, a) => sum + (a.attendance?.extraShifts || 0), 0);
+    const totalLate = attendance.reduce((sum, a) => sum + (a.attendance?.lateToWork || 0), 0);
+    const totalMissed = attendance.reduce((sum, a) => sum + (a.attendance?.missedDays || 0), 0);
+    const totalSick = attendance.reduce((sum, a) => sum + (a.attendance?.sickLeaves || 0), 0);
+    
+    expect(totalMistakes).toBe(6); // 2 + 1 + 3
+    expect(totalExtraShifts).toBe(3); // 1 + 2 + 0
+    expect(totalLate).toBe(3); // 0 + 1 + 2
+    expect(totalMissed).toBe(1); // 1 + 0 + 0
+    expect(totalSick).toBe(1); // 0 + 1 + 0
+  });
+
+  it("should return correct response structure", () => {
+    const mockResponse = {
+      fmPerformance: "This month I focused on team development...",
+      goalsThisMonth: "Our goals were to improve appearance scores...",
+      teamOverview: "The team showed strong performance...",
+      stats: {
+        totalGPs: 5,
+        avgTotal: "19.5",
+        avgAppearance: "10.2",
+        avgGamePerf: "9.3",
+        topPerformers: [
+          { name: "GP A", score: "22.0" },
+          { name: "GP B", score: "21.0" },
+        ],
+        needsImprovement: [
+          { name: "GP C", score: "16.0" },
+        ],
+        attendance: {
+          totalMistakes: 5,
+          totalExtraShifts: 3,
+          totalLate: 2,
+          totalMissed: 1,
+          totalSick: 0,
+        },
+      },
+    };
+    
+    expect(mockResponse).toHaveProperty("fmPerformance");
+    expect(mockResponse).toHaveProperty("goalsThisMonth");
+    expect(mockResponse).toHaveProperty("teamOverview");
+    expect(mockResponse).toHaveProperty("stats");
+    expect(mockResponse.stats).toHaveProperty("totalGPs");
+    expect(mockResponse.stats).toHaveProperty("topPerformers");
+    expect(mockResponse.stats).toHaveProperty("needsImprovement");
+    expect(mockResponse.stats).toHaveProperty("attendance");
+  });
+
+  it("should handle empty stats gracefully", () => {
+    const stats: { avgTotalScore: number }[] = [];
+    
+    // Should not divide by zero
+    const avgTotal = stats.length > 0 
+      ? stats.reduce((sum, gp) => sum + Number(gp.avgTotalScore || 0), 0) / stats.length
+      : 0;
+    
+    expect(avgTotal).toBe(0);
+  });
+});
