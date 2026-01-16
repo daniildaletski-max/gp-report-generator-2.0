@@ -1439,3 +1439,161 @@ export async function syncErrorsFromGoogleSheets(
 
   return { updated, notFound };
 }
+
+
+// ============================================
+// ADMIN FUNCTIONS
+// ============================================
+
+export async function updateUserRole(userId: number, role: 'user' | 'admin'): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users)
+    .set({ role })
+    .where(eq(users.id, userId));
+}
+
+export async function getUserById(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function deleteUser(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.delete(users).where(eq(users.id, userId));
+}
+
+// Get all reports with team info (admin only)
+export async function getAllReportsWithTeam() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    report: reports,
+    team: fmTeams,
+  })
+  .from(reports)
+  .leftJoin(fmTeams, eq(reports.teamId, fmTeams.id))
+  .orderBy(desc(reports.createdAt));
+}
+
+// Get system stats for admin dashboard
+export async function getAdminDashboardStats() {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [
+    totalUsers,
+    totalTeams,
+    totalGPs,
+    totalEvaluations,
+    totalReports,
+  ] = await Promise.all([
+    db.select({ count: sql<number>`COUNT(*)` }).from(users),
+    db.select({ count: sql<number>`COUNT(*)` }).from(fmTeams),
+    db.select({ count: sql<number>`COUNT(*)` }).from(gamePresenters),
+    db.select({ count: sql<number>`COUNT(*)` }).from(evaluations),
+    db.select({ count: sql<number>`COUNT(*)` }).from(reports),
+  ]);
+
+  // Get recent activity
+  const recentReports = await db.select({
+    report: reports,
+    team: fmTeams,
+  })
+  .from(reports)
+  .leftJoin(fmTeams, eq(reports.teamId, fmTeams.id))
+  .orderBy(desc(reports.createdAt))
+  .limit(5);
+
+  const recentUsers = await db.select()
+    .from(users)
+    .orderBy(desc(users.lastSignedIn))
+    .limit(5);
+
+  return {
+    totalUsers: totalUsers[0]?.count || 0,
+    totalTeams: totalTeams[0]?.count || 0,
+    totalGPs: totalGPs[0]?.count || 0,
+    totalEvaluations: totalEvaluations[0]?.count || 0,
+    totalReports: totalReports[0]?.count || 0,
+    recentReports,
+    recentUsers,
+  };
+}
+
+// Update FM team details
+export async function updateFmTeam(teamId: number, data: Partial<InsertFmTeam>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(fmTeams)
+    .set(data)
+    .where(eq(fmTeams.id, teamId));
+}
+
+// Delete FM team
+export async function deleteFmTeam(teamId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  // First, unassign all users from this team
+  await db.update(users)
+    .set({ teamId: null })
+    .where(eq(users.teamId, teamId));
+
+  // Then delete the team
+  await db.delete(fmTeams).where(eq(fmTeams.id, teamId));
+}
+
+// Get team with assigned users
+export async function getTeamWithUsers(teamId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const team = await db.select().from(fmTeams).where(eq(fmTeams.id, teamId)).limit(1);
+  if (team.length === 0) return null;
+
+  const assignedUsers = await db.select()
+    .from(users)
+    .where(eq(users.teamId, teamId));
+
+  const gpCount = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(gamePresenters)
+    .where(eq(gamePresenters.teamId, teamId));
+
+  return {
+    ...team[0],
+    assignedUsers,
+    gpCount: gpCount[0]?.count || 0,
+  };
+}
+
+// Get all teams with stats for admin
+export async function getAllTeamsWithStats() {
+  const db = await getDb();
+  if (!db) return [];
+
+  const teams = await db.select().from(fmTeams).orderBy(fmTeams.teamName);
+
+  return await Promise.all(teams.map(async (team) => {
+    const [assignedUsers, gpCount, reportCount] = await Promise.all([
+      db.select().from(users).where(eq(users.teamId, team.id)),
+      db.select({ count: sql<number>`COUNT(*)` }).from(gamePresenters).where(eq(gamePresenters.teamId, team.id)),
+      db.select({ count: sql<number>`COUNT(*)` }).from(reports).where(eq(reports.teamId, team.id)),
+    ]);
+
+    return {
+      ...team,
+      assignedUsers,
+      gpCount: gpCount[0]?.count || 0,
+      reportCount: reportCount[0]?.count || 0,
+    };
+  }));
+}

@@ -2,7 +2,7 @@ import { COOKIE_NAME } from "@shared/const";
 console.log("[routers.ts] LOADED AT", new Date().toISOString());
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { invokeLLM } from "./_core/llm";
 import { storagePut } from "./storage";
@@ -365,14 +365,68 @@ export const appRouter = router({
 
   // FM Teams management
   fmTeam: router({
-    list: protectedProcedure.query(async () => {
-      return await db.getAllFmTeams();
+    // List teams - for FM shows only their team, for admin shows all
+    list: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role === 'admin') {
+        return await db.getAllFmTeams();
+      }
+      // FM can only see their own team
+      if (ctx.user.teamId) {
+        const team = await db.getFmTeamById(ctx.user.teamId);
+        return team ? [team] : [];
+      }
+      return [];
     }),
+
+    // List all teams with stats (admin only)
+    listWithStats: adminProcedure.query(async () => {
+      return await db.getAllTeamsWithStats();
+    }),
+
+    // Get team details with users (admin only)
+    getWithUsers: adminProcedure
+      .input(z.object({ teamId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getTeamWithUsers(input.teamId);
+      }),
     
-    initialize: protectedProcedure.mutation(async () => {
+    // Initialize default teams (admin only)
+    initialize: adminProcedure.mutation(async () => {
       await db.initializeDefaultTeams();
       return { success: true };
     }),
+
+    // Create new team (admin only)
+    create: adminProcedure
+      .input(z.object({
+        teamName: z.string().min(1),
+        floorManagerName: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const team = await db.createFmTeam(input);
+        return team;
+      }),
+
+    // Update team (admin only)
+    update: adminProcedure
+      .input(z.object({
+        teamId: z.number(),
+        teamName: z.string().min(1).optional(),
+        floorManagerName: z.string().min(1).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { teamId, ...data } = input;
+        await db.updateFmTeam(teamId, data);
+        return { success: true };
+      }),
+
+    // Delete team (admin only)
+    delete: adminProcedure
+      .input(z.object({ teamId: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteFmTeam(input.teamId);
+        return { success: true };
+      }),
   }),
 
   // Upload and process evaluation screenshots
@@ -630,25 +684,37 @@ export const appRouter = router({
     }),
 
     // List all users (admin only)
-    list: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user.role !== 'admin') {
-        throw new Error("Only admins can view all users");
-      }
+    list: adminProcedure.query(async () => {
       return await db.getAllUsers();
     }),
 
     // Assign user to team (admin only)
-    assignToTeam: protectedProcedure
+    assignToTeam: adminProcedure
       .input(z.object({
         userId: z.number(),
         teamId: z.number().nullable(),
       }))
-      .mutation(async ({ ctx, input }) => {
-        // Only admin can assign teams
-        if (ctx.user.role !== 'admin') {
-          throw new Error("Only admins can assign teams");
-        }
+      .mutation(async ({ input }) => {
         await db.updateUserTeam(input.userId, input.teamId);
+        return { success: true };
+      }),
+
+    // Update user role (admin only)
+    updateRole: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        role: z.enum(['user', 'admin']),
+      }))
+      .mutation(async ({ input }) => {
+        await db.updateUserRole(input.userId, input.role);
+        return { success: true };
+      }),
+
+    // Delete user (admin only)
+    delete: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteUser(input.userId);
         return { success: true };
       }),
   }),
@@ -665,6 +731,11 @@ export const appRouter = router({
         const teamId = ctx.user.teamId || undefined;
         return await db.getDashboardStats(input?.month, input?.year, teamId);
       }),
+
+    // Admin dashboard with system-wide stats
+    adminStats: adminProcedure.query(async () => {
+      return await db.getAdminDashboardStats();
+    }),
   }),
 
   // Report generation
@@ -1558,9 +1629,21 @@ Attendance Summary:
 
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return await db.getReportWithTeam(input.id);
+      .query(async ({ ctx, input }) => {
+        const report = await db.getReportWithTeam(input.id);
+        if (!report) return null;
+        
+        // FM can only access their own team's reports
+        if (ctx.user.teamId && report.report.teamId !== ctx.user.teamId) {
+          throw new Error("Access denied: You can only view your team's reports");
+        }
+        return report;
       }),
+
+    // Admin: list all reports with team info
+    listAll: adminProcedure.query(async () => {
+      return await db.getAllReportsWithTeam();
+    }),
   }),
 
   // Error file management

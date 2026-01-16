@@ -432,3 +432,62 @@
 - [x] Move chart below attendance table (row 40, column N)
 - [x] Remove Chart Data sheet completely
 - [x] Add comparison chart with previous month data (row 62, column N)
+
+
+## Admin Module & Access Control Improvements (v28)
+
+### Backend Access Control
+- [ ] Add teamId field to users table for FM team assignment
+- [ ] Create adminProcedure for admin-only endpoints
+- [ ] Add team isolation to all FM endpoints (evaluations, reports, GPs, attendance)
+- [ ] Ensure FM can only see their own team's data
+- [ ] Ensure FM cannot access other FM's reports
+
+### Admin Panel Enhancements
+- [ ] User management page (list all users, assign roles, assign teams)
+- [ ] Team management page (create/edit/delete teams, assign FMs)
+- [ ] System overview dashboard (all teams stats, all reports)
+- [ ] Audit log for admin actions
+
+### UI/UX Improvements
+- [ ] Role-based navigation (different menu for Admin vs FM)
+- [ ] Team selector for admins (view any team)
+- [ ] FM sees only their assigned team
+- [ ] Clear visual distinction between admin and FM views
+
+
+## Admin Module & Access Control Enhancement (v28)
+
+### Admin-Only Procedures
+- [x] Create adminProcedure for admin-only endpoints
+- [x] Add user role management (admin can change user roles)
+- [x] Add user deletion capability for admins
+- [x] Add team CRUD operations (create, update, delete teams)
+- [x] Add admin dashboard with system-wide stats (total users, teams, GPs, evaluations, reports)
+
+### FM Isolation
+- [x] FM can only see their own team's data in all modules
+- [x] FM cannot access other teams' reports (report.get checks team ownership)
+- [x] FM sees restricted Admin page (only GP Stats and GP Access tabs)
+- [x] fmTeam.list returns only FM's team for non-admin users
+
+### UI Improvements
+- [x] Different UI for Admin vs FM on Admin page
+- [x] Admin sees full panel with Overview, Users, Teams, GP Stats, GP Access, Errors tabs
+- [x] FM sees simplified panel with GP Stats and GP Access tabs only
+- [x] Dynamic sidebar navigation based on user role (Admin icon vs Team icon)
+- [x] Admin Overview tab with system-wide statistics and recent activity
+
+### Backend Endpoints Added
+- [x] user.updateRole - change user role (admin only)
+- [x] user.delete - delete user (admin only)
+- [x] fmTeam.listWithStats - list teams with assigned users, GP count, report count
+- [x] fmTeam.getWithUsers - get team details with assigned users
+- [x] fmTeam.create - create new team (admin only)
+- [x] fmTeam.update - update team name/FM name (admin only)
+- [x] fmTeam.delete - delete team (admin only)
+- [x] dashboard.adminStats - system-wide statistics (admin only)
+- [x] report.listAll - list all reports with team info (admin only)
+
+### Tests
+- [x] All 76 tests passing

@@ -12,17 +12,32 @@ import Evaluations from "./pages/Evaluations";
 import Reports from "./pages/Reports";
 import Admin from "./pages/Admin";
 import GPPortal from "./pages/GPPortal";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings } from "lucide-react";
+import { useAuth } from "./_core/hooks/useAuth";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield } from "lucide-react";
 
-const sidebarItems = [
+// Base sidebar items for all users
+const baseSidebarItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/upload", label: "Upload", icon: UploadIcon },
   { href: "/evaluations", label: "Evaluations", icon: FileCheck },
   { href: "/reports", label: "Reports", icon: FileSpreadsheet },
-  { href: "/admin", label: "Admin", icon: Settings },
 ];
 
+// Admin-only item
+const adminSidebarItem = { href: "/admin", label: "Admin", icon: Shield };
+
+// FM-only item (Team Management)
+const fmSidebarItem = { href: "/admin", label: "Team", icon: Settings };
+
 function DashboardRoutes() {
+  const { user } = useAuth();
+  
+  // Build sidebar items based on role
+  const sidebarItems = [
+    ...baseSidebarItems,
+    user?.role === "admin" ? adminSidebarItem : fmSidebarItem,
+  ];
+
   return (
     <DashboardLayout sidebarItems={sidebarItems}>
       <Switch>
