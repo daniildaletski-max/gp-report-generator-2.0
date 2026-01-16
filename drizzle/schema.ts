@@ -228,3 +228,43 @@ export const monthlyGpStats = mysqlTable("monthly_gp_stats", {
 
 export type MonthlyGpStats = typeof monthlyGpStats.$inferSelect;
 export type InsertMonthlyGpStats = typeof monthlyGpStats.$inferInsert;
+
+
+/**
+ * Audit Logs - tracks all critical user actions for security and compliance
+ */
+export const auditLogs = mysqlTable("audit_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"), // Can be null for system actions
+  userName: varchar("userName", { length: 255 }),
+  userRole: varchar("userRole", { length: 50 }),
+  action: varchar("action", { length: 100 }).notNull(), // e.g., "evaluation.create", "report.delete"
+  entityType: varchar("entityType", { length: 50 }).notNull(), // e.g., "evaluation", "report", "user"
+  entityId: int("entityId"), // ID of the affected entity
+  details: json("details"), // Additional context (old values, new values, etc.)
+  ipAddress: varchar("ipAddress", { length: 45 }), // IPv4 or IPv6
+  userAgent: text("userAgent"),
+  teamId: int("teamId"), // For team-scoped actions
+  status: mysqlEnum("status", ["success", "failure", "warning"]).default("success").notNull(),
+  errorMessage: text("errorMessage"), // For failed actions
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = typeof auditLogs.$inferInsert;
+
+/**
+ * Rate Limits - tracks request counts for rate limiting
+ */
+export const rateLimits = mysqlTable("rate_limits", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  endpoint: varchar("endpoint", { length: 100 }).notNull(), // e.g., "upload", "export", "llm"
+  requestCount: int("requestCount").default(0).notNull(),
+  windowStart: timestamp("windowStart").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type RateLimit = typeof rateLimits.$inferSelect;
+export type InsertRateLimit = typeof rateLimits.$inferInsert;

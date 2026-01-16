@@ -433,12 +433,30 @@ export const appRouter = router({
   evaluation: router({
     uploadAndExtract: protectedProcedure
       .input(z.object({
-        imageBase64: z.string(),
-        filename: z.string(),
-        mimeType: z.string().default("image/png"),
+        imageBase64: z.string().max(10 * 1024 * 1024), // Max 10MB base64
+        filename: z.string().max(255).regex(/^[\w\-. ]+$/), // Safe filename
+        mimeType: z.string().refine(m => ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(m), {
+          message: 'Invalid image type. Allowed: PNG, JPEG, WebP'
+        }),
       }))
       .mutation(async ({ ctx, input }) => {
-        const fileKey = `evaluations/${ctx.user.id}/${nanoid()}-${input.filename}`;
+        // Rate limiting
+        const rateCheck = await db.checkRateLimit(ctx.user.id, 'upload');
+        if (!rateCheck.allowed) {
+          await db.createAuditLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name,
+            userRole: ctx.user.role,
+            action: 'evaluation.uploadAndExtract',
+            entityType: 'evaluation',
+            teamId: ctx.user.teamId,
+            status: 'failure',
+            errorMessage: `Rate limit exceeded. Resets at ${rateCheck.resetAt.toISOString()}`,
+          });
+          throw new Error(`Rate limit exceeded. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
+        }
+
+        const fileKey = `evaluations/${ctx.user.id}/${nanoid()}-${db.sanitizeString(input.filename, 100)}`;
         const buffer = Buffer.from(input.imageBase64, "base64");
         const { url: imageUrl } = await storagePut(fileKey, buffer, input.mimeType);
 
@@ -474,6 +492,18 @@ export const appRouter = router({
           screenshotKey: fileKey,
           rawExtractedData: extractedData,
           uploadedById: ctx.user.id,
+        });
+
+        // Audit log for successful upload
+        await db.createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name,
+          userRole: ctx.user.role,
+          action: 'evaluation.create',
+          entityType: 'evaluation',
+          entityId: evaluation.id,
+          teamId: ctx.user.teamId,
+          details: { gpId: gp.id, gpName: gp.name, filename: input.filename },
         });
 
         return {
@@ -517,48 +547,112 @@ export const appRouter = router({
 
     update: protectedProcedure
       .input(z.object({
-        id: z.number(),
-        evaluatorName: z.string().optional(),
+        id: z.number().positive(),
+        evaluatorName: z.string().max(255).optional(),
         evaluationDate: z.date().optional(),
-        game: z.string().optional(),
-        totalScore: z.number().optional(),
-        hairScore: z.number().optional(),
-        makeupScore: z.number().optional(),
-        outfitScore: z.number().optional(),
-        postureScore: z.number().optional(),
-        dealingStyleScore: z.number().optional(),
-        gamePerformanceScore: z.number().optional(),
-        hairComment: z.string().optional(),
-        makeupComment: z.string().optional(),
-        outfitComment: z.string().optional(),
-        postureComment: z.string().optional(),
-        dealingStyleComment: z.string().optional(),
-        gamePerformanceComment: z.string().optional(),
+        game: z.string().max(100).optional(),
+        totalScore: z.number().min(0).max(100).optional(),
+        hairScore: z.number().min(0).max(5).optional(),
+        makeupScore: z.number().min(0).max(5).optional(),
+        outfitScore: z.number().min(0).max(5).optional(),
+        postureScore: z.number().min(0).max(5).optional(),
+        dealingStyleScore: z.number().min(0).max(10).optional(),
+        gamePerformanceScore: z.number().min(0).max(10).optional(),
+        hairComment: z.string().max(1000).optional(),
+        makeupComment: z.string().max(1000).optional(),
+        outfitComment: z.string().max(1000).optional(),
+        postureComment: z.string().max(1000).optional(),
+        dealingStyleComment: z.string().max(1000).optional(),
+        gamePerformanceComment: z.string().max(1000).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         // Check ownership before update
         const evaluation = await db.getEvaluationWithGP(input.id);
         if (!evaluation) throw new Error("Evaluation not found");
         if (ctx.user.teamId && evaluation.gamePresenter?.teamId !== ctx.user.teamId) {
+          await db.createAuditLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name,
+            userRole: ctx.user.role,
+            action: 'evaluation.update',
+            entityType: 'evaluation',
+            entityId: input.id,
+            teamId: ctx.user.teamId,
+            status: 'failure',
+            errorMessage: 'Access denied: attempted to edit another team\'s evaluation',
+          });
           throw new Error("Access denied: You can only edit your team's evaluations");
         }
         
         const { id, ...data } = input;
+        // Sanitize text fields
+        if (data.evaluatorName) data.evaluatorName = db.sanitizeString(data.evaluatorName, 255);
+        if (data.game) data.game = db.sanitizeString(data.game, 100);
+        if (data.hairComment) data.hairComment = db.sanitizeString(data.hairComment, 1000);
+        if (data.makeupComment) data.makeupComment = db.sanitizeString(data.makeupComment, 1000);
+        if (data.outfitComment) data.outfitComment = db.sanitizeString(data.outfitComment, 1000);
+        if (data.postureComment) data.postureComment = db.sanitizeString(data.postureComment, 1000);
+        if (data.dealingStyleComment) data.dealingStyleComment = db.sanitizeString(data.dealingStyleComment, 1000);
+        if (data.gamePerformanceComment) data.gamePerformanceComment = db.sanitizeString(data.gamePerformanceComment, 1000);
+        
         const updated = await db.updateEvaluation(id, data);
+        
+        await db.createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name,
+          userRole: ctx.user.role,
+          action: 'evaluation.update',
+          entityType: 'evaluation',
+          entityId: id,
+          teamId: ctx.user.teamId,
+          details: { updatedFields: Object.keys(data) },
+        });
+        
         return { success: true, evaluation: updated };
       }),
 
     delete: protectedProcedure
-      .input(z.object({ id: z.number() }))
+      .input(z.object({ id: z.number().positive() }))
       .mutation(async ({ ctx, input }) => {
+        // Rate limiting for delete operations
+        const rateCheck = await db.checkRateLimit(ctx.user.id, 'delete');
+        if (!rateCheck.allowed) {
+          throw new Error(`Rate limit exceeded. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
+        }
+        
         // Check ownership before delete
         const evaluation = await db.getEvaluationWithGP(input.id);
         if (!evaluation) throw new Error("Evaluation not found");
         if (ctx.user.teamId && evaluation.gamePresenter?.teamId !== ctx.user.teamId) {
+          await db.createAuditLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name,
+            userRole: ctx.user.role,
+            action: 'evaluation.delete',
+            entityType: 'evaluation',
+            entityId: input.id,
+            teamId: ctx.user.teamId,
+            status: 'failure',
+            errorMessage: 'Access denied: attempted to delete another team\'s evaluation',
+          });
           throw new Error("Access denied: You can only delete your team's evaluations");
         }
         
+        const gpName = evaluation.gamePresenter?.name;
+        const evalDate = evaluation.evaluation.evaluationDate;
         await db.deleteEvaluation(input.id);
+        
+        await db.createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name,
+          userRole: ctx.user.role,
+          action: 'evaluation.delete',
+          entityType: 'evaluation',
+          entityId: input.id,
+          teamId: ctx.user.teamId,
+          details: { gpName, evaluationDate: evalDate },
+        });
+        
         return { success: true };
       }),
 
@@ -741,15 +835,32 @@ export const appRouter = router({
     // Bulk set attitude for multiple GPs
     bulkSetAttitude: protectedProcedure
       .input(z.object({
-        gpIds: z.array(z.number()),
+        gpIds: z.array(z.number().positive()).max(100), // Max 100 GPs at once
         attitude: z.number().min(1).max(5),
         month: z.number().min(1).max(12),
-        year: z.number(),
+        year: z.number().min(2020).max(2100),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Rate limiting for bulk operations
+        const rateCheck = await db.checkRateLimit(ctx.user.id, 'bulk');
+        if (!rateCheck.allowed) {
+          throw new Error(`Rate limit exceeded for bulk operations. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
+        }
+        
         if (ctx.user.teamId) {
           const verification = await db.verifyGpOwnership(input.gpIds, ctx.user.teamId);
           if (!verification.valid) {
+            await db.createAuditLog({
+              userId: ctx.user.id,
+              userName: ctx.user.name,
+              userRole: ctx.user.role,
+              action: 'gamePresenter.bulkSetAttitude',
+              entityType: 'monthlyGpStats',
+              teamId: ctx.user.teamId,
+              status: 'failure',
+              errorMessage: 'Access denied: attempted to update GPs from another team',
+              details: { invalidGpIds: verification.invalidGpIds },
+            });
             throw new Error(`Access denied: Some GPs don't belong to your team`);
           }
         }
@@ -762,20 +873,46 @@ export const appRouter = router({
           ctx.user.id
         );
         
+        await db.createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name,
+          userRole: ctx.user.role,
+          action: 'gamePresenter.bulkSetAttitude',
+          entityType: 'monthlyGpStats',
+          teamId: ctx.user.teamId,
+          details: { gpCount: input.gpIds.length, attitude: input.attitude, month: input.month, year: input.year, result },
+        });
+        
         return result;
       }),
 
     // Bulk reset mistakes for multiple GPs
     bulkResetMistakes: protectedProcedure
       .input(z.object({
-        gpIds: z.array(z.number()),
+        gpIds: z.array(z.number().positive()).max(100),
         month: z.number().min(1).max(12),
-        year: z.number(),
+        year: z.number().min(2020).max(2100),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Rate limiting for bulk operations
+        const rateCheck = await db.checkRateLimit(ctx.user.id, 'bulk');
+        if (!rateCheck.allowed) {
+          throw new Error(`Rate limit exceeded for bulk operations. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
+        }
+        
         if (ctx.user.teamId) {
           const verification = await db.verifyGpOwnership(input.gpIds, ctx.user.teamId);
           if (!verification.valid) {
+            await db.createAuditLog({
+              userId: ctx.user.id,
+              userName: ctx.user.name,
+              userRole: ctx.user.role,
+              action: 'gamePresenter.bulkResetMistakes',
+              entityType: 'monthlyGpStats',
+              teamId: ctx.user.teamId,
+              status: 'failure',
+              errorMessage: 'Access denied: attempted to update GPs from another team',
+            });
             throw new Error(`Access denied: Some GPs don't belong to your team`);
           }
         }
@@ -786,6 +923,16 @@ export const appRouter = router({
           input.year,
           ctx.user.id
         );
+        
+        await db.createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name,
+          userRole: ctx.user.role,
+          action: 'gamePresenter.bulkResetMistakes',
+          entityType: 'monthlyGpStats',
+          teamId: ctx.user.teamId,
+          details: { gpCount: input.gpIds.length, month: input.month, year: input.year, result },
+        });
         
         return result;
       }),
@@ -859,13 +1006,29 @@ export const appRouter = router({
     // Auto-fill text fields based on evaluation data using LLM
     autoFillFields: protectedProcedure
       .input(z.object({
-        teamId: z.number(),
+        teamId: z.number().positive(),
         reportMonth: z.number().min(1).max(12),
-        reportYear: z.number(),
+        reportYear: z.number().min(2020).max(2100),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Rate limiting for LLM operations
+        const rateCheck = await db.checkRateLimit(ctx.user.id, 'llm');
+        if (!rateCheck.allowed) {
+          throw new Error(`Rate limit exceeded for AI operations. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
+        }
+        
         // FM can only auto-fill for their own team
         if (ctx.user.teamId && ctx.user.teamId !== input.teamId) {
+          await db.createAuditLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name,
+            userRole: ctx.user.role,
+            action: 'report.autoFillFields',
+            entityType: 'report',
+            teamId: ctx.user.teamId,
+            status: 'failure',
+            errorMessage: 'Access denied: attempted to auto-fill for another team',
+          });
           throw new Error("Access denied: You can only generate content for your own team");
         }
         
@@ -1048,9 +1211,26 @@ Attendance Summary:
 
     exportToExcel: protectedProcedure
       .input(z.object({
-        reportId: z.number(),
+        reportId: z.number().positive(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Rate limiting for export operations
+        const rateCheck = await db.checkRateLimit(ctx.user.id, 'export');
+        if (!rateCheck.allowed) {
+          await db.createAuditLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name,
+            userRole: ctx.user.role,
+            action: 'report.exportToExcel',
+            entityType: 'report',
+            entityId: input.reportId,
+            teamId: ctx.user.teamId,
+            status: 'failure',
+            errorMessage: 'Rate limit exceeded',
+          });
+          throw new Error(`Rate limit exceeded. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
+        }
+        
         console.log(`\n\n========== [exportToExcel] START ==========`);
         console.log(`[exportToExcel] Called with input.reportId=${input.reportId}`);
         const reportWithTeam = await db.getReportWithTeam(input.reportId);
@@ -1059,6 +1239,17 @@ Attendance Summary:
         
         // FM can only export their own team's reports
         if (ctx.user.teamId && reportWithTeam.report.teamId !== ctx.user.teamId) {
+          await db.createAuditLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name,
+            userRole: ctx.user.role,
+            action: 'report.exportToExcel',
+            entityType: 'report',
+            entityId: input.reportId,
+            teamId: ctx.user.teamId,
+            status: 'failure',
+            errorMessage: 'Access denied: attempted to export another team\'s report',
+          });
           throw new Error("Access denied: You can only export your own team's reports");
         }
 
@@ -1778,18 +1969,55 @@ Attendance Summary:
 
     // Delete report with ownership check
     delete: protectedProcedure
-      .input(z.object({ id: z.number() }))
+      .input(z.object({ id: z.number().positive() }))
       .mutation(async ({ ctx, input }) => {
-        const isAdmin = ctx.user.role === 'admin';
-        const success = await db.deleteReportWithCheck(
-          input.id,
-          ctx.user.teamId,
-          isAdmin
-        );
-        if (!success) {
-          throw new Error("Report not found");
+        // Rate limiting
+        const rateCheck = await db.checkRateLimit(ctx.user.id, 'delete');
+        if (!rateCheck.allowed) {
+          throw new Error(`Rate limit exceeded. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
         }
-        return { success: true };
+        
+        const isAdmin = ctx.user.role === 'admin';
+        
+        // Get report info before deletion for audit
+        const report = await db.getReportById(input.id);
+        
+        try {
+          const success = await db.deleteReportWithCheck(
+            input.id,
+            ctx.user.teamId,
+            isAdmin
+          );
+          if (!success) {
+            throw new Error("Report not found");
+          }
+          
+          await db.createAuditLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name,
+            userRole: ctx.user.role,
+            action: 'report.delete',
+            entityType: 'report',
+            entityId: input.id,
+            teamId: ctx.user.teamId,
+            details: { reportMonth: report?.reportMonth, reportYear: report?.reportYear },
+          });
+          
+          return { success: true };
+        } catch (error: any) {
+          await db.createAuditLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name,
+            userRole: ctx.user.role,
+            action: 'report.delete',
+            entityType: 'report',
+            entityId: input.id,
+            teamId: ctx.user.teamId,
+            status: 'failure',
+            errorMessage: error.message,
+          });
+          throw error;
+        }
       }),
   }),
 
@@ -2046,6 +2274,54 @@ Attendance Summary:
           },
         };
       }),
+  }),
+
+  // Admin-only audit and system management
+  admin: router({
+    // Get audit logs with filtering
+    getAuditLogs: adminProcedure
+      .input(z.object({
+        userId: z.number().optional(),
+        entityType: z.string().optional(),
+        action: z.string().optional(),
+        teamId: z.number().optional(),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+        limit: z.number().min(1).max(500).default(100),
+        offset: z.number().min(0).default(0),
+      }).optional())
+      .query(async ({ input }) => {
+        return await db.getAuditLogs(input || {});
+      }),
+
+    // Get audit log statistics
+    getAuditStats: adminProcedure.query(async () => {
+      return await db.getAuditLogStats();
+    }),
+
+    // Get system health and stats
+    getSystemStats: adminProcedure.query(async () => {
+      const stats = await db.getAdminDashboardStats();
+      const auditStats = await db.getAuditLogStats();
+      return {
+        ...stats,
+        auditStats,
+      };
+    }),
+
+    // Cleanup old rate limit records (maintenance)
+    cleanupRateLimits: adminProcedure.mutation(async ({ ctx }) => {
+      const cleaned = await db.cleanupRateLimits();
+      await db.createAuditLog({
+        userId: ctx.user.id,
+        userName: ctx.user.name,
+        userRole: ctx.user.role,
+        action: 'admin.cleanupRateLimits',
+        entityType: 'system',
+        details: { cleanedRecords: cleaned },
+      });
+      return { success: true, cleanedRecords: cleaned };
+    }),
   }),
 
 });

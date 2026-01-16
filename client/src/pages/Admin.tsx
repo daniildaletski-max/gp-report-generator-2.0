@@ -137,7 +137,7 @@ function FullAdminPanel() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6 h-auto p-1">
+        <TabsList className="grid w-full grid-cols-7 h-auto p-1">
           <TabsTrigger value="overview" className="flex items-center justify-center gap-2 py-2">
             <BarChart3 className="h-4 w-4 shrink-0" />
             <span>Overview</span>
@@ -161,6 +161,10 @@ function FullAdminPanel() {
           <TabsTrigger value="errors" className="flex items-center justify-center gap-2 py-2">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>Errors</span>
+          </TabsTrigger>
+          <TabsTrigger value="audit" className="flex items-center justify-center gap-2 py-2">
+            <Shield className="h-4 w-4 shrink-0" />
+            <span>Audit Log</span>
           </TabsTrigger>
         </TabsList>
 
@@ -201,6 +205,9 @@ function FullAdminPanel() {
           setSelectedMonth={setSelectedMonth}
           setSelectedYear={setSelectedYear}
         />
+
+        {/* Audit Log Tab */}
+        <AuditLogTab />
       </Tabs>
     </div>
   );
@@ -1575,5 +1582,237 @@ function QuickAttitudeButtons({
         </Button>
       ))}
     </div>
+  );
+}
+
+
+// Audit Log Tab Component
+function AuditLogTab() {
+  const [actionFilter, setActionFilter] = useState<string>("");
+  const [entityFilter, setEntityFilter] = useState<string>("");
+  const [limit, setLimit] = useState(50);
+
+  const { data: auditLogs, isLoading, refetch } = trpc.admin.getAuditLogs.useQuery({
+    action: actionFilter || undefined,
+    entityType: entityFilter || undefined,
+    limit,
+  });
+
+  const { data: auditStats } = trpc.admin.getAuditStats.useQuery();
+
+  const cleanupMutation = trpc.admin.cleanupRateLimits.useMutation();
+
+  const handleCleanup = async () => {
+    try {
+      const result = await cleanupMutation.mutateAsync();
+      toast.success(`Cleaned up ${result.cleanedRecords} old rate limit records`);
+      refetch();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to cleanup");
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    if (status === 'success') return <Badge className="bg-green-500">Success</Badge>;
+    if (status === 'failure') return <Badge variant="destructive">Failed</Badge>;
+    return <Badge variant="secondary">{status}</Badge>;
+  };
+
+  const getActionColor = (action: string) => {
+    if (action.includes('delete')) return 'text-red-500';
+    if (action.includes('create') || action.includes('upload')) return 'text-green-500';
+    if (action.includes('update') || action.includes('bulk')) return 'text-blue-500';
+    return '';
+  };
+
+  return (
+    <TabsContent value="audit" className="space-y-4">
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Actions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{auditStats?.total || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Today's Actions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{auditStats?.today || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Failed Actions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-500">{auditStats?.failed || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">This Week</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{auditStats?.thisWeek || 0}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters and Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Audit Log
+            </span>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleCleanup}
+                disabled={cleanupMutation.isPending}
+              >
+                {cleanupMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                )}
+                Cleanup Rate Limits
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Refresh
+              </Button>
+            </div>
+          </CardTitle>
+          <CardDescription>
+            Track all user actions and system events for security auditing.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Filters */}
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="space-y-2">
+              <Label>Action Type</Label>
+              <Select value={actionFilter} onValueChange={setActionFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All actions" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All actions</SelectItem>
+                  <SelectItem value="evaluation.create">Evaluation Create</SelectItem>
+                  <SelectItem value="evaluation.update">Evaluation Update</SelectItem>
+                  <SelectItem value="evaluation.delete">Evaluation Delete</SelectItem>
+                  <SelectItem value="report.delete">Report Delete</SelectItem>
+                  <SelectItem value="report.exportToExcel">Report Export</SelectItem>
+                  <SelectItem value="gamePresenter.bulkSetAttitude">Bulk Set Attitude</SelectItem>
+                  <SelectItem value="gamePresenter.bulkResetMistakes">Bulk Reset Mistakes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Entity Type</Label>
+              <Select value={entityFilter} onValueChange={setEntityFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All entities" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All entities</SelectItem>
+                  <SelectItem value="evaluation">Evaluation</SelectItem>
+                  <SelectItem value="report">Report</SelectItem>
+                  <SelectItem value="monthlyGpStats">Monthly GP Stats</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Show</Label>
+              <Select value={String(limit)} onValueChange={(v) => setLimit(Number(v))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="25">25 records</SelectItem>
+                  <SelectItem value="50">50 records</SelectItem>
+                  <SelectItem value="100">100 records</SelectItem>
+                  <SelectItem value="200">200 records</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Audit Log Table */}
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : auditLogs && auditLogs.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Timestamp</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Entity</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {auditLogs.map((log: any) => (
+                  <TableRow key={log.id} className={log.status === 'failure' ? 'bg-red-50 dark:bg-red-950/20' : ''}>
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                      {format(new Date(log.createdAt), "dd MMM HH:mm:ss")}
+                    </TableCell>
+                    <TableCell className="font-medium">{log.userName}</TableCell>
+                    <TableCell>
+                      <Badge variant={log.userRole === 'admin' ? 'default' : 'secondary'}>
+                        {log.userRole}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className={`font-mono text-sm ${getActionColor(log.action)}`}>
+                      {log.action}
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm">
+                        {log.entityType}
+                        {log.entityId && <span className="text-muted-foreground"> #{log.entityId}</span>}
+                      </span>
+                    </TableCell>
+                    <TableCell>{getStatusBadge(log.status)}</TableCell>
+                    <TableCell className="max-w-[200px]">
+                      {log.errorMessage ? (
+                        <span className="text-red-500 text-sm truncate block" title={log.errorMessage}>
+                          {log.errorMessage}
+                        </span>
+                      ) : log.details ? (
+                        <span className="text-muted-foreground text-sm truncate block" title={JSON.stringify(log.details)}>
+                          {JSON.stringify(log.details).slice(0, 50)}...
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              No audit logs found
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </TabsContent>
   );
 }

@@ -535,3 +535,35 @@
 ### Tests
 - [x] Added 8 new tests for bulk operations
 - [x] All 99 tests passing
+
+
+## Comprehensive System Hardening (v31)
+
+### Audit Logging
+- [x] Create audit_logs table in database schema
+- [x] Add createAuditLog function in db.ts
+- [x] Log all delete operations with user info
+- [x] Log all update operations for sensitive data
+- [x] Log failed access attempts
+- [x] Add audit log viewer in Admin panel (new Audit Log tab)
+- [x] Add audit stats (total, today, this week, failed)
+- [x] Add cleanup function for rate limit records
+
+### Input Validation
+- [x] Add strict validation for all numeric inputs (min/max ranges)
+- [x] Add string length limits for text fields (255 for names, 1000 for comments)
+- [x] Validate date ranges (year 2020-2100)
+- [x] Add sanitizeString function in db.ts
+- [x] Add validation for bulk operations (max 100 items)
+
+### Rate Limiting
+- [x] Add rate limiting for upload endpoints (10/min)
+- [x] Add rate limiting for LLM-based operations (5/min)
+- [x] Add rate limiting for export operations (20/min)
+- [x] Add rate limiting for bulk operations (10/min)
+- [x] Add rate limiting for delete operations (30/min)
+
+### Error Handling & Data Protection
+- [x] Improved error messages with rate limit info
+- [x] Audit logging for all critical operations
+- [x] 99 tests passing
