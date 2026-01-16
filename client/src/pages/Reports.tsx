@@ -7,9 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2 } from "lucide-react";
+import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -33,11 +34,32 @@ export default function ReportsPage() {
     additionalComments: "",
   });
 
+  const utils = trpc.useUtils();
   const { data: reports, isLoading, refetch } = trpc.report.list.useQuery();
   const { data: teams } = trpc.fmTeam.list.useQuery();
   const generateMutation = trpc.report.generate.useMutation();
   const exportMutation = trpc.report.exportToExcel.useMutation();
   const autoFillMutation = trpc.report.autoFillFields.useMutation();
+  const deleteMutation = trpc.report.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Report deleted successfully");
+      utils.report.list.invalidate();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to delete report");
+    },
+  });
+
+  const [deletingReportId, setDeletingReportId] = useState<number | null>(null);
+
+  const handleDeleteReport = async (reportId: number) => {
+    setDeletingReportId(reportId);
+    try {
+      await deleteMutation.mutateAsync({ id: reportId });
+    } finally {
+      setDeletingReportId(null);
+    }
+  };
   
   // Query for auto-fill data (simple stats)
   const { data: teamStats, refetch: refetchStats } = trpc.dashboard.stats.useQuery({
@@ -444,6 +466,39 @@ export default function ReportsPage() {
                             )}
                           </Button>
                         )}
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              disabled={deletingReportId === item.report.id}
+                            >
+                              {deletingReportId === item.report.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Report</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete the report for {item.team?.teamName} - {MONTHS[item.report.reportMonth - 1]} {item.report.reportYear}? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteReport(item.report.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </TableCell>
                   </TableRow>

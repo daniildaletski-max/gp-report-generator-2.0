@@ -504,8 +504,15 @@ export const appRouter = router({
 
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        return await db.getEvaluationWithGP(input.id);
+      .query(async ({ ctx, input }) => {
+        const evaluation = await db.getEvaluationWithGP(input.id);
+        if (!evaluation) return null;
+        
+        // FM can only access their team's evaluations
+        if (ctx.user.teamId && evaluation.gamePresenter?.teamId !== ctx.user.teamId) {
+          throw new Error("Access denied: You can only view your team's evaluations");
+        }
+        return evaluation;
       }),
 
     update: protectedProcedure
@@ -528,7 +535,14 @@ export const appRouter = router({
         dealingStyleComment: z.string().optional(),
         gamePerformanceComment: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Check ownership before update
+        const evaluation = await db.getEvaluationWithGP(input.id);
+        if (!evaluation) throw new Error("Evaluation not found");
+        if (ctx.user.teamId && evaluation.gamePresenter?.teamId !== ctx.user.teamId) {
+          throw new Error("Access denied: You can only edit your team's evaluations");
+        }
+        
         const { id, ...data } = input;
         const updated = await db.updateEvaluation(id, data);
         return { success: true, evaluation: updated };
@@ -536,7 +550,14 @@ export const appRouter = router({
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Check ownership before delete
+        const evaluation = await db.getEvaluationWithGP(input.id);
+        if (!evaluation) throw new Error("Evaluation not found");
+        if (ctx.user.teamId && evaluation.gamePresenter?.teamId !== ctx.user.teamId) {
+          throw new Error("Access denied: You can only delete your team's evaluations");
+        }
+        
         await db.deleteEvaluation(input.id);
         return { success: true };
       }),
@@ -608,10 +629,14 @@ export const appRouter = router({
 
     delete: protectedProcedure
       .input(z.object({ gpId: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const gp = await db.getGamePresenterById(input.gpId);
         if (!gp) {
           throw new Error("Game Presenter not found");
+        }
+        // FM can only delete their team's GPs
+        if (ctx.user.teamId && gp.teamId !== ctx.user.teamId) {
+          throw new Error("Access denied: You can only delete your team's Game Presenters");
         }
         await db.deleteGamePresenter(input.gpId);
         return { success: true, deletedName: gp.name };
@@ -666,6 +691,13 @@ export const appRouter = router({
         notes: z.string().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Check GP ownership
+        const gp = await db.getGamePresenterById(input.gpId);
+        if (!gp) throw new Error("Game Presenter not found");
+        if (ctx.user.teamId && gp.teamId !== ctx.user.teamId) {
+          throw new Error("Access denied: You can only update your team's GP stats");
+        }
+        
         const { gpId, month, year, ...data } = input;
         const stats = await db.updateMonthlyGpStats(gpId, month, year, {
           ...data,
@@ -1644,6 +1676,22 @@ Attendance Summary:
     listAll: adminProcedure.query(async () => {
       return await db.getAllReportsWithTeam();
     }),
+
+    // Delete report with ownership check
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const isAdmin = ctx.user.role === 'admin';
+        const success = await db.deleteReportWithCheck(
+          input.id,
+          ctx.user.teamId,
+          isAdmin
+        );
+        if (!success) {
+          throw new Error("Report not found");
+        }
+        return { success: true };
+      }),
   }),
 
   // Error file management
@@ -1765,6 +1813,11 @@ Attendance Summary:
         if (!gp) {
           throw new Error("Game Presenter not found");
         }
+        
+        // FM can only generate tokens for their team's GPs
+        if (ctx.user.teamId && gp.teamId !== ctx.user.teamId) {
+          throw new Error("Access denied: You can only generate tokens for your team's Game Presenters");
+        }
 
         // Deactivate any existing tokens for this GP
         const existingToken = await db.getGpAccessTokenByGpId(input.gpId);
@@ -1796,7 +1849,19 @@ Attendance Summary:
     // Deactivate a token
     deactivate: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Get token to check ownership
+        const token = await db.getGpAccessTokenById(input.id);
+        if (!token) throw new Error("Token not found");
+        
+        // Check if FM owns this GP's team
+        if (ctx.user.teamId) {
+          const gp = await db.getGamePresenterById(token.gamePresenterId);
+          if (gp && gp.teamId !== ctx.user.teamId) {
+            throw new Error("Access denied: You can only manage your team's GP tokens");
+          }
+        }
+        
         await db.deactivateGpAccessToken(input.id);
         return { success: true };
       }),

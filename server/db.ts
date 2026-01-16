@@ -1597,3 +1597,45 @@ export async function getAllTeamsWithStats() {
     };
   }));
 }
+
+
+// Delete report by ID
+export async function deleteReport(reportId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(reports).where(eq(reports.id, reportId));
+}
+
+// Delete report with ownership check
+export async function deleteReportWithCheck(reportId: number, teamId: number | null, isAdmin: boolean): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Get the report first
+  const report = await db.select().from(reports).where(eq(reports.id, reportId)).limit(1);
+  if (report.length === 0) {
+    return false; // Report not found
+  }
+
+  // Check ownership: admin can delete any, FM can only delete their team's
+  if (!isAdmin && report[0].teamId !== teamId) {
+    throw new Error("Access denied: You can only delete your team's reports");
+  }
+
+  await db.delete(reports).where(eq(reports.id, reportId));
+  return true;
+}
+
+
+// Get GP access token by ID
+export async function getGpAccessTokenById(id: number): Promise<GpAccessToken | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select()
+    .from(gpAccessTokens)
+    .where(eq(gpAccessTokens.id, id))
+    .limit(1);
+  return result[0] || null;
+}

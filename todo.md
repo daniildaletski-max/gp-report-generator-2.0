@@ -491,3 +491,26 @@
 
 ### Tests
 - [x] All 76 tests passing
+
+
+## System Hardening & Report Deletion (v29)
+
+### Report Deletion
+- [x] Add report.delete endpoint with ownership check
+- [x] Add delete button in Reports page UI
+- [x] Add confirmation dialog before deletion
+- [x] Admin can delete any report, FM can only delete their team's reports
+
+### Access Control Hardening
+- [x] evaluation.getById - checks team ownership
+- [x] evaluation.update - checks team ownership before update
+- [x] evaluation.delete - checks team ownership before delete
+- [x] gamePresenter.delete - checks team ownership
+- [x] gamePresenter.updateStats - checks team ownership
+- [x] gpAccess.generateToken - checks team ownership
+- [x] gpAccess.deactivate - checks team ownership
+- [x] report.get - checks team ownership (already existed)
+- [x] report.delete - checks team ownership
+
+### Tests
+- [x] All 91 tests passing
