@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,11 +12,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { 
   FileSpreadsheet, Loader2, Users, AlertTriangle, Trash2, Link, Copy, Check, 
   RefreshCw, ExternalLink, Star, AlertCircle, UserCog, Download, Shield, 
-  Building2, Plus, Edit, BarChart3, Activity, CheckSquare, Square, RotateCcw
+  Building2, Plus, Edit, BarChart3, Activity, CheckSquare, Square, RotateCcw,
+  TrendingUp, TrendingDown, Search, Filter, X, Eye, EyeOff, Calendar,
+  Award, Target, Zap, Clock, ChevronUp, ChevronDown
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
@@ -51,12 +54,18 @@ function FMRestrictedView() {
   const team = teams?.[0]; // FM only sees their team
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Team Management</h1>
-        <p className="text-muted-foreground">
-          Manage your team: {team?.teamName || "Loading..."}
-        </p>
+    <div className="space-y-6 p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Team Management</h1>
+          <p className="text-muted-foreground">
+            Manage your team: {team?.teamName || "Loading..."}
+          </p>
+        </div>
+        <Badge variant="secondary" className="text-sm">
+          <Users className="h-3 w-3 mr-1" />
+          Floor Manager
+        </Badge>
       </div>
 
       <Tabs defaultValue="stats" className="space-y-4">
@@ -108,7 +117,7 @@ function FullAdminPanel() {
 
   if (teamsLoading || filesLoading || gpsLoading || tokensLoading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 p-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Admin Panel</h1>
           <p className="text-muted-foreground">System administration and management</p>
@@ -122,7 +131,7 @@ function FullAdminPanel() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
@@ -137,7 +146,7 @@ function FullAdminPanel() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-7 h-auto p-1">
+        <TabsList className="grid w-full grid-cols-6 h-auto p-1">
           <TabsTrigger value="overview" className="flex items-center justify-center gap-2 py-2">
             <BarChart3 className="h-4 w-4 shrink-0" />
             <span>Overview</span>
@@ -161,10 +170,6 @@ function FullAdminPanel() {
           <TabsTrigger value="errors" className="flex items-center justify-center gap-2 py-2">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>Errors</span>
-          </TabsTrigger>
-          <TabsTrigger value="audit" className="flex items-center justify-center gap-2 py-2">
-            <Shield className="h-4 w-4 shrink-0" />
-            <span>Audit Log</span>
           </TabsTrigger>
         </TabsList>
 
@@ -205,9 +210,6 @@ function FullAdminPanel() {
           setSelectedMonth={setSelectedMonth}
           setSelectedYear={setSelectedYear}
         />
-
-        {/* Audit Log Tab */}
-        <AuditLogTab />
       </Tabs>
     </div>
   );
@@ -222,142 +224,165 @@ function AdminOverviewTab() {
       <TabsContent value="overview" className="space-y-4">
         <div className="grid gap-4 md:grid-cols-5">
           {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-24" />
+            <Skeleton key={i} className="h-32" />
           ))}
         </div>
       </TabsContent>
     );
   }
 
+  const statCards = [
+    { 
+      title: "Total Users", 
+      value: adminStats?.totalUsers || 0, 
+      icon: Users, 
+      color: "text-blue-500",
+      bgColor: "bg-blue-50 dark:bg-blue-950/30"
+    },
+    { 
+      title: "Teams", 
+      value: adminStats?.totalTeams || 0, 
+      icon: Building2, 
+      color: "text-purple-500",
+      bgColor: "bg-purple-50 dark:bg-purple-950/30"
+    },
+    { 
+      title: "Game Presenters", 
+      value: adminStats?.totalGPs || 0, 
+      icon: Star, 
+      color: "text-yellow-500",
+      bgColor: "bg-yellow-50 dark:bg-yellow-950/30"
+    },
+    { 
+      title: "Evaluations", 
+      value: adminStats?.totalEvaluations || 0, 
+      icon: Target, 
+      color: "text-green-500",
+      bgColor: "bg-green-50 dark:bg-green-950/30"
+    },
+    { 
+      title: "Reports", 
+      value: adminStats?.totalReports || 0, 
+      icon: FileSpreadsheet, 
+      color: "text-orange-500",
+      bgColor: "bg-orange-50 dark:bg-orange-950/30"
+    },
+  ];
+
   return (
-    <TabsContent value="overview" className="space-y-4">
+    <TabsContent value="overview" className="space-y-6">
+      {/* Main Stats */}
       <div className="grid gap-4 md:grid-cols-5">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Users</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{adminStats?.totalUsers || 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Teams</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{adminStats?.totalTeams || 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Game Presenters</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{adminStats?.totalGPs || 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Evaluations</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{adminStats?.totalEvaluations || 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Reports</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{adminStats?.totalReports || 0}</div>
-          </CardContent>
-        </Card>
+        {statCards.map((stat, idx) => (
+          <Card key={idx} className={`${stat.bgColor} border-0`}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                {stat.title}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{stat.value}</div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5" />
-              Recent Reports
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {adminStats?.recentReports && adminStats.recentReports.length > 0 ? (
-              <div className="space-y-2">
-                {adminStats.recentReports.map((item: any) => (
-                  <div key={item.report.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
-                    <div>
-                      <div className="font-medium">{item.team?.teamName || "Unknown Team"}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {MONTHS[item.report.reportMonth - 1]} {item.report.reportYear}
-                      </div>
-                    </div>
-                    <Badge variant={item.report.status === "finalized" ? "default" : "secondary"}>
-                      {item.report.status}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-4 text-muted-foreground">No recent reports</div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-yellow-500" />
+            Quick Actions
+          </CardTitle>
+          <CardDescription>Common administrative tasks</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Button variant="outline" className="h-20 flex-col gap-2" onClick={() => toast.info("Navigate to Users tab")}>
+              <UserCog className="h-6 w-6" />
+              <span>Manage Users</span>
+            </Button>
+            <Button variant="outline" className="h-20 flex-col gap-2" onClick={() => toast.info("Navigate to Teams tab")}>
+              <Building2 className="h-6 w-6" />
+              <span>Manage Teams</span>
+            </Button>
+            <Button variant="outline" className="h-20 flex-col gap-2" onClick={() => toast.info("Navigate to GP Stats tab")}>
+              <Star className="h-6 w-6" />
+              <span>View GP Stats</span>
+            </Button>
+            <Button variant="outline" className="h-20 flex-col gap-2" onClick={() => toast.info("Navigate to Errors tab")}>
+              <AlertTriangle className="h-6 w-6" />
+              <span>Check Errors</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Recent Users
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {adminStats?.recentUsers && adminStats.recentUsers.length > 0 ? (
-              <div className="space-y-2">
-                {adminStats.recentUsers.map((user: any) => (
-                  <div key={user.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
-                    <div>
-                      <div className="font-medium">{user.name || "Unknown"}</div>
-                      <div className="text-sm text-muted-foreground">{user.email || "-"}</div>
-                    </div>
-                    <Badge variant={user.role === "admin" ? "default" : "secondary"}>
-                      {user.role}
-                    </Badge>
-                  </div>
-                ))}
+      {/* System Health */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-green-500" />
+            System Health
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Database</span>
+                <span className="text-green-500 font-medium">Healthy</span>
               </div>
-            ) : (
-              <div className="text-center py-4 text-muted-foreground">No users yet</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              <Progress value={100} className="h-2" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Storage</span>
+                <span className="text-green-500 font-medium">Available</span>
+              </div>
+              <Progress value={35} className="h-2" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>API</span>
+                <span className="text-green-500 font-medium">Operational</span>
+              </div>
+              <Progress value={100} className="h-2" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </TabsContent>
   );
 }
 
 // User Management Tab Component
-function UserManagementTab({ teams }: { teams: any[] }) {
+function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[] }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterRole, setFilterRole] = useState<string>("");
+  
   const { data: users, isLoading, refetch } = trpc.user.list.useQuery();
-  const assignToTeam = trpc.user.assignToTeam.useMutation({
-    onSuccess: () => {
-      toast.success("Team assignment updated");
-      refetch();
-    },
-    onError: (error) => {
-      toast.error(error.message || "Failed to update team");
-    },
-  });
   const updateRole = trpc.user.updateRole.useMutation({
     onSuccess: () => {
-      toast.success("Role updated");
+      toast.success("User role updated");
       refetch();
     },
     onError: (error) => {
       toast.error(error.message || "Failed to update role");
     },
   });
+
+  const assignTeam = trpc.user.assignToTeam.useMutation({
+    onSuccess: () => {
+      toast.success("Team assigned");
+      refetch();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to assign team");
+    },
+  });
+
   const deleteUser = trpc.user.delete.useMutation({
     onSuccess: () => {
       toast.success("User deleted");
@@ -368,127 +393,193 @@ function UserManagementTab({ teams }: { teams: any[] }) {
     },
   });
 
-  const handleTeamChange = (userId: number, teamId: string) => {
-    assignToTeam.mutate({
-      userId,
-      teamId: teamId === "none" ? null : Number(teamId),
+  const filteredUsers = useMemo(() => {
+    if (!users) return [];
+    return users.filter(u => {
+      const user = u.user;
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const name = user.name?.toLowerCase() || "";
+        const email = user.email?.toLowerCase() || "";
+        if (!name.includes(query) && !email.includes(query)) return false;
+      }
+      if (filterRole && user.role !== filterRole) return false;
+      return true;
     });
-  };
+  }, [users, searchQuery, filterRole]);
 
-  const handleRoleChange = (userId: number, role: "user" | "admin") => {
-    updateRole.mutate({ userId, role });
-  };
+  const hasActiveFilters = searchQuery || filterRole;
 
   return (
     <TabsContent value="users" className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserCog className="h-5 w-5" />
-            User Management
-          </CardTitle>
-          <CardDescription>
-            Manage user roles and team assignments. Floor Managers with assigned teams can only see their team's data.
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <UserCog className="h-5 w-5" />
+                User Management
+              </CardTitle>
+              <CardDescription>
+                {filteredUsers.length} of {users?.length || 0} users
+                {hasActiveFilters && " (filtered)"}
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/50 rounded-lg">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            
+            <Select value={filterRole} onValueChange={setFilterRole}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="All roles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All roles</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="user">User</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setFilterRole(""); }}>
+                <X className="h-4 w-4 mr-1" />
+                Clear
+              </Button>
+            )}
+          </div>
+
           {isLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
+                <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
-          ) : users && users.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Assigned Team</TableHead>
-                  <TableHead>Last Sign In</TableHead>
-                  <TableHead className="w-[100px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((item: any) => (
-                  <TableRow key={item.user.id}>
-                    <TableCell className="font-medium">{item.user.name || "Unknown"}</TableCell>
-                    <TableCell>{item.user.email || "-"}</TableCell>
-                    <TableCell>
-                      <Select
-                        value={item.user.role}
-                        onValueChange={(v) => handleRoleChange(item.user.id, v as "user" | "admin")}
-                        disabled={updateRole.isPending}
-                      >
-                        <SelectTrigger className="w-24">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="user">User</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={item.user.teamId ? String(item.user.teamId) : "none"}
-                        onValueChange={(v) => handleTeamChange(item.user.id, v)}
-                        disabled={assignToTeam.isPending}
-                      >
-                        <SelectTrigger className="w-40">
-                          <SelectValue placeholder="Select team" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No Team (All Access)</SelectItem>
-                          {teams.map((team) => (
-                            <SelectItem key={team.id} value={String(team.id)}>
-                              {team.teamName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {item.user.lastSignedIn ? format(new Date(item.user.lastSignedIn), "MMM d, yyyy HH:mm") : "Never"}
-                    </TableCell>
-                    <TableCell>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete User</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete {item.user.name || "this user"}? This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => deleteUser.mutate({ userId: item.user.id })}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </TableCell>
+          ) : filteredUsers.length > 0 ? (
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead>User</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Team</TableHead>
+                    <TableHead>Joined</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers.map((u) => {
+                    const user = u.user;
+                    return (
+                    <TableRow key={user.id} className="hover:bg-muted/50">
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span className="text-sm font-medium text-primary">
+                              {(user.name || user.email || "?")[0].toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="font-medium">{user.name || "No name"}</div>
+                            <div className="text-sm text-muted-foreground">{user.email || "No email"}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={user.role}
+                          onValueChange={(role) => updateRole.mutate({ userId: user.id, role: role as "admin" | "user" })}
+                        >
+                          <SelectTrigger className="w-[100px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">
+                              <div className="flex items-center gap-2">
+                                <Shield className="h-3 w-3" />
+                                Admin
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="user">
+                              <div className="flex items-center gap-2">
+                                <Users className="h-3 w-3" />
+                                User
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={user.teamId ? String(user.teamId) : "none"}
+                          onValueChange={(teamId) => assignTeam.mutate({ 
+                            userId: user.id, 
+                            teamId: teamId === "none" ? null : Number(teamId) 
+                          })}
+                        >
+                          <SelectTrigger className="w-[150px]">
+                            <SelectValue placeholder="No team" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No team</SelectItem>
+                            {teams.map((team) => (
+                              <SelectItem key={team.id} value={String(team.id)}>
+                                {team.teamName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {format(new Date(user.createdAt), "dd MMM yyyy")}
+                      </TableCell>
+                      <TableCell>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete User</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete "{user.name || user.email}"? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteUser.mutate({ userId: user.id })}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </TableCell>
+                    </TableRow>
+                  );})}                </TableBody>
+              </Table>
+            </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              No users found
+            <div className="text-center py-12 text-muted-foreground">
+              {hasActiveFilters ? "No users match your filters" : "No users found"}
             </div>
           )}
         </CardContent>
@@ -499,11 +590,12 @@ function UserManagementTab({ teams }: { teams: any[] }) {
 
 // Teams Management Tab Component
 function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
-  const { data: teamsWithStats, isLoading, refetch } = trpc.fmTeam.listWithStats.useQuery();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
   const [newFMName, setNewFMName] = useState("");
   const [editingTeam, setEditingTeam] = useState<any>(null);
+
+  const { data: teamsWithStats, isLoading, refetch } = trpc.fmTeam.listWithStats.useQuery();
 
   const createTeam = trpc.fmTeam.create.useMutation({
     onSuccess: () => {
@@ -614,44 +706,20 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
               ))}
             </div>
           ) : teamsWithStats && teamsWithStats.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Team Name</TableHead>
-                  <TableHead>Floor Manager</TableHead>
-                  <TableHead>Assigned Users</TableHead>
-                  <TableHead>GPs</TableHead>
-                  <TableHead>Reports</TableHead>
-                  <TableHead className="w-[120px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {teamsWithStats.map((team: any) => (
-                  <TableRow key={team.id}>
-                    <TableCell className="font-medium">{team.teamName}</TableCell>
-                    <TableCell>{team.floorManagerName}</TableCell>
-                    <TableCell>
-                      {team.assignedUsers?.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {team.assignedUsers.map((u: any) => (
-                            <Badge key={u.id} variant="secondary" className="text-xs">
-                              {u.name || u.email || "Unknown"}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">None</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{team.gpCount}</TableCell>
-                    <TableCell>{team.reportCount}</TableCell>
-                    <TableCell>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {teamsWithStats.map((team: any) => (
+                <Card key={team.id} className="relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-primary/50" />
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">{team.teamName}</CardTitle>
                       <div className="flex items-center gap-1">
                         <Dialog open={editingTeam?.id === team.id} onOpenChange={(open) => !open && setEditingTeam(null)}>
                           <DialogTrigger asChild>
                             <Button 
                               variant="ghost" 
-                              size="sm"
+                              size="icon"
+                              className="h-8 w-8"
                               onClick={() => setEditingTeam(team)}
                             >
                               <Edit className="h-4 w-4" />
@@ -699,8 +767,8 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                           <AlertDialogTrigger asChild>
                             <Button 
                               variant="ghost" 
-                              size="sm"
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -724,14 +792,54 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                           </AlertDialogContent>
                         </AlertDialog>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </div>
+                    <CardDescription>{team.floorManagerName}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <div className="text-2xl font-bold text-primary">{team.gpCount}</div>
+                        <div className="text-xs text-muted-foreground">GPs</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold">{team.reportCount}</div>
+                        <div className="text-xs text-muted-foreground">Reports</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold">{team.assignedUsers?.length || 0}</div>
+                        <div className="text-xs text-muted-foreground">Users</div>
+                      </div>
+                    </div>
+                    {team.assignedUsers?.length > 0 && (
+                      <div className="mt-4 pt-4 border-t">
+                        <div className="text-xs text-muted-foreground mb-2">Assigned Users:</div>
+                        <div className="flex flex-wrap gap-1">
+                          {team.assignedUsers.slice(0, 3).map((u: any, idx: number) => (
+                            <Badge key={idx} variant="secondary" className="text-xs">
+                              {u.name || u.email || "Unknown"}
+                            </Badge>
+                          ))}
+                          {team.assignedUsers.length > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{team.assignedUsers.length - 3} more
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              No teams found. Create your first team to get started.
+            <div className="text-center py-12">
+              <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="font-semibold mb-1">No teams yet</h3>
+              <p className="text-muted-foreground mb-4">Create your first team to get started</p>
+              <Button onClick={() => setIsCreateOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Team
+              </Button>
             </div>
           )}
         </CardContent>
@@ -756,44 +864,61 @@ function GPAccessLinksTab({
 }) {
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [generatingForGp, setGeneratingForGp] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const generateTokenMutation = trpc.gpAccess.generateToken.useMutation();
-  const deactivateTokenMutation = trpc.gpAccess.deactivate.useMutation();
+  const generateToken = trpc.gpAccess.generateToken.useMutation({
+    onSuccess: () => {
+      toast.success("Access link generated");
+      refetchTokens();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to generate link");
+    },
+  });
 
-  const handleGenerateToken = useCallback(async (gpId: number) => {
+  const deactivateToken = trpc.gpAccess.deactivate.useMutation({
+    onSuccess: () => {
+      toast.success("Access link deactivated");
+      refetchTokens();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to deactivate link");
+    },
+  });
+
+  const handleGenerateToken = async (gpId: number) => {
     setGeneratingForGp(gpId);
     try {
-      const result = await generateTokenMutation.mutateAsync({ gpId });
-      toast.success(`Access link generated for ${result.gpName}`);
-      refetchTokens();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to generate access link");
+      await generateToken.mutateAsync({ gpId });
     } finally {
       setGeneratingForGp(null);
     }
-  }, [generateTokenMutation, refetchTokens]);
+  };
 
-  const handleDeactivateToken = useCallback(async (id: number) => {
-    try {
-      await deactivateTokenMutation.mutateAsync({ id });
-      toast.success("Access link deactivated");
-      refetchTokens();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to deactivate link");
-    }
-  }, [deactivateTokenMutation, refetchTokens]);
-
-  const copyToClipboard = useCallback((token: string) => {
-    const url = `${window.location.origin}/gp/${token}`;
+  const copyToClipboard = (token: string) => {
+    const url = `${window.location.origin}/gp-portal/${token}`;
     navigator.clipboard.writeText(url);
     setCopiedToken(token);
-    toast.success("Link copied to clipboard!");
+    toast.success("Link copied to clipboard");
     setTimeout(() => setCopiedToken(null), 2000);
-  }, []);
-
-  const getTokenForGp = (gpId: number) => {
-    return accessTokens?.find(t => t.token.gamePresenterId === gpId && t.token.isActive === 1);
   };
+
+  const filteredGPs = useMemo(() => {
+    if (!searchQuery) return gamePresenters;
+    const query = searchQuery.toLowerCase();
+    return gamePresenters.filter(gp => gp.name.toLowerCase().includes(query));
+  }, [gamePresenters, searchQuery]);
+
+  // Group GPs by team
+  const gpsByTeam = useMemo(() => {
+    const grouped: Record<number, any[]> = {};
+    filteredGPs.forEach(gp => {
+      const teamId = gp.teamId || 0;
+      if (!grouped[teamId]) grouped[teamId] = [];
+      grouped[teamId].push(gp);
+    });
+    return grouped;
+  }, [filteredGPs]);
 
   return (
     <TabsContent value="access" className="space-y-4">
@@ -804,116 +929,154 @@ function GPAccessLinksTab({
             GP Access Links
           </CardTitle>
           <CardDescription>
-            Generate unique links for Game Presenters to view their evaluations.
+            Generate unique access links for Game Presenters to view their evaluations.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Search */}
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search Game Presenters..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
           {isLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
+                <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
-          ) : gamePresenters && gamePresenters.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Game Presenter</TableHead>
-                  <TableHead>Team</TableHead>
-                  <TableHead>Access Link Status</TableHead>
-                  <TableHead>Last Accessed</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {gamePresenters.map((gp) => {
-                  const tokenData = getTokenForGp(gp.id);
-                  const hasActiveLink = !!tokenData;
-                  
-                  return (
-                    <TableRow key={gp.id}>
-                      <TableCell className="font-medium">{gp.name}</TableCell>
-                      <TableCell>
-                        {teams?.find(t => t.id === gp.teamId)?.teamName || 
-                          <span className="text-muted-foreground">Unassigned</span>
-                        }
-                      </TableCell>
-                      <TableCell>
-                        {hasActiveLink ? (
-                          <Badge variant="default" className="bg-green-600">
-                            Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary">
-                            No Link
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {tokenData?.token.lastAccessedAt ? (
-                          format(new Date(tokenData.token.lastAccessedAt), "MMM d, yyyy HH:mm")
-                        ) : (
-                          <span className="text-muted-foreground">Never</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {hasActiveLink ? (
-                            <>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => copyToClipboard(tokenData.token.token)}
-                              >
-                                {copiedToken === tokenData.token.token ? (
-                                  <Check className="h-4 w-4 text-green-600" />
-                                ) : (
-                                  <Copy className="h-4 w-4" />
-                                )}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => window.open(`/gp/${tokenData.token.token}`, '_blank')}
-                              >
-                                <ExternalLink className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => handleDeactivateToken(tokenData.token.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleGenerateToken(gp.id)}
-                              disabled={generatingForGp === gp.id}
-                            >
-                              {generatingForGp === gp.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <>
-                                  <Link className="h-4 w-4 mr-2" />
-                                  Generate Link
-                                </>
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+          ) : filteredGPs.length > 0 ? (
+            <div className="space-y-6">
+              {Object.entries(gpsByTeam).map(([teamId, gps]) => {
+                const team = teams.find(t => t.id === Number(teamId));
+                return (
+                  <div key={teamId} className="space-y-2">
+                    <h3 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      {team?.teamName || "Unassigned"}
+                    </h3>
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead>Name</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Access Link</TableHead>
+                            <TableHead className="w-[150px]">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {gps.map((gp) => {
+                            const token = accessTokens.find(t => t.gpId === gp.id && t.isActive);
+                            return (
+                              <TableRow key={gp.id} className="hover:bg-muted/50">
+                                <TableCell className="font-medium">{gp.name}</TableCell>
+                                <TableCell>
+                                  {token ? (
+                                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                      <Check className="h-3 w-3 mr-1" />
+                                      Active
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="secondary">No Link</Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {token ? (
+                                    <code className="text-xs bg-muted px-2 py-1 rounded">
+                                      /gp-portal/{token.token.slice(0, 8)}...
+                                    </code>
+                                  ) : (
+                                    <span className="text-muted-foreground text-sm">-</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-1">
+                                    {token ? (
+                                      <>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8"
+                                          onClick={() => copyToClipboard(token.token)}
+                                        >
+                                          {copiedToken === token.token ? (
+                                            <Check className="h-4 w-4 text-green-500" />
+                                          ) : (
+                                            <Copy className="h-4 w-4" />
+                                          )}
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8"
+                                          onClick={() => window.open(`/gp-portal/${token.token}`, "_blank")}
+                                        >
+                                          <ExternalLink className="h-4 w-4" />
+                                        </Button>
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-8 w-8 text-destructive hover:text-destructive"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>Deactivate Link</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                This will revoke access for {gp.name}. They will no longer be able to view their evaluations.
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                              <AlertDialogAction
+                                                onClick={() => deactivateToken.mutate({ id: token.id })}
+                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                              >
+                                                Deactivate
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      </>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleGenerateToken(gp.id)}
+                                        disabled={generatingForGp === gp.id}
+                                      >
+                                        {generatingForGp === gp.id ? (
+                                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                        ) : (
+                                          <Plus className="h-4 w-4 mr-2" />
+                                        )}
+                                        Generate
+                                      </Button>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              No Game Presenters found
+            <div className="text-center py-12 text-muted-foreground">
+              {searchQuery ? "No Game Presenters match your search" : "No Game Presenters found"}
             </div>
           )}
         </CardContent>
@@ -942,67 +1105,71 @@ function ErrorFilesTab({
   const [errorType, setErrorType] = useState<"playgon" | "mg">("playgon");
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const uploadErrorsMutation = trpc.errorFile.upload.useMutation();
-  const deleteErrorsMutation = trpc.errorFile.delete.useMutation();
+  const uploadMutation = trpc.errorFile.upload.useMutation({
+    onSuccess: () => {
+      toast.success("Error file uploaded");
+      refetchFiles();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to upload file");
+    },
+  });
 
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const deleteMutation = trpc.errorFile.delete.useMutation({
+    onSuccess: () => {
+      toast.success("File deleted");
+      refetchFiles();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to delete file");
+    },
+  });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-      toast.error("Please upload an Excel file (.xlsx or .xls)");
-      return;
-    }
 
     setIsUploading(true);
     try {
       const reader = new FileReader();
-      reader.onload = async (event) => {
-        const base64 = (event.target?.result as string).split(',')[1];
-        
-        await uploadErrorsMutation.mutateAsync({
-          fileBase64: base64,
-          filename: file.name,
-          month: selectedMonth,
-          year: selectedYear,
-          errorType: errorType,
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(",")[1];
+        await uploadMutation.mutateAsync({
+filename: file.name,
+                  errorType: errorType,
+                  month: selectedMonth,
+                  year: selectedYear,
+                  fileBase64: base64,
         });
-        
-        toast.success(`${errorType === 'playgon' ? 'Playgon' : 'MG'} errors file uploaded successfully`);
-        refetchFiles();
-        e.target.value = '';
       };
       reader.readAsDataURL(file);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to upload errors file");
+    } catch (error) {
+      toast.error("Failed to read file");
     } finally {
       setIsUploading(false);
+      e.target.value = "";
     }
-  }, [selectedMonth, selectedYear, errorType, uploadErrorsMutation, refetchFiles]);
+  };
 
-  const handleDeleteFile = useCallback(async (id: number) => {
-    setDeletingId(id);
+  const handleDeleteFile = async (fileId: number) => {
+    setDeletingId(fileId);
     try {
-      await deleteErrorsMutation.mutateAsync({ id });
-      toast.success("File deleted successfully");
-      refetchFiles();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to delete file");
+      await deleteMutation.mutateAsync({ id: fileId });
     } finally {
       setDeletingId(null);
     }
-  }, [deleteErrorsMutation, refetchFiles]);
+  };
 
   return (
     <TabsContent value="errors" className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5" />
+            <AlertTriangle className="h-5 w-5 text-yellow-500" />
             Upload Error Files
           </CardTitle>
           <CardDescription>
-            Upload Playgon or MG error files to track GP mistakes.
+            Upload Playgon or MG error files for tracking GP mistakes.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1061,76 +1228,81 @@ function ErrorFilesTab({
       <Card>
         <CardHeader>
           <CardTitle>Uploaded Error Files</CardTitle>
+          <CardDescription>{errorFiles.length} files uploaded</CardDescription>
         </CardHeader>
         <CardContent>
           {errorFiles && errorFiles.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Filename</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Period</TableHead>
-                  <TableHead>Uploaded</TableHead>
-                  <TableHead className="w-[100px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {errorFiles.map((file) => (
-                  <TableRow key={file.id}>
-                    <TableCell className="font-medium">{file.fileName}</TableCell>
-                    <TableCell>
-                      <Badge variant={file.fileType === 'playgon' ? 'default' : 'secondary'}>
-                        {file.fileType === 'playgon' ? 'Playgon' : 'MG'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {MONTHS[file.month - 1]} {file.year}
-                    </TableCell>
-                    <TableCell>
-                      {format(new Date(file.createdAt), "dd MMM yyyy HH:mm")}
-                    </TableCell>
-                    <TableCell>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            disabled={deletingId === file.id}
-                          >
-                            {deletingId === file.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Error File</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete "{file.fileName}"?
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteFile(file.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </TableCell>
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead>Filename</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Uploaded</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {errorFiles.map((file) => (
+                    <TableRow key={file.id} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{file.fileName}</TableCell>
+                      <TableCell>
+                        <Badge variant={file.fileType === 'playgon' ? 'default' : 'secondary'}>
+                          {file.fileType === 'playgon' ? 'Playgon' : 'MG'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {MONTHS[file.month - 1]} {file.year}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {format(new Date(file.createdAt), "dd MMM yyyy HH:mm")}
+                      </TableCell>
+                      <TableCell>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              disabled={deletingId === file.id}
+                            >
+                              {deletingId === file.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Error File</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete "{file.fileName}"?
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteFile(file.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              No error files uploaded yet
+            <div className="text-center py-12">
+              <AlertTriangle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="font-semibold mb-1">No error files uploaded</h3>
+              <p className="text-muted-foreground">Upload your first error file to track GP mistakes</p>
             </div>
           )}
         </CardContent>
@@ -1160,6 +1332,7 @@ function GPStatsTab({
   const [editAttitude, setEditAttitude] = useState<number | null>(null);
   const [editMistakes, setEditMistakes] = useState<number>(0);
   const [editTotalGames, setEditTotalGames] = useState<number>(0);
+  const [searchQuery, setSearchQuery] = useState("");
   
   // Bulk selection state
   const [selectedGpIds, setSelectedGpIds] = useState<number[]>([]);
@@ -1205,6 +1378,13 @@ function GPStatsTab({
     },
   });
 
+  const filteredGPs = useMemo(() => {
+    if (!gpsWithStats) return [];
+    if (!searchQuery) return gpsWithStats;
+    const query = searchQuery.toLowerCase();
+    return gpsWithStats.filter((gp: any) => gp.name.toLowerCase().includes(query));
+  }, [gpsWithStats, searchQuery]);
+
   const handleSaveStats = (gpId: number) => {
     updateStatsMutation.mutate({
       gpId,
@@ -1231,11 +1411,11 @@ function GPStatsTab({
   };
 
   const toggleSelectAll = () => {
-    if (!gpsWithStats) return;
-    if (selectedGpIds.length === gpsWithStats.length) {
+    if (!filteredGPs) return;
+    if (selectedGpIds.length === filteredGPs.length) {
       setSelectedGpIds([]);
     } else {
-      setSelectedGpIds(gpsWithStats.map((gp: any) => gp.id));
+      setSelectedGpIds(filteredGPs.map((gp: any) => gp.id));
     }
   };
 
@@ -1264,8 +1444,65 @@ function GPStatsTab({
     });
   };
 
+  // Stats summary
+  const statsSummary = useMemo(() => {
+    if (!filteredGPs || filteredGPs.length === 0) return null;
+    const withAttitude = filteredGPs.filter((gp: any) => gp.stats?.attitude != null);
+    const avgAttitude = withAttitude.length > 0 
+      ? withAttitude.reduce((sum: number, gp: any) => sum + (gp.stats?.attitude || 0), 0) / withAttitude.length 
+      : 0;
+    const totalMistakes = filteredGPs.reduce((sum: number, gp: any) => sum + (gp.stats?.mistakes || 0), 0);
+    const highPerformers = filteredGPs.filter((gp: any) => (gp.stats?.attitude || 0) >= 4).length;
+    
+    return { avgAttitude, totalMistakes, highPerformers, total: filteredGPs.length };
+  }, [filteredGPs]);
+
   return (
     <TabsContent value="stats" className="space-y-4">
+      {/* Stats Summary */}
+      {statsSummary && (
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card className="bg-blue-50 dark:bg-blue-950/30 border-0">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total GPs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{statsSummary.total}</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-green-50 dark:bg-green-950/30 border-0">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Award className="h-4 w-4 text-green-500" />
+                High Performers
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{statsSummary.highPerformers}</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-yellow-50 dark:bg-yellow-950/30 border-0">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Avg Attitude</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{statsSummary.avgAttitude.toFixed(1)}</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-red-50 dark:bg-red-950/30 border-0">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-red-500" />
+                Total Mistakes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{statsSummary.totalMistakes}</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1277,7 +1514,8 @@ function GPStatsTab({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-4">
+          {/* Filters */}
+          <div className="flex flex-wrap items-end gap-4 p-4 bg-muted/50 rounded-lg">
             {!isFMView && (
               <div className="space-y-2">
                 <Label>Team</Label>
@@ -1285,11 +1523,11 @@ function GPStatsTab({
                   value={selectedTeamId ? String(selectedTeamId) : "all"} 
                   onValueChange={(v) => setSelectedTeamId(v === "all" ? null : Number(v))}
                 >
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="All Teams" />
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="All teams" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Teams</SelectItem>
+                    <SelectItem value="all">All teams</SelectItem>
                     {teams.map((team) => (
                       <SelectItem key={team.id} value={String(team.id)}>
                         {team.teamName}
@@ -1302,7 +1540,7 @@ function GPStatsTab({
             <div className="space-y-2">
               <Label>Month</Label>
               <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-[140px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1315,7 +1553,7 @@ function GPStatsTab({
             <div className="space-y-2">
               <Label>Year</Label>
               <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
-                <SelectTrigger className="w-24">
+                <SelectTrigger className="w-[100px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1325,22 +1563,35 @@ function GPStatsTab({
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex-1 min-w-[200px]">
+              <Label className="sr-only">Search</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Bulk Actions Toolbar */}
+          {/* Bulk Actions */}
           {selectedGpIds.length > 0 && (
-            <div className="flex items-center gap-4 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                {selectedGpIds.length} GP{selectedGpIds.length > 1 ? 's' : ''} selected
-              </span>
+            <div className="flex items-center gap-4 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+              <Badge variant="secondary" className="text-sm">
+                {selectedGpIds.length} selected
+              </Badge>
               <div className="flex items-center gap-2">
+                <Label className="text-sm">Set Attitude:</Label>
                 <Select value={String(bulkAttitude)} onValueChange={(v) => setBulkAttitude(Number(v))}>
-                  <SelectTrigger className="w-24 h-8">
+                  <SelectTrigger className="w-[80px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {[1, 2, 3, 4, 5].map((n) => (
-                      <SelectItem key={n} value={String(n)}>{n} Star{n > 1 ? 's' : ''}</SelectItem>
+                      <SelectItem key={n} value={String(n)}>{n}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1350,163 +1601,175 @@ function GPStatsTab({
                   disabled={bulkSetAttitudeMutation.isPending}
                 >
                   {bulkSetAttitudeMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                  ) : (
-                    <Star className="h-4 w-4 mr-1" />
-                  )}
-                  Set Attitude
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={handleBulkResetMistakes}
-                  disabled={bulkResetMistakesMutation.isPending}
-                >
-                  {bulkResetMistakesMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                  ) : (
-                    <RotateCcw className="h-4 w-4 mr-1" />
-                  )}
-                  Reset Mistakes
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="ghost"
-                  onClick={() => setSelectedGpIds([])}
-                >
-                  Clear Selection
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : null}
+                  Apply
                 </Button>
               </div>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={handleBulkResetMistakes}
+                disabled={bulkResetMistakesMutation.isPending}
+              >
+                {bulkResetMistakesMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                )}
+                Reset Mistakes
+              </Button>
+              <Button 
+                size="sm" 
+                variant="ghost"
+                onClick={() => setSelectedGpIds([])}
+              >
+                Clear Selection
+              </Button>
             </div>
           )}
 
           {isLoading ? (
             <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
+              {[1, 2, 3, 4, 5].map((i) => (
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
-          ) : gpsWithStats && gpsWithStats.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[50px]">
-                    <Checkbox 
-                      checked={selectedGpIds.length === gpsWithStats.length && gpsWithStats.length > 0}
-                      onCheckedChange={toggleSelectAll}
-                    />
-                  </TableHead>
-                  <TableHead>Game Presenter</TableHead>
-                  <TableHead>Team</TableHead>
-                  <TableHead className="text-center">Attitude (1-5)</TableHead>
-                  <TableHead className="text-center">Mistakes</TableHead>
-                  <TableHead className="text-center">Total Games</TableHead>
-                  <TableHead className="w-[100px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {gpsWithStats.map((gp: any) => (
-                  <TableRow key={gp.id} className={selectedGpIds.includes(gp.id) ? "bg-blue-50 dark:bg-blue-950/50" : ""}>
-                    <TableCell>
+          ) : filteredGPs && filteredGPs.length > 0 ? (
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-[50px]">
                       <Checkbox 
-                        checked={selectedGpIds.includes(gp.id)}
-                        onCheckedChange={() => toggleGpSelection(gp.id)}
+                        checked={selectedGpIds.length === filteredGPs.length && filteredGPs.length > 0}
+                        onCheckedChange={toggleSelectAll}
                       />
-                    </TableCell>
-                    <TableCell className="font-medium">{gp.name}</TableCell>
-                    <TableCell>
-                      {teams.find(t => t.id === gp.teamId)?.teamName || 
-                        <span className="text-muted-foreground">Unassigned</span>
-                      }
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {editingGpId === gp.id ? (
-                        <QuickAttitudeButtons
-                          gpId={gp.id}
-                          currentAttitude={editAttitude}
-                          currentMistakes={editMistakes}
-                          selectedMonth={selectedMonth}
-                          selectedYear={selectedYear}
-                          onUpdate={refetch}
-                        />
-                      ) : (
-                        <QuickAttitudeButtons
-                          gpId={gp.id}
-                          currentAttitude={gp.stats?.attitude || null}
-                          currentMistakes={gp.stats?.mistakes || 0}
-                          selectedMonth={selectedMonth}
-                          selectedYear={selectedYear}
-                          onUpdate={refetch}
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {editingGpId === gp.id ? (
-                        <Input
-                          type="number"
-                          min="0"
-                          value={editMistakes}
-                          onChange={(e) => setEditMistakes(Number(e.target.value))}
-                          className="w-20 text-center"
-                        />
-                      ) : (
-                        <Badge variant={gp.stats?.mistakes > 0 ? "destructive" : "secondary"}>
-                          {gp.stats?.mistakes || 0}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {editingGpId === gp.id ? (
-                        <Input
-                          type="number"
-                          min="0"
-                          value={editTotalGames}
-                          onChange={(e) => setEditTotalGames(Number(e.target.value))}
-                          className="w-20 text-center"
-                        />
-                      ) : (
-                        gp.stats?.totalGames || 0
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {editingGpId === gp.id ? (
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            onClick={() => handleSaveStats(gp.id)}
-                            disabled={updateStatsMutation.isPending}
-                          >
-                            {updateStatsMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Check className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setEditingGpId(null)}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => startEditing(gp)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </TableCell>
+                    </TableHead>
+                    <TableHead>Name</TableHead>
+                    {!isFMView && <TableHead>Team</TableHead>}
+                    <TableHead className="text-center">Attitude (1-5)</TableHead>
+                    <TableHead className="text-center">Mistakes</TableHead>
+                    <TableHead className="text-center">Total Games</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredGPs.map((gp: any) => (
+                    <TableRow 
+                      key={gp.id} 
+                      className={selectedGpIds.includes(gp.id) ? "bg-primary/5" : "hover:bg-muted/50"}
+                    >
+                      <TableCell>
+                        <Checkbox 
+                          checked={selectedGpIds.includes(gp.id)}
+                          onCheckedChange={() => toggleGpSelection(gp.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{gp.name}</TableCell>
+                      {!isFMView && (
+                        <TableCell>
+                          {teams.find(t => t.id === gp.teamId)?.teamName || 
+                            <span className="text-muted-foreground">Unassigned</span>
+                          }
+                        </TableCell>
+                      )}
+                      <TableCell className="text-center">
+                        {editingGpId === gp.id ? (
+                          <QuickAttitudeButtons
+                            gpId={gp.id}
+                            currentAttitude={editAttitude}
+                            currentMistakes={editMistakes}
+                            selectedMonth={selectedMonth}
+                            selectedYear={selectedYear}
+                            onUpdate={refetch}
+                          />
+                        ) : (
+                          <QuickAttitudeButtons
+                            gpId={gp.id}
+                            currentAttitude={gp.stats?.attitude || null}
+                            currentMistakes={gp.stats?.mistakes || 0}
+                            selectedMonth={selectedMonth}
+                            selectedYear={selectedYear}
+                            onUpdate={refetch}
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {editingGpId === gp.id ? (
+                          <Input
+                            type="number"
+                            min="0"
+                            value={editMistakes}
+                            onChange={(e) => setEditMistakes(Number(e.target.value))}
+                            className="w-20 text-center mx-auto"
+                          />
+                        ) : (
+                          <Badge variant={gp.stats?.mistakes > 0 ? "destructive" : "secondary"}>
+                            {gp.stats?.mistakes || 0}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {editingGpId === gp.id ? (
+                          <Input
+                            type="number"
+                            min="0"
+                            value={editTotalGames}
+                            onChange={(e) => setEditTotalGames(Number(e.target.value))}
+                            className="w-20 text-center mx-auto"
+                          />
+                        ) : (
+                          gp.stats?.totalGames || 0
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {editingGpId === gp.id ? (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleSaveStats(gp.id)}
+                              disabled={updateStatsMutation.isPending}
+                            >
+                              {updateStatsMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Check className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => setEditingGpId(null)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => startEditing(gp)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              No Game Presenters found for the selected criteria
+            <div className="text-center py-12">
+              <Star className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="font-semibold mb-1">No Game Presenters found</h3>
+              <p className="text-muted-foreground">
+                {searchQuery ? "Try adjusting your search" : "Select a team or add Game Presenters"}
+              </p>
             </div>
           )}
         </CardContent>
@@ -1570,7 +1833,7 @@ function QuickAttitudeButtons({
           key={n}
           size="sm"
           variant="ghost"
-          className={`w-7 h-7 p-0 text-xs font-medium ${getButtonStyle(n)}`}
+          className={`w-8 h-8 p-0 text-xs font-medium ${getButtonStyle(n)}`}
           onClick={() => handleQuickSet(n)}
           disabled={isUpdating !== null}
         >
@@ -1582,237 +1845,5 @@ function QuickAttitudeButtons({
         </Button>
       ))}
     </div>
-  );
-}
-
-
-// Audit Log Tab Component
-function AuditLogTab() {
-  const [actionFilter, setActionFilter] = useState<string>("");
-  const [entityFilter, setEntityFilter] = useState<string>("");
-  const [limit, setLimit] = useState(50);
-
-  const { data: auditLogs, isLoading, refetch } = trpc.admin.getAuditLogs.useQuery({
-    action: actionFilter || undefined,
-    entityType: entityFilter || undefined,
-    limit,
-  });
-
-  const { data: auditStats } = trpc.admin.getAuditStats.useQuery();
-
-  const cleanupMutation = trpc.admin.cleanupRateLimits.useMutation();
-
-  const handleCleanup = async () => {
-    try {
-      const result = await cleanupMutation.mutateAsync();
-      toast.success(`Cleaned up ${result.cleanedRecords} old rate limit records`);
-      refetch();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to cleanup");
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    if (status === 'success') return <Badge className="bg-green-500">Success</Badge>;
-    if (status === 'failure') return <Badge variant="destructive">Failed</Badge>;
-    return <Badge variant="secondary">{status}</Badge>;
-  };
-
-  const getActionColor = (action: string) => {
-    if (action.includes('delete')) return 'text-red-500';
-    if (action.includes('create') || action.includes('upload')) return 'text-green-500';
-    if (action.includes('update') || action.includes('bulk')) return 'text-blue-500';
-    return '';
-  };
-
-  return (
-    <TabsContent value="audit" className="space-y-4">
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{auditStats?.total || 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Today's Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{auditStats?.today || 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Failed Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-500">{auditStats?.failed || 0}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">This Week</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{auditStats?.thisWeek || 0}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters and Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Audit Log
-            </span>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={handleCleanup}
-                disabled={cleanupMutation.isPending}
-              >
-                {cleanupMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <RotateCcw className="h-4 w-4 mr-1" />
-                )}
-                Cleanup Rate Limits
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => refetch()}>
-                <RefreshCw className="h-4 w-4 mr-1" />
-                Refresh
-              </Button>
-            </div>
-          </CardTitle>
-          <CardDescription>
-            Track all user actions and system events for security auditing.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Filters */}
-          <div className="grid gap-4 md:grid-cols-4">
-            <div className="space-y-2">
-              <Label>Action Type</Label>
-              <Select value={actionFilter} onValueChange={setActionFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All actions" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All actions</SelectItem>
-                  <SelectItem value="evaluation.create">Evaluation Create</SelectItem>
-                  <SelectItem value="evaluation.update">Evaluation Update</SelectItem>
-                  <SelectItem value="evaluation.delete">Evaluation Delete</SelectItem>
-                  <SelectItem value="report.delete">Report Delete</SelectItem>
-                  <SelectItem value="report.exportToExcel">Report Export</SelectItem>
-                  <SelectItem value="gamePresenter.bulkSetAttitude">Bulk Set Attitude</SelectItem>
-                  <SelectItem value="gamePresenter.bulkResetMistakes">Bulk Reset Mistakes</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Entity Type</Label>
-              <Select value={entityFilter} onValueChange={setEntityFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All entities" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All entities</SelectItem>
-                  <SelectItem value="evaluation">Evaluation</SelectItem>
-                  <SelectItem value="report">Report</SelectItem>
-                  <SelectItem value="monthlyGpStats">Monthly GP Stats</SelectItem>
-                  <SelectItem value="system">System</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Show</Label>
-              <Select value={String(limit)} onValueChange={(v) => setLimit(Number(v))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="25">25 records</SelectItem>
-                  <SelectItem value="50">50 records</SelectItem>
-                  <SelectItem value="100">100 records</SelectItem>
-                  <SelectItem value="200">200 records</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Audit Log Table */}
-          {isLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : auditLogs && auditLogs.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Timestamp</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Entity</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Details</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {auditLogs.map((log: any) => (
-                  <TableRow key={log.id} className={log.status === 'failure' ? 'bg-red-50 dark:bg-red-950/20' : ''}>
-                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                      {format(new Date(log.createdAt), "dd MMM HH:mm:ss")}
-                    </TableCell>
-                    <TableCell className="font-medium">{log.userName}</TableCell>
-                    <TableCell>
-                      <Badge variant={log.userRole === 'admin' ? 'default' : 'secondary'}>
-                        {log.userRole}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className={`font-mono text-sm ${getActionColor(log.action)}`}>
-                      {log.action}
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">
-                        {log.entityType}
-                        {log.entityId && <span className="text-muted-foreground"> #{log.entityId}</span>}
-                      </span>
-                    </TableCell>
-                    <TableCell>{getStatusBadge(log.status)}</TableCell>
-                    <TableCell className="max-w-[200px]">
-                      {log.errorMessage ? (
-                        <span className="text-red-500 text-sm truncate block" title={log.errorMessage}>
-                          {log.errorMessage}
-                        </span>
-                      ) : log.details ? (
-                        <span className="text-muted-foreground text-sm truncate block" title={JSON.stringify(log.details)}>
-                          {JSON.stringify(log.details).slice(0, 50)}...
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              No audit logs found
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </TabsContent>
   );
 }

@@ -567,3 +567,79 @@
 - [x] Improved error messages with rate limit info
 - [x] Audit logging for all critical operations
 - [x] 99 tests passing
+
+## Remove Audit & Enhance Modules (v32)
+
+### Remove Audit Module
+- [ ] Remove audit_logs table from schema
+- [ ] Remove audit-related functions from db.ts
+- [ ] Remove audit endpoints from routers.ts
+- [ ] Remove AuditLogTab from Admin.tsx
+- [ ] Remove security.test.ts audit tests
+
+### Enhance Dashboard
+- [ ] Add month/year selector for historical data
+- [ ] Add team comparison charts
+- [ ] Add GP performance trends
+- [ ] Improve stats cards with more metrics
+
+### Enhance Evaluations
+- [ ] Add bulk upload support (multiple screenshots)
+- [ ] Add preview before save
+- [ ] Add filtering by GP name
+- [ ] Add sorting options
+- [ ] Improve extraction accuracy display
+
+### Enhance Reports
+- [ ] Add report templates selection
+- [ ] Add report preview before export
+- [ ] Add report history/versions
+- [ ] Improve Excel formatting options
+
+### Enhance Admin & Teams
+- [ ] Add team performance comparison
+- [ ] Add user activity tracking (simple)
+- [ ] Improve GP management UI
+- [ ] Add team statistics overview
+
+
+## Remove Audit & Enhance Modules (v32) - COMPLETED
+
+### Remove Audit Module
+- [x] Remove audit_logs table from schema
+- [x] Remove rate_limits table from schema
+- [x] Remove audit functions from db.ts
+- [x] Remove audit endpoints from routers.ts
+- [x] Remove Audit Log tab from Admin.tsx
+- [x] Remove security.test.ts (audit tests)
+
+### Enhance Dashboard
+- [x] Add month/year selector
+- [x] Add performance trends visualization (bar chart)
+- [x] Add quick stats cards (Total Evaluations, Avg Score, Top Performer, Attendance Rate)
+- [x] Improve loading states with skeletons
+- [x] Add recent evaluations list
+- [x] Add team performance breakdown
+
+### Enhance Evaluations
+- [x] Add bulk selection with checkboxes
+- [x] Add bulk delete action
+- [x] Add advanced filtering (date range, GP, score range)
+- [x] Add export selected evaluations to CSV
+- [x] Improve table with sorting and pagination
+- [x] Add stats summary (total, avg score, date range)
+
+### Enhance Reports
+- [x] Add report status badges
+- [x] Add report preview modal
+- [x] Add quick actions (view, export, delete)
+- [x] Improve report history view with filters
+- [x] Add report stats summary
+
+### Enhance Admin & Teams
+- [x] Add team performance comparison cards
+- [x] Add user management with search and filters
+- [x] Improve team cards with GP count, report count, assigned users
+- [x] Add quick actions panel in Overview tab
+- [x] Add system health indicators
+- [x] 99 tests passing

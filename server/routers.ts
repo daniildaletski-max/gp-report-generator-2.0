@@ -440,22 +440,6 @@ export const appRouter = router({
         }),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Rate limiting
-        const rateCheck = await db.checkRateLimit(ctx.user.id, 'upload');
-        if (!rateCheck.allowed) {
-          await db.createAuditLog({
-            userId: ctx.user.id,
-            userName: ctx.user.name,
-            userRole: ctx.user.role,
-            action: 'evaluation.uploadAndExtract',
-            entityType: 'evaluation',
-            teamId: ctx.user.teamId,
-            status: 'failure',
-            errorMessage: `Rate limit exceeded. Resets at ${rateCheck.resetAt.toISOString()}`,
-          });
-          throw new Error(`Rate limit exceeded. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
-        }
-
         const fileKey = `evaluations/${ctx.user.id}/${nanoid()}-${db.sanitizeString(input.filename, 100)}`;
         const buffer = Buffer.from(input.imageBase64, "base64");
         const { url: imageUrl } = await storagePut(fileKey, buffer, input.mimeType);
@@ -492,18 +476,6 @@ export const appRouter = router({
           screenshotKey: fileKey,
           rawExtractedData: extractedData,
           uploadedById: ctx.user.id,
-        });
-
-        // Audit log for successful upload
-        await db.createAuditLog({
-          userId: ctx.user.id,
-          userName: ctx.user.name,
-          userRole: ctx.user.role,
-          action: 'evaluation.create',
-          entityType: 'evaluation',
-          entityId: evaluation.id,
-          teamId: ctx.user.teamId,
-          details: { gpId: gp.id, gpName: gp.name, filename: input.filename },
         });
 
         return {
@@ -570,17 +542,6 @@ export const appRouter = router({
         const evaluation = await db.getEvaluationWithGP(input.id);
         if (!evaluation) throw new Error("Evaluation not found");
         if (ctx.user.teamId && evaluation.gamePresenter?.teamId !== ctx.user.teamId) {
-          await db.createAuditLog({
-            userId: ctx.user.id,
-            userName: ctx.user.name,
-            userRole: ctx.user.role,
-            action: 'evaluation.update',
-            entityType: 'evaluation',
-            entityId: input.id,
-            teamId: ctx.user.teamId,
-            status: 'failure',
-            errorMessage: 'Access denied: attempted to edit another team\'s evaluation',
-          });
           throw new Error("Access denied: You can only edit your team's evaluations");
         }
         
@@ -596,63 +557,20 @@ export const appRouter = router({
         if (data.gamePerformanceComment) data.gamePerformanceComment = db.sanitizeString(data.gamePerformanceComment, 1000);
         
         const updated = await db.updateEvaluation(id, data);
-        
-        await db.createAuditLog({
-          userId: ctx.user.id,
-          userName: ctx.user.name,
-          userRole: ctx.user.role,
-          action: 'evaluation.update',
-          entityType: 'evaluation',
-          entityId: id,
-          teamId: ctx.user.teamId,
-          details: { updatedFields: Object.keys(data) },
-        });
-        
         return { success: true, evaluation: updated };
       }),
 
     delete: protectedProcedure
       .input(z.object({ id: z.number().positive() }))
       .mutation(async ({ ctx, input }) => {
-        // Rate limiting for delete operations
-        const rateCheck = await db.checkRateLimit(ctx.user.id, 'delete');
-        if (!rateCheck.allowed) {
-          throw new Error(`Rate limit exceeded. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
-        }
-        
         // Check ownership before delete
         const evaluation = await db.getEvaluationWithGP(input.id);
         if (!evaluation) throw new Error("Evaluation not found");
         if (ctx.user.teamId && evaluation.gamePresenter?.teamId !== ctx.user.teamId) {
-          await db.createAuditLog({
-            userId: ctx.user.id,
-            userName: ctx.user.name,
-            userRole: ctx.user.role,
-            action: 'evaluation.delete',
-            entityType: 'evaluation',
-            entityId: input.id,
-            teamId: ctx.user.teamId,
-            status: 'failure',
-            errorMessage: 'Access denied: attempted to delete another team\'s evaluation',
-          });
           throw new Error("Access denied: You can only delete your team's evaluations");
         }
         
-        const gpName = evaluation.gamePresenter?.name;
-        const evalDate = evaluation.evaluation.evaluationDate;
         await db.deleteEvaluation(input.id);
-        
-        await db.createAuditLog({
-          userId: ctx.user.id,
-          userName: ctx.user.name,
-          userRole: ctx.user.role,
-          action: 'evaluation.delete',
-          entityType: 'evaluation',
-          entityId: input.id,
-          teamId: ctx.user.teamId,
-          details: { gpName, evaluationDate: evalDate },
-        });
-        
         return { success: true };
       }),
 
@@ -841,26 +759,9 @@ export const appRouter = router({
         year: z.number().min(2020).max(2100),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Rate limiting for bulk operations
-        const rateCheck = await db.checkRateLimit(ctx.user.id, 'bulk');
-        if (!rateCheck.allowed) {
-          throw new Error(`Rate limit exceeded for bulk operations. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
-        }
-        
         if (ctx.user.teamId) {
           const verification = await db.verifyGpOwnership(input.gpIds, ctx.user.teamId);
           if (!verification.valid) {
-            await db.createAuditLog({
-              userId: ctx.user.id,
-              userName: ctx.user.name,
-              userRole: ctx.user.role,
-              action: 'gamePresenter.bulkSetAttitude',
-              entityType: 'monthlyGpStats',
-              teamId: ctx.user.teamId,
-              status: 'failure',
-              errorMessage: 'Access denied: attempted to update GPs from another team',
-              details: { invalidGpIds: verification.invalidGpIds },
-            });
             throw new Error(`Access denied: Some GPs don't belong to your team`);
           }
         }
@@ -873,16 +774,6 @@ export const appRouter = router({
           ctx.user.id
         );
         
-        await db.createAuditLog({
-          userId: ctx.user.id,
-          userName: ctx.user.name,
-          userRole: ctx.user.role,
-          action: 'gamePresenter.bulkSetAttitude',
-          entityType: 'monthlyGpStats',
-          teamId: ctx.user.teamId,
-          details: { gpCount: input.gpIds.length, attitude: input.attitude, month: input.month, year: input.year, result },
-        });
-        
         return result;
       }),
 
@@ -894,25 +785,9 @@ export const appRouter = router({
         year: z.number().min(2020).max(2100),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Rate limiting for bulk operations
-        const rateCheck = await db.checkRateLimit(ctx.user.id, 'bulk');
-        if (!rateCheck.allowed) {
-          throw new Error(`Rate limit exceeded for bulk operations. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
-        }
-        
         if (ctx.user.teamId) {
           const verification = await db.verifyGpOwnership(input.gpIds, ctx.user.teamId);
           if (!verification.valid) {
-            await db.createAuditLog({
-              userId: ctx.user.id,
-              userName: ctx.user.name,
-              userRole: ctx.user.role,
-              action: 'gamePresenter.bulkResetMistakes',
-              entityType: 'monthlyGpStats',
-              teamId: ctx.user.teamId,
-              status: 'failure',
-              errorMessage: 'Access denied: attempted to update GPs from another team',
-            });
             throw new Error(`Access denied: Some GPs don't belong to your team`);
           }
         }
@@ -923,16 +798,6 @@ export const appRouter = router({
           input.year,
           ctx.user.id
         );
-        
-        await db.createAuditLog({
-          userId: ctx.user.id,
-          userName: ctx.user.name,
-          userRole: ctx.user.role,
-          action: 'gamePresenter.bulkResetMistakes',
-          entityType: 'monthlyGpStats',
-          teamId: ctx.user.teamId,
-          details: { gpCount: input.gpIds.length, month: input.month, year: input.year, result },
-        });
         
         return result;
       }),
@@ -1011,24 +876,8 @@ export const appRouter = router({
         reportYear: z.number().min(2020).max(2100),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Rate limiting for LLM operations
-        const rateCheck = await db.checkRateLimit(ctx.user.id, 'llm');
-        if (!rateCheck.allowed) {
-          throw new Error(`Rate limit exceeded for AI operations. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
-        }
-        
         // FM can only auto-fill for their own team
         if (ctx.user.teamId && ctx.user.teamId !== input.teamId) {
-          await db.createAuditLog({
-            userId: ctx.user.id,
-            userName: ctx.user.name,
-            userRole: ctx.user.role,
-            action: 'report.autoFillFields',
-            entityType: 'report',
-            teamId: ctx.user.teamId,
-            status: 'failure',
-            errorMessage: 'Access denied: attempted to auto-fill for another team',
-          });
           throw new Error("Access denied: You can only generate content for your own team");
         }
         
@@ -1214,23 +1063,6 @@ Attendance Summary:
         reportId: z.number().positive(),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Rate limiting for export operations
-        const rateCheck = await db.checkRateLimit(ctx.user.id, 'export');
-        if (!rateCheck.allowed) {
-          await db.createAuditLog({
-            userId: ctx.user.id,
-            userName: ctx.user.name,
-            userRole: ctx.user.role,
-            action: 'report.exportToExcel',
-            entityType: 'report',
-            entityId: input.reportId,
-            teamId: ctx.user.teamId,
-            status: 'failure',
-            errorMessage: 'Rate limit exceeded',
-          });
-          throw new Error(`Rate limit exceeded. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
-        }
-        
         console.log(`\n\n========== [exportToExcel] START ==========`);
         console.log(`[exportToExcel] Called with input.reportId=${input.reportId}`);
         const reportWithTeam = await db.getReportWithTeam(input.reportId);
@@ -1239,17 +1071,6 @@ Attendance Summary:
         
         // FM can only export their own team's reports
         if (ctx.user.teamId && reportWithTeam.report.teamId !== ctx.user.teamId) {
-          await db.createAuditLog({
-            userId: ctx.user.id,
-            userName: ctx.user.name,
-            userRole: ctx.user.role,
-            action: 'report.exportToExcel',
-            entityType: 'report',
-            entityId: input.reportId,
-            teamId: ctx.user.teamId,
-            status: 'failure',
-            errorMessage: 'Access denied: attempted to export another team\'s report',
-          });
           throw new Error("Access denied: You can only export your own team's reports");
         }
 
@@ -1971,53 +1792,18 @@ Attendance Summary:
     delete: protectedProcedure
       .input(z.object({ id: z.number().positive() }))
       .mutation(async ({ ctx, input }) => {
-        // Rate limiting
-        const rateCheck = await db.checkRateLimit(ctx.user.id, 'delete');
-        if (!rateCheck.allowed) {
-          throw new Error(`Rate limit exceeded. Try again after ${rateCheck.resetAt.toLocaleTimeString()}`);
-        }
-        
         const isAdmin = ctx.user.role === 'admin';
         
-        // Get report info before deletion for audit
-        const report = await db.getReportById(input.id);
-        
-        try {
-          const success = await db.deleteReportWithCheck(
-            input.id,
-            ctx.user.teamId,
-            isAdmin
-          );
-          if (!success) {
-            throw new Error("Report not found");
-          }
-          
-          await db.createAuditLog({
-            userId: ctx.user.id,
-            userName: ctx.user.name,
-            userRole: ctx.user.role,
-            action: 'report.delete',
-            entityType: 'report',
-            entityId: input.id,
-            teamId: ctx.user.teamId,
-            details: { reportMonth: report?.reportMonth, reportYear: report?.reportYear },
-          });
-          
-          return { success: true };
-        } catch (error: any) {
-          await db.createAuditLog({
-            userId: ctx.user.id,
-            userName: ctx.user.name,
-            userRole: ctx.user.role,
-            action: 'report.delete',
-            entityType: 'report',
-            entityId: input.id,
-            teamId: ctx.user.teamId,
-            status: 'failure',
-            errorMessage: error.message,
-          });
-          throw error;
+        const success = await db.deleteReportWithCheck(
+          input.id,
+          ctx.user.teamId,
+          isAdmin
+        );
+        if (!success) {
+          throw new Error("Report not found or access denied");
         }
+        
+        return { success: true };
       }),
   }),
 
@@ -2276,53 +2062,7 @@ Attendance Summary:
       }),
   }),
 
-  // Admin-only audit and system management
-  admin: router({
-    // Get audit logs with filtering
-    getAuditLogs: adminProcedure
-      .input(z.object({
-        userId: z.number().optional(),
-        entityType: z.string().optional(),
-        action: z.string().optional(),
-        teamId: z.number().optional(),
-        startDate: z.date().optional(),
-        endDate: z.date().optional(),
-        limit: z.number().min(1).max(500).default(100),
-        offset: z.number().min(0).default(0),
-      }).optional())
-      .query(async ({ input }) => {
-        return await db.getAuditLogs(input || {});
-      }),
 
-    // Get audit log statistics
-    getAuditStats: adminProcedure.query(async () => {
-      return await db.getAuditLogStats();
-    }),
-
-    // Get system health and stats
-    getSystemStats: adminProcedure.query(async () => {
-      const stats = await db.getAdminDashboardStats();
-      const auditStats = await db.getAuditLogStats();
-      return {
-        ...stats,
-        auditStats,
-      };
-    }),
-
-    // Cleanup old rate limit records (maintenance)
-    cleanupRateLimits: adminProcedure.mutation(async ({ ctx }) => {
-      const cleaned = await db.cleanupRateLimits();
-      await db.createAuditLog({
-        userId: ctx.user.id,
-        userName: ctx.user.name,
-        userRole: ctx.user.role,
-        action: 'admin.cleanupRateLimits',
-        entityType: 'system',
-        details: { cleanedRecords: cleaned },
-      });
-      return { success: true, cleanedRecords: cleaned };
-    }),
-  }),
 
 });
 

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2, Trash2 } from "lucide-react";
+import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2, Trash2, Eye, Calendar, Users, TrendingUp, Search, Filter, X, Copy, CheckCircle } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -21,8 +22,13 @@ const MONTHS = [
 export default function ReportsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExporting, setIsExporting] = useState<number | null>(null);
-
   const [showNewReport, setShowNewReport] = useState(false);
+  const [viewingReport, setViewingReport] = useState<any>(null);
+  
+  // Filters
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterYear, setFilterYear] = useState<number | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string>("");
   
   const [formData, setFormData] = useState({
     teamId: 0,
@@ -51,6 +57,45 @@ export default function ReportsPage() {
   });
 
   const [deletingReportId, setDeletingReportId] = useState<number | null>(null);
+
+  // Statistics
+  const stats = useMemo(() => {
+    if (!reports) return { total: 0, thisMonth: 0, finalized: 0, exported: 0 };
+    const now = new Date();
+    return {
+      total: reports.length,
+      thisMonth: reports.filter(r => 
+        r.report.reportMonth === now.getMonth() + 1 && 
+        r.report.reportYear === now.getFullYear()
+      ).length,
+      finalized: reports.filter(r => r.report.status === 'finalized').length,
+      exported: reports.filter(r => r.report.excelFileUrl).length,
+    };
+  }, [reports]);
+
+  // Filtered reports
+  const filteredReports = useMemo(() => {
+    if (!reports) return [];
+    return reports.filter(item => {
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const teamName = item.team?.teamName?.toLowerCase() || "";
+        const fmName = item.team?.floorManagerName?.toLowerCase() || "";
+        if (!teamName.includes(query) && !fmName.includes(query)) return false;
+      }
+      if (filterYear && item.report.reportYear !== filterYear) return false;
+      if (filterStatus && item.report.status !== filterStatus) return false;
+      return true;
+    });
+  }, [reports, searchQuery, filterYear, filterStatus]);
+
+  const hasActiveFilters = searchQuery || filterYear || filterStatus;
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setFilterYear(null);
+    setFilterStatus("");
+  };
 
   const handleDeleteReport = async (reportId: number) => {
     setDeletingReportId(reportId);
@@ -164,11 +209,9 @@ export default function ReportsPage() {
   };
 
   const handleExport = async (reportId: number) => {
-    console.log('[Reports] handleExport called with reportId:', reportId);
     setIsExporting(reportId);
     try {
       const result = await exportMutation.mutateAsync({ reportId });
-      console.log('[Reports] exportMutation result:', result);
       toast.success("Excel file generated with embedded chart");
       window.open(result.excelUrl, "_blank");
       refetch();
@@ -179,12 +222,33 @@ export default function ReportsPage() {
     }
   };
 
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} copied to clipboard`);
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'finalized':
+        return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Finalized</Badge>;
+      case 'generated':
+        return <Badge variant="secondary">Generated</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 p-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
           <p className="text-muted-foreground">Generate and manage Team Monthly Overview reports</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-24" />
+          ))}
         </div>
         <Card>
           <CardContent className="pt-6">
@@ -200,7 +264,8 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
@@ -223,7 +288,7 @@ export default function ReportsPage() {
             </DialogHeader>
             
             <div className="space-y-6 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Team *</label>
                   <Select
@@ -236,7 +301,7 @@ export default function ReportsPage() {
                     <SelectContent>
                       {teams?.map((team) => (
                         <SelectItem key={team.id} value={String(team.id)}>
-                          {team.teamName} ({team.floorManagerName})
+                          {team.teamName}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -261,25 +326,25 @@ export default function ReportsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Year</label>
-                <Select
-                  value={String(formData.reportYear)}
-                  onValueChange={(v) => setFormData({ ...formData, reportYear: Number(v) })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[2024, 2025, 2026].map((year) => (
-                      <SelectItem key={year} value={String(year)}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Year</label>
+                  <Select
+                    value={String(formData.reportYear)}
+                    onValueChange={(v) => setFormData({ ...formData, reportYear: Number(v) })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[2024, 2025, 2026].map((year) => (
+                        <SelectItem key={year} value={String(year)}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               {/* Auto-fill All Button */}
@@ -379,147 +444,368 @@ export default function ReportsPage() {
         </Dialog>
       </div>
 
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <FileSpreadsheet className="h-4 w-4" />
+              Total Reports
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              This Month
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.thisMonth}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              Finalized
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{stats.finalized}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Exported
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.exported}</div>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>All Reports</CardTitle>
-          <CardDescription>
-            View and export generated Team Monthly Overview reports
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>All Reports</CardTitle>
+              <CardDescription>
+                {filteredReports.length} of {reports?.length || 0} reports
+                {hasActiveFilters && " (filtered)"}
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
-          {reports && reports.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Team</TableHead>
-                  <TableHead>Period</TableHead>
-                  <TableHead>Floor Manager</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {reports.map((item) => (
-                  <TableRow key={item.report.id}>
-                    <TableCell className="font-medium">{item.team?.teamName || "Unknown"}</TableCell>
-                    <TableCell>
-                      {MONTHS[item.report.reportMonth - 1]} {item.report.reportYear}
-                    </TableCell>
-                    <TableCell>{item.team?.floorManagerName || "-"}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          item.report.status === "finalized"
-                            ? "default"
-                            : item.report.status === "generated"
-                            ? "secondary"
-                            : "outline"
-                        }
-                      >
-                        {item.report.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {format(new Date(item.report.createdAt), "dd MMM yyyy")}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        {item.report.excelFileUrl ? (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => window.open(item.report.excelFileUrl!, "_blank")}
-                            >
-                              <Download className="h-4 w-4 mr-1" />
-                              Download
-                            </Button>
+        <CardContent className="space-y-4">
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/50 rounded-lg">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by team or FM name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            
+            <Select value={filterYear ? String(filterYear) : ""} onValueChange={(v) => setFilterYear(v ? Number(v) : null)}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="All years" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All years</SelectItem>
+                {[2024, 2025, 2026].map((year) => (
+                  <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All statuses</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="generated">Generated</SelectItem>
+                <SelectItem value="finalized">Finalized</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                <X className="h-4 w-4 mr-1" />
+                Clear
+              </Button>
+            )}
+          </div>
+
+          {filteredReports.length > 0 ? (
+            <div className="overflow-x-auto border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead>Team</TableHead>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Floor Manager</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredReports.map((item) => (
+                    <TableRow key={item.report.id} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{item.team?.teamName || "Unknown"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {MONTHS[item.report.reportMonth - 1]} {item.report.reportYear}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{item.team?.floorManagerName || "-"}</TableCell>
+                      <TableCell>{getStatusBadge(item.report.status)}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {format(new Date(item.report.createdAt), "dd MMM yyyy")}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          {/* View Report */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setViewingReport(item)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          
+                          {/* Download/Export */}
+                          {item.report.excelFileUrl ? (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => window.open(item.report.excelFileUrl!, "_blank")}
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleExport(item.report.id)}
+                                disabled={isExporting === item.report.id}
+                                title="Regenerate Excel"
+                              >
+                                {isExporting === item.report.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </>
+                          ) : (
                             <Button
                               variant="ghost"
-                              size="sm"
+                              size="icon"
+                              className="h-8 w-8"
                               onClick={() => handleExport(item.report.id)}
                               disabled={isExporting === item.report.id}
-                              title="Regenerate Excel with latest data"
+                              title="Export to Excel"
                             >
                               {isExporting === item.report.id ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
-                                <RefreshCw className="h-4 w-4" />
+                                <FileSpreadsheet className="h-4 w-4" />
                               )}
                             </Button>
-                          </>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleExport(item.report.id)}
-                            disabled={isExporting === item.report.id}
-                          >
-                            {isExporting === item.report.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <>
-                                <FileSpreadsheet className="h-4 w-4 mr-1" />
-                                Export Excel
-                              </>
-                            )}
-                          </Button>
-                        )}
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                              disabled={deletingReportId === item.report.id}
-                            >
-                              {deletingReportId === item.report.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Report</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete the report for {item.team?.teamName} - {MONTHS[item.report.reportMonth - 1]} {item.report.reportYear}? This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDeleteReport(item.report.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          )}
+                          
+                          {/* Delete */}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                disabled={deletingReportId === item.report.id}
                               >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                                {deletingReportId === item.report.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Report</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete the report for {item.team?.teamName} - {MONTHS[item.report.reportMonth - 1]} {item.report.reportYear}? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteReport(item.report.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           ) : (
             <div className="text-center py-12">
               <FileSpreadsheet className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="font-semibold mb-1">No reports yet</h3>
+              <h3 className="font-semibold mb-1">
+                {hasActiveFilters ? "No matching reports" : "No reports yet"}
+              </h3>
               <p className="text-muted-foreground mb-4">
-                Generate your first Team Monthly Overview report
+                {hasActiveFilters 
+                  ? "Try adjusting your filters"
+                  : "Generate your first Team Monthly Overview report"}
               </p>
-              <Button onClick={() => setShowNewReport(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Report
-              </Button>
+              {hasActiveFilters ? (
+                <Button variant="outline" onClick={clearFilters}>
+                  Clear Filters
+                </Button>
+              ) : (
+                <Button onClick={() => setShowNewReport(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Report
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* View Report Dialog */}
+      <Dialog open={!!viewingReport} onOpenChange={(open) => !open && setViewingReport(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {viewingReport?.team?.teamName} - {viewingReport && MONTHS[viewingReport.report.reportMonth - 1]} {viewingReport?.report.reportYear}
+            </DialogTitle>
+            <DialogDescription>
+              Created on {viewingReport && format(new Date(viewingReport.report.createdAt), "dd MMMM yyyy")}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {viewingReport && (
+            <div className="space-y-6 py-4">
+              <div className="flex items-center gap-2">
+                {getStatusBadge(viewingReport.report.status)}
+                {viewingReport.report.excelFileUrl && (
+                  <Badge variant="outline" className="bg-green-50 text-green-700">
+                    <Download className="h-3 w-3 mr-1" />
+                    Exported
+                  </Badge>
+                )}
+              </div>
+              
+              {viewingReport.report.fmPerformance && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">FM Performance</label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => copyToClipboard(viewingReport.report.fmPerformance, "FM Performance")}
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="p-3 bg-muted rounded-lg text-sm whitespace-pre-wrap">
+                    {viewingReport.report.fmPerformance}
+                  </div>
+                </div>
+              )}
+              
+              {viewingReport.report.goalsThisMonth && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Goals This Month</label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => copyToClipboard(viewingReport.report.goalsThisMonth, "Goals")}
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="p-3 bg-muted rounded-lg text-sm whitespace-pre-wrap">
+                    {viewingReport.report.goalsThisMonth}
+                  </div>
+                </div>
+              )}
+              
+              {viewingReport.report.teamOverview && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Team Overview</label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => copyToClipboard(viewingReport.report.teamOverview, "Team Overview")}
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="p-3 bg-muted rounded-lg text-sm whitespace-pre-wrap">
+                    {viewingReport.report.teamOverview}
+                  </div>
+                </div>
+              )}
+              
+              {viewingReport.report.additionalComments && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Additional Notes</label>
+                  <div className="p-3 bg-muted rounded-lg text-sm whitespace-pre-wrap">
+                    {viewingReport.report.additionalComments}
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                {viewingReport.report.excelFileUrl ? (
+                  <Button onClick={() => window.open(viewingReport.report.excelFileUrl!, "_blank")}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download Excel
+                  </Button>
+                ) : (
+                  <Button onClick={() => handleExport(viewingReport.report.id)} disabled={isExporting === viewingReport.report.id}>
+                    {isExporting === viewingReport.report.id ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    )}
+                    Export to Excel
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
