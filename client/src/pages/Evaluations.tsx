@@ -89,7 +89,7 @@ export default function EvaluationsPage() {
       }
       
       // GP filter
-      if (filterGP && gamePresenter?.id !== Number(filterGP)) {
+      if (filterGP && filterGP !== "all" && gamePresenter?.id !== Number(filterGP)) {
         return false;
       }
       
@@ -133,10 +133,10 @@ export default function EvaluationsPage() {
     setSearchQuery("");
     setFilterMonth(null);
     setFilterYear(null);
-    setFilterGP("");
+    setFilterGP("all");
   };
 
-  const hasActiveFilters = searchQuery || filterMonth !== null || filterYear !== null || filterGP;
+  const hasActiveFilters = searchQuery || filterMonth !== null || filterYear !== null || (filterGP && filterGP !== "all");
   
   // Bulk selection handlers
   const toggleSelectAll = () => {
@@ -445,31 +445,31 @@ export default function EvaluationsPage() {
                 <SelectValue placeholder="All GPs" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All GPs</SelectItem>
+                <SelectItem value="all">All GPs</SelectItem>
                 {uniqueGPs.map((gp) => (
                   <SelectItem key={gp.id} value={String(gp.id)}>{gp.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             
-            <Select value={filterMonth !== null ? String(filterMonth) : ""} onValueChange={(v) => setFilterMonth(v ? Number(v) : null)}>
+            <Select value={filterMonth !== null ? String(filterMonth) : "all"} onValueChange={(v) => setFilterMonth(v === "all" ? null : Number(v))}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="All months" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All months</SelectItem>
+                <SelectItem value="all">All months</SelectItem>
                 {MONTHS.map((month, i) => (
                   <SelectItem key={i} value={String(i + 1)}>{month}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             
-            <Select value={filterYear !== null ? String(filterYear) : ""} onValueChange={(v) => setFilterYear(v ? Number(v) : null)}>
+            <Select value={filterYear !== null ? String(filterYear) : "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
               <SelectTrigger className="w-[100px]">
                 <SelectValue placeholder="Year" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All years</SelectItem>
+                <SelectItem value="all">All years</SelectItem>
                 {[2024, 2025, 2026].map((year) => (
                   <SelectItem key={year} value={String(year)}>{year}</SelectItem>
                 ))}
