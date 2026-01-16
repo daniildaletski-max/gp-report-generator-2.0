@@ -705,6 +705,90 @@ export const appRouter = router({
         });
         return { success: true, stats };
       }),
+
+    // Bulk update stats for multiple GPs
+    bulkUpdateStats: protectedProcedure
+      .input(z.object({
+        updates: z.array(z.object({
+          gpId: z.number(),
+          attitude: z.number().min(1).max(5).nullable().optional(),
+          mistakes: z.number().min(0).optional(),
+          notes: z.string().nullable().optional(),
+        })),
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const gpIds = input.updates.map(u => u.gpId);
+        
+        if (ctx.user.teamId) {
+          const verification = await db.verifyGpOwnership(gpIds, ctx.user.teamId);
+          if (!verification.valid) {
+            throw new Error(`Access denied: Some GPs don't belong to your team`);
+          }
+        }
+        
+        const result = await db.bulkUpdateMonthlyGpStats(
+          input.updates,
+          input.month,
+          input.year,
+          ctx.user.id
+        );
+        
+        return result;
+      }),
+
+    // Bulk set attitude for multiple GPs
+    bulkSetAttitude: protectedProcedure
+      .input(z.object({
+        gpIds: z.array(z.number()),
+        attitude: z.number().min(1).max(5),
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.teamId) {
+          const verification = await db.verifyGpOwnership(input.gpIds, ctx.user.teamId);
+          if (!verification.valid) {
+            throw new Error(`Access denied: Some GPs don't belong to your team`);
+          }
+        }
+        
+        const result = await db.bulkSetAttitude(
+          input.gpIds,
+          input.attitude,
+          input.month,
+          input.year,
+          ctx.user.id
+        );
+        
+        return result;
+      }),
+
+    // Bulk reset mistakes for multiple GPs
+    bulkResetMistakes: protectedProcedure
+      .input(z.object({
+        gpIds: z.array(z.number()),
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.teamId) {
+          const verification = await db.verifyGpOwnership(input.gpIds, ctx.user.teamId);
+          if (!verification.valid) {
+            throw new Error(`Access denied: Some GPs don't belong to your team`);
+          }
+        }
+        
+        const result = await db.bulkResetMistakes(
+          input.gpIds,
+          input.month,
+          input.year,
+          ctx.user.id
+        );
+        
+        return result;
+      }),
   }),
 
   // User/FM management
@@ -779,7 +863,12 @@ export const appRouter = router({
         reportMonth: z.number().min(1).max(12),
         reportYear: z.number(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // FM can only auto-fill for their own team
+        if (ctx.user.teamId && ctx.user.teamId !== input.teamId) {
+          throw new Error("Access denied: You can only generate content for your own team");
+        }
+        
         const team = await db.getFmTeamById(input.teamId);
         if (!team) throw new Error("Team not found");
 
@@ -925,6 +1014,11 @@ Attendance Summary:
         additionalComments: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // FM can only generate reports for their own team
+        if (ctx.user.teamId && ctx.user.teamId !== input.teamId) {
+          throw new Error("Access denied: You can only generate reports for your own team");
+        }
+        
         const team = await db.getFmTeamById(input.teamId);
         if (!team) throw new Error("Team not found");
 
@@ -956,12 +1050,17 @@ Attendance Summary:
       .input(z.object({
         reportId: z.number(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         console.log(`\n\n========== [exportToExcel] START ==========`);
         console.log(`[exportToExcel] Called with input.reportId=${input.reportId}`);
         const reportWithTeam = await db.getReportWithTeam(input.reportId);
         console.log(`[exportToExcel] getReportWithTeam returned:`, reportWithTeam ? { reportId: reportWithTeam.report.id, teamId: reportWithTeam.report.teamId } : null);
         if (!reportWithTeam) throw new Error("Report not found");
+        
+        // FM can only export their own team's reports
+        if (ctx.user.teamId && reportWithTeam.report.teamId !== ctx.user.teamId) {
+          throw new Error("Access denied: You can only export your own team's reports");
+        }
 
         const { report, team } = reportWithTeam;
         const teamName = team?.teamName || "Unknown Team";

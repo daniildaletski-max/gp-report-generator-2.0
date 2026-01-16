@@ -514,3 +514,24 @@
 
 ### Tests
 - [x] All 91 tests passing
+
+
+## Bulk Operations & Additional Hardening (v30)
+
+### Bulk Operations
+- [x] Add bulkUpdateStats endpoint for multiple GP attitude/mistakes update
+- [x] Add bulkSetAttitude endpoint for setting attitude on multiple GPs
+- [x] Add bulkResetMistakes endpoint for resetting mistakes on multiple GPs
+- [x] Add verifyGpOwnership function for team validation
+- [x] Add bulk selection UI with checkboxes on GP Stats page
+- [x] Add bulk action toolbar (set attitude, reset mistakes)
+- [x] Validate team ownership for all GPs in bulk operation
+
+### Additional Access Control Hardening
+- [x] report.autoFillFields - checks team ownership
+- [x] report.generate - checks team ownership
+- [x] report.exportToExcel - checks team ownership
+
+### Tests
+- [x] Added 8 new tests for bulk operations
+- [x] All 99 tests passing

@@ -16,8 +16,9 @@ import { toast } from "sonner";
 import { 
   FileSpreadsheet, Loader2, Users, AlertTriangle, Trash2, Link, Copy, Check, 
   RefreshCw, ExternalLink, Star, AlertCircle, UserCog, Download, Shield, 
-  Building2, Plus, Edit, BarChart3, Activity 
+  Building2, Plus, Edit, BarChart3, Activity, CheckSquare, Square, RotateCcw
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -1152,6 +1153,10 @@ function GPStatsTab({
   const [editAttitude, setEditAttitude] = useState<number | null>(null);
   const [editMistakes, setEditMistakes] = useState<number>(0);
   const [editTotalGames, setEditTotalGames] = useState<number>(0);
+  
+  // Bulk selection state
+  const [selectedGpIds, setSelectedGpIds] = useState<number[]>([]);
+  const [bulkAttitude, setBulkAttitude] = useState<number>(3);
 
   const { data: gpsWithStats, isLoading, refetch } = trpc.gamePresenter.listWithStats.useQuery({
     teamId: selectedTeamId || undefined,
@@ -1167,6 +1172,29 @@ function GPStatsTab({
     },
     onError: (error) => {
       toast.error(error.message || "Failed to update stats");
+    },
+  });
+
+  // Bulk mutations
+  const bulkSetAttitudeMutation = trpc.gamePresenter.bulkSetAttitude.useMutation({
+    onSuccess: (result) => {
+      toast.success(`Updated attitude for ${result.success} GPs`);
+      setSelectedGpIds([]);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to bulk update attitude");
+    },
+  });
+
+  const bulkResetMistakesMutation = trpc.gamePresenter.bulkResetMistakes.useMutation({
+    onSuccess: (result) => {
+      toast.success(`Reset mistakes for ${result.success} GPs`);
+      setSelectedGpIds([]);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to reset mistakes");
     },
   });
 
@@ -1186,6 +1214,47 @@ function GPStatsTab({
     setEditAttitude(gp.stats?.attitude || null);
     setEditMistakes(gp.stats?.mistakes || 0);
     setEditTotalGames(gp.stats?.totalGames || 0);
+  };
+
+  // Bulk selection handlers
+  const toggleGpSelection = (gpId: number) => {
+    setSelectedGpIds(prev => 
+      prev.includes(gpId) ? prev.filter(id => id !== gpId) : [...prev, gpId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (!gpsWithStats) return;
+    if (selectedGpIds.length === gpsWithStats.length) {
+      setSelectedGpIds([]);
+    } else {
+      setSelectedGpIds(gpsWithStats.map((gp: any) => gp.id));
+    }
+  };
+
+  const handleBulkSetAttitude = () => {
+    if (selectedGpIds.length === 0) {
+      toast.error("Please select at least one GP");
+      return;
+    }
+    bulkSetAttitudeMutation.mutate({
+      gpIds: selectedGpIds,
+      attitude: bulkAttitude,
+      month: selectedMonth,
+      year: selectedYear,
+    });
+  };
+
+  const handleBulkResetMistakes = () => {
+    if (selectedGpIds.length === 0) {
+      toast.error("Please select at least one GP");
+      return;
+    }
+    bulkResetMistakesMutation.mutate({
+      gpIds: selectedGpIds,
+      month: selectedMonth,
+      year: selectedYear,
+    });
   };
 
   return (
@@ -1251,6 +1320,59 @@ function GPStatsTab({
             </div>
           </div>
 
+          {/* Bulk Actions Toolbar */}
+          {selectedGpIds.length > 0 && (
+            <div className="flex items-center gap-4 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                {selectedGpIds.length} GP{selectedGpIds.length > 1 ? 's' : ''} selected
+              </span>
+              <div className="flex items-center gap-2">
+                <Select value={String(bulkAttitude)} onValueChange={(v) => setBulkAttitude(Number(v))}>
+                  <SelectTrigger className="w-24 h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <SelectItem key={n} value={String(n)}>{n} Star{n > 1 ? 's' : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button 
+                  size="sm" 
+                  onClick={handleBulkSetAttitude}
+                  disabled={bulkSetAttitudeMutation.isPending}
+                >
+                  {bulkSetAttitudeMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : (
+                    <Star className="h-4 w-4 mr-1" />
+                  )}
+                  Set Attitude
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={handleBulkResetMistakes}
+                  disabled={bulkResetMistakesMutation.isPending}
+                >
+                  {bulkResetMistakesMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : (
+                    <RotateCcw className="h-4 w-4 mr-1" />
+                  )}
+                  Reset Mistakes
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="ghost"
+                  onClick={() => setSelectedGpIds([])}
+                >
+                  Clear Selection
+                </Button>
+              </div>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
@@ -1261,6 +1383,12 @@ function GPStatsTab({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[50px]">
+                    <Checkbox 
+                      checked={selectedGpIds.length === gpsWithStats.length && gpsWithStats.length > 0}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </TableHead>
                   <TableHead>Game Presenter</TableHead>
                   <TableHead>Team</TableHead>
                   <TableHead className="text-center">Attitude (1-5)</TableHead>
@@ -1271,7 +1399,13 @@ function GPStatsTab({
               </TableHeader>
               <TableBody>
                 {gpsWithStats.map((gp: any) => (
-                  <TableRow key={gp.id}>
+                  <TableRow key={gp.id} className={selectedGpIds.includes(gp.id) ? "bg-blue-50 dark:bg-blue-950/50" : ""}>
+                    <TableCell>
+                      <Checkbox 
+                        checked={selectedGpIds.includes(gp.id)}
+                        onCheckedChange={() => toggleGpSelection(gp.id)}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{gp.name}</TableCell>
                     <TableCell>
                       {teams.find(t => t.id === gp.teamId)?.teamName || 

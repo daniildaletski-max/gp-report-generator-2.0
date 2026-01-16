@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
+import { eq, and, gte, lte, sql, desc, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, users, User,
@@ -1638,4 +1638,128 @@ export async function getGpAccessTokenById(id: number): Promise<GpAccessToken | 
     .where(eq(gpAccessTokens.id, id))
     .limit(1);
   return result[0] || null;
+}
+
+
+// ============================================
+// BULK OPERATIONS
+// ============================================
+
+export interface BulkGpStatsUpdate {
+  gpId: number;
+  attitude?: number | null;
+  mistakes?: number;
+  notes?: string | null;
+}
+
+export async function bulkUpdateMonthlyGpStats(
+  updates: BulkGpStatsUpdate[],
+  month: number,
+  year: number,
+  updatedById: number
+): Promise<{ success: number; failed: number; errors: string[] }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  let success = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  for (const update of updates) {
+    try {
+      const stats = await getOrCreateMonthlyGpStats(update.gpId, month, year);
+      
+      const updateData: Record<string, any> = { updatedById };
+      if (update.attitude !== undefined) updateData.attitude = update.attitude;
+      if (update.mistakes !== undefined) updateData.mistakes = update.mistakes;
+      if (update.notes !== undefined) updateData.notes = update.notes;
+
+      await db.update(monthlyGpStats)
+        .set(updateData)
+        .where(eq(monthlyGpStats.id, stats.id));
+      
+      success++;
+    } catch (error: any) {
+      failed++;
+      errors.push(`GP ${update.gpId}: ${error.message}`);
+    }
+  }
+
+  return { success, failed, errors };
+}
+
+export async function verifyGpOwnership(gpIds: number[], teamId: number): Promise<{ valid: boolean; invalidGpIds: number[] }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const gps = await db.select({ id: gamePresenters.id, teamId: gamePresenters.teamId })
+    .from(gamePresenters)
+    .where(inArray(gamePresenters.id, gpIds));
+
+  const invalidGpIds = gps
+    .filter(gp => gp.teamId !== teamId)
+    .map(gp => gp.id);
+
+  const foundIds = gps.map(gp => gp.id);
+  const notFoundIds = gpIds.filter(id => !foundIds.includes(id));
+
+  return {
+    valid: invalidGpIds.length === 0 && notFoundIds.length === 0,
+    invalidGpIds: [...invalidGpIds, ...notFoundIds],
+  };
+}
+
+export async function bulkSetAttitude(
+  gpIds: number[],
+  attitude: number,
+  month: number,
+  year: number,
+  updatedById: number
+): Promise<{ success: number; failed: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  let success = 0;
+  let failed = 0;
+
+  for (const gpId of gpIds) {
+    try {
+      const stats = await getOrCreateMonthlyGpStats(gpId, month, year);
+      await db.update(monthlyGpStats)
+        .set({ attitude, updatedById })
+        .where(eq(monthlyGpStats.id, stats.id));
+      success++;
+    } catch {
+      failed++;
+    }
+  }
+
+  return { success, failed };
+}
+
+export async function bulkResetMistakes(
+  gpIds: number[],
+  month: number,
+  year: number,
+  updatedById: number
+): Promise<{ success: number; failed: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  let success = 0;
+  let failed = 0;
+
+  for (const gpId of gpIds) {
+    try {
+      const stats = await getOrCreateMonthlyGpStats(gpId, month, year);
+      await db.update(monthlyGpStats)
+        .set({ mistakes: 0, updatedById })
+        .where(eq(monthlyGpStats.id, stats.id));
+      success++;
+    } catch {
+      failed++;
+    }
+  }
+
+  return { success, failed };
 }
