@@ -28,7 +28,7 @@ export default function ReportsPage() {
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [filterYear, setFilterYear] = useState<number | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
   
   const [formData, setFormData] = useState({
     teamId: 0,
@@ -84,17 +84,17 @@ export default function ReportsPage() {
         if (!teamName.includes(query) && !fmName.includes(query)) return false;
       }
       if (filterYear && item.report.reportYear !== filterYear) return false;
-      if (filterStatus && item.report.status !== filterStatus) return false;
+      if (filterStatus && filterStatus !== "all" && item.report.status !== filterStatus) return false;
       return true;
     });
   }, [reports, searchQuery, filterYear, filterStatus]);
 
-  const hasActiveFilters = searchQuery || filterYear || filterStatus;
+  const hasActiveFilters = searchQuery || filterYear || (filterStatus && filterStatus !== "all");
 
   const clearFilters = () => {
     setSearchQuery("");
     setFilterYear(null);
-    setFilterStatus("");
+    setFilterStatus("all");
   };
 
   const handleDeleteReport = async (reportId: number) => {
@@ -517,12 +517,12 @@ export default function ReportsPage() {
               />
             </div>
             
-            <Select value={filterYear ? String(filterYear) : ""} onValueChange={(v) => setFilterYear(v ? Number(v) : null)}>
+            <Select value={filterYear ? String(filterYear) : "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
               <SelectTrigger className="w-[120px]">
                 <SelectValue placeholder="All years" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All years</SelectItem>
+                <SelectItem value="all">All years</SelectItem>
                 {[2024, 2025, 2026].map((year) => (
                   <SelectItem key={year} value={String(year)}>{year}</SelectItem>
                 ))}
@@ -534,7 +534,7 @@ export default function ReportsPage() {
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All statuses</SelectItem>
+                <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
                 <SelectItem value="generated">Generated</SelectItem>
                 <SelectItem value="finalized">Finalized</SelectItem>

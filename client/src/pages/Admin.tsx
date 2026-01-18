@@ -360,7 +360,7 @@ function AdminOverviewTab() {
 // User Management Tab Component
 function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[] }) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterRole, setFilterRole] = useState<string>("");
+  const [filterRole, setFilterRole] = useState<string>("all");
   
   const { data: users, isLoading, refetch } = trpc.user.list.useQuery();
   const updateRole = trpc.user.updateRole.useMutation({
@@ -403,12 +403,12 @@ function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[
         const email = user.email?.toLowerCase() || "";
         if (!name.includes(query) && !email.includes(query)) return false;
       }
-      if (filterRole && user.role !== filterRole) return false;
+      if (filterRole && filterRole !== "all" && user.role !== filterRole) return false;
       return true;
     });
   }, [users, searchQuery, filterRole]);
 
-  const hasActiveFilters = searchQuery || filterRole;
+  const hasActiveFilters = searchQuery || (filterRole && filterRole !== "all");
 
   return (
     <TabsContent value="users" className="space-y-4">
@@ -445,14 +445,14 @@ function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[
                 <SelectValue placeholder="All roles" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All roles</SelectItem>
+                <SelectItem value="all">All roles</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
                 <SelectItem value="user">User</SelectItem>
               </SelectContent>
             </Select>
             
             {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setFilterRole(""); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setFilterRole("all"); }}>
                 <X className="h-4 w-4 mr-1" />
                 Clear
               </Button>

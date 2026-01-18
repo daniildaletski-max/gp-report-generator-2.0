@@ -39,7 +39,7 @@ export default function EvaluationsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
-  const [filterGP, setFilterGP] = useState<string>("");
+  const [filterGP, setFilterGP] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"date" | "score" | "name">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
