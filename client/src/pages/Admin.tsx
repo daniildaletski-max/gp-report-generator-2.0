@@ -866,6 +866,8 @@ function GPAccessLinksTab({
   const [generatingForGp, setGeneratingForGp] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
+  const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+
   const generateToken = trpc.gpAccess.generateToken.useMutation({
     onSuccess: () => {
       toast.success("Access link generated");
@@ -875,6 +877,25 @@ function GPAccessLinksTab({
       toast.error(error.message || "Failed to generate link");
     },
   });
+
+  const generateAllTokens = trpc.gpAccess.generateAllTokens.useMutation({
+    onSuccess: (result) => {
+      toast.success(`Generated ${result.totalGenerated} access links (${result.totalSkipped} already had links)`);
+      refetchTokens();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to generate links");
+    },
+  });
+
+  const handleGenerateAll = async () => {
+    setIsGeneratingAll(true);
+    try {
+      await generateAllTokens.mutateAsync({});
+    } finally {
+      setIsGeneratingAll(false);
+    }
+  };
 
   const deactivateToken = trpc.gpAccess.deactivate.useMutation({
     onSuccess: () => {
@@ -931,6 +952,19 @@ function GPAccessLinksTab({
           <CardDescription>
             Generate unique access links for Game Presenters to view their evaluations.
           </CardDescription>
+          <div className="pt-2">
+            <Button 
+              onClick={handleGenerateAll}
+              disabled={isGeneratingAll}
+              className="gap-2"
+            >
+              {isGeneratingAll ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
+              ) : (
+                <><Zap className="h-4 w-4" /> Generate All Links</>
+              )}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Search */}

@@ -744,3 +744,11 @@
 - [x] Verify routing for /gp-portal/:token path
 - [x] Test access links work correctly
 - [x] All 99 tests passing
+
+
+## Bulk Token Generation (v38)
+
+- [x] Add gpAccess.generateAllTokens endpoint for bulk token generation
+- [x] Generate tokens for all GPs without existing active tokens
+- [x] Add "Generate All" button in Admin GP Access tab
+- [ ] Verify all generated links work correctly (user testing)

@@ -1956,6 +1956,50 @@ Attendance Summary:
         return { ...accessToken, gpName: gp.name };
       }),
 
+    // Generate tokens for all GPs without active tokens
+    generateAllTokens: protectedProcedure
+      .input(z.object({ teamId: z.number().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        // Get all GPs (filtered by user for non-admin)
+        let allGps;
+        if (ctx.user.role !== 'admin') {
+          allGps = await db.getAllGamePresentersByUser(ctx.user.id);
+        } else if (input.teamId) {
+          allGps = await db.getGamePresentersByTeam(input.teamId);
+        } else {
+          allGps = await db.getAllGamePresenters();
+        }
+        
+        const generated: { gpId: number; gpName: string; token: string }[] = [];
+        const skipped: { gpId: number; gpName: string; reason: string }[] = [];
+        
+        for (const gp of allGps) {
+          // Check if GP already has an active token
+          const existingToken = await db.getGpAccessTokenByGpId(gp.id);
+          if (existingToken && existingToken.isActive) {
+            skipped.push({ gpId: gp.id, gpName: gp.name, reason: 'Already has active token' });
+            continue;
+          }
+          
+          // Deactivate old token if exists
+          if (existingToken) {
+            await db.deactivateGpAccessToken(existingToken.id);
+          }
+          
+          // Generate new token
+          const token = nanoid(32);
+          await db.createGpAccessToken({
+            gamePresenterId: gp.id,
+            token,
+            createdById: ctx.user.id,
+          });
+          
+          generated.push({ gpId: gp.id, gpName: gp.name, token });
+        }
+        
+        return { generated, skipped, totalGenerated: generated.length, totalSkipped: skipped.length };
+      }),
+
     // Get all GP access tokens (for FM management)
     list: protectedProcedure.query(async ({ ctx }) => {
       // User-based data isolation: non-admin sees only their own GP tokens
