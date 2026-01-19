@@ -752,3 +752,30 @@
 - [x] Generate tokens for all GPs without existing active tokens
 - [x] Add "Generate All" button in Admin GP Access tab
 - [ ] Verify all generated links work correctly (user testing)
+
+
+## FM-Team Assignment by Admin (v39) - ALREADY IMPLEMENTED
+
+### Database Schema - DONE
+- [x] teamId field already exists in users table
+- [x] No migration needed
+
+### Backend Endpoints - DONE
+- [x] user.list endpoint exists to get all users
+- [x] user.assignToTeam endpoint exists to assign FM to team
+- [x] user.updateRole endpoint exists to change role
+- [x] user.delete endpoint exists to remove user
+- [x] Data queries filter by FM's assigned team via userId
+
+### Admin UI - DONE
+- [x] "Users" tab in Admin panel shows all users
+- [x] Shows list of all users with their assigned teams
+- [x] Dropdown to assign/change team for each user
+- [x] Dropdown to change role (Admin/User)
+- [x] Search and filter by role
+- [x] Delete user functionality
+
+### Testing - DONE
+- [x] FM can only see data from their uploads (userId isolation)
+- [x] Admin can assign/reassign FMs to teams
+- [x] All 99 tests passing
