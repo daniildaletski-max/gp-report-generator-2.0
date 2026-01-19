@@ -867,6 +867,49 @@ function GPAccessLinksTab({
   const [searchQuery, setSearchQuery] = useState("");
 
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+  const [isExportingCSV, setIsExportingCSV] = useState(false);
+
+  // Export to CSV function
+  const exportToCSV = () => {
+    setIsExportingCSV(true);
+    try {
+      // Prepare CSV data
+      const csvRows: string[] = [];
+      csvRows.push('GP Name,Team,Access Link,Status,Last Accessed');
+      
+      gamePresenters.forEach(gp => {
+        const tokenData = accessTokens.find(t => t.token?.gamePresenterId === gp.id && t.token?.isActive === 1);
+        const token = tokenData?.token;
+        const team = teams.find(t => t.id === gp.teamId);
+        
+        const gpName = gp.name.replace(/,/g, ' ');
+        const teamName = team?.teamName?.replace(/,/g, ' ') || 'Unassigned';
+        const accessLink = token ? `${window.location.origin}/gp-portal/${token.token}` : '';
+        const status = token ? 'Active' : 'No Link';
+        const lastAccessed = token?.lastAccessedAt ? new Date(token.lastAccessedAt).toLocaleDateString() : '-';
+        
+        csvRows.push(`${gpName},${teamName},${accessLink},${status},${lastAccessed}`);
+      });
+      
+      // Create and download CSV file
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `gp-access-links-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success(`Exported ${gamePresenters.length} GP access links to CSV`);
+    } catch (error) {
+      toast.error('Failed to export CSV');
+    } finally {
+      setIsExportingCSV(false);
+    }
+  };
 
   const generateToken = trpc.gpAccess.generateToken.useMutation({
     onSuccess: () => {
@@ -952,7 +995,7 @@ function GPAccessLinksTab({
           <CardDescription>
             Generate unique access links for Game Presenters to view their evaluations.
           </CardDescription>
-          <div className="pt-2">
+          <div className="pt-2 flex gap-2">
             <Button 
               onClick={handleGenerateAll}
               disabled={isGeneratingAll}
@@ -962,6 +1005,18 @@ function GPAccessLinksTab({
                 <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
               ) : (
                 <><Zap className="h-4 w-4" /> Generate All Links</>
+              )}
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={exportToCSV}
+              disabled={isExportingCSV || gamePresenters.length === 0}
+              className="gap-2"
+            >
+              {isExportingCSV ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Exporting...</>
+              ) : (
+                <><Download className="h-4 w-4" /> Export to CSV</>
               )}
             </Button>
           </div>
