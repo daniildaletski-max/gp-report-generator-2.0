@@ -998,6 +998,126 @@ export async function getDashboardStats(month?: number, year?: number, teamId?: 
   };
 }
 
+// Get dashboard stats filtered by teamId (team-based data isolation)
+export async function getDashboardStatsByTeam(month?: number, year?: number, teamId?: number) {
+  const db = await getDb();
+  if (!db) return { 
+    totalGPs: 0, 
+    totalEvaluations: 0, 
+    totalReports: 0, 
+    thisMonthGPs: 0,
+    gpStats: [],
+    recentEvaluations: [] 
+  };
+
+  // Count GPs (filtered by teamId)
+  const gpCountQuery = teamId 
+    ? await db.select({ count: sql<number>`COUNT(*)` }).from(gamePresenters).where(eq(gamePresenters.teamId, teamId))
+    : await db.select({ count: sql<number>`COUNT(*)` }).from(gamePresenters);
+  const [gpCount] = gpCountQuery;
+
+  // Count evaluations (filtered by teamId via GP)
+  const evalCountQuery = teamId
+    ? await db.select({ count: sql<number>`COUNT(*)` })
+        .from(evaluations)
+        .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+        .where(eq(gamePresenters.teamId, teamId))
+    : await db.select({ count: sql<number>`COUNT(*)` }).from(evaluations);
+  const [evalCount] = evalCountQuery;
+
+  // Count reports (filtered by teamId)
+  const reportCountQuery = teamId
+    ? await db.select({ count: sql<number>`COUNT(*)` }).from(reports).where(eq(reports.teamId, teamId))
+    : await db.select({ count: sql<number>`COUNT(*)` }).from(reports);
+  const [reportCount] = reportCountQuery;
+
+  // Use current month/year if not provided
+  const targetMonth = month || new Date().getMonth() + 1;
+  const targetYear = year || new Date().getFullYear();
+
+  // Count unique GPs evaluated this month (filtered by teamId)
+  const thisMonthConditions = [
+    sql`MONTH(${evaluations.evaluationDate}) = ${targetMonth}`,
+    sql`YEAR(${evaluations.evaluationDate}) = ${targetYear}`
+  ];
+  
+  let thisMonthGPsQuery;
+  if (teamId) {
+    thisMonthGPsQuery = db.select({
+      count: sql<number>`COUNT(DISTINCT ${evaluations.gamePresenterId})`,
+    })
+    .from(evaluations)
+    .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+    .where(and(...thisMonthConditions, eq(gamePresenters.teamId, teamId)));
+  } else {
+    thisMonthGPsQuery = db.select({
+      count: sql<number>`COUNT(DISTINCT ${evaluations.gamePresenterId})`,
+    })
+    .from(evaluations)
+    .where(and(...thisMonthConditions));
+  }
+  
+  const thisMonthGPsResult = await thisMonthGPsQuery;
+  const thisMonthGPs = thisMonthGPsResult[0]?.count || 0;
+
+  // Get detailed stats per GP for the selected month (filtered by teamId)
+  const gpStatsConditions = [
+    sql`MONTH(${evaluations.evaluationDate}) = ${targetMonth}`,
+    sql`YEAR(${evaluations.evaluationDate}) = ${targetYear}`
+  ];
+  if (teamId) {
+    gpStatsConditions.push(eq(gamePresenters.teamId, teamId));
+  }
+  
+  const gpStatsRaw = await db.select({
+    gpId: gamePresenters.id,
+    gpName: gamePresenters.name,
+    evalCount: sql<number>`COUNT(*)`,
+    avgTotal: sql<number>`AVG(${evaluations.totalScore})`,
+    avgHair: sql<number>`AVG(${evaluations.hairScore})`,
+    avgMakeup: sql<number>`AVG(${evaluations.makeupScore})`,
+    avgOutfit: sql<number>`AVG(${evaluations.outfitScore})`,
+    avgPosture: sql<number>`AVG(${evaluations.postureScore})`,
+    avgDealing: sql<number>`AVG(${evaluations.dealingStyleScore})`,
+    avgGamePerf: sql<number>`AVG(${evaluations.gamePerformanceScore})`,
+  })
+  .from(evaluations)
+  .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+  .where(and(...gpStatsConditions))
+  .groupBy(gamePresenters.id, gamePresenters.name)
+  .orderBy(gamePresenters.name);
+
+  const gpStats = gpStatsRaw.map(gp => ({
+    gpId: gp.gpId,
+    gpName: gp.gpName,
+    evalCount: gp.evalCount,
+    avgTotal: gp.avgTotal ? Number(gp.avgTotal).toFixed(1) : "0.0",
+    avgHair: gp.avgHair ? Number(gp.avgHair).toFixed(1) : "0.0",
+    avgMakeup: gp.avgMakeup ? Number(gp.avgMakeup).toFixed(1) : "0.0",
+    avgOutfit: gp.avgOutfit ? Number(gp.avgOutfit).toFixed(1) : "0.0",
+    avgPosture: gp.avgPosture ? Number(gp.avgPosture).toFixed(1) : "0.0",
+    avgDealing: gp.avgDealing ? Number(gp.avgDealing).toFixed(1) : "0.0",
+    avgGamePerf: gp.avgGamePerf ? Number(gp.avgGamePerf).toFixed(1) : "0.0",
+    avgAppearance: gp.avgHair && gp.avgMakeup && gp.avgOutfit && gp.avgPosture 
+      ? ((Number(gp.avgHair) + Number(gp.avgMakeup) + Number(gp.avgOutfit) + Number(gp.avgPosture))).toFixed(1)
+      : "0.0",
+    avgPerformance: gp.avgDealing && gp.avgGamePerf
+      ? (Number(gp.avgDealing) + Number(gp.avgGamePerf)).toFixed(1)
+      : "0.0",
+  }));
+
+  return {
+    totalGPs: gpCount.count,
+    totalEvaluations: evalCount.count,
+    totalReports: reportCount.count,
+    thisMonthGPs,
+    gpStats,
+    recentEvaluations: [],
+    selectedMonth: targetMonth,
+    selectedYear: targetYear,
+  };
+}
+
 // Get dashboard stats filtered by userId (user-based data isolation)
 export async function getDashboardStatsByUser(month?: number, year?: number, userId?: number) {
   const db = await getDb();
@@ -1836,6 +1956,26 @@ export async function deleteReportWithCheckByUser(reportId: number, userId: numb
   return true;
 }
 
+// Delete report with team-based ownership check
+export async function deleteReportWithCheckByTeam(reportId: number, teamId: number | null, isAdmin: boolean): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Get the report first
+  const report = await db.select().from(reports).where(eq(reports.id, reportId)).limit(1);
+  if (report.length === 0) {
+    return false; // Report not found
+  }
+
+  // Check ownership: admin can delete any, user can only delete their team's reports
+  if (!isAdmin && report[0].teamId !== teamId) {
+    throw new Error("Access denied: You can only delete your team's reports");
+  }
+
+  await db.delete(reports).where(eq(reports.id, reportId));
+  return true;
+}
+
 
 // Get GP access token by ID
 export async function getGpAccessTokenById(id: number): Promise<GpAccessToken | null> {
@@ -1928,6 +2068,28 @@ export async function verifyGpOwnershipByUser(gpIds: number[], userId: number): 
 
   const invalidGpIds = gps
     .filter(gp => gp.userId !== userId)
+    .map(gp => gp.id);
+
+  const foundIds = gps.map(gp => gp.id);
+  const notFoundIds = gpIds.filter(id => !foundIds.includes(id));
+
+  return {
+    valid: invalidGpIds.length === 0 && notFoundIds.length === 0,
+    invalidGpIds: [...invalidGpIds, ...notFoundIds],
+  };
+}
+
+export async function verifyGpOwnershipByTeam(gpIds: number[], teamId: number | null): Promise<{ valid: boolean; invalidGpIds: number[] }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  if (!teamId) return { valid: false, invalidGpIds: gpIds };
+
+  const gps = await db.select({ id: gamePresenters.id, teamId: gamePresenters.teamId })
+    .from(gamePresenters)
+    .where(inArray(gamePresenters.id, gpIds));
+
+  const invalidGpIds = gps
+    .filter(gp => gp.teamId !== teamId)
     .map(gp => gp.id);
 
   const foundIds = gps.map(gp => gp.id);

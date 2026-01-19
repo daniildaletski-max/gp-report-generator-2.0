@@ -18,6 +18,21 @@ const MONTHS = [
 
 const COLORS = ['#2563eb', '#16a34a', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
+interface GPStat {
+  gpId: number;
+  gpName: string;
+  evalCount: number;
+  avgTotal: string;
+  avgHair: string;
+  avgMakeup: string;
+  avgOutfit: string;
+  avgPosture: string;
+  avgDealing: string;
+  avgGamePerf: string;
+  avgAppearance: string;
+  avgPerformance: string;
+}
+
 export default function Dashboard() {
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
@@ -32,19 +47,20 @@ export default function Dashboard() {
 
   // Calculate progress metrics
   const totalGPs = stats?.totalGPs || 0;
-  const evaluatedGPs = stats?.thisMonthGPs || 0;
+  const evaluatedGPs = (stats as { thisMonthGPs?: number })?.thisMonthGPs || 0;
   const evaluationProgress = totalGPs > 0 ? Math.round((evaluatedGPs / totalGPs) * 100) : 0;
   const pendingGPs = totalGPs - evaluatedGPs;
 
   // Prepare chart data
-  const chartData = useMemo(() => stats?.gpStats?.map((gp) => ({
+  const gpStats = (stats as { gpStats?: GPStat[] })?.gpStats || [];
+  const chartData = useMemo(() => gpStats.map((gp: GPStat) => ({
     name: gp.gpName || "Unknown", // Full name (first + last)
     fullName: gp.gpName,
     totalScore: Number(gp.avgTotal),
     appearance: Number(gp.avgAppearance),
     performance: Number(gp.avgPerformance),
     evalCount: gp.evalCount,
-  })) || [], [stats?.gpStats]);
+  })), [gpStats]);
 
   // Performance distribution for pie chart
   const performanceDistribution = useMemo(() => {
@@ -414,7 +430,7 @@ export default function Dashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {stats?.gpStats && stats.gpStats.length > 0 ? (
+          {gpStats && gpStats.length > 0 ? (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -431,7 +447,7 @@ export default function Dashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stats.gpStats.map((gp) => {
+                  {gpStats.map((gp: GPStat) => {
                     const total = Number(gp.avgTotal);
                     const getScoreColor = (score: string, max: number = 3) => {
                       const val = Number(score);

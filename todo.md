@@ -779,3 +779,50 @@
 - [x] FM can only see data from their uploads (userId isolation)
 - [x] Admin can assign/reassign FMs to teams
 - [x] All 99 tests passing
+
+
+## Fix FM Access - Team-Based Data (v40)
+
+### Problem
+- FM signs in but cannot see any data
+- FM cannot manage their team or edit evaluations
+- Current isolation is by userId (too strict) - should be by teamId
+
+### Solution - Change from userId to teamId isolation
+- [ ] Update evaluation.list to filter by user's teamId (not userId)
+- [ ] Update evaluation.getById to check teamId ownership
+- [ ] Update evaluation.update to check teamId ownership
+- [ ] Update evaluation.delete to check teamId ownership
+- [ ] Update gamePresenter.list to filter by user's teamId
+- [ ] Update gamePresenter.delete to check teamId ownership
+- [ ] Update gamePresenter.updateStats to check teamId ownership
+- [ ] Update report.list to filter by user's teamId
+- [ ] Update report.get to check teamId ownership
+- [ ] Update report.delete to check teamId ownership
+- [ ] Update dashboard.stats to filter by user's teamId
+- [ ] Update gpAccess.list to filter by user's teamId
+- [ ] FM can upload screenshots and see results for their team
+- [ ] FM can manage their team's GPs
+- [ ] FM can edit their team's evaluations
+- [ ] FM can generate reports for their team
+
+
+## Fix FM Access - Team-Based Data Isolation (v40) - COMPLETED
+
+### Problem - FIXED
+- FM signs in but cannot see any data
+- FM cannot upload screenshots and see results
+- FM cannot manage their team or edit evaluations
+- Data isolation was by userId (too strict) instead of teamId
+
+### Solution - Team-Based Access - IMPLEMENTED
+- [x] Update evaluation.list to filter by teamId (FM sees team's evaluations)
+- [x] Update evaluation.getById/update/delete to check teamId ownership
+- [x] Update gamePresenter.list to filter by teamId (FM sees team's GPs)
+- [x] Update gamePresenter.delete/updateStats/bulk operations for teamId
+- [x] Update report.list to filter by teamId (FM sees team's reports)
+- [x] Update report.get/delete to check teamId ownership
+- [x] Update dashboard.stats to filter by teamId (new getDashboardStatsByTeam function)
+- [x] Update gpAccess.list/deactivate to filter by teamId
+- [x] All 99 tests passing
+- [x] TypeScript errors fixed in Dashboard.tsx and Reports.tsx

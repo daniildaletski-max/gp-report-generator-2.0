@@ -19,6 +19,21 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December"
 ];
 
+interface GPStat {
+  gpId: number;
+  gpName: string;
+  evalCount: number;
+  avgTotal: string;
+  avgHair: string;
+  avgMakeup: string;
+  avgOutfit: string;
+  avgPosture: string;
+  avgDealing: string;
+  avgGamePerf: string;
+  avgAppearance: string;
+  avgPerformance: string;
+}
+
 export default function ReportsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExporting, setIsExporting] = useState<number | null>(null);
@@ -150,15 +165,16 @@ export default function ReportsPage() {
 
   // Simple auto-fill for Team Overview only (no LLM)
   const handleAutoFillOverview = async () => {
-    if (!teamStats || !teamStats.gpStats || teamStats.gpStats.length === 0) {
+    const gpStats = (teamStats as { gpStats?: GPStat[] })?.gpStats;
+    if (!teamStats || !gpStats || gpStats.length === 0) {
       toast.error("No evaluation data available for this month");
       return;
     }
 
-    const stats = teamStats.gpStats;
-    const avgTotal = stats.reduce((sum, gp) => sum + Number(gp.avgTotal), 0) / stats.length;
-    const topPerformers = [...stats].sort((a, b) => Number(b.avgTotal) - Number(a.avgTotal)).slice(0, 3);
-    const needsImprovement = stats.filter(gp => Number(gp.avgTotal) < 18);
+    const stats = gpStats;
+    const avgTotal = stats.reduce((sum: number, gp: GPStat) => sum + Number(gp.avgTotal), 0) / stats.length;
+    const topPerformers = [...stats].sort((a: GPStat, b: GPStat) => Number(b.avgTotal) - Number(a.avgTotal)).slice(0, 3);
+    const needsImprovement = stats.filter((gp: GPStat) => Number(gp.avgTotal) < 18);
     
     let overview = `Team Performance Summary for ${MONTHS[formData.reportMonth - 1]} ${formData.reportYear}:\n\n`;
     overview += `• Total GPs Evaluated: ${stats.length}\n`;
