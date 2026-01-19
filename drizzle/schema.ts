@@ -40,6 +40,7 @@ export const gamePresenters = mysqlTable("game_presenters", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   teamId: int("teamId"),
+  userId: int("userId"), // Owner of this GP record - for user data isolation
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -84,6 +85,7 @@ export const evaluations = mysqlTable("evaluations", {
   screenshotKey: varchar("screenshotKey", { length: 512 }),
   rawExtractedData: json("rawExtractedData"),
   uploadedById: int("uploadedById"),
+  userId: int("userId"), // Owner of this evaluation - for user data isolation
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -157,6 +159,7 @@ export type InsertGpError = typeof gpErrors.$inferInsert;
 export const reports = mysqlTable("reports", {
   id: int("id").autoincrement().primaryKey(),
   teamId: int("teamId").notNull(),
+  userId: int("userId"), // Owner of this report - for user data isolation
   reportMonth: int("reportMonth").notNull(),
   reportYear: int("reportYear").notNull(),
   fmPerformance: text("fmPerformance"),
@@ -222,6 +225,7 @@ export const monthlyGpStats = mysqlTable("monthly_gp_stats", {
   totalGames: int("totalGames").default(0), // Total games played for bonus calculation
   notes: text("notes"), // Optional notes
   updatedById: int("updatedById"),
+  userId: int("userId"), // Owner of this stats record - for user data isolation
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

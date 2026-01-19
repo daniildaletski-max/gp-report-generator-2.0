@@ -972,7 +972,9 @@ function GPAccessLinksTab({
                         </TableHeader>
                         <TableBody>
                           {gps.map((gp) => {
-                            const token = accessTokens.find(t => t.gpId === gp.id && t.isActive);
+                            // accessTokens returns {token: {...}, gp: {...}} structure
+                            const tokenData = accessTokens.find(t => t.token?.gamePresenterId === gp.id && t.token?.isActive === 1);
+                            const token = tokenData ? { ...tokenData.token, gpId: tokenData.token?.gamePresenterId } : null;
                             return (
                               <TableRow key={gp.id} className="hover:bg-muted/50">
                                 <TableCell className="font-medium">{gp.name}</TableCell>

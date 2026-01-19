@@ -1629,7 +1629,7 @@ Attendance Summary:
             const avgAppearance = gp.evaluations.reduce((sum, e) => sum + (e.appearanceScore || 0), 0) / gp.evaluations.length;
             const avgGamePerf = gp.evaluations.reduce((sum, e) => sum + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
             
-            const gpName = gp.gpName.split(" ")[0]; // First name only
+            const gpName = gp.gpName; // Full name (first + last)
             chartLabels.push(gpName);
             appearanceScores.push(Number(avgAppearance.toFixed(1)));
             gamePerformanceScores.push(Number(avgGamePerf.toFixed(1)));
@@ -1682,7 +1682,7 @@ Attendance Summary:
             if (gp.evaluations.length > 0) {
               const avgAppearance = gp.evaluations.reduce((sum, e) => sum + (e.appearanceScore || 0), 0) / gp.evaluations.length;
               const avgGamePerf = gp.evaluations.reduce((sum, e) => sum + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
-              const gpName = gp.gpName.split(" ")[0]; // First name only
+              const gpName = gp.gpName; // Full name (first + last)
               prevMonthScoresMap.set(gpName, Number((avgAppearance + avgGamePerf).toFixed(1)));
             }
           }

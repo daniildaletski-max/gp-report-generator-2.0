@@ -292,13 +292,18 @@ export async function findAllMatchingGPs(name: string, threshold: number = 0.5):
   return matches.sort((a, b) => b.similarity - a.similarity);
 }
 
-export async function findOrCreateGamePresenter(name: string, teamId?: number): Promise<GamePresenter> {
+export async function findOrCreateGamePresenter(name: string, teamId?: number, userId?: number): Promise<GamePresenter> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // First try exact match
+  // First try exact match within user's data (if userId provided)
+  const conditions = [eq(gamePresenters.name, name)];
+  if (userId) {
+    conditions.push(eq(gamePresenters.userId, userId));
+  }
+  
   const existing = await db.select().from(gamePresenters)
-    .where(eq(gamePresenters.name, name))
+    .where(and(...conditions))
     .limit(1);
 
   if (existing.length > 0) {
@@ -316,6 +321,7 @@ export async function findOrCreateGamePresenter(name: string, teamId?: number): 
   const result = await db.insert(gamePresenters).values({
     name,
     teamId: teamId || null,
+    userId: userId || null,
   });
 
   const newGP = await db.select().from(gamePresenters)
@@ -331,6 +337,15 @@ export async function getAllGamePresenters(): Promise<GamePresenter[]> {
   if (!db) return [];
 
   return await db.select().from(gamePresenters).orderBy(gamePresenters.name);
+}
+
+export async function getAllGamePresentersByUser(userId: number): Promise<GamePresenter[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(gamePresenters)
+    .where(eq(gamePresenters.userId, userId))
+    .orderBy(gamePresenters.name);
 }
 
 export async function getGamePresentersByTeam(teamId: number): Promise<GamePresenter[]> {
@@ -424,6 +439,15 @@ export async function getAllEvaluations(): Promise<Evaluation[]> {
   return await db.select().from(evaluations).orderBy(desc(evaluations.createdAt));
 }
 
+export async function getAllEvaluationsByUser(userId: number): Promise<Evaluation[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(evaluations)
+    .where(eq(evaluations.userId, userId))
+    .orderBy(desc(evaluations.createdAt));
+}
+
 export async function getEvaluationWithGP(evaluationId: number) {
   const db = await getDb();
   if (!db) return null;
@@ -450,6 +474,20 @@ export async function getEvaluationsWithGP() {
   })
   .from(evaluations)
   .leftJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+  .orderBy(desc(evaluations.createdAt));
+}
+
+export async function getEvaluationsWithGPByUser(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    evaluation: evaluations,
+    gamePresenter: gamePresenters,
+  })
+  .from(evaluations)
+  .leftJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+  .where(eq(evaluations.userId, userId))
   .orderBy(desc(evaluations.createdAt));
 }
 
@@ -707,6 +745,15 @@ export async function getAllReports(): Promise<Report[]> {
   return await db.select().from(reports).orderBy(desc(reports.createdAt));
 }
 
+export async function getAllReportsByUser(userId: number): Promise<Report[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(reports)
+    .where(eq(reports.userId, userId))
+    .orderBy(desc(reports.createdAt));
+}
+
 export async function getReportsWithTeams() {
   const db = await getDb();
   if (!db) return [];
@@ -717,6 +764,20 @@ export async function getReportsWithTeams() {
   })
   .from(reports)
   .leftJoin(fmTeams, eq(reports.teamId, fmTeams.id))
+  .orderBy(desc(reports.createdAt));
+}
+
+export async function getReportsWithTeamsByUser(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select({
+    report: reports,
+    team: fmTeams,
+  })
+  .from(reports)
+  .leftJoin(fmTeams, eq(reports.teamId, fmTeams.id))
+  .where(eq(reports.userId, userId))
   .orderBy(desc(reports.createdAt));
 }
 

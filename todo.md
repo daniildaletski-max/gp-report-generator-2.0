@@ -678,3 +678,27 @@
 - [x] All 99 tRPC tests passing
 - [x] Database queries verified
 - [x] Access control checks enforced
+
+
+## User Data Isolation & Excel Chart Fix (v34)
+
+### Excel Chart Fix
+- [x] Show full names (first + last) on Excel chart X-axis instead of first name only
+
+### User Data Isolation (NEW CONCEPT)
+- [ ] Each user sees only their own uploaded data (not team-based)
+- [ ] Add userId to evaluations table
+- [ ] Add userId to gamePresenters table  
+- [ ] Add userId to reports table
+- [ ] Add userId to monthlyGpStats table
+- [ ] Filter all queries by ctx.user.id
+- [ ] Each FM has completely separate data space
+
+
+## Bug Fixes (v35)
+
+### GP Access Links Fix
+- [x] Fixed access token display in Admin GP Access tab
+- [x] Corrected data structure parsing (token.gamePresenterId instead of gpId)
+- [x] Token generation and display now working correctly
+- [x] All 99 tests passing
