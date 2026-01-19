@@ -702,3 +702,35 @@
 - [x] Corrected data structure parsing (token.gamePresenterId instead of gpId)
 - [x] Token generation and display now working correctly
 - [x] All 99 tests passing
+
+
+## User Data Isolation & Excel Chart Fix (v36)
+
+### User Data Isolation - COMPLETED
+- [x] Add userId field to evaluations table (track who uploaded)
+- [x] Add userId field to gamePresenters table (track who created)
+- [x] Reports table already has userId field
+- [x] monthlyGpStats table already has userId field
+- [x] Update evaluation.list to filter by ctx.user.id
+- [x] Update evaluation.getById to check userId ownership
+- [x] Update evaluation.update to check userId ownership
+- [x] Update evaluation.delete to check userId ownership
+- [x] Update gamePresenter.list to filter by ctx.user.id
+- [x] Update gamePresenter.delete to check userId ownership
+- [x] Update gamePresenter.updateStats to check userId ownership
+- [x] Update gamePresenter.bulkUpdateStats to check userId ownership
+- [x] Update gamePresenter.bulkSetAttitude to check userId ownership
+- [x] Update gamePresenter.bulkResetMistakes to check userId ownership
+- [x] Update report.list to filter by ctx.user.id
+- [x] Update report.get to check userId ownership
+- [x] Update report.delete to check userId ownership
+- [x] Update dashboard.stats to filter by ctx.user.id
+- [x] Update gpAccess.list to filter by ctx.user.id
+- [x] Update gpAccess.generateToken to check userId ownership
+- [x] Update gpAccess.deactivate to check userId ownership
+- [x] Each FM sees only their own uploaded data, not team data
+
+### Dashboard Chart Fix - COMPLETED
+- [x] Fix Dashboard chart to show full names (first + last) instead of first name only
+- [x] Removed .split(" ")[0] from chartData name field in Dashboard.tsx
+- [x] Chart now displays "Agnes Suvorov" instead of just "Agnes"

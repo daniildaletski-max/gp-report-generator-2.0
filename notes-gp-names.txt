@@ -1,0 +1,19 @@
+GP Names Format Analysis:
+
+The GP names in the database are already stored as FULL NAMES (First + Last):
+- Agnes Suvorov
+- Akemi Hashimura
+- Alina Jivoloup
+- Alina Kudashova
+- Alisa Alokhina
+- Anastasija Kalašnikova
+- Andrea Arsova
+- Anna Maslova
+- Annaliisa Jerlakas
+- Anya Kiisk
+- etc.
+
+The chart generation code already uses gp.gpName which contains the full name.
+The issue might be that the chart labels are being truncated due to space constraints.
+
+Need to verify if the Excel chart is actually showing only first names or if it's a display issue.

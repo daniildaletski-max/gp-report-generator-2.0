@@ -38,7 +38,7 @@ export default function Dashboard() {
 
   // Prepare chart data
   const chartData = useMemo(() => stats?.gpStats?.map((gp) => ({
-    name: gp.gpName?.split(" ")[0] || "Unknown",
+    name: gp.gpName || "Unknown", // Full name (first + last)
     fullName: gp.gpName,
     totalScore: Number(gp.avgTotal),
     appearance: Number(gp.avgAppearance),
