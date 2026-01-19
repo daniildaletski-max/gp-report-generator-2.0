@@ -1,0 +1,40 @@
+{
+  "query": "SELECT id, token, gamePresenterId, isActive FROM gp_access_tokens LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT id, token, gamePresenterId, isActive FROM gp_access_tokens LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "token": "5YeQFfl79OkiFz9w4vfiCcz48PPRTHG9",
+      "gamePresenterId": "1",
+      "isActive": "0"
+    },
+    {
+      "id": "2",
+      "token": "ZBdb03mE-YNpBUzfEieuqkEDCAwq7_HZ",
+      "gamePresenterId": "30001",
+      "isActive": "0"
+    },
+    {
+      "id": "3",
+      "token": "62O0YBP9SyjwF4FrLe8s2S4fwsUrBlhc",
+      "gamePresenterId": "30001",
+      "isActive": "0"
+    },
+    {
+      "id": "30001",
+      "token": "bk2Q3aDPUi18XlGcNLmmBbsLrFbJvcfu",
+      "gamePresenterId": "30001",
+      "isActive": "1"
+    },
+    {
+      "id": "60001",
+      "token": "WOJgIB3PT_Y7oEDhhjKFLBzKNLMw5LWx",
+      "gamePresenterId": "3",
+      "isActive": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttoken\tgamePresenterId\tisActive\n1\t5YeQFfl79OkiFz9w4vfiCcz48PPRTHG9\t1\t0\n2\tZBdb03mE-YNpBUzfEieuqkEDCAwq7_HZ\t30001\t0\n3\t62O0YBP9SyjwF4FrLe8s2S4fwsUrBlhc\t30001\t0\n30001\tbk2Q3aDPUi18XlGcNLmmBbsLrFbJvcfu\t30001\t1\n60001\tWOJgIB3PT_Y7oEDhhjKFLBzKNLMw5LWx\t3\t1\n",
+  "stderr": "",
+  "execution_time_ms": 361
+}

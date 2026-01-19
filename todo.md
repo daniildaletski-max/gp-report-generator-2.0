@@ -734,3 +734,13 @@
 - [x] Fix Dashboard chart to show full names (first + last) instead of first name only
 - [x] Removed .split(" ")[0] from chartData name field in Dashboard.tsx
 - [x] Chart now displays "Agnes Suvorov" instead of just "Agnes"
+
+
+## Bug Fixes (v37)
+
+### GP Access Links 404 Error - FIXED
+- [x] Fix GP portal links returning 404 error
+- [x] Added /gp-portal/:token route to App.tsx (was only /gp/:token)
+- [x] Verify routing for /gp-portal/:token path
+- [x] Test access links work correctly
+- [x] All 99 tests passing
