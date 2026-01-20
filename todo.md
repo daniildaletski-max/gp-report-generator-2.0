@@ -1050,3 +1050,18 @@
 - [x] Toast notifications for user feedback
 - [x] Keyboard shortcuts (Ctrl+V, Ctrl+O, Esc, Del, ?)
 
+
+
+## Critical Bug Fix (v48) - COMPLETED
+
+### Evaluations Not Saving - FIXED
+- [x] Investigate why evaluations are not saved to database after upload
+  - Root cause: Evaluations WERE saving to DB, but not displaying due to team filtering
+  - Users without teamId assignment returned empty array instead of their uploaded data
+- [x] Check uploadAndExtract endpoint for errors - Working correctly
+- [x] Verify database insert query works correctly - Confirmed working (found records in DB)
+- [x] Fix the saving issue
+  - Changed evaluation.list to return user's own evaluations when no teamId assigned
+  - Now uses getEvaluationsWithGPByUser(ctx.user.id) for users without team
+- [x] Test upload and verify evaluations appear in Evaluations page
+- [x] All 128 tests passing

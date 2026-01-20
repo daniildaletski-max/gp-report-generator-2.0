@@ -531,8 +531,8 @@ export const appRouter = router({
       // Team-based data isolation: FM sees their team's data
       if (ctx.user.role !== 'admin') {
         if (!ctx.user.teamId) {
-          // User not assigned to a team - return empty
-          return [];
+          // User not assigned to a team - show evaluations they uploaded
+          return await db.getEvaluationsWithGPByUser(ctx.user.id);
         }
         return await db.getEvaluationsByTeam(ctx.user.teamId);
       }

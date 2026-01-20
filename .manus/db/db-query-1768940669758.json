@@ -1,0 +1,80 @@
+{
+  "query": "SELECT id, gamePresenterId, evaluatorName, totalScore, evaluationDate FROM evaluations ORDER BY id DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT id, gamePresenterId, evaluatorName, totalScore, evaluationDate FROM evaluations ORDER BY id DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "300006",
+      "gamePresenterId": "1",
+      "evaluatorName": "Alexandra-Elizabeth Martinson",
+      "totalScore": "21",
+      "evaluationDate": "2026-01-09 00:00:00"
+    },
+    {
+      "id": "300005",
+      "gamePresenterId": "1",
+      "evaluatorName": "Alexandra-Elizabeth Martinson",
+      "totalScore": "21",
+      "evaluationDate": "2026-01-09 00:00:00"
+    },
+    {
+      "id": "300004",
+      "gamePresenterId": "1",
+      "evaluatorName": "Alexandra-Elizabeth Martinson",
+      "totalScore": "21",
+      "evaluationDate": "2026-01-09 00:00:00"
+    },
+    {
+      "id": "300003",
+      "gamePresenterId": "1",
+      "evaluatorName": "Alexandra-Elizabeth Martinson",
+      "totalScore": "21",
+      "evaluationDate": "2026-01-09 00:00:00"
+    },
+    {
+      "id": "300002",
+      "gamePresenterId": "1",
+      "evaluatorName": "Alexandra-Elizabeth Martinson",
+      "totalScore": "21",
+      "evaluationDate": "2026-01-09 00:00:00"
+    },
+    {
+      "id": "300001",
+      "gamePresenterId": "90001",
+      "evaluatorName": "N/A",
+      "totalScore": "NULL",
+      "evaluationDate": "NULL"
+    },
+    {
+      "id": "270006",
+      "gamePresenterId": "30002",
+      "evaluatorName": "Martha Onyilokwu",
+      "totalScore": "17",
+      "evaluationDate": "2026-01-12 00:00:00"
+    },
+    {
+      "id": "270005",
+      "gamePresenterId": "2",
+      "evaluatorName": "Alexandra-Elizabeth Martinson",
+      "totalScore": "20",
+      "evaluationDate": "2026-01-14 00:00:00"
+    },
+    {
+      "id": "270004",
+      "gamePresenterId": "2",
+      "evaluatorName": "Alexandra-Elizabeth Martinson",
+      "totalScore": "20",
+      "evaluationDate": "2026-01-07 00:00:00"
+    },
+    {
+      "id": "270003",
+      "gamePresenterId": "30002",
+      "evaluatorName": "Martha Onyilokwu",
+      "totalScore": "17",
+      "evaluationDate": "2026-01-12 00:00:00"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tgamePresenterId\tevaluatorName\ttotalScore\tevaluationDate\n300006\t1\tAlexandra-Elizabeth Martinson\t21\t2026-01-09 00:00:00\n300005\t1\tAlexandra-Elizabeth Martinson\t21\t2026-01-09 00:00:00\n300004\t1\tAlexandra-Elizabeth Martinson\t21\t2026-01-09 00:00:00\n300003\t1\tAlexandra-Elizabeth Martinson\t21\t2026-01-09 00:00:00\n300002\t1\tAlexandra-Elizabeth Martinson\t21\t2026-01-09 00:00:00\n300001\t90001\tN/A\tNULL\tNULL\n270006\t30002\tMartha Onyilokwu\t17\t2026-01-12 00:00:00\n270005\t2\tAlexandra-Elizabeth Martinson\t20\t2026-01-14 00:00:00\n270004\t2\tAlexandra-Elizabeth Martinson\t20\t2026-01-07 00:00:00\n270003\t30002\tMartha Onyilokwu\t17\t2026-01-12 00:00:00\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}
