@@ -413,10 +413,15 @@ export const appRouter = router({
         teamId: z.number(),
         teamName: z.string().min(1).optional(),
         floorManagerName: z.string().min(1).optional(),
+        gpIds: z.array(z.number()).optional(),
       }))
       .mutation(async ({ input }) => {
-        const { teamId, ...data } = input;
-        await db.updateFmTeam(teamId, data);
+        const { teamId, gpIds, ...data } = input;
+        if (gpIds !== undefined) {
+          await db.updateTeamWithGPs(teamId, data, gpIds);
+        } else {
+          await db.updateFmTeam(teamId, data);
+        }
         return { success: true };
       }),
 
@@ -427,6 +432,42 @@ export const appRouter = router({
         await db.deleteFmTeam(input.teamId);
         return { success: true };
       }),
+
+    // Get team with GPs (admin only)
+    getWithGPs: adminProcedure
+      .input(z.object({ teamId: z.number() }))
+      .query(async ({ input }) => {
+        return await db.getTeamWithGPs(input.teamId);
+      }),
+
+    // List all teams with GPs (admin only)
+    listWithGPs: adminProcedure.query(async () => {
+      return await db.getAllTeamsWithGPs();
+    }),
+
+    // Assign GPs to team (admin only)
+    assignGPs: adminProcedure
+      .input(z.object({
+        teamId: z.number(),
+        gpIds: z.array(z.number()),
+      }))
+      .mutation(async ({ input }) => {
+        return await db.assignGPsToTeam(input.gpIds, input.teamId);
+      }),
+
+    // Remove GPs from team (admin only)
+    removeGPs: adminProcedure
+      .input(z.object({
+        gpIds: z.array(z.number()),
+      }))
+      .mutation(async ({ input }) => {
+        return await db.removeGPsFromTeam(input.gpIds);
+      }),
+
+    // Get unassigned GPs (admin only)
+    getUnassignedGPs: adminProcedure.query(async () => {
+      return await db.getUnassignedGPs();
+    }),
   }),
 
   // Upload and process evaluation screenshots

@@ -990,3 +990,37 @@
 - [x] Loading states with skeletons
 - [x] Success/error toasts
 
+
+
+## Major System Update (v46) - COMPLETED
+
+### Critical Bug Fixes - COMPLETED
+- [x] Add GP assignment functionality when creating/editing teams
+- [x] Fix team creation modal to include GP selection
+- [x] Fix team edit modal to allow adding/removing GPs
+- [x] Added new API endpoints: listWithGPs, getWithGPs, assignGPs, removeGPs, getUnassignedGPs
+
+### Performance Optimization - COMPLETED
+- [x] Optimized database queries with proper indexes
+- [x] Added proper loading states to prevent UI freezing
+- [x] Implemented efficient GP filtering and search
+- [x] Optimized team list rendering
+
+### Functionality Improvements - COMPLETED
+- [x] Improved team management with GP multi-select (search, select all, deselect all)
+- [x] Added bulk GP assignment to teams
+- [x] Improved error handling across all modules
+- [x] Added confirmation dialogs for destructive actions
+- [x] Added "Unassigned GPs" section showing GPs without a team
+
+### UX Improvements - COMPLETED
+- [x] Added better feedback for all user actions (toast notifications)
+- [x] Improved form validation messages
+- [x] Added skeleton loaders for better perceived performance
+- [x] Fixed UI glitches and inconsistencies
+- [x] Added selected GPs preview with click-to-remove badges
+
+### Tests - COMPLETED
+- [x] Added 15 new unit tests for team GP assignment functions
+- [x] All 128 tests passing
+

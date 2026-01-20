@@ -603,17 +603,22 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
   const [newTeamName, setNewTeamName] = useState("");
   const [newFMName, setNewFMName] = useState("");
   const [editingTeam, setEditingTeam] = useState<any>(null);
+  const [selectedGPs, setSelectedGPs] = useState<number[]>([]);
+  const [gpSearchTerm, setGpSearchTerm] = useState("");
 
-  const { data: teamsWithStats, isLoading, refetch } = trpc.fmTeam.listWithStats.useQuery();
+  const { data: teamsWithGPs, isLoading, refetch } = trpc.fmTeam.listWithGPs.useQuery();
+  const { data: allGPs } = trpc.gamePresenter.list.useQuery();
+  const { data: unassignedGPs, refetch: refetchUnassigned } = trpc.fmTeam.getUnassignedGPs.useQuery();
 
   const createTeam = trpc.fmTeam.create.useMutation({
     onSuccess: () => {
-      toast.success("Team created");
+      toast.success("Team created successfully");
       setIsCreateOpen(false);
       setNewTeamName("");
       setNewFMName("");
       refetch();
       refetchTeams();
+      refetchUnassigned();
     },
     onError: (error) => {
       toast.error(error.message || "Failed to create team");
@@ -622,10 +627,13 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
 
   const updateTeam = trpc.fmTeam.update.useMutation({
     onSuccess: () => {
-      toast.success("Team updated");
+      toast.success("Team updated successfully");
       setEditingTeam(null);
+      setSelectedGPs([]);
+      setGpSearchTerm("");
       refetch();
       refetchTeams();
+      refetchUnassigned();
     },
     onError: (error) => {
       toast.error(error.message || "Failed to update team");
@@ -637,11 +645,53 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
       toast.success("Team deleted");
       refetch();
       refetchTeams();
+      refetchUnassigned();
     },
     onError: (error) => {
       toast.error(error.message || "Failed to delete team");
     },
   });
+
+  // When editing team opens, set selected GPs
+  const handleEditTeam = (team: any) => {
+    setEditingTeam(team);
+    setSelectedGPs(team.gamePresenters?.map((gp: any) => gp.id) || []);
+    setGpSearchTerm("");
+  };
+
+  // Get available GPs for selection (unassigned + currently assigned to this team)
+  const getAvailableGPs = () => {
+    if (!allGPs) return [];
+    return allGPs.filter((gp: any) => {
+      // Include if unassigned or assigned to current editing team
+      return !gp.teamId || gp.teamId === editingTeam?.id;
+    });
+  };
+
+  const availableGPs = getAvailableGPs();
+  const filteredGPs = availableGPs.filter((gp: any) =>
+    gp.name.toLowerCase().includes(gpSearchTerm.toLowerCase())
+  );
+
+  const toggleGP = (gpId: number) => {
+    setSelectedGPs(prev =>
+      prev.includes(gpId)
+        ? prev.filter(id => id !== gpId)
+        : [...prev, gpId]
+    );
+  };
+
+  const selectAllFilteredGPs = () => {
+    const filteredIds = filteredGPs.map((gp: any) => gp.id);
+    setSelectedGPs(prev => {
+      const newSet = new Set([...prev, ...filteredIds]);
+      return Array.from(newSet);
+    });
+  };
+
+  const deselectAllGPs = () => {
+    setSelectedGPs([]);
+  };
 
   return (
     <TabsContent value="teams" className="space-y-4">
@@ -654,7 +704,7 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                 Teams Management
               </CardTitle>
               <CardDescription>
-                Create and manage FM teams. Each team has its own Game Presenters and reports.
+                Create and manage FM teams. Assign Game Presenters to each team.
               </CardDescription>
             </div>
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -668,7 +718,7 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                 <DialogHeader>
                   <DialogTitle>Create New Team</DialogTitle>
                   <DialogDescription>
-                    Add a new FM team to the system.
+                    Add a new FM team. You can assign GPs after creating the team.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -695,7 +745,7 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                   <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
                     Cancel
                   </Button>
-                  <Button 
+                  <Button
                     onClick={() => createTeam.mutate({ teamName: newTeamName, floorManagerName: newFMName })}
                     disabled={!newTeamName || !newFMName || createTeam.isPending}
                   >
@@ -714,68 +764,190 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                 <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
-          ) : teamsWithStats && teamsWithStats.length > 0 ? (
+          ) : teamsWithGPs && teamsWithGPs.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {teamsWithStats.map((team: any) => (
+              {teamsWithGPs.map((team: any) => (
                 <Card key={team.id} className="relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-primary/50" />
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">{team.teamName}</CardTitle>
                       <div className="flex items-center gap-1">
-                        <Dialog open={editingTeam?.id === team.id} onOpenChange={(open) => !open && setEditingTeam(null)}>
+                        <Dialog open={editingTeam?.id === team.id} onOpenChange={(open) => {
+                          if (!open) {
+                            setEditingTeam(null);
+                            setSelectedGPs([]);
+                            setGpSearchTerm("");
+                          }
+                        }}>
                           <DialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() => setEditingTeam(team)}
+                              onClick={() => handleEditTeam(team)}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
                           </DialogTrigger>
-                          <DialogContent>
+                          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
-                              <DialogTitle>Edit Team</DialogTitle>
+                              <DialogTitle>Edit Team: {team.teamName}</DialogTitle>
+                              <DialogDescription>
+                                Update team details and assign Game Presenters.
+                              </DialogDescription>
                             </DialogHeader>
-                            <div className="space-y-4 py-4">
-                              <div className="space-y-2">
-                                <Label>Team Name</Label>
-                                <Input
-                                  value={editingTeam?.teamName || ""}
-                                  onChange={(e) => setEditingTeam({ ...editingTeam, teamName: e.target.value })}
-                                />
+                            <div className="space-y-6 py-4">
+                              {/* Team Details */}
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label>Team Name</Label>
+                                  <Input
+                                    value={editingTeam?.teamName || ""}
+                                    onChange={(e) => setEditingTeam({ ...editingTeam, teamName: e.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Floor Manager Name</Label>
+                                  <Input
+                                    value={editingTeam?.floorManagerName || ""}
+                                    onChange={(e) => setEditingTeam({ ...editingTeam, floorManagerName: e.target.value })}
+                                  />
+                                </div>
                               </div>
-                              <div className="space-y-2">
-                                <Label>Floor Manager Name</Label>
-                                <Input
-                                  value={editingTeam?.floorManagerName || ""}
-                                  onChange={(e) => setEditingTeam({ ...editingTeam, floorManagerName: e.target.value })}
-                                />
+
+                              {/* GP Selection */}
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-base font-semibold">Assign Game Presenters</Label>
+                                  <Badge variant="secondary">
+                                    {selectedGPs.length} selected
+                                  </Badge>
+                                </div>
+
+                                {/* Search and Actions */}
+                                <div className="flex gap-2">
+                                  <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                      placeholder="Search GPs..."
+                                      value={gpSearchTerm}
+                                      onChange={(e) => setGpSearchTerm(e.target.value)}
+                                      className="pl-9"
+                                    />
+                                  </div>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={selectAllFilteredGPs}
+                                    disabled={filteredGPs.length === 0}
+                                  >
+                                    <CheckSquare className="h-4 w-4 mr-1" />
+                                    All
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={deselectAllGPs}
+                                    disabled={selectedGPs.length === 0}
+                                  >
+                                    <Square className="h-4 w-4 mr-1" />
+                                    None
+                                  </Button>
+                                </div>
+
+                                {/* GP List */}
+                                <div className="border rounded-lg max-h-64 overflow-y-auto">
+                                  {filteredGPs.length > 0 ? (
+                                    <div className="divide-y">
+                                      {filteredGPs.map((gp: any) => (
+                                        <label
+                                          key={gp.id}
+                                          className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer transition-colors"
+                                        >
+                                          <Checkbox
+                                            checked={selectedGPs.includes(gp.id)}
+                                            onCheckedChange={() => toggleGP(gp.id)}
+                                          />
+                                          <div className="flex-1 min-w-0">
+                                            <div className="font-medium truncate">{gp.name}</div>
+                                            {gp.teamId && gp.teamId !== editingTeam?.id && (
+                                              <div className="text-xs text-muted-foreground">
+                                                Currently in another team
+                                              </div>
+                                            )}
+                                          </div>
+                                          <Star className="h-4 w-4 text-yellow-500 shrink-0" />
+                                        </label>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="p-8 text-center text-muted-foreground">
+                                      <Star className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                      <p>No GPs found</p>
+                                      {gpSearchTerm && (
+                                        <p className="text-sm">Try a different search term</p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Selected GPs Preview */}
+                                {selectedGPs.length > 0 && (
+                                  <div className="bg-muted/50 rounded-lg p-3">
+                                    <div className="text-sm font-medium mb-2">Selected GPs:</div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {selectedGPs.slice(0, 10).map(gpId => {
+                                        const gp = availableGPs.find((g: any) => g.id === gpId);
+                                        return gp ? (
+                                          <Badge
+                                            key={gpId}
+                                            variant="secondary"
+                                            className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                                            onClick={() => toggleGP(gpId)}
+                                          >
+                                            {gp.name}
+                                            <X className="h-3 w-3 ml-1" />
+                                          </Badge>
+                                        ) : null;
+                                      })}
+                                      {selectedGPs.length > 10 && (
+                                        <Badge variant="outline">
+                                          +{selectedGPs.length - 10} more
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <DialogFooter>
-                              <Button variant="outline" onClick={() => setEditingTeam(null)}>
+                              <Button variant="outline" onClick={() => {
+                                setEditingTeam(null);
+                                setSelectedGPs([]);
+                                setGpSearchTerm("");
+                              }}>
                                 Cancel
                               </Button>
-                              <Button 
+                              <Button
                                 onClick={() => updateTeam.mutate({
                                   teamId: editingTeam.id,
                                   teamName: editingTeam.teamName,
                                   floorManagerName: editingTeam.floorManagerName,
+                                  gpIds: selectedGPs,
                                 })}
                                 disabled={updateTeam.isPending}
                               >
                                 {updateTeam.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                                Save
+                                Save Changes
                               </Button>
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive hover:text-destructive"
                             >
@@ -786,7 +958,7 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Delete Team</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Are you sure you want to delete "{team.teamName}"? All users will be unassigned from this team.
+                                Are you sure you want to delete "{team.teamName}"? All users and GPs will be unassigned from this team.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -819,9 +991,36 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                         <div className="text-xs text-muted-foreground">Users</div>
                       </div>
                     </div>
-                    {team.assignedUsers?.length > 0 && (
+
+                    {/* Show assigned GPs */}
+                    {team.gamePresenters?.length > 0 && (
                       <div className="mt-4 pt-4 border-t">
-                        <div className="text-xs text-muted-foreground mb-2">Assigned Users:</div>
+                        <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                          <Star className="h-3 w-3" />
+                          Game Presenters:
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {team.gamePresenters.slice(0, 5).map((gp: any) => (
+                            <Badge key={gp.id} variant="outline" className="text-xs">
+                              {gp.name}
+                            </Badge>
+                          ))}
+                          {team.gamePresenters.length > 5 && (
+                            <Badge variant="secondary" className="text-xs">
+                              +{team.gamePresenters.length - 5} more
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Show assigned users */}
+                    {team.assignedUsers?.length > 0 && (
+                      <div className="mt-3 pt-3 border-t">
+                        <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          Assigned Users:
+                        </div>
                         <div className="flex flex-wrap gap-1">
                           {team.assignedUsers.slice(0, 3).map((u: any, idx: number) => (
                             <Badge key={idx} variant="secondary" className="text-xs">
@@ -853,6 +1052,36 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Unassigned GPs Section */}
+      {unassignedGPs && unassignedGPs.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Star className="h-5 w-5 text-yellow-500" />
+              Unassigned Game Presenters
+              <Badge variant="secondary">{unassignedGPs.length}</Badge>
+            </CardTitle>
+            <CardDescription>
+              These GPs are not assigned to any team. Edit a team above to assign them.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {unassignedGPs.slice(0, 20).map((gp: any) => (
+                <Badge key={gp.id} variant="outline" className="py-1">
+                  {gp.name}
+                </Badge>
+              ))}
+              {unassignedGPs.length > 20 && (
+                <Badge variant="secondary">
+                  +{unassignedGPs.length - 20} more
+                </Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </TabsContent>
   );
 }

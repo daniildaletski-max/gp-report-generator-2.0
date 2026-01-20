@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, sql, desc, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, sql, desc, inArray, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, users, User,
@@ -2338,4 +2338,144 @@ export async function updateUserFromInvitation(userId: number, teamId: number | 
   await db.update(users)
     .set({ teamId, role })
     .where(eq(users.id, userId));
+}
+
+
+// ============================================
+// TEAM GP ASSIGNMENT FUNCTIONS
+// ============================================
+
+// Get all GPs for a specific team
+export async function getGPsByTeam(teamId: number | null): Promise<GamePresenter[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  if (teamId === null) {
+    return await db.select().from(gamePresenters).where(isNull(gamePresenters.teamId)).orderBy(gamePresenters.name);
+  }
+  
+  return await db.select().from(gamePresenters).where(eq(gamePresenters.teamId, teamId)).orderBy(gamePresenters.name);
+}
+
+// Assign multiple GPs to a team
+export async function assignGPsToTeam(gpIds: number[], teamId: number | null): Promise<{ success: number; failed: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  let success = 0;
+  let failed = 0;
+  
+  for (const gpId of gpIds) {
+    try {
+      await db.update(gamePresenters)
+        .set({ teamId })
+        .where(eq(gamePresenters.id, gpId));
+      success++;
+    } catch {
+      failed++;
+    }
+  }
+  
+  return { success, failed };
+}
+
+// Remove GPs from team (set teamId to null)
+export async function removeGPsFromTeam(gpIds: number[]): Promise<{ success: number; failed: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  let success = 0;
+  let failed = 0;
+  
+  for (const gpId of gpIds) {
+    try {
+      await db.update(gamePresenters)
+        .set({ teamId: null })
+        .where(eq(gamePresenters.id, gpId));
+      success++;
+    } catch {
+      failed++;
+    }
+  }
+  
+  return { success, failed };
+}
+
+// Get all unassigned GPs
+export async function getUnassignedGPs(): Promise<GamePresenter[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(gamePresenters).where(isNull(gamePresenters.teamId)).orderBy(gamePresenters.name);
+}
+
+// Get team with its GPs
+export async function getTeamWithGPs(teamId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const team = await db.select().from(fmTeams).where(eq(fmTeams.id, teamId)).limit(1);
+  if (team.length === 0) return null;
+  
+  const gps = await db.select().from(gamePresenters).where(eq(gamePresenters.teamId, teamId)).orderBy(gamePresenters.name);
+  
+  return {
+    ...team[0],
+    gamePresenters: gps
+  };
+}
+
+// Update team with GP assignments
+export async function updateTeamWithGPs(
+  teamId: number, 
+  data: Partial<InsertFmTeam>, 
+  gpIds: number[]
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  // Update team details if provided
+  if (Object.keys(data).length > 0) {
+    await db.update(fmTeams)
+      .set(data)
+      .where(eq(fmTeams.id, teamId));
+  }
+  
+  // First, remove all GPs from this team
+  await db.update(gamePresenters)
+    .set({ teamId: null })
+    .where(eq(gamePresenters.teamId, teamId));
+  
+  // Then assign the selected GPs to this team
+  if (gpIds.length > 0) {
+    for (const gpId of gpIds) {
+      await db.update(gamePresenters)
+        .set({ teamId })
+        .where(eq(gamePresenters.id, gpId));
+    }
+  }
+}
+
+// Get all teams with their GPs for admin view
+export async function getAllTeamsWithGPs() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const teams = await db.select().from(fmTeams).orderBy(fmTeams.teamName);
+  
+  return await Promise.all(teams.map(async (team) => {
+    const [assignedUsers, gps, reportCount] = await Promise.all([
+      db.select().from(users).where(eq(users.teamId, team.id)),
+      db.select().from(gamePresenters).where(eq(gamePresenters.teamId, team.id)).orderBy(gamePresenters.name),
+      db.select({ count: sql<number>`COUNT(*)` }).from(reports).where(eq(reports.teamId, team.id)),
+    ]);
+    
+    return {
+      ...team,
+      assignedUsers,
+      gamePresenters: gps,
+      gpCount: gps.length,
+      reportCount: reportCount[0]?.count || 0,
+    };
+  }));
 }
