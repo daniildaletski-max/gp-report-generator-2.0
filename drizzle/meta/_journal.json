@@ -64,6 +64,13 @@
       "when": 1768780401958,
       "tag": "0008_salty_zemo",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1768871639931,
+      "tag": "0009_clumsy_chimera",
+      "breakpoints": true
     }
   ]
 }

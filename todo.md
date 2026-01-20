@@ -904,3 +904,53 @@
 - [x] Include last accessed timestamp in export
 - [x] Download as CSV file for mass distribution
 
+
+
+## Invite-Only FM Registration System (v44) - COMPLETED
+
+### Database Schema - COMPLETED
+- [x] Create invitations table (id, email, token, teamId, role, status, expiresAt, createdBy, usedBy)
+- [x] Add migration for invitations table
+
+### Backend API - COMPLETED
+- [x] Create invitation.create procedure (admin only)
+- [x] Create invitation.list procedure (admin only)
+- [x] Create invitation.revoke procedure (admin only)
+- [x] Create invitation.validate procedure (public)
+- [x] Create invitation.resend procedure (admin only)
+- [x] Create invitation.accept procedure (protected)
+- [x] Create invitation.bulkCreate procedure (admin only)
+- [x] Create invitation.delete procedure (admin only)
+- [x] Create invitation.stats procedure (admin only)
+
+### Admin UI - Invitations Tab - COMPLETED
+- [x] Add "Invitations" tab in Admin panel (7 tabs total)
+- [x] Create invitation form (email, team, role, expiry selection)
+- [x] Display pending invitations list with status badges
+- [x] Add copy invite link button (auto-copy on create)
+- [x] Add resend/revoke/delete actions
+- [x] Show invitation statistics (total, pending, accepted, expired/revoked)
+- [x] Search and filter invitations
+- [x] Bulk invite functionality (multiple emails)
+
+### Registration Flow - COMPLETED
+- [x] Create /invite/:token acceptance page
+- [x] Validate invitation token on page load
+- [x] Show invitation details (email, team, role, expiry)
+- [x] Auto-accept invitation after OAuth login
+- [x] Auto-assign team and role from invitation
+- [x] Mark invitation as used after successful acceptance
+- [x] Redirect to dashboard after acceptance
+
+### UI Improvements - COMPLETED
+- [x] Modern gradient header on invite page
+- [x] Color-coded status badges with icons
+- [x] Stats cards with gradient accents
+- [x] Loading and success states with animations
+- [x] Error handling with friendly messages
+- [x] Responsive design for mobile
+
+### Tests - COMPLETED
+- [x] 14 unit tests for invitation system
+- [x] All 113 tests passing
+

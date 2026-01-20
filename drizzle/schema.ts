@@ -233,3 +233,23 @@ export const monthlyGpStats = mysqlTable("monthly_gp_stats", {
 export type MonthlyGpStats = typeof monthlyGpStats.$inferSelect;
 export type InsertMonthlyGpStats = typeof monthlyGpStats.$inferInsert;
 
+/**
+ * Invitations - invite-only registration for Floor Managers
+ */
+export const invitations = mysqlTable("invitations", {
+  id: int("id").autoincrement().primaryKey(),
+  email: varchar("email", { length: 320 }).notNull(),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  teamId: int("teamId"), // Pre-assign team on invitation
+  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  status: mysqlEnum("status", ["pending", "accepted", "expired", "revoked"]).default("pending").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdById: int("createdById").notNull(), // Admin who created the invitation
+  usedById: int("usedById"), // User who accepted the invitation
+  usedAt: timestamp("usedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Invitation = typeof invitations.$inferSelect;
+export type InsertInvitation = typeof invitations.$inferInsert;
+

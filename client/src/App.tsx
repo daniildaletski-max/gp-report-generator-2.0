@@ -12,6 +12,7 @@ import Evaluations from "./pages/Evaluations";
 import Reports from "./pages/Reports";
 import Admin from "./pages/Admin";
 import GPPortal from "./pages/GPPortal";
+import InvitePage from "./pages/InvitePage";
 import { useAuth } from "./_core/hooks/useAuth";
 import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield } from "lucide-react";
 
@@ -58,6 +59,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/gp/:token" component={GPPortal} />
       <Route path="/gp-portal/:token" component={GPPortal} />
+      <Route path="/invite/:token" component={InvitePage} />
       <Route path="/dashboard" component={DashboardRoutes} />
       <Route path="/upload" component={DashboardRoutes} />
       <Route path="/evaluations" component={DashboardRoutes} />

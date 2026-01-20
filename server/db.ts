@@ -2190,3 +2190,152 @@ export function validateDateRange(startDate: Date, endDate: Date, maxDays: numbe
   const diffDays = diffMs / (1000 * 60 * 60 * 24);
   return diffDays >= 0 && diffDays <= maxDays;
 }
+
+
+// ============================================
+// INVITATION FUNCTIONS
+// ============================================
+
+import { invitations, InsertInvitation, Invitation } from "../drizzle/schema";
+
+export async function createInvitation(data: InsertInvitation): Promise<Invitation> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(invitations).values(data);
+  const newInvitation = await db.select().from(invitations)
+    .where(eq(invitations.id, Number(result[0].insertId)))
+    .limit(1);
+  return newInvitation[0];
+}
+
+export async function getInvitationByToken(token: string): Promise<Invitation | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.select().from(invitations)
+    .where(eq(invitations.token, token))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getInvitationByEmail(email: string): Promise<Invitation | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.select().from(invitations)
+    .where(and(
+      eq(invitations.email, email.toLowerCase()),
+      eq(invitations.status, 'pending')
+    ))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getAllInvitations(): Promise<Array<Invitation & { team?: FmTeam | null; createdBy?: User | null }>> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db.select({
+    invitation: invitations,
+    team: fmTeams,
+    createdBy: users,
+  })
+  .from(invitations)
+  .leftJoin(fmTeams, eq(invitations.teamId, fmTeams.id))
+  .leftJoin(users, eq(invitations.createdById, users.id))
+  .orderBy(desc(invitations.createdAt));
+  
+  return result.map(r => ({
+    ...r.invitation,
+    team: r.team,
+    createdBy: r.createdBy,
+  }));
+}
+
+export async function updateInvitationStatus(
+  id: number, 
+  status: 'pending' | 'accepted' | 'expired' | 'revoked',
+  usedById?: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  const updateData: Partial<Invitation> = { status };
+  if (usedById) {
+    updateData.usedById = usedById;
+    updateData.usedAt = new Date();
+  }
+  
+  await db.update(invitations)
+    .set(updateData)
+    .where(eq(invitations.id, id));
+}
+
+export async function getInvitationStats(): Promise<{
+  total: number;
+  pending: number;
+  accepted: number;
+  expired: number;
+  revoked: number;
+}> {
+  const db = await getDb();
+  if (!db) return { total: 0, pending: 0, accepted: 0, expired: 0, revoked: 0 };
+  
+  const allInvitations = await db.select().from(invitations);
+  
+  const stats = {
+    total: allInvitations.length,
+    pending: 0,
+    accepted: 0,
+    expired: 0,
+    revoked: 0,
+  };
+  
+  const now = new Date();
+  for (const inv of allInvitations) {
+    if (inv.status === 'accepted') {
+      stats.accepted++;
+    } else if (inv.status === 'revoked') {
+      stats.revoked++;
+    } else if (inv.status === 'expired' || (inv.status === 'pending' && inv.expiresAt < now)) {
+      stats.expired++;
+    } else {
+      stats.pending++;
+    }
+  }
+  
+  return stats;
+}
+
+export async function expireOldInvitations(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  const now = new Date();
+  const result = await db.update(invitations)
+    .set({ status: 'expired' })
+    .where(and(
+      eq(invitations.status, 'pending'),
+      lte(invitations.expiresAt, now)
+    ));
+  
+  return result[0].affectedRows || 0;
+}
+
+export async function deleteInvitation(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.delete(invitations).where(eq(invitations.id, id));
+}
+
+// Update user with team and role from invitation
+export async function updateUserFromInvitation(userId: number, teamId: number | null, role: 'user' | 'admin'): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.update(users)
+    .set({ teamId, role })
+    .where(eq(users.id, userId));
+}

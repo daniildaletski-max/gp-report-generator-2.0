@@ -19,8 +19,10 @@ import {
   RefreshCw, ExternalLink, Star, AlertCircle, UserCog, Download, Shield, 
   Building2, Plus, Edit, BarChart3, Activity, CheckSquare, Square, RotateCcw,
   TrendingUp, TrendingDown, Search, Filter, X, Eye, EyeOff, Calendar,
-  Award, Target, Zap, Clock, ChevronUp, ChevronDown
+  Award, Target, Zap, Clock, ChevronUp, ChevronDown, Mail, Send, UserPlus,
+  MailCheck, MailX, MailQuestion, Sparkles, Timer
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 
@@ -146,35 +148,42 @@ function FullAdminPanel() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6 h-auto p-1">
+        <TabsList className="grid w-full grid-cols-7 h-auto p-1">
           <TabsTrigger value="overview" className="flex items-center justify-center gap-2 py-2">
             <BarChart3 className="h-4 w-4 shrink-0" />
-            <span>Overview</span>
+            <span className="hidden sm:inline">Overview</span>
+          </TabsTrigger>
+          <TabsTrigger value="invitations" className="flex items-center justify-center gap-2 py-2">
+            <UserPlus className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Invites</span>
           </TabsTrigger>
           <TabsTrigger value="users" className="flex items-center justify-center gap-2 py-2">
             <UserCog className="h-4 w-4 shrink-0" />
-            <span>Users</span>
+            <span className="hidden sm:inline">Users</span>
           </TabsTrigger>
           <TabsTrigger value="teams" className="flex items-center justify-center gap-2 py-2">
             <Building2 className="h-4 w-4 shrink-0" />
-            <span>Teams</span>
+            <span className="hidden sm:inline">Teams</span>
           </TabsTrigger>
           <TabsTrigger value="stats" className="flex items-center justify-center gap-2 py-2">
             <Star className="h-4 w-4 shrink-0" />
-            <span>GP Stats</span>
+            <span className="hidden sm:inline">GP Stats</span>
           </TabsTrigger>
           <TabsTrigger value="access" className="flex items-center justify-center gap-2 py-2">
             <Link className="h-4 w-4 shrink-0" />
-            <span>GP Access</span>
+            <span className="hidden sm:inline">GP Access</span>
           </TabsTrigger>
           <TabsTrigger value="errors" className="flex items-center justify-center gap-2 py-2">
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span>Errors</span>
+            <span className="hidden sm:inline">Errors</span>
           </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
         <AdminOverviewTab />
+
+        {/* Invitations Tab */}
+        <InvitationsTab teams={teams || []} />
 
         {/* User Management Tab */}
         <UserManagementTab teams={teams || []} />
@@ -1394,6 +1403,632 @@ filename: file.name,
               <AlertTriangle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="font-semibold mb-1">No error files uploaded</h3>
               <p className="text-muted-foreground">Upload your first error file to track GP mistakes</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </TabsContent>
+  );
+}
+
+// Invitations Tab Component - Modern UI for invite-only registration
+function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floorManagerName: string }[] }) {
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [bulkEmails, setBulkEmails] = useState("");
+  const [selectedTeamId, setSelectedTeamId] = useState<string>("");
+  const [selectedRole, setSelectedRole] = useState<"user" | "admin">("user");
+  const [expiresInDays, setExpiresInDays] = useState(7);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  const { data: invitations, isLoading, refetch } = trpc.invitation.list.useQuery();
+  const { data: stats } = trpc.invitation.stats.useQuery();
+
+  const createMutation = trpc.invitation.create.useMutation({
+    onSuccess: (data) => {
+      toast.success("Invitation created successfully");
+      setIsCreateOpen(false);
+      setEmail("");
+      setSelectedTeamId("");
+      setSelectedRole("user");
+      refetch();
+      // Auto-copy link
+      const url = `${window.location.origin}/invite/${data.token}`;
+      navigator.clipboard.writeText(url);
+      toast.info("Invite link copied to clipboard!");
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to create invitation");
+    },
+  });
+
+  const bulkCreateMutation = trpc.invitation.bulkCreate.useMutation({
+    onSuccess: (result) => {
+      toast.success(`Created ${result.successful} invitations (${result.failed} failed)`);
+      setIsBulkOpen(false);
+      setBulkEmails("");
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to create invitations");
+    },
+  });
+
+  const revokeMutation = trpc.invitation.revoke.useMutation({
+    onSuccess: () => {
+      toast.success("Invitation revoked");
+      refetch();
+    },
+  });
+
+  const deleteMutation = trpc.invitation.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Invitation deleted");
+      refetch();
+    },
+  });
+
+  const resendMutation = trpc.invitation.resend.useMutation({
+    onSuccess: (data) => {
+      toast.success("New invitation link generated");
+      refetch();
+      const url = `${window.location.origin}/invite/${data.token}`;
+      navigator.clipboard.writeText(url);
+      toast.info("New link copied to clipboard!");
+    },
+  });
+
+  const handleCreate = () => {
+    if (!email) {
+      toast.error("Please enter an email address");
+      return;
+    }
+    createMutation.mutate({
+      email,
+      teamId: selectedTeamId ? Number(selectedTeamId) : undefined,
+      role: selectedRole,
+      expiresInDays,
+    });
+  };
+
+  const handleBulkCreate = () => {
+    const emails = bulkEmails
+      .split(/[\n,;]/)
+      .map(e => e.trim())
+      .filter(e => e && e.includes("@"));
+    
+    if (emails.length === 0) {
+      toast.error("Please enter at least one valid email address");
+      return;
+    }
+
+    bulkCreateMutation.mutate({
+      emails,
+      teamId: selectedTeamId ? Number(selectedTeamId) : undefined,
+      role: selectedRole,
+      expiresInDays,
+    });
+  };
+
+  const copyInviteLink = (token: string) => {
+    const url = `${window.location.origin}/invite/${token}`;
+    navigator.clipboard.writeText(url);
+    setCopiedToken(token);
+    toast.success("Link copied!");
+    setTimeout(() => setCopiedToken(null), 2000);
+  };
+
+  const getStatusBadge = (invitation: any) => {
+    const now = new Date();
+    if (invitation.status === "accepted") {
+      return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"><MailCheck className="h-3 w-3 mr-1" />Accepted</Badge>;
+    }
+    if (invitation.status === "revoked") {
+      return <Badge variant="destructive"><MailX className="h-3 w-3 mr-1" />Revoked</Badge>;
+    }
+    if (invitation.status === "expired" || new Date(invitation.expiresAt) < now) {
+      return <Badge variant="secondary"><Timer className="h-3 w-3 mr-1" />Expired</Badge>;
+    }
+    return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"><MailQuestion className="h-3 w-3 mr-1" />Pending</Badge>;
+  };
+
+  const filteredInvitations = useMemo(() => {
+    if (!invitations) return [];
+    let filtered = invitations;
+    
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(inv => 
+        inv.email.toLowerCase().includes(query) ||
+        inv.team?.teamName?.toLowerCase().includes(query)
+      );
+    }
+    
+    if (statusFilter !== "all") {
+      const now = new Date();
+      filtered = filtered.filter(inv => {
+        if (statusFilter === "pending") {
+          return inv.status === "pending" && new Date(inv.expiresAt) >= now;
+        }
+        if (statusFilter === "expired") {
+          return inv.status === "expired" || (inv.status === "pending" && new Date(inv.expiresAt) < now);
+        }
+        return inv.status === statusFilter;
+      });
+    }
+    
+    return filtered;
+  }, [invitations, searchQuery, statusFilter]);
+
+  return (
+    <TabsContent value="invitations" className="space-y-4">
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card className="relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-400" />
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Invitations</p>
+                <p className="text-3xl font-bold">{stats?.total || 0}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <Mail className="h-6 w-6 text-blue-500" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-amber-400" />
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Pending</p>
+                <p className="text-3xl font-bold">{stats?.pending || 0}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <MailQuestion className="h-6 w-6 text-amber-500" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-green-400" />
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Accepted</p>
+                <p className="text-3xl font-bold">{stats?.accepted || 0}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                <MailCheck className="h-6 w-6 text-green-500" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gray-500 to-gray-400" />
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Expired/Revoked</p>
+                <p className="text-3xl font-bold">{(stats?.expired || 0) + (stats?.revoked || 0)}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-gray-900/30 flex items-center justify-center">
+                <MailX className="h-6 w-6 text-gray-500" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                FM Invitations
+              </CardTitle>
+              <CardDescription>
+                Invite Floor Managers to join the system. They can only register with a valid invitation link.
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Dialog open={isBulkOpen} onOpenChange={setIsBulkOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Users className="h-4 w-4" />
+                    Bulk Invite
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      Bulk Invite Floor Managers
+                    </DialogTitle>
+                    <DialogDescription>
+                      Enter multiple email addresses to send invitations at once.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Email Addresses</Label>
+                      <Textarea
+                        placeholder="Enter emails separated by commas, semicolons, or new lines...\nexample1@email.com\nexample2@email.com"
+                        value={bulkEmails}
+                        onChange={(e) => setBulkEmails(e.target.value)}
+                        rows={5}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {bulkEmails.split(/[\n,;]/).filter(e => e.trim() && e.includes("@")).length} valid emails detected
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Assign to Team</Label>
+                        <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select team (optional)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">No team</SelectItem>
+                            {teams.map(team => (
+                              <SelectItem key={team.id} value={String(team.id)}>
+                                {team.teamName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Role</Label>
+                        <Select value={selectedRole} onValueChange={(v: "user" | "admin") => setSelectedRole(v)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="user">Floor Manager</SelectItem>
+                            <SelectItem value="admin">Administrator</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Expires In</Label>
+                      <Select value={String(expiresInDays)} onValueChange={(v) => setExpiresInDays(Number(v))}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1 day</SelectItem>
+                          <SelectItem value="3">3 days</SelectItem>
+                          <SelectItem value="7">7 days</SelectItem>
+                          <SelectItem value="14">14 days</SelectItem>
+                          <SelectItem value="30">30 days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsBulkOpen(false)}>Cancel</Button>
+                    <Button onClick={handleBulkCreate} disabled={bulkCreateMutation.isPending}>
+                      {bulkCreateMutation.isPending ? (
+                        <><Loader2 className="h-4 w-4 animate-spin mr-2" />Creating...</>
+                      ) : (
+                        <><Send className="h-4 w-4 mr-2" />Send Invitations</>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2">
+                    <UserPlus className="h-4 w-4" />
+                    New Invitation
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <UserPlus className="h-5 w-5" />
+                      Invite Floor Manager
+                    </DialogTitle>
+                    <DialogDescription>
+                      Create an invitation link for a new Floor Manager to join.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Email Address</Label>
+                      <Input
+                        type="email"
+                        placeholder="fm@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Assign to Team</Label>
+                        <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select team" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">No team</SelectItem>
+                            {teams.map(team => (
+                              <SelectItem key={team.id} value={String(team.id)}>
+                                {team.teamName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Role</Label>
+                        <Select value={selectedRole} onValueChange={(v: "user" | "admin") => setSelectedRole(v)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="user">Floor Manager</SelectItem>
+                            <SelectItem value="admin">Administrator</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Expires In</Label>
+                      <Select value={String(expiresInDays)} onValueChange={(v) => setExpiresInDays(Number(v))}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1 day</SelectItem>
+                          <SelectItem value="3">3 days</SelectItem>
+                          <SelectItem value="7">7 days</SelectItem>
+                          <SelectItem value="14">14 days</SelectItem>
+                          <SelectItem value="30">30 days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                    <Button onClick={handleCreate} disabled={createMutation.isPending}>
+                      {createMutation.isPending ? (
+                        <><Loader2 className="h-4 w-4 animate-spin mr-2" />Creating...</>
+                      ) : (
+                        <><Send className="h-4 w-4 mr-2" />Create & Copy Link</>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Search and Filter */}
+          <div className="flex gap-4">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by email or team..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[150px]">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filter" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="accepted">Accepted</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
+                <SelectItem value="revoked">Revoked</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Invitations Table */}
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : filteredInvitations.length > 0 ? (
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead>Email</TableHead>
+                    <TableHead>Team</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Expires</TableHead>
+                    <TableHead className="w-[180px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredInvitations.map((inv) => {
+                    const isExpired = inv.status === "expired" || (inv.status === "pending" && new Date(inv.expiresAt) < new Date());
+                    const isPending = inv.status === "pending" && !isExpired;
+                    
+                    return (
+                      <TableRow key={inv.id} className="hover:bg-muted/50">
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-4 w-4 text-muted-foreground" />
+                            {inv.email}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {inv.team ? (
+                            <Badge variant="outline">
+                              <Building2 className="h-3 w-3 mr-1" />
+                              {inv.team.teamName}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={inv.role === "admin" ? "default" : "secondary"}>
+                            {inv.role === "admin" ? (
+                              <><Shield className="h-3 w-3 mr-1" />Admin</>
+                            ) : (
+                              <>FM</>
+                            )}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(inv)}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {format(new Date(inv.expiresAt), "dd MMM yyyy")}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            {isPending && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => copyInviteLink(inv.token)}
+                                  title="Copy invite link"
+                                >
+                                  {copiedToken === inv.token ? (
+                                    <Check className="h-4 w-4 text-green-500" />
+                                  ) : (
+                                    <Copy className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => window.open(`/invite/${inv.token}`, "_blank")}
+                                  title="Preview invite page"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:text-destructive"
+                                      title="Revoke invitation"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Revoke Invitation</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        This will invalidate the invitation link for {inv.email}. They won't be able to register.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => revokeMutation.mutate({ id: inv.id })}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        Revoke
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </>
+                            )}
+                            {(isExpired || inv.status === "revoked") && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 gap-1"
+                                  onClick={() => resendMutation.mutate({ id: inv.id })}
+                                  disabled={resendMutation.isPending}
+                                  title="Resend with new link"
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                  Resend
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:text-destructive"
+                                      title="Delete invitation"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Delete Invitation</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        This will permanently delete the invitation record for {inv.email}.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => deleteMutation.mutate({ id: inv.id })}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </>
+                            )}
+                            {inv.status === "accepted" && (
+                              <span className="text-sm text-muted-foreground px-2">Completed</span>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <UserPlus className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="font-semibold mb-1">
+                {searchQuery || statusFilter !== "all" ? "No invitations match your filters" : "No invitations yet"}
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                {searchQuery || statusFilter !== "all" 
+                  ? "Try adjusting your search or filter criteria"
+                  : "Create your first invitation to onboard Floor Managers"
+                }
+              </p>
+              {!searchQuery && statusFilter === "all" && (
+                <Button onClick={() => setIsCreateOpen(true)}>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Create Invitation
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
