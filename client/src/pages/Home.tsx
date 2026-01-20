@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +13,11 @@ import { Badge } from "@/components/ui/badge";
 
 export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
+
+  // SEO: Set document title
+  useEffect(() => {
+    document.title = "GP Report Generator - AI-Powered Evaluation Automation Tool";
+  }, []);
 
   if (loading) {
     return (
@@ -134,7 +140,7 @@ export default function Home() {
         <section className="container py-20">
           <div className="text-center mb-14">
             <Badge variant="outline" className="mb-4">Simple Process</Badge>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">How It Works</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">How It Works - Simple 3-Step Process</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
               Three simple steps to transform your evaluation workflow
             </p>
@@ -202,7 +208,7 @@ export default function Home() {
           <div className="container">
             <div className="text-center mb-14">
               <Badge variant="outline" className="mb-4">Features</Badge>
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">Everything You Need</h2>
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">Features - Everything You Need for GP Evaluations</h2>
               <p className="text-muted-foreground max-w-2xl mx-auto">
                 Powerful features designed to streamline your evaluation workflow
               </p>
@@ -293,7 +299,7 @@ export default function Home() {
               <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -ml-32 -mb-32" />
               
               <CardContent className="relative py-16 text-center">
-                <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Get Started?</h2>
+                <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Automate Your GP Evaluations?</h2>
                 <p className="text-white/80 mb-8 max-w-xl mx-auto text-lg">
                   Sign in to start uploading evaluation screenshots and generating reports automatically.
                 </p>
