@@ -1,5 +1,6 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import EvaluationDetailView from "@/components/EvaluationDetailView";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +32,7 @@ export default function EvaluationsPage() {
   const [clearMonth, setClearMonth] = useState(new Date().getMonth() + 1);
   const [clearYear, setClearYear] = useState(new Date().getFullYear());
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  const [viewingEval, setViewingEval] = useState<{ evaluation: any; gamePresenter: any } | null>(null);
   
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -582,33 +584,15 @@ export default function EvaluationsPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
-                            {/* View Screenshot */}
-                            {evaluation.screenshotUrl && (
-                              <Dialog>
-                                <DialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent className="max-w-4xl">
-                                  <DialogHeader>
-                                    <DialogTitle>Evaluation Screenshot</DialogTitle>
-                                    <DialogDescription>
-                                      {gamePresenter?.name} - {evaluation.evaluationDate 
-                                        ? format(new Date(evaluation.evaluationDate), "dd MMM yyyy")
-                                        : "Unknown date"}
-                                    </DialogDescription>
-                                  </DialogHeader>
-                                  <div className="mt-4">
-                                    <img 
-                                      src={evaluation.screenshotUrl} 
-                                      alt="Evaluation screenshot"
-                                      className="w-full rounded-lg border"
-                                    />
-                                  </div>
-                                </DialogContent>
-                              </Dialog>
-                            )}
+                            {/* View Details */}
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8"
+                              onClick={() => setViewingEval({ evaluation, gamePresenter })}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
                             
                             {/* Edit */}
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(evaluation)}>
@@ -823,6 +807,16 @@ export default function EvaluationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Evaluation Detail View */}
+      {viewingEval && (
+        <EvaluationDetailView
+          evaluation={viewingEval.evaluation}
+          gamePresenter={viewingEval.gamePresenter}
+          open={!!viewingEval}
+          onOpenChange={(open) => !open && setViewingEval(null)}
+        />
+      )}
     </div>
   );
 }
