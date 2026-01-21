@@ -2330,24 +2330,27 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
         const fileKey = `error-files/${input.year}/${input.month}/${input.errorType}-${nanoid()}.xlsx`;
         const { url: fileUrl } = await storagePut(fileKey, fileBuffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
-        // Parse Excel file to extract GP errors
+        // Parse Excel file to extract GP errors from "Error Count" sheet
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(fileBuffer as any);
         
         const gpErrorCounts: Record<string, number> = {};
         let totalErrorsCount = 0;
 
-        // Find the Errors sheet (both Playgon and MG files have this sheet)
-        const errorsSheet = workbook.getWorksheet('Errors');
-        if (errorsSheet) {
-          // GP Name is in column B (index 2), starting from row 3
-          // Headers are in row 2: Nr, GP Name, GP Alias, Date, etc.
-          errorsSheet.eachRow((row, rowNumber) => {
-            if (rowNumber >= 3) { // Skip header rows (row 1 and 2)
-              const gpNameCell = row.getCell(2);
-              let gpName: string | null = null;
+        // Find the "Error Count" sheet - this contains aggregated error counts per GP
+        const errorCountSheet = workbook.getWorksheet('Error Count');
+        if (errorCountSheet) {
+          // GP Name is in column B (index 2), Total Errors is in column D (index 4)
+          // Data starts from row 2 (row 1 is header)
+          errorCountSheet.eachRow((row, rowNumber) => {
+            if (rowNumber >= 2) { // Skip header row (row 1)
+              const gpNameCell = row.getCell(2); // Column B
+              const totalErrorsCell = row.getCell(4); // Column D
               
-              // Handle different cell value types
+              let gpName: string | null = null;
+              let errorCount = 0;
+              
+              // Handle GP Name cell - different value types
               if (gpNameCell.value) {
                 if (typeof gpNameCell.value === 'string') {
                   gpName = gpNameCell.value.trim();
@@ -2363,21 +2366,65 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
                 }
               }
               
-              // Validate that it looks like a name (not a formula, not empty)
-              if (gpName && gpName.length > 0 && !gpName.startsWith('=') && gpName !== 'GP Name') {
+              // Handle Total Errors cell - can be number or formula result
+              if (totalErrorsCell.value !== null && totalErrorsCell.value !== undefined) {
+                if (typeof totalErrorsCell.value === 'number') {
+                  errorCount = Math.round(totalErrorsCell.value);
+                } else if (typeof totalErrorsCell.value === 'object' && 'result' in totalErrorsCell.value) {
+                  // Formula with cached result
+                  const result = (totalErrorsCell.value as any).result;
+                  if (typeof result === 'number') {
+                    errorCount = Math.round(result);
+                  }
+                } else if (typeof totalErrorsCell.value === 'string') {
+                  const parsed = parseInt(totalErrorsCell.value, 10);
+                  if (!isNaN(parsed)) {
+                    errorCount = parsed;
+                  }
+                }
+              }
+              
+              // Validate GP name and store error count
+              if (gpName && gpName.length > 0 && !gpName.startsWith('=') && gpName !== 'GP Name' && gpName !== 'Name') {
                 // Check if it looks like a real name (contains letters, possibly space)
                 if (/^[A-Za-z\u00C0-\u024F\s'-]+$/.test(gpName) && gpName.length < 100) {
-                  gpErrorCounts[gpName] = (gpErrorCounts[gpName] || 0) + 1;
-                  totalErrorsCount++;
+                  gpErrorCounts[gpName] = errorCount;
+                  totalErrorsCount += errorCount;
                 }
               }
             }
           });
         } else {
-          // Fallback: try to find GP names in any sheet
-          workbook.eachSheet((worksheet) => {
-            totalErrorsCount += Math.max(0, worksheet.rowCount - 1);
-          });
+          // Fallback: try the old "Errors" sheet format
+          const errorsSheet = workbook.getWorksheet('Errors');
+          if (errorsSheet) {
+            errorsSheet.eachRow((row, rowNumber) => {
+              if (rowNumber >= 3) {
+                const gpNameCell = row.getCell(2);
+                let gpName: string | null = null;
+                
+                if (gpNameCell.value) {
+                  if (typeof gpNameCell.value === 'string') {
+                    gpName = gpNameCell.value.trim();
+                  } else if (typeof gpNameCell.value === 'object' && 'text' in gpNameCell.value) {
+                    gpName = (gpNameCell.value as any).text?.trim();
+                  } else if (typeof gpNameCell.value === 'object' && 'result' in gpNameCell.value) {
+                    const result = (gpNameCell.value as any).result;
+                    if (typeof result === 'string') {
+                      gpName = result.trim();
+                    }
+                  }
+                }
+                
+                if (gpName && gpName.length > 0 && !gpName.startsWith('=') && gpName !== 'GP Name') {
+                  if (/^[A-Za-z\u00C0-\u024F\s'-]+$/.test(gpName) && gpName.length < 100) {
+                    gpErrorCounts[gpName] = (gpErrorCounts[gpName] || 0) + 1;
+                    totalErrorsCount++;
+                  }
+                }
+              }
+            });
+          }
         }
 
         // Save error file to database
@@ -2391,10 +2438,22 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           uploadedById: ctx.user.id,
         });
 
-        // Save individual GP errors to database and update attendance
+        // Update GP mistakes directly from parsed error counts
+        // This is more efficient than creating individual error records
+        const notFoundGPs: string[] = [];
+        const updatedGPs: string[] = [];
+        
         for (const [gpName, count] of Object.entries(gpErrorCounts)) {
-          // Create GP error records
-          for (let i = 0; i < count; i++) {
+          // Find GP by name and update their mistakes count
+          const updated = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year);
+          if (updated) {
+            updatedGPs.push(gpName);
+          } else {
+            notFoundGPs.push(gpName);
+          }
+          
+          // Also create a single summary error record for tracking
+          if (count > 0) {
             await db.createGpError({
               gpName,
               errorFileId: errorFile.id,
@@ -2403,10 +2462,13 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           }
         }
 
-        // Update GP attendance with mistake counts
-        await db.updateGPMistakesFromErrors(input.month, input.year);
-
-        return { ...errorFile, parsedErrors: totalErrorsCount, gpErrorCounts };
+        return { 
+          ...errorFile, 
+          parsedErrors: totalErrorsCount, 
+          gpErrorCounts,
+          updatedGPs,
+          notFoundGPs 
+        };
       }),
 
     list: protectedProcedure.query(async () => {

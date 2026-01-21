@@ -1355,3 +1355,15 @@
 - [x] Test GGs calculation (Total Games / Mistakes)
 - [x] Verify bonus eligibility calculation based on GGs
 
+
+
+## Fix Error File Parsing (v37)
+
+- [x] Update error file parsing to read from "Error Count" sheet
+- [x] Read "Total Errors" column (D) instead of counting rows
+- [x] Match GP names from column B with database records
+- [x] Update monthly_gp_stats.mistakes with correct values
+- [x] Add updateGPMistakesDirectly function for efficient updates
+- [x] Unit tests for error file parsing logic
+- [x] Test with real error file upload (requires re-uploading file to apply new parsing)
+

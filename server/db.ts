@@ -688,6 +688,60 @@ export async function updateGPMistakesFromErrors(month: number, year: number): P
   }
 }
 
+// Update GP mistakes directly by name and count
+export async function updateGPMistakesDirectly(
+  gpName: string, 
+  mistakesCount: number, 
+  month: number, 
+  year: number
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  // Find GP by name (case-insensitive, trimmed)
+  const gp = await db.select()
+    .from(gamePresenters)
+    .where(eq(gamePresenters.name, gpName.trim()))
+    .limit(1);
+  
+  if (gp.length === 0) {
+    // Try fuzzy match - remove extra spaces, normalize
+    const normalizedName = gpName.trim().replace(/\s+/g, ' ');
+    const allGPs = await db.select().from(gamePresenters);
+    const matchedGP = allGPs.find(g => 
+      g.name.toLowerCase().replace(/\s+/g, ' ') === normalizedName.toLowerCase()
+    );
+    
+    if (!matchedGP) {
+      return false;
+    }
+    
+    // Update monthly_gp_stats for matched GP
+    const stats = await getOrCreateMonthlyGpStats(matchedGP.id, month, year);
+    await db.update(monthlyGpStats)
+      .set({ mistakes: mistakesCount })
+      .where(eq(monthlyGpStats.id, stats.id));
+    
+    // Also update attendance table (legacy)
+    const attendance = await getOrCreateAttendance(matchedGP.id, month, year);
+    await updateAttendance(attendance.id, { mistakes: mistakesCount });
+    
+    return true;
+  }
+  
+  // Update monthly_gp_stats for found GP
+  const stats = await getOrCreateMonthlyGpStats(gp[0].id, month, year);
+  await db.update(monthlyGpStats)
+    .set({ mistakes: mistakesCount })
+    .where(eq(monthlyGpStats.id, stats.id));
+  
+  // Also update attendance table (legacy)
+  const attendance = await getOrCreateAttendance(gp[0].id, month, year);
+  await updateAttendance(attendance.id, { mistakes: mistakesCount });
+  
+  return true;
+}
+
 // ============================================
 // REPORT FUNCTIONS
 // ============================================
