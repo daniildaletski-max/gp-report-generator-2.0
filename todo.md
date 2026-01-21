@@ -1337,3 +1337,21 @@
 - [x] Monthly Performance section responsive (full width on mobile)
 - [x] Evaluation History cards with mobile-friendly expand/collapse
 - [x] Footer optimized for mobile (smaller text, stacked layout)
+
+
+## Monthly Mistakes Count in GP Dashboard (v61)
+- [ ] Add mistakes count to GP Portal stats
+- [ ] Show total mistakes for current month
+- [ ] Display in stats grid alongside other metrics
+- [ ] Test with GP Portal
+
+
+## GP Dashboard Mistakes Counter Verification (v36)
+
+- [x] Verify Monthly Mistakes card displays in GP Portal stats grid
+- [x] Confirm mistakes count from monthly_gp_stats shows correctly
+- [x] Test color coding (green for 0 mistakes, orange for >0 mistakes)
+- [x] Verify Monthly Performance & Bonus section shows mistakes
+- [x] Test GGs calculation (Total Games / Mistakes)
+- [x] Verify bonus eligibility calculation based on GGs
+

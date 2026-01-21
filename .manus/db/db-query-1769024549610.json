@@ -1,0 +1,35 @@
+{
+  "query": "SELECT gat.token, gat.isActive, gp.name \nFROM gp_access_tokens gat \nJOIN game_presenters gp ON gat.gamePresenterId = gp.id \nWHERE gp.name LIKE '%Agnes%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT gat.token, gat.isActive, gp.name \nFROM gp_access_tokens gat \nJOIN game_presenters gp ON gat.gamePresenterId = gp.id \nWHERE gp.name LIKE '%Agnes%';",
+  "rows": [
+    {
+      "token": "5YeQFfl79OkiFz9w4vfiCcz48PPRTHG9",
+      "isActive": "0",
+      "name": "Agnes Suvorov"
+    },
+    {
+      "token": "grWm94luRBoL_UWI1jGH9-Oj3kmrqQHa",
+      "isActive": "0",
+      "name": "Agnes Suvorov"
+    },
+    {
+      "token": "rzKN9CatxCXClLb5W6hOov4uawdhlgMc",
+      "isActive": "0",
+      "name": "Agnes Suvorov"
+    },
+    {
+      "token": "0xory0CWbwAcegebIovMuwME0AZJN66o",
+      "isActive": "0",
+      "name": "Agnes Suvorov"
+    },
+    {
+      "token": "bDHK3hPE_Yg0--1u8X9jr-oSLGPbFYFK",
+      "isActive": "0",
+      "name": "Agnes Suvorov"
+    }
+  ],
+  "messages": [],
+  "stdout": "token\tisActive\tname\n5YeQFfl79OkiFz9w4vfiCcz48PPRTHG9\t0\tAgnes Suvorov\ngrWm94luRBoL_UWI1jGH9-Oj3kmrqQHa\t0\tAgnes Suvorov\nrzKN9CatxCXClLb5W6hOov4uawdhlgMc\t0\tAgnes Suvorov\n0xory0CWbwAcegebIovMuwME0AZJN66o\t0\tAgnes Suvorov\nbDHK3hPE_Yg0--1u8X9jr-oSLGPbFYFK\t0\tAgnes Suvorov\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

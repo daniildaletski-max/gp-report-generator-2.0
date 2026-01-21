@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO monthly_gp_stats (gamePresenterId, month, year, attitude, mistakes, totalGames, createdAt, updatedAt)\nSELECT id, 1, 2026, 4, 3, 1500, NOW(), NOW()\nFROM game_presenters WHERE name LIKE '%Agnes Suvorov%'\nON DUPLICATE KEY UPDATE mistakes = 3, attitude = 4, totalGames = 1500;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute INSERT INTO monthly_gp_stats (gamePresenterId, month, year, attitude, mistakes, totalGames, createdAt, updatedAt)\nSELECT id, 1, 2026, 4, 3, 1500, NOW(), NOW()\nFROM game_presenters WHERE name LIKE '%Agnes Suvorov%'\nON DUPLICATE KEY UPDATE mistakes = 3, attitude = 4, totalGames = 1500;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 69
+}

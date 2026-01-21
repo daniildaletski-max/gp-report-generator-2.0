@@ -157,8 +157,8 @@ export default function GPPortal() {
 
       {/* Main Content */}
       <main className="container py-4 sm:py-8 space-y-4 sm:space-y-8">
-        {/* Hero Stats - Single column on very small screens */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+        {/* Hero Stats - 2 cols on mobile, 5 on desktop */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4">
           <Card className="bg-white/5 backdrop-blur-lg border-white/10 overflow-hidden group hover:bg-white/10 transition-all">
             <CardContent className="p-3 sm:pt-6 sm:px-6 relative">
               <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all" />
@@ -220,6 +220,36 @@ export default function GPPortal() {
                     {totalEvaluations > 0 ? avgTotal.toFixed(1) : "—"}
                   </p>
                   <p className="text-[10px] sm:text-sm text-yellow-200/70 truncate">Avg Total Score</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Monthly Mistakes Card */}
+          <Card className="bg-white/5 backdrop-blur-lg border-white/10 overflow-hidden group hover:bg-white/10 transition-all">
+            <CardContent className="p-3 sm:pt-6 sm:px-6 relative">
+              <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-orange-500/10 rounded-full blur-2xl group-hover:bg-orange-500/20 transition-all" />
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className={`p-2 sm:p-3 rounded-lg sm:rounded-xl shrink-0 ${
+                  (data.monthlyStats?.current?.mistakes ?? 0) === 0 
+                    ? 'bg-green-500/20' 
+                    : 'bg-orange-500/20'
+                }`}>
+                  <AlertTriangle className={`h-4 w-4 sm:h-6 sm:w-6 ${
+                    (data.monthlyStats?.current?.mistakes ?? 0) === 0 
+                      ? 'text-green-400' 
+                      : 'text-orange-400'
+                  }`} />
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-xl sm:text-3xl font-bold ${
+                    (data.monthlyStats?.current?.mistakes ?? 0) === 0 
+                      ? 'text-green-400' 
+                      : 'text-orange-400'
+                  }`}>
+                    {data.monthlyStats?.current?.mistakes ?? 0}
+                  </p>
+                  <p className="text-[10px] sm:text-sm text-orange-200/70 truncate">Monthly Mistakes</p>
                 </div>
               </div>
             </CardContent>
