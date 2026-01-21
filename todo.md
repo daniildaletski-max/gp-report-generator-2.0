@@ -1287,3 +1287,11 @@
 - [x] QuickChart v3 API for better chart rendering
 - [x] autoFill: true by default when generating reports
 - [x] All 133 tests passing
+
+
+## Fix Chart Display in Reports (v56)
+- [x] Add "Chart" sheet with data for native Google Sheets chart creation
+- [x] Chart sheet includes: GP Name, Current Month Score, Previous Month Score
+- [x] Instructions for creating chart in Google Sheets (Insert → Chart)
+- [x] Test chart visibility in Google Drive preview - 3 sheets visible: Data, Chart, Monthly Report
+- [x] All 133 tests passing

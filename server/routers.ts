@@ -1383,7 +1383,88 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           dataRow += 7;
         }
 
-        // ===== Sheet 2: Monthly Report (matching template format) =====
+        // ===== Sheet 2: Chart Data (for native Excel/Sheets chart) =====
+        const chartSheet = workbook.addWorksheet("Chart");
+        
+        // Set column widths for Chart sheet
+        chartSheet.columns = [
+          { width: 25 }, { width: 15 }, { width: 18 }, { width: 12 }
+        ];
+        
+        // Title
+        chartSheet.mergeCells("A1:D1");
+        chartSheet.getCell("A1").value = `${teamName} Performance - ${monthName} ${report.reportYear}`;
+        chartSheet.getCell("A1").font = { bold: true, size: 16 };
+        chartSheet.getCell("A1").alignment = { horizontal: "center" };
+        
+        // Headers
+        chartSheet.getCell("A3").value = "Game Presenter";
+        chartSheet.getCell("B3").value = "Appearance";
+        chartSheet.getCell("C3").value = "Game Performance";
+        chartSheet.getCell("D3").value = "Total Score";
+        
+        ["A3", "B3", "C3", "D3"].forEach(cell => {
+          chartSheet.getCell(cell).font = { bold: true };
+          chartSheet.getCell(cell).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
+          chartSheet.getCell(cell).font = { bold: true, color: { argb: "FFFFFFFF" } };
+          chartSheet.getCell(cell).alignment = { horizontal: "center" };
+        });
+        
+        // Data rows
+        let chartDataRow = 4;
+        for (const gp of gpEvaluationsData) {
+          if (gp.evaluations.length > 0) {
+            const avgAppearance = gp.evaluations.reduce((sum, e) => sum + (e.appearanceScore || 0), 0) / gp.evaluations.length;
+            const avgGamePerf = gp.evaluations.reduce((sum, e) => sum + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
+            const total = avgAppearance + avgGamePerf;
+            
+            chartSheet.getCell(`A${chartDataRow}`).value = gp.gpName;
+            chartSheet.getCell(`B${chartDataRow}`).value = Number(avgAppearance.toFixed(1));
+            chartSheet.getCell(`C${chartDataRow}`).value = Number(avgGamePerf.toFixed(1));
+            chartSheet.getCell(`D${chartDataRow}`).value = Number(total.toFixed(1));
+            
+            // Color code total score
+            if (total >= 18) {
+              chartSheet.getCell(`D${chartDataRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF92D050" } };
+            } else if (total >= 15) {
+              chartSheet.getCell(`D${chartDataRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+            } else {
+              chartSheet.getCell(`D${chartDataRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF6B6B" } };
+            }
+            chartSheet.getCell(`D${chartDataRow}`).font = { bold: true };
+            
+            chartDataRow++;
+          }
+        }
+        
+        // Add instructions for creating chart
+        const instructionRow = chartDataRow + 2;
+        chartSheet.mergeCells(`A${instructionRow}:D${instructionRow}`);
+        chartSheet.getCell(`A${instructionRow}`).value = "📊 To create a chart: Select data A3:D" + (chartDataRow - 1) + " → Insert → Chart → Bar Chart";
+        chartSheet.getCell(`A${instructionRow}`).font = { italic: true, color: { argb: "FF666666" } };
+        
+        // Add summary statistics
+        const summaryRow = instructionRow + 2;
+        chartSheet.getCell(`A${summaryRow}`).value = "Summary Statistics";
+        chartSheet.getCell(`A${summaryRow}`).font = { bold: true };
+        
+        chartSheet.getCell(`A${summaryRow + 1}`).value = "Average Appearance:";
+        chartSheet.getCell(`B${summaryRow + 1}`).value = { formula: `AVERAGE(B4:B${chartDataRow - 1})` };
+        
+        chartSheet.getCell(`A${summaryRow + 2}`).value = "Average Game Perf:";
+        chartSheet.getCell(`B${summaryRow + 2}`).value = { formula: `AVERAGE(C4:C${chartDataRow - 1})` };
+        
+        chartSheet.getCell(`A${summaryRow + 3}`).value = "Average Total:";
+        chartSheet.getCell(`B${summaryRow + 3}`).value = { formula: `AVERAGE(D4:D${chartDataRow - 1})` };
+        chartSheet.getCell(`B${summaryRow + 3}`).font = { bold: true };
+        
+        chartSheet.getCell(`A${summaryRow + 4}`).value = "Top Score:";
+        chartSheet.getCell(`B${summaryRow + 4}`).value = { formula: `MAX(D4:D${chartDataRow - 1})` };
+        
+        chartSheet.getCell(`A${summaryRow + 5}`).value = "Lowest Score:";
+        chartSheet.getCell(`B${summaryRow + 5}`).value = { formula: `MIN(D4:D${chartDataRow - 1})` };
+
+        // ===== Sheet 3: Monthly Report (matching template format) =====
         const mainSheet = workbook.addWorksheet(`${monthName} ${report.reportYear}`);
         
         // Set column widths to match template exactly
@@ -2058,7 +2139,91 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }
         ];
 
-        // ===== Sheet 2: Monthly Report =====
+        // ===== Sheet 2: Chart Data (for native Google Sheets chart) =====
+        const chartSheet = workbook.addWorksheet("Chart");
+        
+        // Set column widths for Chart sheet
+        chartSheet.columns = [
+          { width: 25 },  // GP Name
+          { width: 15 },  // Current Month
+          { width: 15 },  // Previous Month
+        ];
+        
+        // Title row
+        chartSheet.mergeCells("A1:C1");
+        chartSheet.getCell("A1").value = `${teamName} - ${monthName} ${report.reportYear} Performance Comparison`;
+        chartSheet.getCell("A1").font = { bold: true, size: 14 };
+        chartSheet.getCell("A1").alignment = { horizontal: "center" };
+        
+        // Headers for chart data
+        chartSheet.getRow(3).values = ["GP Name", `${monthName} ${report.reportYear}`, `Previous Month`];
+        chartSheet.getRow(3).font = { bold: true };
+        chartSheet.getRow(3).fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF4472C4" }
+        };
+        chartSheet.getRow(3).font = { bold: true, color: { argb: "FFFFFFFF" } };
+        
+        // Build previous month lookup
+        const prevMonthLookup: Record<string, number> = {};
+        for (const gpData of prevMonthEvaluations) {
+          const evals = gpData.evaluations;
+          if (evals.length > 0) {
+            const avgTotal = evals.reduce((sum, e) => 
+              sum + (e.gamePerformanceScore || 0) + (e.appearanceScore || 0), 0) / evals.length;
+            prevMonthLookup[gpData.gpName] = Math.round(avgTotal * 10) / 10;
+          }
+        }
+        
+        // Data rows for chart
+        let chartRowIndex = 4;
+        for (const gpData of gpEvaluationsData) {
+          const evals = gpData.evaluations;
+          const avgTotal = evals.length > 0 
+            ? evals.reduce((sum, e) => sum + (e.gamePerformanceScore || 0) + (e.appearanceScore || 0), 0) / evals.length 
+            : 0;
+          const prevTotal = prevMonthLookup[gpData.gpName] || 0;
+          
+          const row = chartSheet.getRow(chartRowIndex);
+          row.values = [
+            gpData.gpName,
+            Math.round(avgTotal * 10) / 10,
+            prevTotal
+          ];
+          
+          // Alternate row colors for readability
+          if (chartRowIndex % 2 === 0) {
+            row.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFF2F2F2" }
+            };
+          }
+          chartRowIndex++;
+        }
+        
+        // Add borders to data range
+        for (let i = 3; i < chartRowIndex; i++) {
+          for (let j = 1; j <= 3; j++) {
+            chartSheet.getCell(i, j).border = {
+              top: { style: "thin" },
+              left: { style: "thin" },
+              bottom: { style: "thin" },
+              right: { style: "thin" }
+            };
+          }
+        }
+        
+        // Add instructions for creating chart in Google Sheets
+        chartSheet.getCell(`A${chartRowIndex + 2}`).value = "📊 To create a chart in Google Sheets:";
+        chartSheet.getCell(`A${chartRowIndex + 2}`).font = { bold: true };
+        chartSheet.getCell(`A${chartRowIndex + 3}`).value = "1. Select data range A3:C" + (chartRowIndex - 1);
+        chartSheet.getCell(`A${chartRowIndex + 4}`).value = "2. Go to Insert → Chart";
+        chartSheet.getCell(`A${chartRowIndex + 5}`).value = "3. Choose 'Bar chart' or 'Column chart'";
+        chartSheet.getCell(`A${chartRowIndex + 6}`).value = "4. The chart will show current vs previous month comparison";
+
+        // ===== Sheet 3: Monthly Report =====
         const mainSheet = workbook.addWorksheet("Monthly Report");
         
         // Title
