@@ -1370,7 +1370,8 @@
 
 ## SEO Fixes for Homepage (v38)
 
-- [x] Add H1 heading to homepage (already present in hero section)
-- [x] Add H2 headings to homepage sections (How It Works, Features)
-- [x] Shorten meta description to 127 characters (was 179)
+- [x] Add H1 heading to homepage (static in index.html for crawlers + React h1)
+- [x] Add H2 headings to homepage sections (static in index.html for crawlers)
+- [x] Shorten meta description to 126 characters (was 179)
+- [x] Add sr-only hidden div with SEO headings for non-JS crawlers
 
