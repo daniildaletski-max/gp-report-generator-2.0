@@ -140,7 +140,7 @@ export default function Home() {
         <section className="container py-20">
           <div className="text-center mb-14">
             <Badge variant="outline" className="mb-4">Simple Process</Badge>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">How It Works - Simple 3-Step Process</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">How It Works</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
               Three simple steps to transform your evaluation workflow
             </p>
@@ -208,7 +208,7 @@ export default function Home() {
           <div className="container">
             <div className="text-center mb-14">
               <Badge variant="outline" className="mb-4">Features</Badge>
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">Features - Everything You Need for GP Evaluations</h2>
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">Features</h2>
               <p className="text-muted-foreground max-w-2xl mx-auto">
                 Powerful features designed to streamline your evaluation workflow
               </p>

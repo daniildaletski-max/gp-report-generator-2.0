@@ -1367,3 +1367,10 @@
 - [x] Unit tests for error file parsing logic
 - [x] Test with real error file upload (requires re-uploading file to apply new parsing)
 
+
+## SEO Fixes for Homepage (v38)
+
+- [x] Add H1 heading to homepage (already present in hero section)
+- [x] Add H2 headings to homepage sections (How It Works, Features)
+- [x] Shorten meta description to 127 characters (was 179)
+
