@@ -26,25 +26,34 @@ async function generateChartImage(
         labels: labels,
         datasets: [
           {
-            label: 'Total Score',
+            label: 'Total Score (max 24)',
             data: totalScores,
-            backgroundColor: 'rgba(54, 162, 235, 0.8)',
+            backgroundColor: 'rgba(54, 162, 235, 0.9)',
             borderColor: 'rgba(54, 162, 235, 1)',
-            borderWidth: 1
+            borderWidth: 1,
+            borderRadius: 6,
+            barPercentage: 0.8,
+            categoryPercentage: 0.9
           },
           {
-            label: 'Appearance',
+            label: 'Appearance (max 12)',
             data: appearanceScores,
-            backgroundColor: 'rgba(75, 192, 192, 0.8)',
+            backgroundColor: 'rgba(75, 192, 192, 0.9)',
             borderColor: 'rgba(75, 192, 192, 1)',
-            borderWidth: 1
+            borderWidth: 1,
+            borderRadius: 6,
+            barPercentage: 0.8,
+            categoryPercentage: 0.9
           },
           {
-            label: 'Game Performance',
+            label: 'Game Performance (max 10)',
             data: gamePerformanceScores,
-            backgroundColor: 'rgba(255, 159, 64, 0.8)',
+            backgroundColor: 'rgba(255, 159, 64, 0.9)',
             borderColor: 'rgba(255, 159, 64, 1)',
-            borderWidth: 1
+            borderWidth: 1,
+            borderRadius: 6,
+            barPercentage: 0.8,
+            categoryPercentage: 0.9
           }
         ]
       },
@@ -54,32 +63,61 @@ async function generateChartImage(
           title: {
             display: true,
             text: title,
-            font: { size: 16 }
+            font: { size: 18, weight: 'bold' },
+            padding: { bottom: 20 }
           },
           legend: {
-            position: 'bottom'
+            position: 'bottom',
+            labels: {
+              padding: 20,
+              font: { size: 12 }
+            }
+          },
+          datalabels: {
+            display: true,
+            anchor: 'end',
+            align: 'top',
+            font: { size: 10, weight: 'bold' },
+            formatter: (value: number) => value.toFixed(1)
           }
         },
         scales: {
           y: {
-            beginAtZero: true,
-            max: 24,
+            min: 0,
+            max: 25,
+            grace: '0',
+            ticks: {
+              stepSize: 5
+            },
             title: {
               display: true,
-              text: 'Score'
+              text: 'Score',
+              font: { size: 14, weight: 'bold' }
+            },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.1)'
             }
           },
           x: {
             title: {
               display: true,
-              text: 'Game Presenters'
+              text: 'Game Presenters',
+              font: { size: 14, weight: 'bold' }
+            },
+            ticks: {
+              maxRotation: 45,
+              minRotation: 45,
+              font: { size: 11 }
+            },
+            grid: {
+              display: false
             }
           }
         }
       }
     };
 
-    const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=800&h=400&bkg=white`;
+    const chartUrl = `https://quickchart.io/chart?v=3&c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=900&h=450&bkg=white`;
     
     const response = await fetch(chartUrl);
     if (!response.ok) {
@@ -1161,11 +1199,17 @@ Attendance Summary:
                 messages: [
                   {
                     role: "system",
-                    content: `You are a Floor Manager writing a team overview for a monthly report. Write professionally and concisely. Summarize team performance, highlight top performers, mention any concerns, and note attendance patterns. Keep it to 4-5 sentences. Do not use bullet points.`
+                    content: `You are a Floor Manager writing a team overview for a monthly report. Write professionally and concisely in 5-7 sentences. Include:
+1. Overall team performance summary with specific numbers
+2. Recognition of top performers by name
+3. Areas where the team excelled
+4. Any concerns or challenges observed
+5. Attendance patterns and their impact
+Do not use bullet points or numbered lists. Write in flowing paragraphs.`
                   },
                   {
                     role: "user",
-                    content: `Based on this team data, write a brief team overview:\n${dataContext}`
+                    content: `Based on this team data, write a comprehensive team overview:\n${dataContext}`
                   }
                 ]
               });
@@ -1183,11 +1227,17 @@ Attendance Summary:
                 messages: [
                   {
                     role: "system",
-                    content: `You are a Floor Manager writing about goals for a monthly report. Write professionally and concisely. Include 2-3 specific goals based on team performance data. Focus on areas that need improvement and maintaining strengths. Keep it to 3-4 sentences. Do not use bullet points.`
+                    content: `You are a Floor Manager writing team goals for a monthly report. Write professionally in 4-6 sentences. Include:
+1. 2-3 specific, measurable goals based on the data analysis
+2. Focus on improving weak areas identified in the data
+3. Goals for maintaining or building on current strengths
+4. Specific targets (e.g., "improve average appearance score from X to Y")
+5. Action items for achieving these goals
+Do not use bullet points or numbered lists. Write in flowing paragraphs with clear objectives.`
                   },
                   {
                     role: "user",
-                    content: `Based on this team data, write brief goals for the team:\n${dataContext}`
+                    content: `Based on this team data, write specific and actionable team goals:\n${dataContext}`
                   }
                 ]
               });
@@ -1921,6 +1971,236 @@ Attendance Summary:
           success: true,
           excelUrl,
         };
+      }),
+
+    exportToGoogleSheets: protectedProcedure
+      .input(z.object({
+        reportId: z.number().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        console.log(`\n\n========== [exportToGoogleSheets] START ==========`);
+        const reportWithTeam = await db.getReportWithTeam(input.reportId);
+        if (!reportWithTeam) throw new Error("Report not found");
+        
+        // FM can only export their own team's reports
+        if (ctx.user.teamId && reportWithTeam.report.teamId !== ctx.user.teamId) {
+          throw new Error("Access denied: You can only export your own team's reports");
+        }
+
+        const { report, team } = reportWithTeam;
+        const teamName = team?.teamName || "Unknown Team";
+        const monthNames = ["January", "February", "March", "April", "May", "June", 
+                          "July", "August", "September", "October", "November", "December"];
+        const monthName = monthNames[report.reportMonth - 1];
+
+        // First generate Excel file using existing logic
+        const gpEvaluationsData = await db.getGPEvaluationsForDataSheet(
+          report.teamId, 
+          report.reportYear, 
+          report.reportMonth
+        );
+
+        // Get previous month data for comparison
+        const prevMonth = report.reportMonth === 1 ? 12 : report.reportMonth - 1;
+        const prevYear = report.reportMonth === 1 ? report.reportYear - 1 : report.reportYear;
+        const prevMonthEvaluations = await db.getGPEvaluationsForDataSheet(
+          report.teamId,
+          prevYear,
+          prevMonth
+        );
+
+        const workbook = new ExcelJS.Workbook();
+        
+        // ===== Sheet 1: Data (GP Performance scores) =====
+        const dataSheet = workbook.addWorksheet("Data");
+        
+        // Headers
+        dataSheet.getRow(1).values = [
+          "GP Name", "GAME PERF.", "APPEARANCE", "TOTAL", "Eval 1", "Eval 2", "Eval 3", "Eval 4"
+        ];
+        dataSheet.getRow(1).font = { bold: true };
+        dataSheet.getRow(1).fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF4472C4" }
+        };
+        dataSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+        // Data rows
+        let rowIndex = 2;
+        for (const gpData of gpEvaluationsData) {
+          // Calculate averages from evaluations
+          const evals = gpData.evaluations;
+          const avgGamePerf = evals.length > 0 
+            ? evals.reduce((sum, e) => sum + (e.gamePerformanceScore || 0), 0) / evals.length 
+            : 0;
+          const avgAppearance = evals.length > 0 
+            ? evals.reduce((sum, e) => sum + (e.appearanceScore || 0), 0) / evals.length 
+            : 0;
+          
+          const row = dataSheet.getRow(rowIndex);
+          row.values = [
+            gpData.gpName,
+            Math.round(avgGamePerf * 10) / 10,
+            Math.round(avgAppearance * 10) / 10,
+            Math.round((avgGamePerf + avgAppearance) * 10) / 10,
+            evals[0] ? (evals[0].gamePerformanceScore || 0) + (evals[0].appearanceScore || 0) : "-",
+            evals[1] ? (evals[1].gamePerformanceScore || 0) + (evals[1].appearanceScore || 0) : "-",
+            evals[2] ? (evals[2].gamePerformanceScore || 0) + (evals[2].appearanceScore || 0) : "-",
+            evals[3] ? (evals[3].gamePerformanceScore || 0) + (evals[3].appearanceScore || 0) : "-"
+          ];
+          rowIndex++;
+        }
+
+        // Set column widths
+        dataSheet.columns = [
+          { width: 25 }, { width: 12 }, { width: 12 }, { width: 10 },
+          { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }
+        ];
+
+        // ===== Sheet 2: Monthly Report =====
+        const mainSheet = workbook.addWorksheet("Monthly Report");
+        
+        // Title
+        mainSheet.mergeCells("A1:H1");
+        mainSheet.getCell("A1").value = `${teamName} - ${monthName} ${report.reportYear} Monthly Report`;
+        mainSheet.getCell("A1").font = { bold: true, size: 16 };
+        mainSheet.getCell("A1").alignment = { horizontal: "center" };
+
+        // FM Performance section
+        mainSheet.getCell("A3").value = "FM Performance:";
+        mainSheet.getCell("A3").font = { bold: true };
+        mainSheet.mergeCells("A4:H10");
+        mainSheet.getCell("A4").value = report.fmPerformance || "";
+        mainSheet.getCell("A4").alignment = { wrapText: true, vertical: "top" };
+
+        // Goals section
+        mainSheet.getCell("A12").value = "Goals this month:";
+        mainSheet.getCell("A12").font = { bold: true };
+        mainSheet.mergeCells("A13:H17");
+        mainSheet.getCell("A13").value = report.goalsThisMonth || "";
+        mainSheet.getCell("A13").alignment = { wrapText: true, vertical: "top" };
+
+        // Team Overview section
+        mainSheet.getCell("A19").value = "Team Overview:";
+        mainSheet.getCell("A19").font = { bold: true };
+        mainSheet.mergeCells("A20:H24");
+        mainSheet.getCell("A20").value = report.teamOverview || "";
+        mainSheet.getCell("A20").alignment = { wrapText: true, vertical: "top" };
+
+        // Attendance table
+        mainSheet.getCell("A26").value = "GP Attendance:";
+        mainSheet.getCell("A26").font = { bold: true };
+        
+        const attendanceHeaders = ["Name", "Mistakes", "Extra shifts", "Late", "Missed days", "Sick leaves", "Remarks"];
+        mainSheet.getRow(27).values = attendanceHeaders;
+        mainSheet.getRow(27).font = { bold: true };
+        mainSheet.getRow(27).fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFE2EFDA" }
+        };
+
+        // Get attendance data from monthly stats
+        const attendanceData = await db.getMonthlyGpStatsByTeam(report.teamId, report.reportYear, report.reportMonth);
+        let attRowIndex = 28;
+        for (const att of attendanceData) {
+          mainSheet.getRow(attRowIndex).values = [
+            att.gp?.name || "Unknown",
+            att.stats?.mistakes || 0,
+            0, // Extra shifts
+            0, // Late
+            0, // Missed days
+            0, // Sick leaves
+            att.stats?.attitude ? `Attitude: ${att.stats.attitude}/5` : ""
+          ];
+          attRowIndex++;
+        }
+
+        // Additional Notes section
+        mainSheet.getCell(`A${attRowIndex + 2}`).value = "Additional Notes:";
+        mainSheet.getCell(`A${attRowIndex + 2}`).font = { bold: true };
+        mainSheet.mergeCells(`A${attRowIndex + 3}:H${attRowIndex + 7}`);
+        mainSheet.getCell(`A${attRowIndex + 3}`).value = "";
+        mainSheet.getCell(`A${attRowIndex + 3}`).alignment = { wrapText: true, vertical: "top" };
+
+        // Generate Excel buffer
+        const buffer = await workbook.xlsx.writeBuffer();
+        
+        // Save temporarily to local file with final name
+        const finalFileName = `${monthName}_${report.reportYear}_TeamOverview.xlsx`;
+        const tempFilePath = `/tmp/${finalFileName}`;
+        const fs = await import('fs/promises');
+        await fs.writeFile(tempFilePath, Buffer.from(buffer));
+
+        // Upload to Google Drive using rclone
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
+
+        const gdrivePath = `manus_google_drive:GP_Reports/${teamName}/${report.reportYear}`;
+        const gdriveFileName = `${monthName}_${report.reportYear}_TeamOverview.xlsx`;
+        
+        try {
+          // Upload file using copy (creates directories automatically)
+          console.log(`[exportToGoogleSheets] Uploading to ${gdrivePath}/${gdriveFileName}`);
+          await execAsync(`rclone copy "${tempFilePath}" "${gdrivePath}" --config /home/ubuntu/.gdrive-rclone.ini`);
+          
+          // Wait for Google Drive to process
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          
+          // Get shareable link
+          let googleSheetsUrl = '';
+          const finalPath = `${gdrivePath}/${finalFileName}`;
+          try {
+            const { stdout: linkOutput } = await execAsync(
+              `rclone link "${finalPath}" --config /home/ubuntu/.gdrive-rclone.ini -v`
+            );
+            googleSheetsUrl = linkOutput.trim();
+            console.log(`[exportToGoogleSheets] Got link: ${googleSheetsUrl}`);
+          } catch (linkError) {
+            // If link fails, list files to find the uploaded one
+            console.log('[exportToGoogleSheets] Link failed, trying to find file...');
+            try {
+              const { stdout: lsOutput } = await execAsync(
+                `rclone lsf "${gdrivePath}" --config /home/ubuntu/.gdrive-rclone.ini`
+              );
+              console.log(`[exportToGoogleSheets] Files in folder: ${lsOutput}`);
+              // Try to get link for the first xlsx file found
+              const files = lsOutput.split('\n').filter(f => f.endsWith('.xlsx'));
+              if (files.length > 0) {
+                const { stdout: link2 } = await execAsync(
+                  `rclone link "${gdrivePath}/${files[0]}" --config /home/ubuntu/.gdrive-rclone.ini -v`
+                );
+                googleSheetsUrl = link2.trim();
+              }
+            } catch (e) {
+              googleSheetsUrl = 'File uploaded to Google Drive (link unavailable)';
+            }
+          }
+
+          // Clean up temp file
+          await fs.unlink(tempFilePath).catch(() => {});
+
+          // Update report with Google Sheets URL
+          await db.updateReport(report.id, {
+            excelFileUrl: googleSheetsUrl,
+            status: "finalized",
+          });
+
+          console.log(`[exportToGoogleSheets] Uploaded to Google Drive: ${googleSheetsUrl}`);
+
+          return {
+            success: true,
+            googleSheetsUrl,
+            message: `Report uploaded to Google Drive: ${gdrivePath}/${gdriveFileName}`
+          };
+        } catch (error) {
+          console.error('[exportToGoogleSheets] Google Drive upload failed:', error);
+          // Clean up temp file
+          await fs.unlink(tempFilePath).catch(() => {});
+          throw new Error(`Failed to upload to Google Drive: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
       }),
 
     list: protectedProcedure.query(async ({ ctx }) => {

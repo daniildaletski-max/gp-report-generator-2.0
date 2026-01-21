@@ -1246,3 +1246,44 @@
 - [x] Performance Analysis section with Top Performers and Needs Improvement
 - [x] All 133 tests passing
 
+
+
+## Google Sheets Export (v54)
+
+- [ ] Add Google Sheets export option for monthly reports
+- [ ] Upload generated spreadsheet to Google Drive
+- [ ] Return shareable Google Sheets link
+- [ ] Keep Excel export as alternative option
+- [ ] Update UI with format selection (Excel vs Google Sheets)
+
+
+
+## AI Report Generation Enhancements (v55)
+- [ ] Add chart graph with GP evaluations in Excel report
+- [ ] Add AI analysis of evaluation data
+- [ ] Add AI-generated Team Goals based on analysis
+- [ ] Add AI-generated Team Overview based on analysis
+- [ ] Display full names (First + Last) on chart X-axis
+
+
+## Google Sheets Export & AI Report Generation (v54-55)
+
+- [x] Add Export to Google Sheets button (uploads Excel to Google Drive)
+- [x] Google Drive folder structure: GP_Reports/TeamName/Year/
+- [x] Get shareable link after upload
+- [x] AI-generated Team Goals based on evaluation data analysis
+- [x] AI-generated Team Overview with performance summary
+- [x] Chart graph with GP evaluations (Total Score, Appearance, Game Performance)
+- [x] Fixed Y-axis to start from 0 for better visualization
+- [x] Auto-fill fields when generating report (autoFill: true by default)
+- [x] Performance Analysis section with Top Performers and Team Statistics
+
+
+## Report Improvements Completed (v55)
+- [x] Chart graph with GP evaluations - Y-axis starts from 0 (QuickChart v3)
+- [x] AI-generated Team Goals based on data analysis
+- [x] AI-generated Team Overview based on data analysis
+- [x] Google Sheets export functionality (upload to Google Drive)
+- [x] QuickChart v3 API for better chart rendering
+- [x] autoFill: true by default when generating reports
+- [x] All 133 tests passing

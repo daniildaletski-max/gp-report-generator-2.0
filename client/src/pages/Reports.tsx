@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2, Trash2, Eye, Calendar, Users, TrendingUp, Search, Filter, X, Copy, CheckCircle } from "lucide-react";
+import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2, Trash2, Eye, Calendar, Users, TrendingUp, Search, Filter, X, Copy, CheckCircle, Cloud, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -60,6 +60,8 @@ export default function ReportsPage() {
   const { data: teams } = trpc.fmTeam.list.useQuery();
   const generateMutation = trpc.report.generate.useMutation();
   const exportMutation = trpc.report.exportToExcel.useMutation();
+  const exportGoogleSheetsMutation = trpc.report.exportToGoogleSheets.useMutation();
+  const [isExportingGoogleSheets, setIsExportingGoogleSheets] = useState<number | null>(null);
   const autoFillMutation = trpc.report.autoFillFields.useMutation();
   const deleteMutation = trpc.report.delete.useMutation({
     onSuccess: () => {
@@ -204,7 +206,10 @@ export default function ReportsPage() {
 
     setIsGenerating(true);
     try {
-      await generateMutation.mutateAsync(formData);
+      await generateMutation.mutateAsync({
+        ...formData,
+        autoFill: true, // Always auto-fill empty fields with AI-generated content
+      });
       toast.success("Report generated successfully");
       setShowNewReport(false);
       setFormData({
@@ -235,6 +240,20 @@ export default function ReportsPage() {
       toast.error(error.message || "Failed to export report");
     } finally {
       setIsExporting(null);
+    }
+  };
+
+  const handleExportGoogleSheets = async (reportId: number) => {
+    setIsExportingGoogleSheets(reportId);
+    try {
+      const result = await exportGoogleSheetsMutation.mutateAsync({ reportId });
+      toast.success("Report uploaded to Google Drive!");
+      window.open(result.googleSheetsUrl, "_blank");
+      refetch();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to export to Google Sheets");
+    } finally {
+      setIsExportingGoogleSheets(null);
     }
   };
 
@@ -604,7 +623,7 @@ export default function ReportsPage() {
                             <Eye className="h-4 w-4" />
                           </Button>
                           
-                          {/* Download/Export */}
+                          {/* Download/Export Excel */}
                           {item.report.excelFileUrl ? (
                             <>
                               <Button
@@ -612,6 +631,7 @@ export default function ReportsPage() {
                                 size="icon"
                                 className="h-8 w-8"
                                 onClick={() => window.open(item.report.excelFileUrl!, "_blank")}
+                                title="Download Excel"
                               >
                                 <Download className="h-4 w-4" />
                               </Button>
@@ -646,6 +666,22 @@ export default function ReportsPage() {
                               )}
                             </Button>
                           )}
+                          
+                          {/* Export to Google Sheets */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-green-600 hover:text-green-700"
+                            onClick={() => handleExportGoogleSheets(item.report.id)}
+                            disabled={isExportingGoogleSheets === item.report.id}
+                            title="Export to Google Sheets"
+                          >
+                            {isExportingGoogleSheets === item.report.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Cloud className="h-4 w-4" />
+                            )}
+                          </Button>
                           
                           {/* Delete */}
                           <AlertDialog>
@@ -817,6 +853,19 @@ export default function ReportsPage() {
                     Export to Excel
                   </Button>
                 )}
+                <Button 
+                  variant="outline" 
+                  className="text-green-600 border-green-600 hover:bg-green-50"
+                  onClick={() => handleExportGoogleSheets(viewingReport.report.id)} 
+                  disabled={isExportingGoogleSheets === viewingReport.report.id}
+                >
+                  {isExportingGoogleSheets === viewingReport.report.id ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Cloud className="h-4 w-4 mr-2" />
+                  )}
+                  Google Sheets
+                </Button>
               </div>
             </div>
           )}
