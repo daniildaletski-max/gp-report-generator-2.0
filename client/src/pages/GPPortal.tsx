@@ -111,108 +111,115 @@ export default function GPPortal() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
-      {/* Header */}
+      {/* Header - Mobile Optimized */}
       <header className="bg-white/5 backdrop-blur-lg border-b border-white/10 sticky top-0 z-50">
-        <div className="container py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white p-3 rounded-xl shadow-lg shadow-blue-500/30">
-                <Star className="h-7 w-7" />
+        <div className="container py-3 sm:py-4">
+          {/* Mobile: Stack vertically, Desktop: Side by side */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            {/* Logo and Title */}
+            <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white p-2 sm:p-3 rounded-xl shadow-lg shadow-blue-500/30">
+                <Star className="h-5 w-5 sm:h-7 sm:w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">My Performance</h1>
-                <p className="text-sm text-blue-200/70">Game Presenter Dashboard</p>
+                <h1 className="text-lg sm:text-2xl font-bold text-white">My Performance</h1>
+                <p className="text-xs sm:text-sm text-blue-200/70">Game Presenter Dashboard</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            
+            {/* Name Badge and Refresh - Mobile: Full width row */}
+            <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3">
+              <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-sm sm:text-lg px-3 sm:px-4 py-1.5 sm:py-2 shadow-lg truncate max-w-[200px] sm:max-w-none">
+                {data.gpName}
+              </Badge>
               <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={handleManualRefresh}
                 disabled={isFetching}
-                className="text-blue-200 hover:text-white hover:bg-white/10"
+                className="text-blue-200 hover:text-white hover:bg-white/10 shrink-0"
               >
-                <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
-                Refresh
+                <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline ml-2">Refresh</span>
               </Button>
-              <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-lg px-4 py-2 shadow-lg">
-                {data.gpName}
-              </Badge>
             </div>
           </div>
-          <div className="mt-2 text-xs text-blue-300/50 flex items-center gap-1">
+          
+          {/* Last updated - smaller on mobile */}
+          <div className="mt-2 text-[10px] sm:text-xs text-blue-300/50 flex items-center gap-1">
             <Clock className="h-3 w-3" />
-            Last updated: {formatDistanceToNow(lastRefresh, { addSuffix: true })}
+            <span className="hidden sm:inline">Last updated: </span>
+            {formatDistanceToNow(lastRefresh, { addSuffix: true })}
             {isFetching && <span className="ml-2 text-blue-400">• Syncing...</span>}
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container py-8 space-y-8">
-        {/* Hero Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <main className="container py-4 sm:py-8 space-y-4 sm:space-y-8">
+        {/* Hero Stats - Single column on very small screens */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           <Card className="bg-white/5 backdrop-blur-lg border-white/10 overflow-hidden group hover:bg-white/10 transition-all">
-            <CardContent className="pt-6 relative">
-              <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all" />
-              <div className="flex items-center gap-4">
-                <div className="bg-blue-500/20 p-3 rounded-xl">
-                  <Eye className="h-6 w-6 text-blue-400" />
+            <CardContent className="p-3 sm:pt-6 sm:px-6 relative">
+              <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all" />
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="bg-blue-500/20 p-2 sm:p-3 rounded-lg sm:rounded-xl shrink-0">
+                  <Eye className="h-4 w-4 sm:h-6 sm:w-6 text-blue-400" />
                 </div>
-                <div>
-                  <p className="text-3xl font-bold text-white">{totalEvaluations}</p>
-                  <p className="text-sm text-blue-200/70">Total Evaluations</p>
+                <div className="min-w-0">
+                  <p className="text-xl sm:text-3xl font-bold text-white">{totalEvaluations}</p>
+                  <p className="text-[10px] sm:text-sm text-blue-200/70 truncate">Total Evaluations</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           
           <Card className="bg-white/5 backdrop-blur-lg border-white/10 overflow-hidden group hover:bg-white/10 transition-all">
-            <CardContent className="pt-6 relative">
-              <div className="absolute top-0 right-0 w-20 h-20 bg-green-500/10 rounded-full blur-2xl group-hover:bg-green-500/20 transition-all" />
-              <div className="flex items-center gap-4">
-                <div className="bg-green-500/20 p-3 rounded-xl">
-                  <Sparkles className="h-6 w-6 text-green-400" />
+            <CardContent className="p-3 sm:pt-6 sm:px-6 relative">
+              <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-green-500/10 rounded-full blur-2xl group-hover:bg-green-500/20 transition-all" />
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="bg-green-500/20 p-2 sm:p-3 rounded-lg sm:rounded-xl shrink-0">
+                  <Sparkles className="h-4 w-4 sm:h-6 sm:w-6 text-green-400" />
                 </div>
-                <div>
-                  <p className="text-3xl font-bold text-white">
+                <div className="min-w-0">
+                  <p className="text-xl sm:text-3xl font-bold text-white">
                     {totalEvaluations > 0 ? avgAppearance.toFixed(1) : "—"}
                   </p>
-                  <p className="text-sm text-green-200/70">Avg Appearance</p>
+                  <p className="text-[10px] sm:text-sm text-green-200/70 truncate">Avg Appearance</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           
           <Card className="bg-white/5 backdrop-blur-lg border-white/10 overflow-hidden group hover:bg-white/10 transition-all">
-            <CardContent className="pt-6 relative">
-              <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/10 rounded-full blur-2xl group-hover:bg-purple-500/20 transition-all" />
-              <div className="flex items-center gap-4">
-                <div className="bg-purple-500/20 p-3 rounded-xl">
-                  <Gamepad2 className="h-6 w-6 text-purple-400" />
+            <CardContent className="p-3 sm:pt-6 sm:px-6 relative">
+              <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-purple-500/10 rounded-full blur-2xl group-hover:bg-purple-500/20 transition-all" />
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="bg-purple-500/20 p-2 sm:p-3 rounded-lg sm:rounded-xl shrink-0">
+                  <Gamepad2 className="h-4 w-4 sm:h-6 sm:w-6 text-purple-400" />
                 </div>
-                <div>
-                  <p className="text-3xl font-bold text-white">
+                <div className="min-w-0">
+                  <p className="text-xl sm:text-3xl font-bold text-white">
                     {totalEvaluations > 0 ? avgGamePerf.toFixed(1) : "—"}
                   </p>
-                  <p className="text-sm text-purple-200/70">Avg Game Perf.</p>
+                  <p className="text-[10px] sm:text-sm text-purple-200/70 truncate">Avg Game Perf.</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-white/5 backdrop-blur-lg border-white/10 overflow-hidden group hover:bg-white/10 transition-all">
-            <CardContent className="pt-6 relative">
-              <div className="absolute top-0 right-0 w-20 h-20 bg-yellow-500/10 rounded-full blur-2xl group-hover:bg-yellow-500/20 transition-all" />
-              <div className="flex items-center gap-4">
-                <div className="bg-yellow-500/20 p-3 rounded-xl">
-                  <Award className="h-6 w-6 text-yellow-400" />
+            <CardContent className="p-3 sm:pt-6 sm:px-6 relative">
+              <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-yellow-500/10 rounded-full blur-2xl group-hover:bg-yellow-500/20 transition-all" />
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="bg-yellow-500/20 p-2 sm:p-3 rounded-lg sm:rounded-xl shrink-0">
+                  <Award className="h-4 w-4 sm:h-6 sm:w-6 text-yellow-400" />
                 </div>
-                <div>
-                  <p className="text-3xl font-bold text-white">
+                <div className="min-w-0">
+                  <p className="text-xl sm:text-3xl font-bold text-white">
                     {totalEvaluations > 0 ? avgTotal.toFixed(1) : "—"}
                   </p>
-                  <p className="text-sm text-yellow-200/70">Avg Total Score</p>
+                  <p className="text-[10px] sm:text-sm text-yellow-200/70 truncate">Avg Total Score</p>
                 </div>
               </div>
             </CardContent>
@@ -220,7 +227,7 @@ export default function GPPortal() {
         </div>
 
         {/* Trend & Recent Activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
           {/* Performance Trend */}
           <Card className="bg-white/5 backdrop-blur-lg border-white/10">
             <CardHeader>
@@ -320,12 +327,12 @@ export default function GPPortal() {
         {/* Monthly Stats & Bonus Section */}
         {data.monthlyStats && (
           <div>
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-              <Trophy className="h-5 w-5 text-yellow-400" />
-              Monthly Performance & Bonus Status
+            <h2 className="text-base sm:text-xl font-semibold mb-3 sm:mb-4 flex items-center gap-2 text-white">
+              <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-400" />
+              Monthly Performance & Bonus
             </h2>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
               {/* Current Month Stats */}
               {data.monthlyStats.current && (
                 <Card className="bg-gradient-to-br from-blue-500/20 to-indigo-500/20 backdrop-blur-lg border-blue-400/30">
@@ -503,24 +510,24 @@ export default function GPPortal() {
 
         {/* Evaluations List */}
         <div>
-          <h2 className="text-xl font-semibold mb-4 text-white flex items-center gap-2">
-            <Eye className="h-5 w-5 text-blue-400" />
+          <h2 className="text-base sm:text-xl font-semibold mb-3 sm:mb-4 text-white flex items-center gap-2">
+            <Eye className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400" />
             Evaluation History
             {totalEvaluations > 0 && (
-              <Badge variant="secondary" className="ml-2">{totalEvaluations}</Badge>
+              <Badge variant="secondary" className="ml-2 text-xs sm:text-sm">{totalEvaluations}</Badge>
             )}
           </h2>
           
           {data.evaluations.length === 0 ? (
             <Card className="bg-white/5 backdrop-blur-lg border-white/10">
-              <CardContent className="py-16 text-center">
-                <Eye className="h-16 w-16 text-blue-300/30 mx-auto mb-4" />
-                <p className="text-blue-200/60 text-lg">No evaluations yet</p>
-                <p className="text-blue-200/40 text-sm mt-2">Check back after your next evaluation!</p>
+              <CardContent className="py-10 sm:py-16 text-center">
+                <Eye className="h-12 w-12 sm:h-16 sm:w-16 text-blue-300/30 mx-auto mb-4" />
+                <p className="text-blue-200/60 text-base sm:text-lg">No evaluations yet</p>
+                <p className="text-blue-200/40 text-xs sm:text-sm mt-2">Check back after your next evaluation!</p>
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {data.evaluations.map((evaluation) => {
                 const isExpanded = expandedEvaluations.has(evaluation.id);
                 const scoreColor = (evaluation.totalScore || 0) >= 18 ? 'green' : 
@@ -534,31 +541,41 @@ export default function GPPortal() {
                     }`}
                   >
                     <CardHeader 
-                      className="cursor-pointer"
+                      className="cursor-pointer p-3 sm:p-6"
                       onClick={() => toggleEvaluation(evaluation.id)}
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                          <div className={`w-3 h-3 rounded-full ${
+                      {/* Mobile: Stack vertically, Desktop: Side by side */}
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+                        {/* Date and Game info */}
+                        <div className="flex items-center gap-2 sm:gap-4">
+                          <div className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full shrink-0 ${
                             scoreColor === 'green' ? 'bg-green-400' :
                             scoreColor === 'yellow' ? 'bg-yellow-400' : 'bg-red-400'
                           }`} />
-                          <div className="flex items-center gap-2 text-blue-200/70">
-                            <Calendar className="h-4 w-4" />
-                            <span className="font-medium text-white">
+                          <div className="flex items-center gap-1.5 sm:gap-2 text-blue-200/70 min-w-0">
+                            <Calendar className="h-3 w-3 sm:h-4 sm:w-4 shrink-0" />
+                            <span className="font-medium text-white text-sm sm:text-base truncate">
                               {evaluation.evaluationDate 
-                                ? format(new Date(evaluation.evaluationDate), "MMMM d, yyyy")
+                                ? format(new Date(evaluation.evaluationDate), "MMM d, yyyy")
                                 : "Date unknown"}
                             </span>
                           </div>
                           {evaluation.game && (
-                            <Badge variant="outline" className="border-blue-400/30 text-blue-200">
+                            <Badge variant="outline" className="border-blue-400/30 text-blue-200 text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 hidden sm:inline-flex">
                               {evaluation.game}
                             </Badge>
                           )}
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Badge className={`text-lg px-4 py-1 ${
+                        
+                        {/* Score and expand button */}
+                        <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 pl-4 sm:pl-0">
+                          {/* Show game badge on mobile in this row */}
+                          {evaluation.game && (
+                            <Badge variant="outline" className="border-blue-400/30 text-blue-200 text-[10px] px-1.5 py-0.5 sm:hidden">
+                              {evaluation.game}
+                            </Badge>
+                          )}
+                          <Badge className={`text-sm sm:text-lg px-2 sm:px-4 py-0.5 sm:py-1 ${
                             scoreColor === 'green' ? 'bg-green-500/30 text-green-300' :
                             scoreColor === 'yellow' ? 'bg-yellow-500/30 text-yellow-300' : 
                             'bg-red-500/30 text-red-300'
@@ -566,25 +583,25 @@ export default function GPPortal() {
                             {evaluation.totalScore ?? "—"}/22
                           </Badge>
                           {isExpanded ? (
-                            <ChevronUp className="h-5 w-5 text-blue-200/50" />
+                            <ChevronUp className="h-4 w-4 sm:h-5 sm:w-5 text-blue-200/50" />
                           ) : (
-                            <ChevronDown className="h-5 w-5 text-blue-200/50" />
+                            <ChevronDown className="h-4 w-4 sm:h-5 sm:w-5 text-blue-200/50" />
                           )}
                         </div>
                       </div>
                     </CardHeader>
                     
                     {isExpanded && (
-                      <CardContent className="pt-0 pb-6 animate-in slide-in-from-top-2">
-                        <Separator className="bg-white/10 mb-6" />
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <CardContent className="pt-0 pb-4 sm:pb-6 px-3 sm:px-6 animate-in slide-in-from-top-2">
+                        <Separator className="bg-white/10 mb-4 sm:mb-6" />
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                           {/* Appearance Section */}
                           <div>
-                            <h4 className="font-semibold text-white mb-4 flex items-center gap-2">
-                              <Sparkles className="h-4 w-4 text-pink-400" />
+                            <h4 className="font-semibold text-white mb-3 sm:mb-4 flex items-center gap-2 text-sm sm:text-base">
+                              <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 text-pink-400" />
                               Appearance ({evaluation.appearanceScore ?? 0}/12)
                             </h4>
-                            <div className="space-y-3">
+                            <div className="space-y-2 sm:space-y-3">
                               <ScoreRow 
                                 icon={<Scissors className="h-4 w-4" />}
                                 label="Hair"
@@ -618,11 +635,11 @@ export default function GPPortal() {
 
                           {/* Game Performance Section */}
                           <div>
-                            <h4 className="font-semibold text-white mb-4 flex items-center gap-2">
-                              <Gamepad2 className="h-4 w-4 text-blue-400" />
+                            <h4 className="font-semibold text-white mb-3 sm:mb-4 flex items-center gap-2 text-sm sm:text-base">
+                              <Gamepad2 className="h-3 w-3 sm:h-4 sm:w-4 text-blue-400" />
                               Game Performance ({evaluation.gamePerformanceTotalScore ?? 0}/10)
                             </h4>
-                            <div className="space-y-3">
+                            <div className="space-y-2 sm:space-y-3">
                               <ScoreRow 
                                 icon={<Star className="h-4 w-4" />}
                                 label="Dealing Style"
@@ -651,12 +668,12 @@ export default function GPPortal() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-white/5 border-t border-white/10 py-8 mt-8">
-        <div className="container text-center">
-          <p className="text-blue-200/50 text-sm">This is a read-only view of your evaluations.</p>
-          <p className="text-blue-200/40 text-xs mt-1">For questions, please contact your Floor Manager.</p>
-          <p className="text-blue-200/30 text-xs mt-4">
-            Auto-refreshes every 30 seconds • Last sync: {format(lastRefresh, "HH:mm:ss")}
+      <footer className="bg-white/5 border-t border-white/10 py-4 sm:py-8 mt-4 sm:mt-8">
+        <div className="container text-center px-4">
+          <p className="text-blue-200/50 text-xs sm:text-sm">This is a read-only view of your evaluations.</p>
+          <p className="text-blue-200/40 text-[10px] sm:text-xs mt-1">For questions, please contact your Floor Manager.</p>
+          <p className="text-blue-200/30 text-[10px] sm:text-xs mt-2 sm:mt-4">
+            Auto-refreshes every 30s • Last sync: {format(lastRefresh, "HH:mm:ss")}
           </p>
         </div>
       </footer>
@@ -686,13 +703,13 @@ function ScoreRow({
   };
 
   return (
-    <div className="bg-white/5 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2 text-blue-200/80">
-          {icon}
-          <span className="font-medium">{label}</span>
+    <div className="bg-white/5 rounded-lg sm:rounded-xl p-2.5 sm:p-4">
+      <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 text-blue-200/80">
+          <span className="[&>svg]:h-3 [&>svg]:w-3 sm:[&>svg]:h-4 sm:[&>svg]:w-4">{icon}</span>
+          <span className="font-medium text-xs sm:text-sm">{label}</span>
         </div>
-        <Badge className={`${
+        <Badge className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 ${
           percentage >= 80 ? "bg-green-500/30 text-green-300" :
           percentage >= 60 ? "bg-yellow-500/30 text-yellow-300" :
           "bg-red-500/30 text-red-300"
@@ -700,14 +717,14 @@ function ScoreRow({
           {score ?? "—"}/{maxScore}
         </Badge>
       </div>
-      <div className="w-full bg-white/10 rounded-full h-2 mb-2">
+      <div className="w-full bg-white/10 rounded-full h-1.5 sm:h-2 mb-1.5 sm:mb-2">
         <div 
-          className={`h-2 rounded-full transition-all ${getColor()}`}
+          className={`h-1.5 sm:h-2 rounded-full transition-all ${getColor()}`}
           style={{ width: `${percentage}%` }}
         />
       </div>
       {comment && (
-        <p className="text-sm text-blue-200/60 italic mt-2">"{comment}"</p>
+        <p className="text-[10px] sm:text-sm text-blue-200/60 italic mt-1.5 sm:mt-2 line-clamp-2">"{comment}"</p>
       )}
     </div>
   );

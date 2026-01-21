@@ -1324,3 +1324,16 @@
 - [x] Score column (Q) now single column instead of merged Q:R
 - [x] Other columns (R:X) properly aligned: Mistakes, Extra shifts, Lateness, Missed day, Sick leave, Attitude, Remarks
 - [x] Tested in Google Sheets - all headers correctly aligned on purple background
+
+
+## Mobile-Friendly GP Dashboard (v60)
+- [x] Analyze current GP Dashboard layout for mobile issues
+- [x] Improve responsive design for evaluation cards
+- [x] Optimize stats grid for small screens (grid-cols-2 lg:grid-cols-4)
+- [x] Ensure touch-friendly buttons and interactions (min-h-[44px])
+- [x] Header layout: name badge wraps, refresh shows only icon on mobile
+- [x] Responsive padding and gaps (p-3 sm:pt-6, gap-2 sm:gap-4)
+- [x] ScoreRow component optimized for mobile (smaller text, compact layout)
+- [x] Monthly Performance section responsive (full width on mobile)
+- [x] Evaluation History cards with mobile-friendly expand/collapse
+- [x] Footer optimized for mobile (smaller text, stacked layout)
