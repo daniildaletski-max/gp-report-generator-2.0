@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, sql, desc, inArray, isNull } from "drizzle-orm";
+import { eq, and, or, gte, lte, sql, desc, inArray, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, users, User,
@@ -481,13 +481,20 @@ export async function getEvaluationsWithGPByUser(userId: number) {
   const db = await getDb();
   if (!db) return [];
 
+  // Filter by uploadedById OR userId for backwards compatibility
+  // uploadedById is set during upload, userId is for explicit ownership
   return await db.select({
     evaluation: evaluations,
     gamePresenter: gamePresenters,
   })
   .from(evaluations)
   .leftJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
-  .where(eq(evaluations.userId, userId))
+  .where(
+    or(
+      eq(evaluations.uploadedById, userId),
+      eq(evaluations.userId, userId)
+    )
+  )
   .orderBy(desc(evaluations.createdAt));
 }
 

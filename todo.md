@@ -1179,3 +1179,18 @@
 - [x] Set document.title (30-60 characters)
 - [x] Add meta description (50-160 characters)
 - [x] Add relevant keywords to content
+
+
+## Bug Fix: Upload to Evaluations Sync (v52)
+- [ ] Fix: Uploaded screenshots not syncing to Evaluations module
+- [ ] Ensure extracted data from screenshots creates evaluation records in database
+- [ ] Verify the upload → AI extraction → save to evaluations flow works correctly
+
+
+## Bug Fix: Upload to Evaluations Sync (v52)
+
+- [x] Investigate why uploaded screenshots don't appear in Evaluations module
+- [x] Fix data synchronization between Upload and Evaluations
+- [x] Added userId field when creating evaluation from upload
+- [x] Updated getEvaluationsWithGPByUser to filter by uploadedById OR userId
+- [x] All 133 tests passing

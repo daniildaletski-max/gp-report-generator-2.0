@@ -517,6 +517,7 @@ export const appRouter = router({
           screenshotKey: fileKey,
           rawExtractedData: extractedData,
           uploadedById: ctx.user.id,
+          userId: ctx.user.id, // For data isolation - user sees their own uploads
         });
 
         return {
