@@ -1,0 +1,24 @@
+{
+  "query": "SELECT id, gamePresenterId, evaluationDate, appearanceScore, gamePerformanceTotalScore FROM evaluations LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT id, gamePresenterId, evaluationDate, appearanceScore, gamePerformanceTotalScore FROM evaluations LIMIT 10;",
+  "rows": [
+    {
+      "id": "390004",
+      "gamePresenterId": "1",
+      "evaluationDate": "NULL",
+      "appearanceScore": "0",
+      "gamePerformanceTotalScore": "0"
+    },
+    {
+      "id": "390005",
+      "gamePresenterId": "1",
+      "evaluationDate": "2026-01-09 00:00:00",
+      "appearanceScore": "11",
+      "gamePerformanceTotalScore": "10"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tgamePresenterId\tevaluationDate\tappearanceScore\tgamePerformanceTotalScore\n390004\t1\tNULL\t0\t0\n390005\t1\t2026-01-09 00:00:00\t11\t10\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

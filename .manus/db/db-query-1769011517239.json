@@ -1,0 +1,24 @@
+{
+  "query": "SELECT e.id, e.gamePresenterId, e.evaluationDate, gp.name, gp.teamId FROM evaluations e JOIN game_presenters gp ON e.gamePresenterId = gp.id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT e.id, e.gamePresenterId, e.evaluationDate, gp.name, gp.teamId FROM evaluations e JOIN game_presenters gp ON e.gamePresenterId = gp.id;",
+  "rows": [
+    {
+      "id": "390005",
+      "gamePresenterId": "1",
+      "evaluationDate": "2026-01-09 00:00:00",
+      "name": "Agnes Suvorov",
+      "teamId": "NULL"
+    },
+    {
+      "id": "390004",
+      "gamePresenterId": "1",
+      "evaluationDate": "NULL",
+      "name": "Agnes Suvorov",
+      "teamId": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tgamePresenterId\tevaluationDate\tname\tteamId\n390005\t1\t2026-01-09 00:00:00\tAgnes Suvorov\tNULL\n390004\t1\tNULL\tAgnes Suvorov\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

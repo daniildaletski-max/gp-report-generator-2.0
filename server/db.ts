@@ -1333,9 +1333,9 @@ export async function getGPEvaluationsForDataSheet(teamId: number, year: number,
     return [];
   }
 
-  // Use UTC dates to avoid timezone issues
-  const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
-  const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59));
+  // Use local dates for the month range (start of month to end of month)
+  const startDate = new Date(year, month - 1, 1, 0, 0, 0);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
   console.log(`[getGPEvaluationsForDataSheet] Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
   // Get all GPs in the team with their evaluations for the month
@@ -1348,17 +1348,19 @@ export async function getGPEvaluationsForDataSheet(teamId: number, year: number,
 
   const result = [];
 
-  // Debug: check first GP's evaluations without date filter
-  if (gps.length > 0) {
-    const debugEvals = await db.select({
+  // Debug: check all evaluations for this team's GPs without date filter
+  const gpIds = gps.map(g => g.gpId);
+  if (gpIds.length > 0) {
+    const allTeamEvals = await db.select({
       id: evaluations.id,
       gpId: evaluations.gamePresenterId,
       date: evaluations.evaluationDate,
+      appearance: evaluations.appearanceScore,
+      gamePerf: evaluations.gamePerformanceTotalScore,
     })
     .from(evaluations)
-    .where(eq(evaluations.gamePresenterId, gps[0].gpId))
-    .limit(5);
-    console.log(`[getGPEvaluationsForDataSheet] Debug - First GP (${gps[0].gpId}) evaluations without date filter:`, debugEvals);
+    .where(inArray(evaluations.gamePresenterId, gpIds));
+    console.log(`[getGPEvaluationsForDataSheet] Debug - All team evaluations without date filter:`, allTeamEvals);
   }
 
   for (const gp of gps) {

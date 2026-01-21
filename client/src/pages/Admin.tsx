@@ -100,6 +100,7 @@ function FMRestrictedView() {
           accessTokens={accessTokens || []}
           teams={teams || []}
           refetchTokens={refetchTokens}
+          refetchGPs={refetchGPs}
           isLoading={gpsLoading || tokensLoading}
         />
       </Tabs>
@@ -207,6 +208,7 @@ function FullAdminPanel() {
           accessTokens={accessTokens || []}
           teams={teams || []}
           refetchTokens={refetchTokens}
+          refetchGPs={refetchGPs}
           isLoading={false}
         />
 
@@ -1092,17 +1094,30 @@ function GPAccessLinksTab({
   accessTokens, 
   teams, 
   refetchTokens,
+  refetchGPs,
   isLoading 
 }: { 
   gamePresenters: any[];
   accessTokens: any[];
   teams: any[];
   refetchTokens: () => void;
+  refetchGPs: () => void;
   isLoading: boolean;
 }) {
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [generatingForGp, setGeneratingForGp] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [assigningTeamForGp, setAssigningTeamForGp] = useState<number | null>(null);
+
+  const assignToTeam = trpc.gamePresenter.assignToTeam.useMutation({
+    onSuccess: () => {
+      toast.success("GP assigned to team");
+      refetchGPs();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to assign team");
+    },
+  });
 
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [isExportingCSV, setIsExportingCSV] = useState(false);
@@ -1292,6 +1307,7 @@ function GPAccessLinksTab({
                         <TableHeader>
                           <TableRow className="bg-muted/50">
                             <TableHead>Name</TableHead>
+                            <TableHead>Team</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Access Link</TableHead>
                             <TableHead className="w-[150px]">Actions</TableHead>
@@ -1305,6 +1321,38 @@ function GPAccessLinksTab({
                             return (
                               <TableRow key={gp.id} className="hover:bg-muted/50">
                                 <TableCell className="font-medium">{gp.name}</TableCell>
+                                <TableCell>
+                                  <Select
+                                    value={gp.teamId?.toString() || "0"}
+                                    onValueChange={(value) => {
+                                      const newTeamId = parseInt(value);
+                                      if (newTeamId !== gp.teamId) {
+                                        setAssigningTeamForGp(gp.id);
+                                        assignToTeam.mutate(
+                                          { gpId: gp.id, teamId: newTeamId },
+                                          { onSettled: () => setAssigningTeamForGp(null) }
+                                        );
+                                      }
+                                    }}
+                                    disabled={assigningTeamForGp === gp.id}
+                                  >
+                                    <SelectTrigger className="w-[140px] h-8">
+                                      {assigningTeamForGp === gp.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <SelectValue placeholder="Select team" />
+                                      )}
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="0">Unassigned</SelectItem>
+                                      {teams.map((t) => (
+                                        <SelectItem key={t.id} value={t.id.toString()}>
+                                          {t.teamName}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </TableCell>
                                 <TableCell>
                                   {token ? (
                                     <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">

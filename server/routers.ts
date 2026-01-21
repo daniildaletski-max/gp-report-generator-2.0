@@ -1093,6 +1093,7 @@ Attendance Summary:
         goalsThisMonth: z.string().optional(),
         teamOverview: z.string().optional(),
         additionalComments: z.string().optional(),
+        autoFill: z.boolean().optional().default(true), // Auto-fill empty fields by default
       }))
       .mutation(async ({ ctx, input }) => {
         // FM can only generate reports for their own team
@@ -1105,14 +1106,106 @@ Attendance Summary:
 
         const stats = await db.getGPMonthlyStats(input.teamId, input.reportYear, input.reportMonth);
         const attendance = await db.getAttendanceByTeamMonth(input.teamId, input.reportMonth, input.reportYear);
+        const monthName = MONTH_NAMES[input.reportMonth - 1];
+
+        // Auto-generate content if fields are empty and autoFill is enabled
+        let fmPerformance = input.fmPerformance || null;
+        let goalsThisMonth = input.goalsThisMonth || null;
+        let teamOverview = input.teamOverview || null;
+
+        if (input.autoFill && stats.length > 0) {
+          // Calculate team statistics for auto-generation
+          const avgTotal = stats.reduce((sum, gp) => sum + Number(gp.avgTotalScore || 0), 0) / stats.length;
+          const avgAppearance = stats.reduce((sum, gp) => sum + Number(gp.avgAppearanceScore || 0), 0) / stats.length;
+          const avgGamePerf = stats.reduce((sum, gp) => sum + Number(gp.avgGamePerfScore || 0), 0) / stats.length;
+          
+          const topPerformers = [...stats]
+            .sort((a, b) => Number(b.avgTotalScore || 0) - Number(a.avgTotalScore || 0))
+            .slice(0, 3);
+          
+          const needsImprovement = stats.filter(gp => Number(gp.avgTotalScore || 0) < 18);
+          
+          // Calculate attendance stats
+          const totalMistakes = attendance.reduce((sum, a) => sum + (a.monthlyStats?.mistakes || a.attendance?.mistakes || 0), 0);
+          const totalExtraShifts = attendance.reduce((sum, a) => sum + (a.attendance?.extraShifts || 0), 0);
+          const totalLate = attendance.reduce((sum, a) => sum + (a.attendance?.lateToWork || 0), 0);
+
+          // Build context for LLM
+          const dataContext = `
+Team: ${team.teamName}
+Floor Manager: ${team.floorManagerName}
+Period: ${monthName} ${input.reportYear}
+
+Team Statistics:
+- Total GPs Evaluated: ${stats.length}
+- Average Total Score: ${avgTotal.toFixed(1)}/24
+- Average Appearance Score: ${avgAppearance.toFixed(1)}/12
+- Average Game Performance Score: ${avgGamePerf.toFixed(1)}/10
+
+Top Performers:
+${topPerformers.map((gp, i) => `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/24`).join('\n')}
+
+${needsImprovement.length > 0 ? `GPs Needing Improvement (score < 18):
+${needsImprovement.map(gp => `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/24`).join('\n')}` : 'All GPs are performing well (score >= 18)'}
+
+Attendance Summary:
+- Total Mistakes: ${totalMistakes}
+- Extra Shifts Worked: ${totalExtraShifts}
+- Late Arrivals: ${totalLate}
+`;
+
+          // Auto-generate Team Overview if empty
+          if (!teamOverview) {
+            try {
+              const teamOverviewResponse = await invokeLLM({
+                messages: [
+                  {
+                    role: "system",
+                    content: `You are a Floor Manager writing a team overview for a monthly report. Write professionally and concisely. Summarize team performance, highlight top performers, mention any concerns, and note attendance patterns. Keep it to 4-5 sentences. Do not use bullet points.`
+                  },
+                  {
+                    role: "user",
+                    content: `Based on this team data, write a brief team overview:\n${dataContext}`
+                  }
+                ]
+              });
+              const content = teamOverviewResponse.choices[0]?.message?.content;
+              teamOverview = typeof content === 'string' ? content : null;
+            } catch (e) {
+              console.error('[generate] Failed to auto-generate teamOverview:', e);
+            }
+          }
+
+          // Auto-generate Goals if empty
+          if (!goalsThisMonth) {
+            try {
+              const goalsResponse = await invokeLLM({
+                messages: [
+                  {
+                    role: "system",
+                    content: `You are a Floor Manager writing about goals for a monthly report. Write professionally and concisely. Include 2-3 specific goals based on team performance data. Focus on areas that need improvement and maintaining strengths. Keep it to 3-4 sentences. Do not use bullet points.`
+                  },
+                  {
+                    role: "user",
+                    content: `Based on this team data, write brief goals for the team:\n${dataContext}`
+                  }
+                ]
+              });
+              const content = goalsResponse.choices[0]?.message?.content;
+              goalsThisMonth = typeof content === 'string' ? content : null;
+            } catch (e) {
+              console.error('[generate] Failed to auto-generate goalsThisMonth:', e);
+            }
+          }
+        }
 
         const report = await db.createReport({
           teamId: input.teamId,
           reportMonth: input.reportMonth,
           reportYear: input.reportYear,
-          fmPerformance: input.fmPerformance || null,
-          goalsThisMonth: input.goalsThisMonth || null,
-          teamOverview: input.teamOverview || null,
+          fmPerformance: fmPerformance,
+          goalsThisMonth: goalsThisMonth,
+          teamOverview: teamOverview,
           additionalComments: input.additionalComments || null,
           reportData: { stats, attendance },
           status: "generated",

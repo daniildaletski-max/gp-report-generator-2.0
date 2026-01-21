@@ -1,0 +1,88 @@
+{
+  "query": "SELECT gp.id, gp.name, gp.teamId, (SELECT COUNT(*) FROM evaluations WHERE gamePresenterId = gp.id) as eval_count FROM game_presenters gp WHERE gp.teamId = (SELECT id FROM fm_teams WHERE teamName = 'Team Omnicron');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT gp.id, gp.name, gp.teamId, (SELECT COUNT(*) FROM evaluations WHERE gamePresenterId = gp.id) as eval_count FROM game_presenters gp WHERE gp.teamId = (SELECT id FROM fm_teams WHERE teamName = 'Team Omnicron');",
+  "rows": [
+    {
+      "id": "60001",
+      "name": "Viktoriia Marchenko",
+      "teamId": "1",
+      "eval_count": "0"
+    },
+    {
+      "id": "60002",
+      "name": "Elina Sahkai",
+      "teamId": "1",
+      "eval_count": "0"
+    },
+    {
+      "id": "60003",
+      "name": "Yusuf Turabi",
+      "teamId": "1",
+      "eval_count": "0"
+    },
+    {
+      "id": "60004",
+      "name": "Mariia Kolbasova",
+      "teamId": "1",
+      "eval_count": "0"
+    },
+    {
+      "id": "60005",
+      "name": "Anastasija Kalašnikova",
+      "teamId": "1",
+      "eval_count": "0"
+    },
+    {
+      "id": "60006",
+      "name": "Elizaveta Sofia Reemet",
+      "teamId": "1",
+      "eval_count": "0"
+    },
+    {
+      "id": "60007",
+      "name": "Danylo Baiduhanov",
+      "teamId": "1",
+      "eval_count": "0"
+    },
+    {
+      "id": "60008",
+      "name": "Annaliisa Jerlakas",
+      "teamId": "1",
+      "eval_count": "0"
+    },
+    {
+      "id": "60009",
+      "name": "Laurit Kurm",
+      "teamId": "1",
+      "eval_count": "0"
+    },
+    {
+      "id": "60010",
+      "name": "Vladimir Petrov",
+      "teamId": "1",
+      "eval_count": "0"
+    },
+    {
+      "id": "60011",
+      "name": "Anya Kiisk",
+      "teamId": "1",
+      "eval_count": "0"
+    },
+    {
+      "id": "60012",
+      "name": "Milena Kõiv",
+      "teamId": "1",
+      "eval_count": "0"
+    },
+    {
+      "id": "60013",
+      "name": "Eliise Jõgar",
+      "teamId": "1",
+      "eval_count": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tteamId\teval_count\n60001\tViktoriia Marchenko\t1\t0\n60002\tElina Sahkai\t1\t0\n60003\tYusuf Turabi\t1\t0\n60004\tMariia Kolbasova\t1\t0\n60005\tAnastasija Kalašnikova\t1\t0\n60006\tElizaveta Sofia Reemet\t1\t0\n60007\tDanylo Baiduhanov\t1\t0\n60008\tAnnaliisa Jerlakas\t1\t0\n60009\tLaurit Kurm\t1\t0\n60010\tVladimir Petrov\t1\t0\n60011\tAnya Kiisk\t1\t0\n60012\tMilena Kõiv\t1\t0\n60013\tEliise Jõgar\t1\t0\n",
+  "stderr": "",
+  "execution_time_ms": 60
+}

@@ -1,0 +1,8 @@
+{
+  "query": "SELECT COUNT(*) as count, gp.firstName, gp.lastName FROM evaluations e JOIN game_presenters gp ON e.gamePresenterId = gp.id WHERE gp.teamId = 2 AND MONTH(e.evaluationDate) = 12 AND YEAR(e.evaluationDate) = 2025 GROUP BY gp.id LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT COUNT(*) as count, gp.firstName, gp.lastName FROM evaluations e JOIN game_presenters gp ON e.gamePresenterId = gp.id WHERE gp.teamId = 2 AND MONTH(e.evaluationDate) = 12 AND YEAR(e.evaluationDate) = 2025 GROUP BY gp.id LIMIT 10;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'gp.firstname' in 'field list'"
+  ]
+}

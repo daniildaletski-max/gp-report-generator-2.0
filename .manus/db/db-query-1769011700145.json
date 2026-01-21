@@ -1,0 +1,35 @@
+{
+  "query": "SELECT gp.id, gp.name, gp.teamId FROM game_presenters gp WHERE gp.teamId = (SELECT id FROM fm_teams WHERE teamName = 'Team Omnicron') LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT gp.id, gp.name, gp.teamId FROM game_presenters gp WHERE gp.teamId = (SELECT id FROM fm_teams WHERE teamName = 'Team Omnicron') LIMIT 5;",
+  "rows": [
+    {
+      "id": "60001",
+      "name": "Viktoriia Marchenko",
+      "teamId": "1"
+    },
+    {
+      "id": "60002",
+      "name": "Elina Sahkai",
+      "teamId": "1"
+    },
+    {
+      "id": "60003",
+      "name": "Yusuf Turabi",
+      "teamId": "1"
+    },
+    {
+      "id": "60004",
+      "name": "Mariia Kolbasova",
+      "teamId": "1"
+    },
+    {
+      "id": "60005",
+      "name": "Anastasija Kalašnikova",
+      "teamId": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tteamId\n60001\tViktoriia Marchenko\t1\n60002\tElina Sahkai\t1\n60003\tYusuf Turabi\t1\n60004\tMariia Kolbasova\t1\n60005\tAnastasija Kalašnikova\t1\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

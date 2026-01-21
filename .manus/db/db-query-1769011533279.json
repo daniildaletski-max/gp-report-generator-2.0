@@ -1,0 +1,28 @@
+{
+  "query": "SELECT e.id, e.gamePresenterId, DATE(e.evaluationDate) as eval_date, gp.name as gp_name, t.teamName, e.appearanceScore, e.gamePerformanceTotalScore FROM evaluations e LEFT JOIN game_presenters gp ON e.gamePresenterId = gp.id LEFT JOIN fm_teams t ON gp.teamId = t.id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT e.id, e.gamePresenterId, DATE(e.evaluationDate) as eval_date, gp.name as gp_name, t.teamName, e.appearanceScore, e.gamePerformanceTotalScore FROM evaluations e LEFT JOIN game_presenters gp ON e.gamePresenterId = gp.id LEFT JOIN fm_teams t ON gp.teamId = t.id;",
+  "rows": [
+    {
+      "id": "390005",
+      "gamePresenterId": "1",
+      "eval_date": "2026-01-09",
+      "gp_name": "Agnes Suvorov",
+      "teamName": "NULL",
+      "appearanceScore": "11",
+      "gamePerformanceTotalScore": "10"
+    },
+    {
+      "id": "390004",
+      "gamePresenterId": "1",
+      "eval_date": "NULL",
+      "gp_name": "Agnes Suvorov",
+      "teamName": "NULL",
+      "appearanceScore": "0",
+      "gamePerformanceTotalScore": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tgamePresenterId\teval_date\tgp_name\tteamName\tappearanceScore\tgamePerformanceTotalScore\n390005\t1\t2026-01-09\tAgnes Suvorov\tNULL\t11\t10\n390004\t1\tNULL\tAgnes Suvorov\tNULL\t0\t0\n",
+  "stderr": "",
+  "execution_time_ms": 51
+}

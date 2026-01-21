@@ -1194,3 +1194,55 @@
 - [x] Added userId field when creating evaluation from upload
 - [x] Updated getEvaluationsWithGPByUser to filter by uploadedById OR userId
 - [x] All 133 tests passing
+
+
+## Excel Report Improvements (v53)
+
+### Chart Graph for GP Evaluations
+- [ ] Add native Excel chart showing GP evaluation scores
+- [ ] Display full names (First + Last) on X-axis
+- [ ] Show Appearance and Game Performance as separate series
+- [ ] Color-coded bars for visual clarity
+
+### Automated Analysis
+- [ ] AI-powered analysis of evaluation results
+- [ ] Identify top performers and areas for improvement
+- [ ] Generate performance trends and insights
+
+### Auto-generate Team Goals
+- [ ] Analyze team performance data
+- [ ] Generate specific, actionable goals based on weak areas
+- [ ] Include measurable targets
+
+### Auto-generate Team Overview
+- [ ] Summarize team performance statistics
+- [ ] Highlight achievements and concerns
+- [ ] Include comparison with previous month if available
+
+
+## Report Generation Fix (v53)
+- [ ] Assign Agnes Suvorov to Team Omnicron
+- [ ] Verify report generates with chart and data
+- [ ] Improve UI for manual GP-to-team assignment
+- [ ] Test full report generation workflow
+
+## Report Generation & GP Team Assignment Fix (v53) - COMPLETED
+
+### Root Cause Analysis
+- [x] Identified that Agnes Suvorov had teamId = NULL, causing her to not appear in Team Omnicron reports
+- [x] Verified chart image IS generated and embedded in Excel (xl/media/image1.png)
+- [x] Confirmed Team Goals and Team Overview auto-generate via AI when empty
+
+### GP Team Assignment UI
+- [x] Added Team dropdown column in GP Access Links table
+- [x] Can now manually assign/change GP's team from Admin panel
+- [x] Added refetchGPs prop to GPAccessLinksTab component
+- [x] Added assignToTeam mutation for real-time updates
+
+### Report Generation Verification
+- [x] Chart image generates correctly via QuickChart API
+- [x] Chart shows Total Score, Appearance, Game Performance bars
+- [x] Auto-fill for Team Overview and Goals works when fields are empty
+- [x] Performance Analysis section with Top Performers and Needs Improvement
+- [x] All 133 tests passing
+
