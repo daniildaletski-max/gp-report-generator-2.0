@@ -11,6 +11,7 @@ import { nanoid } from "nanoid";
 import * as db from "./db";
 import ExcelJS from "exceljs";
 import XLSXChart from "xlsx-chart";
+import { google } from "googleapis";
 // Chart generation via QuickChart API
 async function generateChartImage(
   labels: string[],
@@ -2289,63 +2290,112 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
         mainSheet.getCell(`A${attRowIndex + 3}`).value = "";
         mainSheet.getCell(`A${attRowIndex + 3}`).alignment = { wrapText: true, vertical: "top" };
 
-        // Generate Excel buffer
-        const buffer = await workbook.xlsx.writeBuffer();
+        // Generate Excel buffer from exceljs workbook
+        const excelBuffer = await workbook.xlsx.writeBuffer();
         
-        // Save temporarily to local file with final name
-        const finalFileName = `${monthName}_${report.reportYear}_TeamOverview.xlsx`;
-        const tempFilePath = `/tmp/${finalFileName}`;
+        // Now generate chart using xlsx-chart library
         const fs = await import('fs/promises');
-        await fs.writeFile(tempFilePath, Buffer.from(buffer));
-
-        // Upload to Google Drive using rclone
         const { exec } = await import('child_process');
         const { promisify } = await import('util');
         const execAsync = promisify(exec);
-
+        
+        // Prepare chart data for xlsx-chart
+        const chartTitles = [`${monthName} ${report.reportYear}`, 'Previous Month'];
+        const chartFields = gpEvaluationsData.map(gp => gp.gpName);
+        
+        // Reuse prevMonthLookup from Chart sheet section above
+        // Build chart data object
+        const chartData: Record<string, Record<string, number>> = {
+          [`${monthName} ${report.reportYear}`]: {},
+          'Previous Month': {}
+        };
+        
+        for (const gpData of gpEvaluationsData) {
+          const evals = gpData.evaluations;
+          const avgTotal = evals.length > 0 
+            ? evals.reduce((sum, e) => sum + (e.gamePerformanceScore || 0) + (e.appearanceScore || 0), 0) / evals.length 
+            : 0;
+          const prevTotal = prevMonthLookup[gpData.gpName] || 0;
+          
+          chartData[`${monthName} ${report.reportYear}`][gpData.gpName] = Math.round(avgTotal * 10) / 10;
+          chartData['Previous Month'][gpData.gpName] = prevTotal;
+        }
+        
+        console.log('[exportToGoogleSheets] Chart data prepared:', JSON.stringify(chartData, null, 2));
+        
+        // Generate chart Excel file using xlsx-chart
+        const xlsxChart = new XLSXChart();
+        const chartOpts = {
+          chart: 'column' as const,
+          titles: chartTitles,
+          fields: chartFields,
+          data: chartData,
+          chartTitle: `${teamName} - ${monthName} ${report.reportYear} GP Performance`
+        };
+        
+        // Generate chart buffer
+        const chartBuffer = await new Promise<Buffer>((resolve, reject) => {
+          xlsxChart.generate(chartOpts, (err: Error | null, data: Buffer) => {
+            if (err) reject(err);
+            else resolve(data);
+          });
+        });
+        
+        console.log('[exportToGoogleSheets] Chart generated, buffer size:', chartBuffer.length);
+        
+        // Save chart file temporarily
+        const chartFileName = `${monthName}_${report.reportYear}_Chart.xlsx`;
+        const chartFilePath = `/tmp/${chartFileName}`;
+        await fs.writeFile(chartFilePath, chartBuffer);
+        
+        // Also save the main report file
+        const mainFileName = `${monthName}_${report.reportYear}_TeamOverview.xlsx`;
+        const mainFilePath = `/tmp/${mainFileName}`;
+        await fs.writeFile(mainFilePath, Buffer.from(excelBuffer));
+        
         const gdrivePath = `manus_google_drive:GP_Reports/${teamName}/${report.reportYear}`;
-        const gdriveFileName = `${monthName}_${report.reportYear}_TeamOverview.xlsx`;
         
         try {
-          // Upload file using copy (creates directories automatically)
-          console.log(`[exportToGoogleSheets] Uploading to ${gdrivePath}/${gdriveFileName}`);
-          await execAsync(`rclone copy "${tempFilePath}" "${gdrivePath}" --config /home/ubuntu/.gdrive-rclone.ini`);
+          // Upload CHART file with --drive-import-formats xlsx to convert to native Google Sheets
+          console.log(`[exportToGoogleSheets] Uploading chart to Google Sheets: ${gdrivePath}/${chartFileName}`);
+          await execAsync(`rclone copyto "${chartFilePath}" "${gdrivePath}/${chartFileName}" --drive-import-formats xlsx --config /home/ubuntu/.gdrive-rclone.ini`);
           
-          // Wait for Google Drive to process
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          // Also upload the main report file
+          console.log(`[exportToGoogleSheets] Uploading main report: ${gdrivePath}/${mainFileName}`);
+          await execAsync(`rclone copyto "${mainFilePath}" "${gdrivePath}/${mainFileName}" --drive-import-formats xlsx --config /home/ubuntu/.gdrive-rclone.ini`);
           
-          // Get shareable link
+          // Wait for Google Drive to process conversion
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Get shareable link for the chart file
           let googleSheetsUrl = '';
-          const finalPath = `${gdrivePath}/${finalFileName}`;
+          
           try {
             const { stdout: linkOutput } = await execAsync(
-              `rclone link "${finalPath}" --config /home/ubuntu/.gdrive-rclone.ini -v`
+              `rclone link "${gdrivePath}/${chartFileName}" --config /home/ubuntu/.gdrive-rclone.ini -v`
             );
             googleSheetsUrl = linkOutput.trim();
-            console.log(`[exportToGoogleSheets] Got link: ${googleSheetsUrl}`);
+            console.log(`[exportToGoogleSheets] Got chart link: ${googleSheetsUrl}`);
           } catch (linkError) {
-            // If link fails, list files to find the uploaded one
             console.log('[exportToGoogleSheets] Link failed, trying to find file...');
             try {
               const { stdout: lsOutput } = await execAsync(
-                `rclone lsf "${gdrivePath}" --config /home/ubuntu/.gdrive-rclone.ini`
+                `rclone lsjson "${gdrivePath}" --config /home/ubuntu/.gdrive-rclone.ini`
               );
-              console.log(`[exportToGoogleSheets] Files in folder: ${lsOutput}`);
-              // Try to get link for the first xlsx file found
-              const files = lsOutput.split('\n').filter(f => f.endsWith('.xlsx'));
-              if (files.length > 0) {
-                const { stdout: link2 } = await execAsync(
-                  `rclone link "${gdrivePath}/${files[0]}" --config /home/ubuntu/.gdrive-rclone.ini -v`
-                );
-                googleSheetsUrl = link2.trim();
+              const files = JSON.parse(lsOutput);
+              const targetFile = files.find((f: any) => f.Name.includes('Chart'));
+              if (targetFile && targetFile.ID) {
+                googleSheetsUrl = `https://docs.google.com/spreadsheets/d/${targetFile.ID}/edit`;
+                console.log(`[exportToGoogleSheets] Found chart file ID: ${targetFile.ID}`);
               }
             } catch (e) {
-              googleSheetsUrl = 'File uploaded to Google Drive (link unavailable)';
+              console.error('[exportToGoogleSheets] Failed to find file:', e);
             }
           }
 
-          // Clean up temp file
-          await fs.unlink(tempFilePath).catch(() => {});
+          // Clean up temp files
+          await fs.unlink(chartFilePath).catch(() => {});
+          await fs.unlink(mainFilePath).catch(() => {});
 
           // Update report with Google Sheets URL
           await db.updateReport(report.id, {
@@ -2358,12 +2408,13 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           return {
             success: true,
             googleSheetsUrl,
-            message: `Report uploaded to Google Drive: ${gdrivePath}/${gdriveFileName}`
+            message: `Report with chart uploaded to Google Drive: ${gdrivePath}/${chartFileName}`
           };
         } catch (error) {
           console.error('[exportToGoogleSheets] Google Drive upload failed:', error);
-          // Clean up temp file
-          await fs.unlink(tempFilePath).catch(() => {});
+          // Clean up temp files
+          await fs.unlink(chartFilePath).catch(() => {});
+          await fs.unlink(mainFilePath).catch(() => {});
           throw new Error(`Failed to upload to Google Drive: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }),

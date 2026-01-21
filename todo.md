@@ -1295,3 +1295,12 @@
 - [x] Instructions for creating chart in Google Sheets (Insert → Chart)
 - [x] Test chart visibility in Google Drive preview - 3 sheets visible: Data, Chart, Monthly Report
 - [x] All 133 tests passing
+
+
+## Automatic Chart Creation via xlsx-chart (v57)
+- [x] Use xlsx-chart library to generate Excel with embedded chart
+- [x] Upload chart file to Google Drive with --drive-import-formats xlsx
+- [x] Chart displays automatically in Google Sheets - NO MANUAL STEPS REQUIRED!
+- [x] Tested with Team Omnicron January 2026 report - SUCCESS!
+- [x] Chart shows: GP names on X-axis, scores on Y-axis, January 2026 vs Previous Month comparison
+- [x] Two files uploaded: Chart file (with embedded chart) + Main report file (Data + Monthly Report sheets)
