@@ -1316,3 +1316,11 @@
 - [x] Test export to Google Sheets with embedded chart - SUCCESS!
 - [x] Chart displays correctly in Google Drive: "Team Omnicron - January 2026 GP Performance"
 - [x] Attendance table with GP names and scores (color-coded: green >=18, yellow >=15, red <15)
+
+
+## Fix Attendance Table Header Alignment (v59)
+- [x] Fix header row alignment - "Name" and other headers (Mistakes, Extra shifts, etc.) now in same row
+- [x] FM Performance text separate from table headers (no overlap)
+- [x] Score column (Q) now single column instead of merged Q:R
+- [x] Other columns (R:X) properly aligned: Mistakes, Extra shifts, Lateness, Missed day, Sick leave, Attitude, Remarks
+- [x] Tested in Google Sheets - all headers correctly aligned on purple background

@@ -90,10 +90,30 @@ def create_report_with_chart(data_json_or_path, output_path, template_path=None)
     ws['B4'].alignment = Alignment(wrap_text=True, vertical='top')
     
     # ===== ATTENDANCE TABLE HEADERS (N3:X3) =====
-    headers = ['Name', '', '', 'Mistakes', 'Extra shifts', 'Lateness', 'Missed day', 'Sick leave', 'Attitude', 'Remarks', '']
-    col_start = 14  # Column N
-    for i, header in enumerate(headers):
-        cell = ws.cell(row=3, column=col_start + i)
+    # Header structure: Name (N3:P3), Score (Q3), Mistakes (R3), Extra shifts (S3), Lateness (T3), Missed day (U3), Sick leave (V3), Attitude (W3), Remarks (X3)
+    
+    # Name header (merged N3:P3)
+    ws.merge_cells('N3:P3')
+    ws['N3'] = 'Name'
+    ws['N3'].font = Font(bold=True, size=9)
+    ws['N3'].fill = purple_light
+    ws['N3'].border = thin_border
+    ws['N3'].alignment = Alignment(horizontal='center', vertical='center')
+    
+    # Individual headers for other columns (Q onwards)
+    attendance_headers = [
+        ('Q3', ''),  # Score column (empty header, data below)
+        ('R3', 'Mistakes'),
+        ('S3', 'Extra shifts'),
+        ('T3', 'Lateness'),
+        ('U3', 'Missed day'),
+        ('V3', 'Sick leave'),
+        ('W3', 'Attitude'),
+        ('X3', 'Remarks')
+    ]
+    
+    for cell_ref, header in attendance_headers:
+        cell = ws[cell_ref]
         cell.value = header
         cell.font = Font(bold=True, size=9)
         cell.fill = purple_light
@@ -128,8 +148,8 @@ def create_report_with_chart(data_json_or_path, output_path, template_path=None)
         ws[f'N{row}'].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         ws[f'N{row}'].border = thin_border
         
-        # Score cell (Q:R, 2 rows)
-        ws.merge_cells(f'Q{row}:R{row+1}')
+        # Score cell (Q only, 2 rows)
+        ws.merge_cells(f'Q{row}:Q{row+1}')
         ws[f'Q{row}'] = score
         ws[f'Q{row}'].alignment = Alignment(horizontal='center', vertical='center')
         ws[f'Q{row}'].font = Font(bold=True, size=12)
@@ -143,10 +163,10 @@ def create_report_with_chart(data_json_or_path, output_path, template_path=None)
         elif score > 0:
             ws[f'Q{row}'].fill = red_fill
         
-        # Other columns (S:X)
-        other_data = [mistakes, extra_shifts, lateness, missed_days, sick_leave, attitude]
+        # Other columns (R:X) - Mistakes, Extra shifts, Lateness, Missed day, Sick leave, Attitude, Remarks
+        other_data = [mistakes, extra_shifts, lateness, missed_days, sick_leave, attitude, remarks]
         for j, val in enumerate(other_data):
-            col = 19 + j  # Column S onwards
+            col = 18 + j  # Column R onwards (R=18)
             ws.merge_cells(f'{get_column_letter(col)}{row}:{get_column_letter(col)}{row+1}')
             ws.cell(row=row, column=col).value = val if val else ''
             ws.cell(row=row, column=col).alignment = Alignment(horizontal='center', vertical='center')
