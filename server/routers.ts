@@ -2075,7 +2075,7 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
                           "July", "August", "September", "October", "November", "December"];
         const monthName = monthNames[report.reportMonth - 1];
 
-        // First generate Excel file using existing logic
+        // Get GP evaluations data
         const gpEvaluationsData = await db.getGPEvaluationsForDataSheet(
           report.teamId, 
           report.reportYear, 
@@ -2091,81 +2091,9 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           prevMonth
         );
 
-        const workbook = new ExcelJS.Workbook();
-        
-        // ===== Sheet 1: Data (GP Performance scores) =====
-        const dataSheet = workbook.addWorksheet("Data");
-        
-        // Headers
-        dataSheet.getRow(1).values = [
-          "GP Name", "GAME PERF.", "APPEARANCE", "TOTAL", "Eval 1", "Eval 2", "Eval 3", "Eval 4"
-        ];
-        dataSheet.getRow(1).font = { bold: true };
-        dataSheet.getRow(1).fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FF4472C4" }
-        };
-        dataSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+        // Get attendance data
+        const attendanceData = await db.getMonthlyGpStatsByTeam(report.teamId, report.reportYear, report.reportMonth);
 
-        // Data rows
-        let rowIndex = 2;
-        for (const gpData of gpEvaluationsData) {
-          // Calculate averages from evaluations
-          const evals = gpData.evaluations;
-          const avgGamePerf = evals.length > 0 
-            ? evals.reduce((sum, e) => sum + (e.gamePerformanceScore || 0), 0) / evals.length 
-            : 0;
-          const avgAppearance = evals.length > 0 
-            ? evals.reduce((sum, e) => sum + (e.appearanceScore || 0), 0) / evals.length 
-            : 0;
-          
-          const row = dataSheet.getRow(rowIndex);
-          row.values = [
-            gpData.gpName,
-            Math.round(avgGamePerf * 10) / 10,
-            Math.round(avgAppearance * 10) / 10,
-            Math.round((avgGamePerf + avgAppearance) * 10) / 10,
-            evals[0] ? (evals[0].gamePerformanceScore || 0) + (evals[0].appearanceScore || 0) : "-",
-            evals[1] ? (evals[1].gamePerformanceScore || 0) + (evals[1].appearanceScore || 0) : "-",
-            evals[2] ? (evals[2].gamePerformanceScore || 0) + (evals[2].appearanceScore || 0) : "-",
-            evals[3] ? (evals[3].gamePerformanceScore || 0) + (evals[3].appearanceScore || 0) : "-"
-          ];
-          rowIndex++;
-        }
-
-        // Set column widths
-        dataSheet.columns = [
-          { width: 25 }, { width: 12 }, { width: 12 }, { width: 10 },
-          { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }
-        ];
-
-        // ===== Sheet 2: Chart Data (for native Google Sheets chart) =====
-        const chartSheet = workbook.addWorksheet("Chart");
-        
-        // Set column widths for Chart sheet
-        chartSheet.columns = [
-          { width: 25 },  // GP Name
-          { width: 15 },  // Current Month
-          { width: 15 },  // Previous Month
-        ];
-        
-        // Title row
-        chartSheet.mergeCells("A1:C1");
-        chartSheet.getCell("A1").value = `${teamName} - ${monthName} ${report.reportYear} Performance Comparison`;
-        chartSheet.getCell("A1").font = { bold: true, size: 14 };
-        chartSheet.getCell("A1").alignment = { horizontal: "center" };
-        
-        // Headers for chart data
-        chartSheet.getRow(3).values = ["GP Name", `${monthName} ${report.reportYear}`, `Previous Month`];
-        chartSheet.getRow(3).font = { bold: true };
-        chartSheet.getRow(3).fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FF4472C4" }
-        };
-        chartSheet.getRow(3).font = { bold: true, color: { argb: "FFFFFFFF" } };
-        
         // Build previous month lookup
         const prevMonthLookup: Record<string, number> = {};
         for (const gpData of prevMonthEvaluations) {
@@ -2176,206 +2104,127 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
             prevMonthLookup[gpData.gpName] = Math.round(avgTotal * 10) / 10;
           }
         }
-        
-        // Data rows for chart
-        let chartRowIndex = 4;
-        for (const gpData of gpEvaluationsData) {
+
+        // Prepare GP data for Python script
+        const gpDataForPython = gpEvaluationsData.map(gpData => {
           const evals = gpData.evaluations;
           const avgTotal = evals.length > 0 
             ? evals.reduce((sum, e) => sum + (e.gamePerformanceScore || 0) + (e.appearanceScore || 0), 0) / evals.length 
             : 0;
           const prevTotal = prevMonthLookup[gpData.gpName] || 0;
           
-          const row = chartSheet.getRow(chartRowIndex);
-          row.values = [
-            gpData.gpName,
-            Math.round(avgTotal * 10) / 10,
-            prevTotal
-          ];
+          // Find attendance data for this GP
+          const attData = attendanceData.find(a => a.gp?.name === gpData.gpName);
           
-          // Alternate row colors for readability
-          if (chartRowIndex % 2 === 0) {
-            row.fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: { argb: "FFF2F2F2" }
-            };
-          }
-          chartRowIndex++;
-        }
-        
-        // Add borders to data range
-        for (let i = 3; i < chartRowIndex; i++) {
-          for (let j = 1; j <= 3; j++) {
-            chartSheet.getCell(i, j).border = {
-              top: { style: "thin" },
-              left: { style: "thin" },
-              bottom: { style: "thin" },
-              right: { style: "thin" }
-            };
-          }
-        }
-        
-        // Add instructions for creating chart in Google Sheets
-        chartSheet.getCell(`A${chartRowIndex + 2}`).value = "📊 To create a chart in Google Sheets:";
-        chartSheet.getCell(`A${chartRowIndex + 2}`).font = { bold: true };
-        chartSheet.getCell(`A${chartRowIndex + 3}`).value = "1. Select data range A3:C" + (chartRowIndex - 1);
-        chartSheet.getCell(`A${chartRowIndex + 4}`).value = "2. Go to Insert → Chart";
-        chartSheet.getCell(`A${chartRowIndex + 5}`).value = "3. Choose 'Bar chart' or 'Column chart'";
-        chartSheet.getCell(`A${chartRowIndex + 6}`).value = "4. The chart will show current vs previous month comparison";
-
-        // ===== Sheet 3: Monthly Report =====
-        const mainSheet = workbook.addWorksheet("Monthly Report");
-        
-        // Title
-        mainSheet.mergeCells("A1:H1");
-        mainSheet.getCell("A1").value = `${teamName} - ${monthName} ${report.reportYear} Monthly Report`;
-        mainSheet.getCell("A1").font = { bold: true, size: 16 };
-        mainSheet.getCell("A1").alignment = { horizontal: "center" };
-
-        // FM Performance section
-        mainSheet.getCell("A3").value = "FM Performance:";
-        mainSheet.getCell("A3").font = { bold: true };
-        mainSheet.mergeCells("A4:H10");
-        mainSheet.getCell("A4").value = report.fmPerformance || "";
-        mainSheet.getCell("A4").alignment = { wrapText: true, vertical: "top" };
-
-        // Goals section
-        mainSheet.getCell("A12").value = "Goals this month:";
-        mainSheet.getCell("A12").font = { bold: true };
-        mainSheet.mergeCells("A13:H17");
-        mainSheet.getCell("A13").value = report.goalsThisMonth || "";
-        mainSheet.getCell("A13").alignment = { wrapText: true, vertical: "top" };
-
-        // Team Overview section
-        mainSheet.getCell("A19").value = "Team Overview:";
-        mainSheet.getCell("A19").font = { bold: true };
-        mainSheet.mergeCells("A20:H24");
-        mainSheet.getCell("A20").value = report.teamOverview || "";
-        mainSheet.getCell("A20").alignment = { wrapText: true, vertical: "top" };
-
-        // Attendance table
-        mainSheet.getCell("A26").value = "GP Attendance:";
-        mainSheet.getCell("A26").font = { bold: true };
-        
-        const attendanceHeaders = ["Name", "Mistakes", "Extra shifts", "Late", "Missed days", "Sick leaves", "Remarks"];
-        mainSheet.getRow(27).values = attendanceHeaders;
-        mainSheet.getRow(27).font = { bold: true };
-        mainSheet.getRow(27).fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFE2EFDA" }
-        };
-
-        // Get attendance data from monthly stats
-        const attendanceData = await db.getMonthlyGpStatsByTeam(report.teamId, report.reportYear, report.reportMonth);
-        let attRowIndex = 28;
-        for (const att of attendanceData) {
-          mainSheet.getRow(attRowIndex).values = [
-            att.gp?.name || "Unknown",
-            att.stats?.mistakes || 0,
-            0, // Extra shifts
-            0, // Late
-            0, // Missed days
-            0, // Sick leaves
-            att.stats?.attitude ? `Attitude: ${att.stats.attitude}/5` : ""
-          ];
-          attRowIndex++;
-        }
-
-        // Additional Notes section
-        mainSheet.getCell(`A${attRowIndex + 2}`).value = "Additional Notes:";
-        mainSheet.getCell(`A${attRowIndex + 2}`).font = { bold: true };
-        mainSheet.mergeCells(`A${attRowIndex + 3}:H${attRowIndex + 7}`);
-        mainSheet.getCell(`A${attRowIndex + 3}`).value = "";
-        mainSheet.getCell(`A${attRowIndex + 3}`).alignment = { wrapText: true, vertical: "top" };
-
-        // Generate Excel buffer from exceljs workbook
-        const excelBuffer = await workbook.xlsx.writeBuffer();
-        
-        // Now generate chart using xlsx-chart library
-        const fs = await import('fs/promises');
-        const { exec } = await import('child_process');
-        const { promisify } = await import('util');
-        const execAsync = promisify(exec);
-        
-        // Prepare chart data for xlsx-chart
-        const chartTitles = [`${monthName} ${report.reportYear}`, 'Previous Month'];
-        const chartFields = gpEvaluationsData.map(gp => gp.gpName);
-        
-        // Reuse prevMonthLookup from Chart sheet section above
-        // Build chart data object
-        const chartData: Record<string, Record<string, number>> = {
-          [`${monthName} ${report.reportYear}`]: {},
-          'Previous Month': {}
-        };
-        
-        for (const gpData of gpEvaluationsData) {
-          const evals = gpData.evaluations;
-          const avgTotal = evals.length > 0 
-            ? evals.reduce((sum, e) => sum + (e.gamePerformanceScore || 0) + (e.appearanceScore || 0), 0) / evals.length 
-            : 0;
-          const prevTotal = prevMonthLookup[gpData.gpName] || 0;
-          
-          chartData[`${monthName} ${report.reportYear}`][gpData.gpName] = Math.round(avgTotal * 10) / 10;
-          chartData['Previous Month'][gpData.gpName] = prevTotal;
-        }
-        
-        console.log('[exportToGoogleSheets] Chart data prepared:', JSON.stringify(chartData, null, 2));
-        
-        // Generate chart Excel file using xlsx-chart
-        const xlsxChart = new XLSXChart();
-        const chartOpts = {
-          chart: 'column' as const,
-          titles: chartTitles,
-          fields: chartFields,
-          data: chartData,
-          chartTitle: `${teamName} - ${monthName} ${report.reportYear} GP Performance`
-        };
-        
-        // Generate chart buffer
-        const chartBuffer = await new Promise<Buffer>((resolve, reject) => {
-          xlsxChart.generate(chartOpts, (err: Error | null, data: Buffer) => {
-            if (err) reject(err);
-            else resolve(data);
-          });
+          return {
+            name: gpData.gpName,
+            score: Math.round(avgTotal * 10) / 10,
+            prevScore: prevTotal,
+            mistakes: attData?.stats?.mistakes || 0,
+            extraShifts: 0,
+            lateness: 0,
+            missedDays: 0,
+            sickLeave: 0,
+            attitude: attData?.stats?.attitude ? `${attData.stats.attitude}/5` : '',
+            remarks: ''
+          };
         });
+
+        // Prepare JSON data for Python script
+        const pythonData = {
+          teamName,
+          monthName,
+          year: report.reportYear,
+          gpData: gpDataForPython,
+          fmPerformance: report.fmPerformance || '',
+          goalsThisMonth: report.goalsThisMonth || '',
+          teamOverview: report.teamOverview || '',
+          additionalNotes: ''
+        };
+
+        const fs = await import('fs/promises');
+        const { spawn } = await import('child_process');
+        const { promisify } = await import('util');
+        const { exec } = await import('child_process');
+        const execAsync = promisify(exec);
+
+        // Generate Excel file with chart using Python script
+        const fileName = `${monthName}_${report.reportYear}_${teamName.replace(/\s+/g, '_')}_Report.xlsx`;
+        const filePath = `/tmp/${fileName}`;
         
-        console.log('[exportToGoogleSheets] Chart generated, buffer size:', chartBuffer.length);
+        // Write JSON data to temp file to avoid shell escaping issues
+        const jsonFilePath = `/tmp/report_data_${Date.now()}.json`;
+        await fs.writeFile(jsonFilePath, JSON.stringify(pythonData, null, 2));
         
-        // Save chart file temporarily
-        const chartFileName = `${monthName}_${report.reportYear}_Chart.xlsx`;
-        const chartFilePath = `/tmp/${chartFileName}`;
-        await fs.writeFile(chartFilePath, chartBuffer);
+        console.log('[exportToGoogleSheets] Calling Python script to generate Excel with chart...');
+        console.log('[exportToGoogleSheets] JSON file:', jsonFilePath);
+        console.log('[exportToGoogleSheets] Output file:', filePath);
         
-        // Also save the main report file
-        const mainFileName = `${monthName}_${report.reportYear}_TeamOverview.xlsx`;
-        const mainFilePath = `/tmp/${mainFileName}`;
-        await fs.writeFile(mainFilePath, Buffer.from(excelBuffer));
-        
+        try {
+          // Use spawn with explicit PATH to avoid Python version conflicts
+          const pythonResult = await new Promise<{stdout: string, stderr: string}>((resolve, reject) => {
+            const pythonProcess = spawn('/usr/bin/python3.11', [
+              '/home/ubuntu/gp-report-generator/server/generate_excel_chart.py',
+              jsonFilePath,
+              filePath
+            ], {
+              // Completely isolated environment to avoid Python version conflicts
+              env: {
+                PATH: '/usr/bin:/bin:/usr/local/bin',
+                HOME: '/home/ubuntu',
+                PYTHONPATH: '',
+                PYTHONHOME: ''
+              },
+              cwd: '/home/ubuntu/gp-report-generator'
+            });
+            
+            let stdout = '';
+            let stderr = '';
+            
+            pythonProcess.stdout.on('data', (data) => { stdout += data.toString(); });
+            pythonProcess.stderr.on('data', (data) => { stderr += data.toString(); });
+            
+            pythonProcess.on('close', (code) => {
+              if (code === 0) {
+                resolve({ stdout, stderr });
+              } else {
+                reject(new Error(`Python exited with code ${code}: ${stderr}`));
+              }
+            });
+            
+            pythonProcess.on('error', (err) => reject(err));
+          });
+          
+          console.log('[exportToGoogleSheets] Python output:', pythonResult.stdout);
+          if (pythonResult.stderr) console.log('[exportToGoogleSheets] Python stderr:', pythonResult.stderr);
+          
+          // Clean up JSON temp file
+          await fs.unlink(jsonFilePath).catch(() => {});
+        } catch (pythonError) {
+          console.error('[exportToGoogleSheets] Python script failed:', pythonError);
+          await fs.unlink(jsonFilePath).catch(() => {});
+          throw new Error(`Failed to generate Excel with chart: ${pythonError instanceof Error ? pythonError.message : 'Unknown error'}`);
+        }
+
+        // Upload to Google Drive
         const gdrivePath = `manus_google_drive:GP_Reports/${teamName}/${report.reportYear}`;
         
         try {
-          // Upload CHART file with --drive-import-formats xlsx to convert to native Google Sheets
-          console.log(`[exportToGoogleSheets] Uploading chart to Google Sheets: ${gdrivePath}/${chartFileName}`);
-          await execAsync(`rclone copyto "${chartFilePath}" "${gdrivePath}/${chartFileName}" --drive-import-formats xlsx --config /home/ubuntu/.gdrive-rclone.ini`);
-          
-          // Also upload the main report file
-          console.log(`[exportToGoogleSheets] Uploading main report: ${gdrivePath}/${mainFileName}`);
-          await execAsync(`rclone copyto "${mainFilePath}" "${gdrivePath}/${mainFileName}" --drive-import-formats xlsx --config /home/ubuntu/.gdrive-rclone.ini`);
+          console.log(`[exportToGoogleSheets] Uploading to Google Sheets: ${gdrivePath}/${fileName}`);
+          await execAsync(`rclone copyto "${filePath}" "${gdrivePath}/${fileName}" --drive-import-formats xlsx --config /home/ubuntu/.gdrive-rclone.ini`);
           
           // Wait for Google Drive to process conversion
           await new Promise(resolve => setTimeout(resolve, 2000));
           
-          // Get shareable link for the chart file
+          // Get shareable link
           let googleSheetsUrl = '';
           
           try {
             const { stdout: linkOutput } = await execAsync(
-              `rclone link "${gdrivePath}/${chartFileName}" --config /home/ubuntu/.gdrive-rclone.ini -v`
+              `rclone link "${gdrivePath}/${fileName}" --config /home/ubuntu/.gdrive-rclone.ini -v`
             );
             googleSheetsUrl = linkOutput.trim();
-            console.log(`[exportToGoogleSheets] Got chart link: ${googleSheetsUrl}`);
+            console.log(`[exportToGoogleSheets] Got link: ${googleSheetsUrl}`);
           } catch (linkError) {
             console.log('[exportToGoogleSheets] Link failed, trying to find file...');
             try {
@@ -2383,19 +2232,18 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
                 `rclone lsjson "${gdrivePath}" --config /home/ubuntu/.gdrive-rclone.ini`
               );
               const files = JSON.parse(lsOutput);
-              const targetFile = files.find((f: any) => f.Name.includes('Chart'));
+              const targetFile = files.find((f: any) => f.Name.includes(monthName) && f.Name.includes('Report'));
               if (targetFile && targetFile.ID) {
                 googleSheetsUrl = `https://docs.google.com/spreadsheets/d/${targetFile.ID}/edit`;
-                console.log(`[exportToGoogleSheets] Found chart file ID: ${targetFile.ID}`);
+                console.log(`[exportToGoogleSheets] Found file ID: ${targetFile.ID}`);
               }
             } catch (e) {
               console.error('[exportToGoogleSheets] Failed to find file:', e);
             }
           }
 
-          // Clean up temp files
-          await fs.unlink(chartFilePath).catch(() => {});
-          await fs.unlink(mainFilePath).catch(() => {});
+          // Clean up temp file
+          await fs.unlink(filePath).catch(() => {});
 
           // Update report with Google Sheets URL
           await db.updateReport(report.id, {
@@ -2408,13 +2256,11 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           return {
             success: true,
             googleSheetsUrl,
-            message: `Report with chart uploaded to Google Drive: ${gdrivePath}/${chartFileName}`
+            message: `Report with chart uploaded to Google Drive: ${gdrivePath}/${fileName}`
           };
         } catch (error) {
           console.error('[exportToGoogleSheets] Google Drive upload failed:', error);
-          // Clean up temp files
-          await fs.unlink(chartFilePath).catch(() => {});
-          await fs.unlink(mainFilePath).catch(() => {});
+          await fs.unlink(filePath).catch(() => {});
           throw new Error(`Failed to upload to Google Drive: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }),

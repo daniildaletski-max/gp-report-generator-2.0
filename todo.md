@@ -1304,3 +1304,15 @@
 - [x] Tested with Team Omnicron January 2026 report - SUCCESS!
 - [x] Chart shows: GP names on X-axis, scores on Y-axis, January 2026 vs Previous Month comparison
 - [x] Two files uploaded: Chart file (with embedded chart) + Main report file (Data + Monthly Report sheets)
+
+
+## Excel Report Template Overhaul (v58)
+- [x] Analyze FM-MonthlyTeamOverviewTemplate.xlsx structure exactly
+- [x] Generate Excel with single file (not separate chart file)
+- [x] Chart on TEMPLATE sheet, directly under the data table
+- [x] Python openpyxl script for native Excel chart generation
+- [x] Fixed Python version conflict with isolated environment (PATH, PYTHONPATH, PYTHONHOME cleared)
+- [x] Team Goals, Team Overview, FM Performance, Additional Notes all formatted correctly
+- [x] Test export to Google Sheets with embedded chart - SUCCESS!
+- [x] Chart displays correctly in Google Drive: "Team Omnicron - January 2026 GP Performance"
+- [x] Attendance table with GP names and scores (color-coded: green >=18, yellow >=15, red <15)
