@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Eye, Pencil, Trash2, Image, Trash, Search, Filter, X, Download, CheckSquare, Square, FileSpreadsheet, Calendar, User, TrendingUp, ArrowUpDown, ChevronDown, MoreHorizontal } from "lucide-react";
+import { Eye, Pencil, Trash2, Image, Trash, Search, Filter, X, Download, CheckSquare, Square, FileSpreadsheet, Calendar, User, TrendingUp, ArrowUpDown, ChevronDown, MoreHorizontal, Heart, ThumbsDown, ThumbsUp } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -26,6 +26,12 @@ const MONTHS = [
 export default function EvaluationsPage() {
   const utils = trpc.useUtils();
   const { data: evaluations, isLoading } = trpc.evaluation.list.useQuery();
+  
+  // Attitude entries query
+  const { data: attitudeEntries, isLoading: isLoadingAttitude } = trpc.attitudeScreenshot.listAll.useQuery({});
+  
+  // Active tab state
+  const [activeTab, setActiveTab] = useState<"evaluations" | "attitude">("evaluations");
   
   const [editingEval, setEditingEval] = useState<any>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -56,6 +62,21 @@ export default function EvaluationsPage() {
     });
     return Array.from(gps.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [evaluations]);
+
+  // Attitude statistics
+  const attitudeStats = useMemo(() => {
+    if (!attitudeEntries) return { total: 0, positive: 0, negative: 0, thisMonth: 0 };
+    const now = new Date();
+    const thisMonthEntries = attitudeEntries.filter(e => 
+      e.month === now.getMonth() + 1 && e.year === now.getFullYear()
+    );
+    return {
+      total: attitudeEntries.length,
+      positive: attitudeEntries.filter(e => e.attitudeType === 'positive' || (e.attitudeScore && e.attitudeScore > 0)).length,
+      negative: attitudeEntries.filter(e => e.attitudeType === 'negative' || (e.attitudeScore && e.attitudeScore < 0)).length,
+      thisMonth: thisMonthEntries.length,
+    };
+  }, [attitudeEntries]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -416,17 +437,31 @@ export default function EvaluationsPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>All Evaluations</CardTitle>
-              <CardDescription>
-                {filteredEvaluations.length} of {evaluations?.length || 0} evaluations
-                {hasActiveFilters && " (filtered)"}
-              </CardDescription>
-            </div>
-          </div>
+      {/* Tabs for Evaluations and Attitude */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "evaluations" | "attitude")} className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="evaluations" className="flex items-center gap-2">
+            <FileSpreadsheet className="h-4 w-4" />
+            Evaluations ({stats.total})
+          </TabsTrigger>
+          <TabsTrigger value="attitude" className="flex items-center gap-2">
+            <Heart className="h-4 w-4" />
+            Attitude ({attitudeStats.total})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="evaluations" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>All Evaluations</CardTitle>
+                  <CardDescription>
+                    {filteredEvaluations.length} of {evaluations?.length || 0} evaluations
+                    {hasActiveFilters && " (filtered)"}
+                  </CardDescription>
+                </div>
+              </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Search and Filter Bar */}
@@ -649,6 +684,115 @@ export default function EvaluationsPage() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        {/* Attitude Tab */}
+        <TabsContent value="attitude" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Attitude Entries</CardTitle>
+                  <CardDescription>
+                    {attitudeEntries?.length || 0} attitude entries recorded
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <ThumbsUp className="h-4 w-4 text-green-500" />
+                    <span className="text-sm font-medium text-green-600">{attitudeStats.positive} Positive</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ThumbsDown className="h-4 w-4 text-red-500" />
+                    <span className="text-sm font-medium text-red-600">{attitudeStats.negative} Negative</span>
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingAttitude ? (
+                <div className="space-y-4">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : attitudeEntries && attitudeEntries.length > 0 ? (
+                <div className="overflow-x-auto border rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead>Game Presenter</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Comment</TableHead>
+                        <TableHead className="text-center">Score</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {attitudeEntries.map((entry) => (
+                        <TableRow key={entry.id} className="hover:bg-muted/50">
+                          <TableCell className="font-medium">
+                            {entry.gamePresenter?.name || entry.gpName || 'Unknown'}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {entry.evaluationDate 
+                              ? format(new Date(entry.evaluationDate), "dd MMM yyyy, HH:mm")
+                              : entry.createdAt
+                              ? format(new Date(entry.createdAt), "dd MMM yyyy, HH:mm")
+                              : "-"}
+                          </TableCell>
+                          <TableCell>
+                            {(() => {
+                              const isPositive = entry.attitudeType === 'positive' || (entry.attitudeScore && entry.attitudeScore > 0);
+                              return (
+                                <Badge 
+                                  variant="outline" 
+                                  className={isPositive 
+                                    ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900 dark:text-green-200' 
+                                    : 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900 dark:text-red-200'
+                                  }
+                                >
+                                  {isPositive ? (
+                                    <><ThumbsUp className="h-3 w-3 mr-1" /> POSITIVE</>
+                                  ) : (
+                                    <><ThumbsDown className="h-3 w-3 mr-1" /> NEGATIVE</>
+                                  )}
+                                </Badge>
+                              );
+                            })()}
+                          </TableCell>
+                          <TableCell className="max-w-md">
+                            <p className="truncate" title={entry.comment || entry.description || ''}>
+                              {entry.comment || entry.description || '-'}
+                            </p>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
+                              (entry.attitudeScore || 0) > 0 
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                                : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                            }`}>
+                              {(entry.attitudeScore || 0) > 0 ? '+' : ''}{entry.attitudeScore || 0}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="font-semibold mb-1">No attitude entries yet</h3>
+                  <p className="text-muted-foreground">
+                    Upload attitude screenshots in the Upload section to track GP behavior
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>

@@ -1547,3 +1547,14 @@
 - [ ] Sync attitude data with evaluations module
 - [ ] GP Dashboard should show attitude entries in table format (Date, Type, Comment, Score)
 
+
+
+## Attitude in Evaluations Module (v45)
+
+- [x] Add API endpoint to get all attitude entries (listAll)
+- [x] Add Attitude tab in Evaluations page with table view
+- [x] Show GP name, date, type, comment, score in table
+- [x] Add statistics for positive/negative counts
+- [x] Fix positive/negative detection based on score value
+- [x] Fix LLM URL fallback (forge.manus.ai instead of forge.manus.im)
+- [x] All 147 tests passing

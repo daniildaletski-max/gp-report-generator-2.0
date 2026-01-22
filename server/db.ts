@@ -2792,3 +2792,34 @@ export async function getAttitudeScreenshotsForGP(gpId: number, month: number, y
     return [];
   }
 }
+
+
+export async function getAllAttitudeScreenshots(month?: number, year?: number, gamePresenterId?: number): Promise<AttitudeScreenshot[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    const conditions: any[] = [];
+    
+    if (month !== undefined) {
+      conditions.push(eq(attitudeScreenshots.month, month));
+    }
+    if (year !== undefined) {
+      conditions.push(eq(attitudeScreenshots.year, year));
+    }
+    if (gamePresenterId !== undefined) {
+      conditions.push(eq(attitudeScreenshots.gamePresenterId, gamePresenterId));
+    }
+
+    const query = db.select().from(attitudeScreenshots);
+    
+    if (conditions.length > 0) {
+      return await query.where(and(...conditions)).orderBy(desc(attitudeScreenshots.createdAt));
+    }
+    
+    return await query.orderBy(desc(attitudeScreenshots.createdAt));
+  } catch (error) {
+    console.error("[Database] Error getting all attitude screenshots:", error);
+    return [];
+  }
+}

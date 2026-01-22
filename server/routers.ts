@@ -3302,6 +3302,31 @@ Respond with a JSON object containing an array of ALL entries found:
         return await db.getAttitudeScreenshots(input.month, input.year, input.gamePresenterId);
       }),
 
+    // List all attitude screenshots with optional filters
+    listAll: protectedProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12).optional(),
+        year: z.number().min(2020).max(2030).optional(),
+        gamePresenterId: z.number().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const month = input?.month;
+        const year = input?.year;
+        const gpId = input?.gamePresenterId;
+        
+        // Get all attitude entries with GP info
+        const allEntries = await db.getAllAttitudeScreenshots(month, year, gpId);
+        
+        // Get all GPs for name mapping
+        const gps = await db.getAllGamePresenters();
+        const gpMap = new Map(gps.map(gp => [gp.id, gp]));
+        
+        return allEntries.map(entry => ({
+          ...entry,
+          gamePresenter: entry.gamePresenterId ? gpMap.get(entry.gamePresenterId) || null : null,
+        }));
+      }),
+
     // Delete attitude screenshot
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
