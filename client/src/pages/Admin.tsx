@@ -1694,7 +1694,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [bulkEmails, setBulkEmails] = useState("");
-  const [selectedTeamId, setSelectedTeamId] = useState<string>("");
+  const [selectedTeamId, setSelectedTeamId] = useState<string>("none");
   const [selectedRole, setSelectedRole] = useState<"user" | "admin">("user");
   const [expiresInDays, setExpiresInDays] = useState(7);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
@@ -1765,7 +1765,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
     }
     createMutation.mutate({
       email,
-      teamId: selectedTeamId ? Number(selectedTeamId) : undefined,
+      teamId: selectedTeamId && selectedTeamId !== 'none' ? Number(selectedTeamId) : undefined,
       role: selectedRole,
       expiresInDays,
     });
@@ -1784,7 +1784,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
 
     bulkCreateMutation.mutate({
       emails,
-      teamId: selectedTeamId ? Number(selectedTeamId) : undefined,
+      teamId: selectedTeamId && selectedTeamId !== 'none' ? Number(selectedTeamId) : undefined,
       role: selectedRole,
       expiresInDays,
     });
@@ -1954,7 +1954,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                             <SelectValue placeholder="Select team (optional)" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">No team</SelectItem>
+                            <SelectItem value="none">No team</SelectItem>
                             {teams.map(team => (
                               <SelectItem key={team.id} value={String(team.id)}>
                                 {team.teamName}
@@ -2040,7 +2040,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                             <SelectValue placeholder="Select team" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">No team</SelectItem>
+                            <SelectItem value="none">No team</SelectItem>
                             {teams.map(team => (
                               <SelectItem key={team.id} value={String(team.id)}>
                                 {team.teamName}

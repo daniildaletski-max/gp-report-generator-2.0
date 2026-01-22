@@ -1705,3 +1705,8 @@
 - [x] Attitude entries table in GP Portal (already implemented)
 - [x] Error details section in GP Portal (already implemented)
 - [x] All 147 tests passing
+
+
+## Bug Fix - Select.Item Empty Value Error
+
+- [x] Fix Select.Item with empty value on Admin page causing crash
