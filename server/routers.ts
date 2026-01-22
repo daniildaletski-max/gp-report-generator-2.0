@@ -3190,13 +3190,17 @@ Respond in JSON format:
           }
         }
 
-        // Save to database
+        // Save to database with new fields
         const attitudeScreenshot = await db.createAttitudeScreenshot({
           gamePresenterId,
+          evaluationId: null, // Will be linked later if matching evaluation found
           gpName: extractedData.gpName || 'Unknown',
           evaluationDate: extractedData.evaluationDate ? new Date(extractedData.evaluationDate) : null,
-          attitudeScore: extractedData.attitudeScore || 3,
+          attitudeType: extractedData.entryType?.toLowerCase() === 'positive' ? 'positive' : 
+                        extractedData.entryType?.toLowerCase() === 'negative' ? 'negative' : 'neutral',
+          attitudeScore: extractedData.entryScore || (extractedData.attitudeCategory === 'positive' ? 1 : -1),
           attitudeCategory: extractedData.attitudeCategory || 'neutral',
+          comment: extractedData.description || '', // The Comment from the table
           description: extractedData.description || '',
           evaluatorName: extractedData.evaluatorName || null,
           screenshotUrl,

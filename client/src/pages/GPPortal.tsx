@@ -766,72 +766,100 @@ export default function GPPortal() {
           </div>
         )}
 
-        {/* Attitude Details Section */}
+        {/* Attitude Entries Section - Table format like screenshot */}
         {data.attitudeDetails && data.attitudeDetails.length > 0 && (
           <div>
             <h2 className="text-base sm:text-xl font-semibold mb-3 sm:mb-4 text-white flex items-center gap-2">
               <ThumbsUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
-              Attitude Evaluations This Month
+              Attitude Entries
               <Badge variant="secondary" className="ml-2 text-xs sm:text-sm bg-green-500/20 text-green-300">
                 {data.attitudeDetails.length}
               </Badge>
             </h2>
             
-            <div className="space-y-3 sm:space-y-4">
-              {data.attitudeDetails.map((attitude: any) => (
-                <Card key={attitude.id} className="bg-white/5 backdrop-blur-lg border-green-400/20 overflow-hidden">
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                      {/* Attitude Screenshot */}
-                      {attitude.screenshotUrl && (
-                        <div className="w-full sm:w-24 h-24 flex-shrink-0">
-                          <img
-                            src={attitude.screenshotUrl}
-                            alt="Attitude screenshot"
-                            className="w-full h-full object-cover rounded-md"
-                          />
-                        </div>
-                      )}
-                      
-                      {/* Attitude Details */}
-                      <div className="flex-1 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge className={`text-xs ${
-                            attitude.attitudeCategory === 'positive' ? 'bg-green-500/30 text-green-300' :
-                            attitude.attitudeCategory === 'neutral' ? 'bg-gray-500/30 text-gray-300' :
-                            'bg-red-500/30 text-red-300'
-                          }`}>
-                            {attitude.attitudeCategory?.charAt(0).toUpperCase() + attitude.attitudeCategory?.slice(1)}
-                          </Badge>
-                          <div className="flex items-center gap-1">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star
-                                key={star}
-                                className={`h-3 w-3 ${
-                                  star <= (attitude.attitudeScore || 0)
-                                    ? 'fill-yellow-400 text-yellow-400'
-                                    : 'text-gray-500'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                        
-                        <p className="text-sm text-white">{attitude.description}</p>
-                        
-                        {attitude.evaluatorName && (
-                          <p className="text-xs text-blue-200/60">Evaluator: {attitude.evaluatorName}</p>
-                        )}
-                        
-                        <p className="text-xs text-blue-200/40">
-                          {attitude.createdAt ? format(new Date(attitude.createdAt), "MMM d, yyyy 'at' HH:mm") : ''}
-                        </p>
+            <Card className="bg-white/5 backdrop-blur-lg border-white/10 overflow-hidden">
+              {/* Table Header - Hidden on mobile */}
+              <div className="hidden sm:grid sm:grid-cols-12 gap-4 p-4 bg-white/5 border-b border-white/10 text-sm font-medium text-blue-200/70">
+                <div className="col-span-3">Date</div>
+                <div className="col-span-2">Type</div>
+                <div className="col-span-5">Comment</div>
+                <div className="col-span-2 text-right">Score</div>
+              </div>
+              
+              {/* Table Rows */}
+              <div className="divide-y divide-white/10">
+                {data.attitudeDetails.map((attitude: any) => (
+                  <div key={attitude.id} className="p-3 sm:p-4 hover:bg-white/5 transition-colors">
+                    {/* Mobile Layout */}
+                    <div className="sm:hidden space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-blue-200/60">
+                          {attitude.evaluationDate 
+                            ? format(new Date(attitude.evaluationDate), "d MMM yyyy, HH:mm")
+                            : attitude.createdAt 
+                              ? format(new Date(attitude.createdAt), "d MMM yyyy, HH:mm")
+                              : 'Date unknown'}
+                        </span>
+                        <Badge className={`text-xs px-2 py-0.5 ${
+                          attitude.attitudeType === 'positive' || attitude.attitudeCategory === 'positive'
+                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                            : attitude.attitudeType === 'negative' || attitude.attitudeCategory === 'negative'
+                              ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                              : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+                        }`}>
+                          {(attitude.attitudeType || attitude.attitudeCategory || 'neutral').toUpperCase()}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-white">{attitude.comment || attitude.description}</p>
+                      <div className="flex justify-end">
+                        <span className={`text-lg font-bold ${
+                          (attitude.attitudeScore || 0) > 0 ? 'text-green-400' : 
+                          (attitude.attitudeScore || 0) < 0 ? 'text-red-400' : 'text-gray-400'
+                        }`}>
+                          {(attitude.attitudeScore || 0) > 0 ? '+' : ''}{attitude.attitudeScore || 0}
+                        </span>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    
+                    {/* Desktop Layout - Table Row */}
+                    <div className="hidden sm:grid sm:grid-cols-12 gap-4 items-center">
+                      <div className="col-span-3 text-sm text-blue-200/80">
+                        {attitude.evaluationDate 
+                          ? format(new Date(attitude.evaluationDate), "d MMM yyyy, HH:mm")
+                          : attitude.createdAt 
+                            ? format(new Date(attitude.createdAt), "d MMM yyyy, HH:mm")
+                            : 'Date unknown'}
+                      </div>
+                      <div className="col-span-2">
+                        <Badge className={`text-xs px-3 py-1 ${
+                          attitude.attitudeType === 'positive' || attitude.attitudeCategory === 'positive'
+                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                            : attitude.attitudeType === 'negative' || attitude.attitudeCategory === 'negative'
+                              ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                              : 'bg-gray-500/20 text-gray-400 border border-gray-500/30'
+                        }`}>
+                          {(attitude.attitudeType || attitude.attitudeCategory || 'neutral').toUpperCase()}
+                        </Badge>
+                      </div>
+                      <div className="col-span-5 text-sm text-white">
+                        {attitude.comment || attitude.description}
+                      </div>
+                      <div className="col-span-2 text-right">
+                        <span className={`text-lg font-bold px-3 py-1 rounded-md ${
+                          (attitude.attitudeScore || 0) > 0 
+                            ? 'text-green-400 bg-green-500/10' 
+                            : (attitude.attitudeScore || 0) < 0 
+                              ? 'text-red-400 bg-red-500/10' 
+                              : 'text-gray-400 bg-gray-500/10'
+                        }`}>
+                          {(attitude.attitudeScore || 0) > 0 ? '+' : ''}{attitude.attitudeScore || 0}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
           </div>
         )}
       </main>

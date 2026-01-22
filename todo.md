@@ -1476,3 +1476,16 @@
 - [x] Auto-detect month/year from current date for uploads
 - [x] All 147 tests passing
 
+
+
+## Auto-Sync Error/Attitude with GP Evaluations (v41)
+
+- [x] Link error_screenshots and attitude_screenshots to evaluations table (added evaluationId column)
+- [x] Auto-match uploaded screenshots to GP by name (fuzzy matching)
+- [x] Auto-match by date/month to find relevant evaluation period
+- [x] Update monthly_gp_stats with aggregated errors and attitude scores
+- [x] Display linked errors and attitude in GP Dashboard
+- [x] Show error details (type, description, severity) in GP Portal
+- [x] Show attitude entries in table format (Date, Type, Comment, Score) in GP Portal
+- [x] All 147 tests passing
+

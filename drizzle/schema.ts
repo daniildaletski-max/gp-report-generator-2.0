@@ -259,6 +259,7 @@ export type InsertInvitation = typeof invitations.$inferInsert;
 export const errorScreenshots = mysqlTable("error_screenshots", {
   id: int("id").autoincrement().primaryKey(),
   gamePresenterId: int("gamePresenterId"),
+  evaluationId: int("evaluationId"), // Link to evaluation if matched
   gpName: varchar("gpName", { length: 255 }), // Name extracted from screenshot
   errorDate: timestamp("errorDate"),
   errorType: varchar("errorType", { length: 100 }), // Classification: dealing_error, procedure_error, etc.
@@ -286,10 +287,13 @@ export type InsertErrorScreenshot = typeof errorScreenshots.$inferInsert;
 export const attitudeScreenshots = mysqlTable("attitude_screenshots", {
   id: int("id").autoincrement().primaryKey(),
   gamePresenterId: int("gamePresenterId"),
+  evaluationId: int("evaluationId"), // Link to evaluation if matched
   gpName: varchar("gpName", { length: 255 }), // Name extracted from screenshot
   evaluationDate: timestamp("evaluationDate"),
-  attitudeScore: int("attitudeScore"), // 1-5 score
+  attitudeType: mysqlEnum("attitudeType", ["positive", "negative", "neutral"]).default("neutral"), // POSITIVE/NEGATIVE from screenshot
+  attitudeScore: int("attitudeScore"), // +1 or -1 score
   attitudeCategory: varchar("attitudeCategory", { length: 100 }), // positive, neutral, negative
+  comment: text("comment"), // Comment from screenshot
   description: text("description"), // Detailed description from screenshot
   evaluatorName: varchar("evaluatorName", { length: 255 }),
   screenshotUrl: text("screenshotUrl"),
