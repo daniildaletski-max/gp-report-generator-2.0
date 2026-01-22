@@ -322,6 +322,124 @@
     transform: scale(0.98);
   }
 
+  /* Pulse animation for notifications */
+  .pulse-dot {
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.7; }
+  }
+
+  /* Shimmer loading effect */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      oklch(0.95 0 0) 0%,
+      oklch(0.98 0 0) 50%,
+      oklch(0.95 0 0) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  .dark .shimmer {
+    background: linear-gradient(
+      90deg,
+      oklch(0.2 0 0) 0%,
+      oklch(0.25 0 0) 50%,
+      oklch(0.2 0 0) 100%
+    );
+    background-size: 200% 100%;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Bounce animation */
+  .bounce-in {
+    animation: bounce-in 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+  @keyframes bounce-in {
+    0% { transform: scale(0); opacity: 0; }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Floating animation */
+  .float {
+    animation: float 3s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  /* Glow effect */
+  .glow-blue {
+    box-shadow: 0 0 20px oklch(0.6 0.2 260 / 30%);
+  }
+  .glow-green {
+    box-shadow: 0 0 20px oklch(0.6 0.2 145 / 30%);
+  }
+  .glow-amber {
+    box-shadow: 0 0 20px oklch(0.7 0.2 85 / 30%);
+  }
+
+  /* Progress bar animation */
+  .progress-animated {
+    transition: width 0.5s ease-out;
+  }
+
+  /* Count up animation helper */
+  .count-up {
+    transition: all 0.3s ease-out;
+  }
+
+  /* Highlight flash */
+  .highlight-flash {
+    animation: highlight-flash 1s ease-out;
+  }
+  @keyframes highlight-flash {
+    0% { background-color: oklch(0.85 0.15 85); }
+    100% { background-color: transparent; }
+  }
+  .dark .highlight-flash {
+    animation: highlight-flash-dark 1s ease-out;
+  }
+  @keyframes highlight-flash-dark {
+    0% { background-color: oklch(0.35 0.1 85); }
+    100% { background-color: transparent; }
+  }
+
+  /* Success checkmark animation */
+  .check-animate {
+    animation: check-animate 0.4s ease-out;
+  }
+  @keyframes check-animate {
+    0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+    50% { transform: scale(1.2) rotate(0deg); }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+
+  /* Slide up animation */
+  .slide-up {
+    animation: slide-up 0.3s ease-out;
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Rotate animation */
+  .spin-slow {
+    animation: spin 3s linear infinite;
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
   /* Scrollbar styling */
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;

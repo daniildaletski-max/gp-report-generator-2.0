@@ -263,18 +263,31 @@ async function extractEvaluationFromImage(imageUrl: string): Promise<EvaluationD
     messages: [
       {
         role: "system",
-        content: `You are an OCR assistant that extracts structured data from Game Presenter evaluation screenshots. 
-Extract all visible information including presenter name, evaluator name, date, game type, total score, and individual category scores with their comments.
-The categories typically include: Hair, Makeup, Outfit, Posture, Dealing Style, and Game Performance/Game Commenting.
-Each category has a score in format "X/Y" where X is the score and Y is the maximum.
-Return the data in the exact JSON format specified.`
+        content: `You are a highly accurate OCR assistant specialized in extracting structured data from Game Presenter evaluation screenshots.
+
+IMPORTANT EXTRACTION RULES:
+1. PRESENTER NAME: Extract the full name exactly as shown (First Name + Last Name). Look for labels like "Game Presenter", "GP Name", or similar.
+2. EVALUATOR NAME: Extract the full name of the person who conducted the evaluation.
+3. DATE: Extract the evaluation date. Common formats: "9 Jan 2026", "09/01/2026", "January 9, 2026".
+4. GAME TYPE: Look for game names like Baccarat, Roulette, Blackjack, Dragon Tiger, etc.
+5. SCORES: Each category shows a score in format "X/Y" where X is achieved score and Y is maximum possible.
+   - Hair: Usually /3 max
+   - Makeup: Usually /3 max
+   - Outfit: Usually /3 max
+   - Posture: Usually /3 max
+   - Dealing Style: Usually /5 max
+   - Game Performance/Game Commenting: Usually /5 max
+6. COMMENTS: Extract any feedback text associated with each category.
+7. TOTAL SCORE: Sum of all individual scores, typically out of 22.
+
+Be precise and extract exactly what you see. If a field is not visible, use reasonable defaults (empty string for comments, 0 for missing scores).`
       },
       {
         role: "user",
         content: [
           {
             type: "text",
-            text: "Extract all evaluation data from this screenshot. Return a JSON object with the following structure: { presenterName, evaluatorName, date, game, totalScore, hair: {score, maxScore, comment}, makeup: {score, maxScore, comment}, outfit: {score, maxScore, comment}, posture: {score, maxScore, comment}, dealingStyle: {score, maxScore, comment}, gamePerformance: {score, maxScore, comment} }"
+            text: "Carefully analyze this evaluation screenshot and extract ALL data. Pay special attention to:\n- The presenter's FULL NAME (first + last)\n- All score values (X/Y format)\n- Any comments or feedback for each category\n\nReturn a complete JSON object with: presenterName, evaluatorName, date, game, totalScore, and category objects (hair, makeup, outfit, posture, dealingStyle, gamePerformance) each containing score, maxScore, and comment."
           },
           {
             type: "image_url",

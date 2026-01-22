@@ -202,62 +202,70 @@ export default function Dashboard() {
       </Card>
 
       {/* Stats Cards Row 1 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-full -mr-10 -mt-10" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
+        <Card className="relative overflow-hidden card-hover group">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-full -mr-10 -mt-10 group-hover:scale-150 transition-transform duration-500" />
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Game Presenters
             </CardTitle>
-            <Users className="h-5 w-5 text-blue-500" />
+            <div className="p-2 bg-blue-500/10 rounded-lg group-hover:bg-blue-500/20 transition-colors">
+              <Users className="h-5 w-5 text-blue-500" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats?.totalGPs || 0}</div>
+            <div className="text-3xl font-bold tabular-nums">{stats?.totalGPs || 0}</div>
             <p className="text-xs text-muted-foreground mt-1">Total registered GPs</p>
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-green-500/10 rounded-full -mr-10 -mt-10" />
+        <Card className="relative overflow-hidden card-hover group">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-green-500/10 rounded-full -mr-10 -mt-10 group-hover:scale-150 transition-transform duration-500" />
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Evaluations
             </CardTitle>
-            <FileCheck className="h-5 w-5 text-green-500" />
+            <div className="p-2 bg-green-500/10 rounded-lg group-hover:bg-green-500/20 transition-colors">
+              <FileCheck className="h-5 w-5 text-green-500" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats?.totalEvaluations || 0}</div>
+            <div className="text-3xl font-bold tabular-nums">{stats?.totalEvaluations || 0}</div>
             <p className="text-xs text-muted-foreground mt-1">Total evaluations uploaded</p>
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/10 rounded-full -mr-10 -mt-10" />
+        <Card className="relative overflow-hidden card-hover group">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/10 rounded-full -mr-10 -mt-10 group-hover:scale-150 transition-transform duration-500" />
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Team Average
             </CardTitle>
-            <TrendingUp className="h-5 w-5 text-amber-500" />
+            <div className="p-2 bg-amber-500/10 rounded-lg group-hover:bg-amber-500/20 transition-colors">
+              <TrendingUp className="h-5 w-5 text-amber-500" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">
+            <div className="text-3xl font-bold tabular-nums">
               {avgTeamScore > 0 ? avgTeamScore.toFixed(1) : '-'}
-              <span className="text-lg text-muted-foreground">/24</span>
+              <span className="text-lg text-muted-foreground">/22</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">Average score this month</p>
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/10 rounded-full -mr-10 -mt-10" />
+        <Card className="relative overflow-hidden card-hover group">
+          <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/10 rounded-full -mr-10 -mt-10 group-hover:scale-150 transition-transform duration-500" />
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Reports
             </CardTitle>
-            <FileSpreadsheet className="h-5 w-5 text-purple-500" />
+            <div className="p-2 bg-purple-500/10 rounded-lg group-hover:bg-purple-500/20 transition-colors">
+              <FileSpreadsheet className="h-5 w-5 text-purple-500" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats?.totalReports || 0}</div>
+            <div className="text-3xl font-bold tabular-nums">{stats?.totalReports || 0}</div>
             <p className="text-xs text-muted-foreground mt-1">Reports generated</p>
           </CardContent>
         </Card>
