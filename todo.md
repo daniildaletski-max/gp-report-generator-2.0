@@ -1586,3 +1586,20 @@
 - [x] Auto-update monthly_gp_stats when attitude is uploaded
 - [x] Auto-update monthly_gp_stats when errors are uploaded
 - [x] All 147 tests passing
+
+
+
+## Attitude in Team Monthly Overview (v47) - COMPLETED
+
+### Remove Smart Upload
+- [x] Remove Smart Upload tab from Upload page
+- [x] Remove smartUpload mutation from frontend
+- [x] Keep only Evaluations, Attitude, Errors tabs
+
+### Add Attitude to Excel Report
+- [x] Fetch attitude entries for each GP in report month
+- [x] Update Attitude/Concerns/Remarks column with attitude summary (+X/-Y)
+- [x] Add separate "Attitude Entries" sheet with detailed data
+- [x] Show GP Name, Date, Type, Comment, Score in Attitude sheet
+- [x] Color-coded POSITIVE (green) and NEGATIVE (red) entries
+- [x] All 147 tests passing

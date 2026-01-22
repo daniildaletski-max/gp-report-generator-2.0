@@ -98,22 +98,7 @@ interface FileWithPreview {
   processingTime?: number;
 }
 
-type UploadType = "evaluations" | "attitude" | "errors" | "smart";
-
-interface SmartUploadResult {
-  type: 'ATTITUDE' | 'ERROR';
-  detectedType: string;
-  detectionConfidence: number;
-  detectionReason: string;
-  screenshotUrl: string;
-  screenshotKey: string;
-  extractedData: any;
-  gpName: string | null;
-  gpMatched: boolean;
-  gamePresenterId: number | null;
-  entriesCount: number;
-  savedEntries: any[];
-}
+type UploadType = "evaluations" | "attitude" | "errors";
 
 // ============ UTILITIES ============
 
@@ -172,7 +157,6 @@ export default function UploadPage() {
   const uploadEvaluationMutation = trpc.evaluation.uploadAndExtract.useMutation();
   const uploadAttitudeMutation = trpc.attitudeScreenshot.upload.useMutation();
   const uploadErrorMutation = trpc.errorScreenshot.upload.useMutation();
-  const smartUploadMutation = trpc.smartUpload.upload.useMutation();
 
   const generateId = () => Math.random().toString(36).substring(2, 9);
 
@@ -482,76 +466,6 @@ export default function UploadPage() {
                   } 
                 : f
             ));
-          } else if (activeTab === "smart") {
-            // Smart upload - auto-detect type
-            result = await smartUploadMutation.mutateAsync({
-              imageBase64: base64,
-              filename: pendingFile.file.name,
-              mimeType: 'image/jpeg',
-              gpId: selectedGpId || undefined,
-            }) as SmartUploadResult;
-            
-            setFiles((prev) => prev.map(f => 
-              f.id === fileId ? { ...f, progress: 80 } : f
-            ));
-
-            const processingTime = Date.now() - fileStartTime;
-            
-            // Store result based on detected type
-            if (result.type === 'ATTITUDE') {
-              setFiles((prev) => prev.map(f => 
-                f.id === fileId 
-                  ? { 
-                      ...f, 
-                      status: "success" as const, 
-                      attitudeData: {
-                        gpName: result.gpName,
-                        entries: result.extractedData?.entries || [],
-                        totalEntries: result.entriesCount,
-                        totalPositive: result.extractedData?.totalPositive || 0,
-                        totalNegative: result.extractedData?.totalNegative || 0,
-                      },
-                      matchInfo: {
-                        matchedName: result.gpName || 'Unknown',
-                        similarity: result.gpMatched ? 1 : 0,
-                        isExactMatch: result.gpMatched,
-                        isNewGP: !result.gpMatched,
-                      },
-                      progress: 100,
-                      processingTime,
-                    } 
-                  : f
-              ));
-            } else {
-              setFiles((prev) => prev.map(f => 
-                f.id === fileId 
-                  ? { 
-                      ...f, 
-                      status: "success" as const, 
-                      errorData: {
-                        presenterName: result.gpName || 'Unknown',
-                        errorType: result.extractedData?.errorType || 'unknown',
-                        description: result.extractedData?.errorDescription || '',
-                        severity: result.extractedData?.severity || 'medium',
-                      },
-                      matchInfo: {
-                        matchedName: result.gpName || 'Unknown',
-                        similarity: result.gpMatched ? 1 : 0,
-                        isExactMatch: result.gpMatched,
-                        isNewGP: !result.gpMatched,
-                      },
-                      progress: 100,
-                      processingTime,
-                    } 
-                  : f
-              ));
-            }
-            
-            // Show detection info
-            toast.info(`Detected: ${result.detectedType} (${Math.round(result.detectionConfidence * 100)}% confidence)`, {
-              description: result.detectionReason,
-              duration: 4000,
-            });
           }
           
           processed++;
@@ -615,7 +529,6 @@ export default function UploadPage() {
       case "evaluations": return <FileCheck className="h-4 w-4" />;
       case "attitude": return <Heart className="h-4 w-4" />;
       case "errors": return <AlertTriangle className="h-4 w-4" />;
-      case "smart": return <Sparkles className="h-4 w-4 text-purple-500" />;
     }
   };
 
@@ -624,7 +537,6 @@ export default function UploadPage() {
       case "evaluations": return "Upload evaluation screenshots for AI extraction";
       case "attitude": return "Upload attitude entry screenshots (POSITIVE/NEGATIVE)";
       case "errors": return "Upload error screenshots for tracking";
-      case "smart": return "AI auto-detects screenshot type (attitude or errors)";
     }
   };
 
@@ -691,11 +603,7 @@ export default function UploadPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as UploadType)}>
-        <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
-          <TabsTrigger value="smart" className="flex items-center gap-2 bg-gradient-to-r from-purple-500/10 to-blue-500/10">
-            <Sparkles className="h-4 w-4 text-purple-500" />
-            <span className="hidden sm:inline">Smart</span>
-          </TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
           <TabsTrigger value="evaluations" className="flex items-center gap-2">
             <FileCheck className="h-4 w-4" />
             <span className="hidden sm:inline">Evaluations</span>

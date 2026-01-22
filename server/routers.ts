@@ -1299,6 +1299,30 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           report.reportYear
         );
 
+        // Get attitude entries for all GPs in the team for this month
+        const attitudeByGp: Record<number, { positive: number; negative: number; entries: Array<{ date: string; type: string; comment: string; score: number }> }> = {};
+        for (const item of freshAttendance) {
+          if (item.gamePresenter?.id) {
+            const gpAttitudeEntries = await db.getAttitudeScreenshotsForGP(
+              item.gamePresenter.id,
+              report.reportMonth,
+              report.reportYear
+            );
+            
+            const positive = gpAttitudeEntries.filter(e => (e.attitudeScore || 0) > 0).length;
+            const negative = gpAttitudeEntries.filter(e => (e.attitudeScore || 0) < 0).length;
+            const entries = gpAttitudeEntries.map(e => ({
+              date: e.evaluationDate ? new Date(e.evaluationDate).toLocaleDateString() : new Date(e.createdAt).toLocaleDateString(),
+              type: (e.attitudeScore || 0) > 0 ? 'POSITIVE' : 'NEGATIVE',
+              comment: e.comment || '',
+              score: e.attitudeScore || 0
+            }));
+            
+            attitudeByGp[item.gamePresenter.id] = { positive, negative, entries };
+          }
+        }
+        console.log(`[exportToExcel] Loaded attitude data for ${Object.keys(attitudeByGp).length} GPs`);
+
         // Get detailed GP evaluations for Data sheet
         console.log(`[exportToExcel] reportId=${input.reportId}, teamId=${report.teamId}, year=${report.reportYear}, month=${report.reportMonth}`);
         const gpEvaluationsData = await db.getGPEvaluationsForDataSheet(
@@ -1590,8 +1614,25 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           mainSheet.getCell(`Y${gpRow}`).alignment = { horizontal: "center", vertical: "middle" };
 
           mainSheet.mergeCells(`AA${gpRow}:AE${gpRow + 1}`);
-          // Combine attitude score with remarks
-          const attitudeText = item.monthlyStats?.attitude ? `Attitude: ${item.monthlyStats.attitude}/5` : "";
+          // Combine attitude entries with remarks
+          const gpId = item.gamePresenter?.id;
+          const gpAttitude = gpId ? attitudeByGp[gpId] : null;
+          
+          let attitudeText = "";
+          if (gpAttitude && gpAttitude.entries.length > 0) {
+            // Format: "Attitude: +X/-Y" followed by entry comments
+            attitudeText = `Attitude: +${gpAttitude.positive}/-${gpAttitude.negative}`;
+            // Add first 2 comments if available
+            const comments = gpAttitude.entries.slice(0, 2).map(e => 
+              `${e.type === 'POSITIVE' ? '+' : '-'} ${e.comment.substring(0, 50)}${e.comment.length > 50 ? '...' : ''}`
+            );
+            if (comments.length > 0) {
+              attitudeText += " | " + comments.join("; ");
+            }
+          } else if (item.monthlyStats?.attitude) {
+            attitudeText = `Attitude: ${item.monthlyStats.attitude}/5`;
+          }
+          
           const remarksText = item.attendance?.remarks || item.monthlyStats?.notes || "";
           mainSheet.getCell(`AA${gpRow}`).value = [attitudeText, remarksText].filter(Boolean).join(" | ");
           mainSheet.getCell(`AA${gpRow}`).alignment = { wrapText: true, vertical: "middle" };
@@ -2031,6 +2072,77 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           } else {
             console.log('[exportToExcel] No previous month data available for comparison');
           }
+        }
+
+        // ===== Sheet 4: Attitude Entries (detailed attitude data) =====
+        const hasAttitudeData = Object.values(attitudeByGp).some(a => a.entries.length > 0);
+        if (hasAttitudeData) {
+          const attitudeSheet = workbook.addWorksheet("Attitude Entries");
+          
+          // Set column widths
+          attitudeSheet.columns = [
+            { width: 25 }, // GP Name
+            { width: 18 }, // Date
+            { width: 12 }, // Type
+            { width: 60 }, // Comment
+            { width: 8 },  // Score
+          ];
+          
+          // Header row
+          attitudeSheet.getRow(1).values = ["GP Name", "Date", "Type", "Comment", "Score"];
+          attitudeSheet.getRow(1).font = { bold: true };
+          attitudeSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+          attitudeSheet.getRow(1).alignment = { horizontal: "center", vertical: "middle" };
+          
+          // Data rows
+          let attRow = 2;
+          for (const item of freshAttendance) {
+            const gpId = item.gamePresenter?.id;
+            const gpName = item.gamePresenter?.name || "Unknown";
+            const gpAttitude = gpId ? attitudeByGp[gpId] : null;
+            
+            if (gpAttitude && gpAttitude.entries.length > 0) {
+              for (const entry of gpAttitude.entries) {
+                attitudeSheet.getRow(attRow).values = [
+                  gpName,
+                  entry.date,
+                  entry.type,
+                  entry.comment,
+                  entry.score
+                ];
+                
+                // Color code type column
+                const typeCell = attitudeSheet.getCell(`C${attRow}`);
+                if (entry.type === 'POSITIVE') {
+                  typeCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD4EDDA" } };
+                  typeCell.font = { color: { argb: "FF155724" } };
+                } else {
+                  typeCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8D7DA" } };
+                  typeCell.font = { color: { argb: "FF721C24" } };
+                }
+                
+                // Color code score column
+                const scoreCell = attitudeSheet.getCell(`E${attRow}`);
+                if (entry.score > 0) {
+                  scoreCell.font = { color: { argb: "FF155724" }, bold: true };
+                } else {
+                  scoreCell.font = { color: { argb: "FF721C24" }, bold: true };
+                }
+                
+                attRow++;
+              }
+            }
+          }
+          
+          // Add summary row
+          attRow++;
+          const totalPositive = Object.values(attitudeByGp).reduce((sum, a) => sum + a.positive, 0);
+          const totalNegative = Object.values(attitudeByGp).reduce((sum, a) => sum + a.negative, 0);
+          attitudeSheet.getRow(attRow).values = ["TOTAL", "", `+${totalPositive} / -${totalNegative}`, "", ""];
+          attitudeSheet.getRow(attRow).font = { bold: true };
+          attitudeSheet.getRow(attRow).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+          
+          console.log(`[exportToExcel] Added Attitude Entries sheet with ${attRow - 2} entries`);
         }
 
         // Generate main report buffer
