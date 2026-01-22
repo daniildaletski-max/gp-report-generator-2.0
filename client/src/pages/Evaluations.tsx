@@ -30,6 +30,17 @@ export default function EvaluationsPage() {
   // Attitude entries query
   const { data: attitudeEntries, isLoading: isLoadingAttitude } = trpc.attitudeScreenshot.listAll.useQuery({});
   
+  // Delete attitude mutation
+  const deleteAttitudeMutation = trpc.attitudeScreenshot.delete.useMutation({
+    onSuccess: () => {
+      utils.attitudeScreenshot.listAll.invalidate();
+      toast.success('Attitude entry deleted');
+    },
+    onError: (error) => {
+      toast.error('Failed to delete: ' + error.message);
+    },
+  });
+  
   // Active tab state
   const [activeTab, setActiveTab] = useState<"evaluations" | "attitude">("evaluations");
   
@@ -50,6 +61,13 @@ export default function EvaluationsPage() {
   const [filterGP, setFilterGP] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"date" | "score" | "name">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  
+  // Attitude filter state
+  const [attitudeFilterGP, setAttitudeFilterGP] = useState<string>("all");
+  const [attitudeFilterMonth, setAttitudeFilterMonth] = useState<number | null>(null);
+  const [attitudeFilterYear, setAttitudeFilterYear] = useState<number | null>(null);
+  const [attitudeFilterType, setAttitudeFilterType] = useState<string>("all");
+  const [attitudeSearchQuery, setAttitudeSearchQuery] = useState("");
 
   // Get unique GPs for filter
   const uniqueGPs = useMemo(() => {
@@ -77,6 +95,47 @@ export default function EvaluationsPage() {
       thisMonth: thisMonthEntries.length,
     };
   }, [attitudeEntries]);
+
+  // Unique GPs for attitude filter
+  const attitudeUniqueGPs = useMemo(() => {
+    if (!attitudeEntries) return [];
+    const gps = new Map<string, string>();
+    attitudeEntries.forEach((entry) => {
+      const name = entry.gamePresenter?.name || entry.gpName || 'Unknown';
+      gps.set(name, name);
+    });
+    return Array.from(gps.values()).sort();
+  }, [attitudeEntries]);
+
+  // Filtered attitude entries
+  const filteredAttitudeEntries = useMemo(() => {
+    if (!attitudeEntries) return [];
+    return attitudeEntries.filter(entry => {
+      // GP filter
+      if (attitudeFilterGP !== 'all') {
+        const gpName = entry.gamePresenter?.name || entry.gpName || 'Unknown';
+        if (gpName !== attitudeFilterGP) return false;
+      }
+      // Month filter
+      if (attitudeFilterMonth !== null && entry.month !== attitudeFilterMonth) return false;
+      // Year filter
+      if (attitudeFilterYear !== null && entry.year !== attitudeFilterYear) return false;
+      // Type filter
+      if (attitudeFilterType !== 'all') {
+        const isPositive = entry.attitudeType === 'positive' || (entry.attitudeScore && entry.attitudeScore > 0);
+        if (attitudeFilterType === 'positive' && !isPositive) return false;
+        if (attitudeFilterType === 'negative' && isPositive) return false;
+      }
+      // Search filter
+      if (attitudeSearchQuery) {
+        const searchLower = attitudeSearchQuery.toLowerCase();
+        const gpName = (entry.gamePresenter?.name || entry.gpName || '').toLowerCase();
+        const comment = (entry.comment || entry.description || '').toLowerCase();
+        if (!gpName.includes(searchLower) && !comment.includes(searchLower)) return false;
+      }
+      return true;
+    });
+  }, [attitudeEntries, attitudeFilterGP, attitudeFilterMonth, attitudeFilterYear, attitudeFilterType, attitudeSearchQuery]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -694,7 +753,7 @@ export default function EvaluationsPage() {
                 <div>
                   <CardTitle>Attitude Entries</CardTitle>
                   <CardDescription>
-                    {attitudeEntries?.length || 0} attitude entries recorded
+                    {filteredAttitudeEntries.length} of {attitudeEntries?.length || 0} entries
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-4">
@@ -710,13 +769,76 @@ export default function EvaluationsPage() {
               </div>
             </CardHeader>
             <CardContent>
+              {/* Filters */}
+              <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-muted/50 rounded-lg">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by GP or comment..."
+                    value={attitudeSearchQuery}
+                    onChange={(e) => setAttitudeSearchQuery(e.target.value)}
+                    className="pl-9 h-9"
+                  />
+                </div>
+                <Select value={attitudeFilterGP} onValueChange={setAttitudeFilterGP}>
+                  <SelectTrigger className="w-[160px] h-9">
+                    <User className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="All GPs" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All GPs</SelectItem>
+                    {attitudeUniqueGPs.map((gp) => (
+                      <SelectItem key={gp} value={gp}>{gp}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={attitudeFilterMonth?.toString() || 'all'} onValueChange={(v) => setAttitudeFilterMonth(v === 'all' ? null : parseInt(v))}>
+                  <SelectTrigger className="w-[140px] h-9">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="All months" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All months</SelectItem>
+                    {MONTHS.map((month, i) => (
+                      <SelectItem key={i} value={(i + 1).toString()}>{month}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={attitudeFilterType} onValueChange={setAttitudeFilterType}>
+                  <SelectTrigger className="w-[130px] h-9">
+                    <Filter className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="All types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All types</SelectItem>
+                    <SelectItem value="positive">Positive</SelectItem>
+                    <SelectItem value="negative">Negative</SelectItem>
+                  </SelectContent>
+                </Select>
+                {(attitudeFilterGP !== 'all' || attitudeFilterMonth !== null || attitudeFilterType !== 'all' || attitudeSearchQuery) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setAttitudeFilterGP('all');
+                      setAttitudeFilterMonth(null);
+                      setAttitudeFilterYear(null);
+                      setAttitudeFilterType('all');
+                      setAttitudeSearchQuery('');
+                    }}
+                    className="h-9"
+                  >
+                    <X className="h-4 w-4 mr-1" /> Clear
+                  </Button>
+                )}
+              </div>
               {isLoadingAttitude ? (
                 <div className="space-y-4">
                   {[1, 2, 3, 4, 5].map((i) => (
                     <Skeleton key={i} className="h-12 w-full" />
                   ))}
                 </div>
-              ) : attitudeEntries && attitudeEntries.length > 0 ? (
+              ) : filteredAttitudeEntries.length > 0 ? (
                 <div className="overflow-x-auto border rounded-lg">
                   <Table>
                     <TableHeader>
@@ -726,10 +848,11 @@ export default function EvaluationsPage() {
                         <TableHead>Type</TableHead>
                         <TableHead>Comment</TableHead>
                         <TableHead className="text-center">Score</TableHead>
+                        <TableHead className="text-center w-16">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {attitudeEntries.map((entry) => (
+                      {filteredAttitudeEntries.map((entry) => (
                         <TableRow key={entry.id} className="hover:bg-muted/50">
                           <TableCell className="font-medium">
                             {entry.gamePresenter?.name || entry.gpName || 'Unknown'}
@@ -774,6 +897,32 @@ export default function EvaluationsPage() {
                             }`}>
                               {(entry.attitudeScore || 0) > 0 ? '+' : ''}{entry.attitudeScore || 0}
                             </span>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Attitude Entry</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this attitude entry? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteAttitudeMutation.mutate({ id: entry.id })}
+                                    className="bg-red-500 hover:bg-red-600"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </TableCell>
                         </TableRow>
                       ))}

@@ -1558,3 +1558,31 @@
 - [x] Fix positive/negative detection based on score value
 - [x] Fix LLM URL fallback (forge.manus.ai instead of forge.manus.im)
 - [x] All 147 tests passing
+
+
+## System Upgrade v46 - AI & UX Improvements - COMPLETED
+
+### AI Analysis Improvements
+- [x] Auto-detect screenshot type (errors vs attitude) based on content - smartUpload.upload endpoint
+- [x] Improve LLM prompt to distinguish error codes (SC_BAC, SC_RO) from attitude comments
+- [x] Add validation to reject misclassified uploads
+
+### Delete Functionality
+- [x] Add delete button for individual attitude entries in Evaluations tab
+- [x] Add confirmation dialog before deletion (using Trash2 icon with hover effect)
+- [x] Update statistics after deletion (invalidate query)
+
+### Filters & Search
+- [x] Add GP filter dropdown in Attitude tab
+- [x] Add month/year filter in Attitude tab
+- [x] Add type filter (All/Positive/Negative) in Attitude tab
+
+### UX Improvements
+- [x] Unified Smart Upload interface with auto-detection (new Smart tab)
+- [x] Better visual feedback during upload (toast with detection info)
+- [x] Show upload progress and results summary
+
+### Auto-sync
+- [x] Auto-update monthly_gp_stats when attitude is uploaded
+- [x] Auto-update monthly_gp_stats when errors are uploaded
+- [x] All 147 tests passing
