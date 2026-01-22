@@ -1,0 +1,25 @@
+{
+  "query": "SELECT id, name, teamId FROM game_presenters WHERE name LIKE '%N/A%' OR name LIKE '%No data%' OR name LIKE '%No evaluation%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT id, name, teamId FROM game_presenters WHERE name LIKE '%N/A%' OR name LIKE '%No data%' OR name LIKE '%No evaluation%';",
+  "rows": [
+    {
+      "id": "90001",
+      "name": "N/A - No evaluation data visible in the image",
+      "teamId": "NULL"
+    },
+    {
+      "id": "120001",
+      "name": "N/A (No evaluation data visible)",
+      "teamId": "NULL"
+    },
+    {
+      "id": "150001",
+      "name": "N/A - No data visible in image",
+      "teamId": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tteamId\n90001\tN/A - No evaluation data visible in the image\tNULL\n120001\tN/A (No evaluation data visible)\tNULL\n150001\tN/A - No data visible in image\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}
