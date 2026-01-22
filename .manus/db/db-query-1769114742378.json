@@ -1,0 +1,66 @@
+{
+  "query": "SELECT id, gpName, LEFT(comment, 100) as comment_short, attitudeScore, attitudeType FROM attitude_screenshots ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT id, gpName, LEFT(comment, 100) as comment_short, attitudeScore, attitudeType FROM attitude_screenshots ORDER BY id;",
+  "rows": [
+    {
+      "id": "1",
+      "gpName": "Unknown",
+      "comment_short": "NULL",
+      "attitudeScore": "3",
+      "attitudeType": "neutral"
+    },
+    {
+      "id": "2",
+      "gpName": "Unknown",
+      "comment_short": "NULL",
+      "attitudeScore": "3",
+      "attitudeType": "neutral"
+    },
+    {
+      "id": "30001",
+      "gpName": "Unknown",
+      "comment_short": "",
+      "attitudeScore": "-1",
+      "attitudeType": "neutral"
+    },
+    {
+      "id": "60001",
+      "gpName": "Alicia Bel-Haj",
+      "comment_short": "Interface error (SC_BAC2). Additional Comment: Interface frozen, app restarted and game continued as",
+      "attitudeScore": "-1",
+      "attitudeType": "negative"
+    },
+    {
+      "id": "60002",
+      "gpName": "Alicia Bel-Haj",
+      "comment_short": "Ball falls out of the wheel (SC_RO). Additional Comment: No spin. Game round voided by FM. System Vo",
+      "attitudeScore": "-1",
+      "attitudeType": "negative"
+    },
+    {
+      "id": "60003",
+      "gpName": "Alicia Bel-Haj",
+      "comment_short": "Was late to the studio even after FM told her to come earlier.",
+      "attitudeScore": "-1",
+      "attitudeType": "negative"
+    },
+    {
+      "id": "60004",
+      "gpName": "Alicia Bel-Haj",
+      "comment_short": "Went to the studio with her headphones",
+      "attitudeScore": "-1",
+      "attitudeType": "negative"
+    },
+    {
+      "id": "60005",
+      "gpName": "Alicia Bel-Haj",
+      "comment_short": "Dealer is systematically being late to the studio for 1-2 minutes",
+      "attitudeScore": "-1",
+      "attitudeType": "negative"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tgpName\tcomment_short\tattitudeScore\tattitudeType\n1\tUnknown\tNULL\t3\tneutral\n2\tUnknown\tNULL\t3\tneutral\n30001\tUnknown\t\t-1\tneutral\n60001\tAlicia Bel-Haj\tInterface error (SC_BAC2). Additional Comment: Interface frozen, app restarted and game continued as\t-1\tnegative\n60002\tAlicia Bel-Haj\tBall falls out of the wheel (SC_RO). Additional Comment: No spin. Game round voided by FM. System Vo\t-1\tnegative\n60003\tAlicia Bel-Haj\tWas late to the studio even after FM told her to come earlier.\t-1\tnegative\n60004\tAlicia Bel-Haj\tWent to the studio with her headphones\t-1\tnegative\n60005\tAlicia Bel-Haj\tDealer is systematically being late to the studio for 1-2 minutes\t-1\tnegative\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

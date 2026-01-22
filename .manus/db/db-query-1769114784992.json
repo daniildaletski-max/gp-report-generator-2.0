@@ -1,0 +1,46 @@
+{
+  "query": "SELECT id, gpName, LEFT(comment, 80) as comment_short, attitudeScore FROM attitude_screenshots ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT id, gpName, LEFT(comment, 80) as comment_short, attitudeScore FROM attitude_screenshots ORDER BY id;",
+  "rows": [
+    {
+      "id": "1",
+      "gpName": "Unknown",
+      "comment_short": "NULL",
+      "attitudeScore": "3"
+    },
+    {
+      "id": "2",
+      "gpName": "Unknown",
+      "comment_short": "NULL",
+      "attitudeScore": "3"
+    },
+    {
+      "id": "30001",
+      "gpName": "Unknown",
+      "comment_short": "",
+      "attitudeScore": "-1"
+    },
+    {
+      "id": "60003",
+      "gpName": "Alicia Bel-Haj",
+      "comment_short": "Was late to the studio even after FM told her to come earlier.",
+      "attitudeScore": "-1"
+    },
+    {
+      "id": "60004",
+      "gpName": "Alicia Bel-Haj",
+      "comment_short": "Went to the studio with her headphones",
+      "attitudeScore": "-1"
+    },
+    {
+      "id": "60005",
+      "gpName": "Alicia Bel-Haj",
+      "comment_short": "Dealer is systematically being late to the studio for 1-2 minutes",
+      "attitudeScore": "-1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tgpName\tcomment_short\tattitudeScore\n1\tUnknown\tNULL\t3\n2\tUnknown\tNULL\t3\n30001\tUnknown\t\t-1\n60003\tAlicia Bel-Haj\tWas late to the studio even after FM told her to come earlier.\t-1\n60004\tAlicia Bel-Haj\tWent to the studio with her headphones\t-1\n60005\tAlicia Bel-Haj\tDealer is systematically being late to the studio for 1-2 minutes\t-1\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}
