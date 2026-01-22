@@ -2926,13 +2926,17 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
       .input(z.object({
         imageBase64: z.string(),
         filename: z.string(),
-        month: z.number().min(1).max(12),
-        year: z.number().min(2020).max(2030),
+        mimeType: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Auto-detect month and year from current date
+        const now = new Date();
+        const month = now.getMonth() + 1;
+        const year = now.getFullYear();
+        
         // Decode and upload image to S3
         const imageBuffer = Buffer.from(input.imageBase64, 'base64');
-        const fileKey = `error-screenshots/${input.year}/${input.month}/${Date.now()}-${input.filename}`;
+        const fileKey = `error-screenshots/${year}/${month}/${Date.now()}-${input.filename}`;
         const contentType = input.filename.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
         
         const { url: screenshotUrl } = await storagePut(fileKey, imageBuffer, contentType);
@@ -3033,15 +3037,15 @@ Respond in JSON format:
           screenshotUrl,
           screenshotKey: fileKey,
           rawExtractedData: extractedData,
-          month: input.month,
-          year: input.year,
+          month,
+          year,
           uploadedById: ctx.user.id,
           processedAt: new Date(),
         });
 
         // Update monthly stats if GP was matched
         if (gamePresenterId) {
-          await db.incrementGPMistakes(gamePresenterId, input.month, input.year);
+          await db.incrementGPMistakes(gamePresenterId, month, year);
         }
 
         return {
@@ -3088,13 +3092,17 @@ Respond in JSON format:
       .input(z.object({
         imageBase64: z.string(),
         filename: z.string(),
-        month: z.number().min(1).max(12),
-        year: z.number().min(2020).max(2030),
+        mimeType: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Auto-detect month and year from current date
+        const now = new Date();
+        const month = now.getMonth() + 1;
+        const year = now.getFullYear();
+        
         // Decode and upload image to S3
         const imageBuffer = Buffer.from(input.imageBase64, 'base64');
-        const fileKey = `attitude-screenshots/${input.year}/${input.month}/${Date.now()}-${input.filename}`;
+        const fileKey = `attitude-screenshots/${year}/${month}/${Date.now()}-${input.filename}`;
         const contentType = input.filename.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
         
         const { url: screenshotUrl } = await storagePut(fileKey, imageBuffer, contentType);
@@ -3102,22 +3110,27 @@ Respond in JSON format:
         // Use AI to analyze the attitude screenshot
         const analysisPrompt = `Analyze this attitude evaluation screenshot from a casino game presenter evaluation system.
 
-Extract the following information:
-1. GP Name (Game Presenter name) - the person being evaluated
-2. Attitude Score - a score from 1 to 5 (1=poor, 5=excellent)
-3. Attitude Category - classify as: positive, neutral, or negative
-4. Description - detailed description of the attitude evaluation
-5. Evaluator Name - if visible
-6. Evaluation Date - if visible
+This screenshot shows an attitude entry table with columns: Date, Type (POSITIVE/NEGATIVE), Comment, Score.
+
+Extract the following information for EACH attitude entry visible in the screenshot:
+1. GP Name (Game Presenter name) - the person being evaluated (may be shown in header or context)
+2. Date - the date of the attitude entry (format: "3 Jan 2026, 21:00")
+3. Type - POSITIVE or NEGATIVE
+4. Comment - the text description of the attitude entry
+5. Score - the score value (+1 for positive, -1 for negative)
+
+If multiple entries are visible, extract the FIRST/MOST RECENT one.
 
 Respond in JSON format:
 {
   "gpName": "string or null",
-  "attitudeScore": number (1-5),
+  "attitudeScore": number (1-5, where 1=very negative, 3=neutral, 5=very positive),
   "attitudeCategory": "positive|neutral|negative",
-  "description": "string",
+  "description": "the Comment text from the table",
   "evaluatorName": "string or null",
-  "evaluationDate": "YYYY-MM-DD or null"
+  "evaluationDate": "YYYY-MM-DD or null",
+  "entryType": "POSITIVE or NEGATIVE",
+  "entryScore": number (+1 or -1)
 }`;
 
         const llmResponse = await invokeLLM({
@@ -3144,9 +3157,11 @@ Respond in JSON format:
                   attitudeCategory: { type: 'string', enum: ['positive', 'neutral', 'negative'] },
                   description: { type: 'string' },
                   evaluatorName: { type: ['string', 'null'] },
-                  evaluationDate: { type: ['string', 'null'] }
+                  evaluationDate: { type: ['string', 'null'] },
+                  entryType: { type: ['string', 'null'] },
+                  entryScore: { type: ['integer', 'null'] }
                 },
-                required: ['gpName', 'attitudeScore', 'attitudeCategory', 'description', 'evaluatorName', 'evaluationDate'],
+                required: ['gpName', 'attitudeScore', 'attitudeCategory', 'description', 'evaluatorName', 'evaluationDate', 'entryType', 'entryScore'],
                 additionalProperties: false
               }
             }
@@ -3187,15 +3202,15 @@ Respond in JSON format:
           screenshotUrl,
           screenshotKey: fileKey,
           rawExtractedData: extractedData,
-          month: input.month,
-          year: input.year,
+          month,
+          year,
           uploadedById: ctx.user.id,
           processedAt: new Date(),
         });
 
         // Update monthly stats if GP was matched
         if (gamePresenterId && extractedData.attitudeScore) {
-          await db.updateGPAttitude(gamePresenterId, input.month, input.year, extractedData.attitudeScore);
+          await db.updateGPAttitude(gamePresenterId, month, year, extractedData.attitudeScore);
         }
 
         return {

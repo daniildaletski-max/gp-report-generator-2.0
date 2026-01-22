@@ -13,10 +13,8 @@ import Reports from "./pages/Reports";
 import Admin from "./pages/Admin";
 import GPPortal from "./pages/GPPortal";
 import InvitePage from "./pages/InvitePage";
-import ErrorScreenshots from "./pages/ErrorScreenshots";
-import AttitudeScreenshots from "./pages/AttitudeScreenshots";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, AlertTriangle, Heart } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield } from "lucide-react";
 
 // Base sidebar items for all users
 const baseSidebarItems = [
@@ -24,8 +22,6 @@ const baseSidebarItems = [
   { href: "/upload", label: "Upload", icon: UploadIcon },
   { href: "/evaluations", label: "Evaluations", icon: FileCheck },
   { href: "/reports", label: "Reports", icon: FileSpreadsheet },
-  { href: "/error-screenshots", label: "Errors", icon: AlertTriangle },
-  { href: "/attitude-screenshots", label: "Attitude", icon: Heart },
 ];
 
 // Admin-only item
@@ -50,8 +46,6 @@ function DashboardRoutes() {
         <Route path="/upload" component={Upload} />
         <Route path="/evaluations" component={Evaluations} />
         <Route path="/reports" component={Reports} />
-        <Route path="/error-screenshots" component={ErrorScreenshots} />
-        <Route path="/attitude-screenshots" component={AttitudeScreenshots} />
         <Route path="/admin" component={Admin} />
         <Route component={NotFound} />
       </Switch>
@@ -68,10 +62,8 @@ function Router() {
       <Route path="/invite/:token" component={InvitePage} />
       <Route path="/dashboard" component={DashboardRoutes} />
       <Route path="/upload" component={DashboardRoutes} />
-      <Route path="/evaluations" component={DashboardRoutes} />
+      <Route path="/evaluations" component={Evaluations} />
       <Route path="/reports" component={DashboardRoutes} />
-      <Route path="/error-screenshots" component={DashboardRoutes} />
-      <Route path="/attitude-screenshots" component={DashboardRoutes} />
       <Route path="/admin" component={DashboardRoutes} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

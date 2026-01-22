@@ -1440,3 +1440,39 @@
 - [x] 11 unit tests for screenshot processing logic
 - [x] All tests passing
 
+
+
+## Integrate Error/Attitude Upload into Upload Evaluations (v52)
+
+### Remove Separate Modules
+- [ ] Delete ErrorScreenshots.tsx page
+- [ ] Delete AttitudeScreenshots.tsx page
+- [ ] Remove routes from App.tsx
+- [ ] Remove sidebar navigation items for Errors and Attitude
+
+### Update Upload Evaluations Page
+- [ ] Add tabs: Evaluations, Errors, Attitude
+- [ ] Create Errors tab with drag-and-drop upload
+- [ ] Create Attitude tab with drag-and-drop upload
+- [ ] AI analysis extracts: Date, Type (NEGATIVE/POSITIVE), Comment, Score
+- [ ] Display uploaded entries in table format (Date, Type, Comment, Score)
+- [ ] Match GP name from screenshot with database
+
+### GP Dashboard Integration
+- [ ] Show Period Performance summary (Rounds, Errors, Evaluations, Attitude Entries, etc.)
+- [ ] Show Attitude Entries table with Date, Type, Comment, Score
+- [ ] Color-coded Type badges (NEGATIVE=red, POSITIVE=green)
+- [ ] Score display with color (-1=red, +1=green)
+
+
+
+## Integrate Error/Attitude into Upload Module (v40) - COMPLETED
+
+- [x] Delete separate ErrorScreenshots and AttitudeScreenshots pages
+- [x] Update Upload page with tabs for Evaluations, Attitude, Errors
+- [x] Integrate AI analysis for attitude screenshots (extracts GP name, date, type, comment, score)
+- [x] Integrate AI analysis for error screenshots (extracts GP name, error type, severity, description)
+- [x] Unified upload interface with consistent UX across all tabs
+- [x] Auto-detect month/year from current date for uploads
+- [x] All 147 tests passing
+
