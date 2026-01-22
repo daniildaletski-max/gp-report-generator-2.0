@@ -20,7 +20,7 @@ import {
   Building2, Plus, Edit, BarChart3, Activity, CheckSquare, Square, RotateCcw,
   TrendingUp, TrendingDown, Search, Filter, X, Eye, EyeOff, Calendar,
   Award, Target, Zap, Clock, ChevronUp, ChevronDown, Mail, Send, UserPlus,
-  MailCheck, MailX, MailQuestion, Sparkles, Timer
+  MailCheck, MailX, MailQuestion, Sparkles, Timer, Trophy
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -2447,7 +2447,7 @@ function GPStatsTab({
     });
   };
 
-  // Stats summary
+  // Stats summary with extended analytics
   const statsSummary = useMemo(() => {
     if (!filteredGPs || filteredGPs.length === 0) return null;
     const withAttitude = filteredGPs.filter((gp: any) => gp.stats?.attitude != null);
@@ -2456,133 +2456,381 @@ function GPStatsTab({
       : 0;
     const totalMistakes = filteredGPs.reduce((sum: number, gp: any) => sum + (gp.stats?.mistakes || 0), 0);
     const highPerformers = filteredGPs.filter((gp: any) => (gp.stats?.attitude || 0) >= 4).length;
+    const lowPerformers = filteredGPs.filter((gp: any) => (gp.stats?.attitude || 0) <= 2 && gp.stats?.attitude != null).length;
+    const totalGames = filteredGPs.reduce((sum: number, gp: any) => sum + (gp.stats?.totalGames || 0), 0);
     
-    return { avgAttitude, totalMistakes, highPerformers, total: filteredGPs.length };
+    // Attitude distribution for chart
+    const attitudeDistribution = [0, 0, 0, 0, 0]; // For 1-5
+    filteredGPs.forEach((gp: any) => {
+      const att = gp.stats?.attitude;
+      if (att && att >= 1 && att <= 5) {
+        attitudeDistribution[att - 1]++;
+      }
+    });
+    
+    // Top performers by attitude
+    const topByAttitude = [...filteredGPs]
+      .filter((gp: any) => gp.stats?.attitude != null)
+      .sort((a: any, b: any) => (b.stats?.attitude || 0) - (a.stats?.attitude || 0))
+      .slice(0, 5);
+    
+    // Most mistakes
+    const topByMistakes = [...filteredGPs]
+      .filter((gp: any) => (gp.stats?.mistakes || 0) > 0)
+      .sort((a: any, b: any) => (b.stats?.mistakes || 0) - (a.stats?.mistakes || 0))
+      .slice(0, 5);
+    
+    // Team breakdown
+    const teamStats: Record<string, { count: number; avgAttitude: number; totalMistakes: number }> = {};
+    filteredGPs.forEach((gp: any) => {
+      const teamName = gp.teamName || 'Unassigned';
+      if (!teamStats[teamName]) {
+        teamStats[teamName] = { count: 0, avgAttitude: 0, totalMistakes: 0 };
+      }
+      teamStats[teamName].count++;
+      teamStats[teamName].totalMistakes += gp.stats?.mistakes || 0;
+      if (gp.stats?.attitude) {
+        teamStats[teamName].avgAttitude += gp.stats.attitude;
+      }
+    });
+    Object.keys(teamStats).forEach(team => {
+      const s = teamStats[team];
+      s.avgAttitude = s.count > 0 ? s.avgAttitude / s.count : 0;
+    });
+    
+    return { 
+      avgAttitude, 
+      totalMistakes, 
+      highPerformers, 
+      lowPerformers,
+      total: filteredGPs.length,
+      totalGames,
+      attitudeDistribution,
+      topByAttitude,
+      topByMistakes,
+      teamStats,
+      withAttitudeCount: withAttitude.length
+    };
   }, [filteredGPs]);
 
   return (
-    <TabsContent value="stats" className="space-y-4">
-      {/* Stats Summary */}
-      {statsSummary && (
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card className="bg-blue-50 dark:bg-blue-950/30 border-0">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total GPs</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{statsSummary.total}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-green-50 dark:bg-green-950/30 border-0">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Award className="h-4 w-4 text-green-500" />
-                High Performers
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{statsSummary.highPerformers}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-yellow-50 dark:bg-yellow-950/30 border-0">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Avg Attitude</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{statsSummary.avgAttitude.toFixed(1)}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-red-50 dark:bg-red-950/30 border-0">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-red-500" />
-                Total Mistakes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">{statsSummary.totalMistakes}</div>
-            </CardContent>
-          </Card>
+    <TabsContent value="stats" className="space-y-6">
+      {/* Header with Filters */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <BarChart3 className="h-6 w-6 text-primary" />
+            GP Performance Dashboard
+          </h2>
+          <p className="text-muted-foreground">
+            {MONTHS[selectedMonth - 1]} {selectedYear} • Visual analytics for Game Presenters
+          </p>
         </div>
-      )}
+        <div className="flex flex-wrap items-center gap-3">
+          {!isFMView && (
+            <Select 
+              value={selectedTeamId ? String(selectedTeamId) : "all"} 
+              onValueChange={(v) => setSelectedTeamId(v === "all" ? null : Number(v))}
+            >
+              <SelectTrigger className="w-[160px]">
+                <Building2 className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="All teams" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All teams</SelectItem>
+                {teams.map((team) => (
+                  <SelectItem key={team.id} value={String(team.id)}>
+                    {team.teamName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
+            <SelectTrigger className="w-[130px]">
+              <Calendar className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MONTHS.map((month, idx) => (
+                <SelectItem key={idx} value={String(idx + 1)}>{month}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+            <SelectTrigger className="w-[100px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[2024, 2025, 2026].map((year) => (
+                <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Star className="h-5 w-5" />
-            GP Monthly Stats
-          </CardTitle>
-          <CardDescription>
-            Track attitude and mistakes for each Game Presenter.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-wrap items-end gap-4 p-4 bg-muted/50 rounded-lg">
-            {!isFMView && (
-              <div className="space-y-2">
-                <Label>Team</Label>
-                <Select 
-                  value={selectedTeamId ? String(selectedTeamId) : "all"} 
-                  onValueChange={(v) => setSelectedTeamId(v === "all" ? null : Number(v))}
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="All teams" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All teams</SelectItem>
-                    {teams.map((team) => (
-                      <SelectItem key={team.id} value={String(team.id)}>
-                        {team.teamName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label>Month</Label>
-              <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MONTHS.map((month, idx) => (
-                    <SelectItem key={idx} value={String(idx + 1)}>{month}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Year</Label>
-              <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
-                <SelectTrigger className="w-[100px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[2024, 2025, 2026].map((year) => (
-                    <SelectItem key={year} value={String(year)}>{year}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex-1 min-w-[200px]">
-              <Label className="sr-only">Search</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
+      {isLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+      ) : statsSummary && (
+        <>
+          {/* Stats Summary Cards */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+            <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-200/50 dark:border-blue-800/50">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Total GPs</p>
+                    <p className="text-3xl font-bold">{statsSummary.total}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {statsSummary.withAttitudeCount} with ratings
+                    </p>
+                  </div>
+                  <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
+                    <Users className="h-6 w-6 text-blue-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-200/50 dark:border-green-800/50">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Top Performers</p>
+                    <p className="text-3xl font-bold text-green-600">{statsSummary.highPerformers}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Attitude 4-5</p>
+                  </div>
+                  <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <TrendingUp className="h-6 w-6 text-green-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border-yellow-200/50 dark:border-yellow-800/50">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Avg Attitude</p>
+                    <p className="text-3xl font-bold">{statsSummary.avgAttitude.toFixed(1)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">out of 5.0</p>
+                  </div>
+                  <div className="h-12 w-12 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                    <Star className="h-6 w-6 text-yellow-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gradient-to-br from-red-500/10 to-red-600/5 border-red-200/50 dark:border-red-800/50">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Total Mistakes</p>
+                    <p className="text-3xl font-bold text-red-600">{statsSummary.totalMistakes}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {statsSummary.lowPerformers} need attention
+                    </p>
+                  </div>
+                  <div className="h-12 w-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                    <AlertTriangle className="h-6 w-6 text-red-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-200/50 dark:border-purple-800/50">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Total Games</p>
+                    <p className="text-3xl font-bold">{statsSummary.totalGames.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground mt-1">this month</p>
+                  </div>
+                  <div className="h-12 w-12 rounded-full bg-purple-500/20 flex items-center justify-center">
+                    <Activity className="h-6 w-6 text-purple-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
+          {/* Charts Row */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Attitude Distribution */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Target className="h-5 w-5 text-primary" />
+                  Attitude Distribution
+                </CardTitle>
+                <CardDescription>How GPs are rated this month</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {[5, 4, 3, 2, 1].map((level) => {
+                    const count = statsSummary.attitudeDistribution[level - 1];
+                    const percentage = statsSummary.withAttitudeCount > 0 
+                      ? (count / statsSummary.withAttitudeCount) * 100 
+                      : 0;
+                    const colors: Record<number, string> = {
+                      5: 'bg-green-500',
+                      4: 'bg-emerald-400',
+                      3: 'bg-yellow-400',
+                      2: 'bg-orange-400',
+                      1: 'bg-red-500'
+                    };
+                    return (
+                      <div key={level} className="flex items-center gap-3">
+                        <div className="w-8 text-center">
+                          <Badge variant="outline" className="font-bold">{level}</Badge>
+                        </div>
+                        <div className="flex-1">
+                          <div className="h-8 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full ${colors[level]} transition-all duration-500 flex items-center justify-end pr-2`}
+                              style={{ width: `${Math.max(percentage, 2)}%` }}
+                            >
+                              {percentage > 10 && (
+                                <span className="text-xs font-medium text-white">{count}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="w-16 text-right text-sm text-muted-foreground">
+                          {percentage.toFixed(0)}%
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Top Performers & Needs Attention */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-yellow-500" />
+                  Leaderboard
+                </CardTitle>
+                <CardDescription>Top performers and those needing attention</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Top Performers */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-green-600 mb-3 flex items-center gap-1">
+                      <TrendingUp className="h-4 w-4" /> Top Rated
+                    </h4>
+                    <div className="space-y-2">
+                      {statsSummary.topByAttitude.slice(0, 5).map((gp: any, idx: number) => (
+                        <div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/30">
+                          <span className="text-xs font-bold text-green-600 w-5">#{idx + 1}</span>
+                          <span className="text-sm truncate flex-1">{gp.name}</span>
+                          <Badge className="bg-green-500">{gp.stats?.attitude}</Badge>
+                        </div>
+                      ))}
+                      {statsSummary.topByAttitude.length === 0 && (
+                        <p className="text-sm text-muted-foreground">No data</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Most Mistakes */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-red-600 mb-3 flex items-center gap-1">
+                      <AlertTriangle className="h-4 w-4" /> Most Mistakes
+                    </h4>
+                    <div className="space-y-2">
+                      {statsSummary.topByMistakes.slice(0, 5).map((gp: any, idx: number) => (
+                        <div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/30">
+                          <span className="text-xs font-bold text-red-600 w-5">#{idx + 1}</span>
+                          <span className="text-sm truncate flex-1">{gp.name}</span>
+                          <Badge variant="destructive">{gp.stats?.mistakes}</Badge>
+                        </div>
+                      ))}
+                      {statsSummary.topByMistakes.length === 0 && (
+                        <p className="text-sm text-muted-foreground">No mistakes recorded</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Team Breakdown */}
+          {Object.keys(statsSummary.teamStats).length > 1 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-primary" />
+                  Team Comparison
+                </CardTitle>
+                <CardDescription>Performance breakdown by team</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  {Object.entries(statsSummary.teamStats).map(([teamName, stats]) => (
+                    <div key={teamName} className="p-4 rounded-lg border bg-card hover:shadow-md transition-shadow">
+                      <h4 className="font-semibold truncate mb-2">{teamName}</h4>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <p className="text-2xl font-bold text-blue-600">{stats.count}</p>
+                          <p className="text-xs text-muted-foreground">GPs</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-yellow-600">{stats.avgAttitude.toFixed(1)}</p>
+                          <p className="text-xs text-muted-foreground">Avg</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-red-600">{stats.totalMistakes}</p>
+                          <p className="text-xs text-muted-foreground">Errors</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* GP Cards Grid */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                All Game Presenters
+              </CardTitle>
+              <CardDescription>
+                Click on attitude buttons to update ratings
+              </CardDescription>
+            </div>
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
           {/* Bulk Actions */}
           {selectedGpIds.length > 0 && (
-            <div className="flex items-center gap-4 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+            <div className="flex items-center gap-4 p-4 mb-4 bg-primary/5 border border-primary/20 rounded-lg">
               <Badge variant="secondary" className="text-sm">
                 {selectedGpIds.length} selected
               </Badge>
@@ -2639,132 +2887,76 @@ function GPStatsTab({
               ))}
             </div>
           ) : filteredGPs && filteredGPs.length > 0 ? (
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="w-[50px]">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredGPs.map((gp: any) => {
+                const attitude = gp.stats?.attitude;
+                const mistakes = gp.stats?.mistakes || 0;
+                const totalGames = gp.stats?.totalGames || 0;
+                const teamName = teams.find(t => t.id === gp.teamId)?.teamName || 'Unassigned';
+                
+                const getBorderColor = () => {
+                  if (!attitude) return 'border-muted';
+                  if (attitude >= 4) return 'border-green-400';
+                  if (attitude === 3) return 'border-yellow-400';
+                  return 'border-red-400';
+                };
+                
+                return (
+                  <div 
+                    key={gp.id} 
+                    className={`relative p-4 rounded-xl border-2 bg-card hover:shadow-lg transition-all ${getBorderColor()} ${selectedGpIds.includes(gp.id) ? 'ring-2 ring-primary' : ''}`}
+                  >
+                    {/* Selection checkbox */}
+                    <div className="absolute top-2 right-2">
                       <Checkbox 
-                        checked={selectedGpIds.length === filteredGPs.length && filteredGPs.length > 0}
-                        onCheckedChange={toggleSelectAll}
+                        checked={selectedGpIds.includes(gp.id)}
+                        onCheckedChange={() => toggleGpSelection(gp.id)}
                       />
-                    </TableHead>
-                    <TableHead>Name</TableHead>
-                    {!isFMView && <TableHead>Team</TableHead>}
-                    <TableHead className="text-center">Attitude (1-5)</TableHead>
-                    <TableHead className="text-center">Mistakes</TableHead>
-                    <TableHead className="text-center">Total Games</TableHead>
-                    <TableHead className="w-[100px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredGPs.map((gp: any) => (
-                    <TableRow 
-                      key={gp.id} 
-                      className={selectedGpIds.includes(gp.id) ? "bg-primary/5" : "hover:bg-muted/50"}
-                    >
-                      <TableCell>
-                        <Checkbox 
-                          checked={selectedGpIds.includes(gp.id)}
-                          onCheckedChange={() => toggleGpSelection(gp.id)}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">{gp.name}</TableCell>
-                      {!isFMView && (
-                        <TableCell>
-                          {teams.find(t => t.id === gp.teamId)?.teamName || 
-                            <span className="text-muted-foreground">Unassigned</span>
-                          }
-                        </TableCell>
-                      )}
-                      <TableCell className="text-center">
-                        {editingGpId === gp.id ? (
-                          <QuickAttitudeButtons
-                            gpId={gp.id}
-                            currentAttitude={editAttitude}
-                            currentMistakes={editMistakes}
-                            selectedMonth={selectedMonth}
-                            selectedYear={selectedYear}
-                            onUpdate={refetch}
-                          />
-                        ) : (
-                          <QuickAttitudeButtons
-                            gpId={gp.id}
-                            currentAttitude={gp.stats?.attitude || null}
-                            currentMistakes={gp.stats?.mistakes || 0}
-                            selectedMonth={selectedMonth}
-                            selectedYear={selectedYear}
-                            onUpdate={refetch}
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {editingGpId === gp.id ? (
-                          <Input
-                            type="number"
-                            min="0"
-                            value={editMistakes}
-                            onChange={(e) => setEditMistakes(Number(e.target.value))}
-                            className="w-20 text-center mx-auto"
-                          />
-                        ) : (
-                          <Badge variant={gp.stats?.mistakes > 0 ? "destructive" : "secondary"}>
-                            {gp.stats?.mistakes || 0}
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {editingGpId === gp.id ? (
-                          <Input
-                            type="number"
-                            min="0"
-                            value={editTotalGames}
-                            onChange={(e) => setEditTotalGames(Number(e.target.value))}
-                            className="w-20 text-center mx-auto"
-                          />
-                        ) : (
-                          gp.stats?.totalGames || 0
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {editingGpId === gp.id ? (
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleSaveStats(gp.id)}
-                              disabled={updateStatsMutation.isPending}
-                            >
-                              {updateStatsMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Check className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8"
-                              onClick={() => setEditingGpId(null)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => startEditing(gp)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                    </div>
+                    
+                    {/* GP Info */}
+                    <div className="mb-3">
+                      <h4 className="font-semibold text-lg truncate pr-8">{gp.name}</h4>
+                      <p className="text-sm text-muted-foreground">{teamName}</p>
+                    </div>
+                    
+                    {/* Attitude Rating */}
+                    <div className="mb-3">
+                      <p className="text-xs text-muted-foreground mb-2">Attitude Rating</p>
+                      <QuickAttitudeButtons
+                        gpId={gp.id}
+                        currentAttitude={attitude || null}
+                        currentMistakes={mistakes}
+                        selectedMonth={selectedMonth}
+                        selectedYear={selectedYear}
+                        onUpdate={refetch}
+                      />
+                    </div>
+                    
+                    {/* Stats Row */}
+                    <div className="flex items-center justify-between pt-3 border-t">
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">Mistakes</p>
+                        <Badge variant={mistakes > 0 ? "destructive" : "secondary"} className="mt-1">
+                          {mistakes}
+                        </Badge>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">Games</p>
+                        <p className="font-semibold">{totalGames.toLocaleString()}</p>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        onClick={() => startEditing(gp)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-12">

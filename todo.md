@@ -1603,3 +1603,38 @@
 - [x] Show GP Name, Date, Type, Comment, Score in Attitude sheet
 - [x] Color-coded POSITIVE (green) and NEGATIVE (red) entries
 - [x] All 147 tests passing
+
+
+## GP Monthly Stats Dashboard Redesign (v48)
+
+### Dashboard Components
+- [ ] Summary stat cards (Total GPs, Avg Attitude, Total Mistakes, Top Performer)
+- [ ] Pie chart - attitude distribution (1-5 scale)
+- [ ] Bar chart - top 10 GP by attitude score
+- [ ] Bar chart - top 10 GP by mistakes count
+- [ ] Team comparison chart
+
+### Visual Improvements
+- [ ] Remove table-based layout
+- [ ] Add responsive grid for charts
+- [ ] Add mini GP cards with key metrics
+- [ ] Add color-coded performance indicators
+
+
+## GP Monthly Stats Dashboard Redesign (v48) - COMPLETED
+
+### Dashboard Components
+- [x] Stats summary cards with icons and gradients (Total GPs, Top Performers, Avg Attitude, Total Mistakes, Total Games)
+- [x] Horizontal bar chart for attitude distribution (1-5 rating breakdown with percentages)
+- [x] Leaderboard for top GP by rating and most mistakes
+
+### GP Cards Grid
+- [x] Replace table with card grid layout (responsive 1-4 columns)
+- [x] Each GP as a card with name, team, attitude buttons, mistakes badge, games count
+- [x] Color-coded borders based on attitude level (green 4-5, yellow 3, red 1-2)
+- [x] Hover effects and selection state with ring highlight
+
+### Visual Improvements
+- [x] Smooth animations and transitions
+- [x] Better color scheme for performance indicators
+- [x] All 147 tests passing
