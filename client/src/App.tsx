@@ -60,9 +60,10 @@ function Router() {
       <Route path="/gp/:token" component={GPPortal} />
       <Route path="/gp-portal/:token" component={GPPortal} />
       <Route path="/invite/:token" component={InvitePage} />
+      {/* All dashboard pages use DashboardRoutes for consistent sidebar */}
       <Route path="/dashboard" component={DashboardRoutes} />
       <Route path="/upload" component={DashboardRoutes} />
-      <Route path="/evaluations" component={Evaluations} />
+      <Route path="/evaluations" component={DashboardRoutes} />
       <Route path="/reports" component={DashboardRoutes} />
       <Route path="/admin" component={DashboardRoutes} />
       <Route path="/404" component={NotFound} />

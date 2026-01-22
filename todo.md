@@ -1535,3 +1535,15 @@
 - [x] Show warning when GP not selected
 - [x] Test workflow with GP selection
 
+
+
+## Critical Bug Fixes (v44)
+
+- [x] Fix menu disappearing when clicking on modules (navigation bug) - fixed App.tsx routing
+- [x] Fix LLM response parsing errors for attitude and error screenshots - added null checks
+- [x] Show selected GP name clearly when uploading attitude/errors - added visual indicator
+- [ ] Add attitude entries display in GP Dashboard (currently not showing)
+- [ ] Fix data synchronization - attitude should update GP monthly stats
+- [ ] Sync attitude data with evaluations module
+- [ ] GP Dashboard should show attitude entries in table format (Date, Type, Comment, Score)
+

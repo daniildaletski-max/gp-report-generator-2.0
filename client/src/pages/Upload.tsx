@@ -751,6 +751,16 @@ export default function UploadPage() {
                         </option>
                       ))}
                     </select>
+                    {selectedGpId && (
+                      <div className="mt-2 p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-green-600" />
+                          <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                            Uploading for: {gpList?.find(gp => gp.id === selectedGpId)?.name || 'Unknown'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                     {!selectedGpId && (
                       <p className="text-sm text-amber-600 mt-1 flex items-center gap-1">
                         <AlertTriangle className="h-3 w-3" />

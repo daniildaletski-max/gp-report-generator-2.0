@@ -2692,8 +2692,11 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           attitudeDetails: attitudeDetails.map(a => ({
             id: a.id,
             attitudeScore: a.attitudeScore,
+            attitudeType: a.attitudeType,
             attitudeCategory: a.attitudeCategory,
+            comment: a.comment || a.description,
             description: a.description,
+            evaluationDate: a.evaluationDate,
             evaluatorName: a.evaluatorName,
             screenshotUrl: a.screenshotUrl,
             createdAt: a.createdAt,
@@ -3004,10 +3007,14 @@ Respond in JSON format:
 
         let extractedData: any = {};
         try {
-          const content = llmResponse.choices[0].message.content;
-          extractedData = JSON.parse(typeof content === 'string' ? content : '{}');
+          const message = llmResponse?.choices?.[0]?.message;
+          const content = message?.content;
+          if (content) {
+            extractedData = JSON.parse(typeof content === 'string' ? content : '{}');
+          }
         } catch (e) {
           console.error('Failed to parse LLM response:', e);
+          // Continue with default empty data
         }
 
         // Use provided GP ID directly if available, otherwise try to match by name
@@ -3197,12 +3204,14 @@ Respond with a JSON object containing an array of ALL entries found:
 
         let extractedData: any = { gpName: null, entries: [], totalEntries: 0, totalNegative: 0, totalPositive: 0 };
         try {
-          const content = llmResponse.choices[0]?.message?.content;
+          const message = llmResponse?.choices?.[0]?.message;
+          const content = message?.content;
           if (content) {
             extractedData = JSON.parse(typeof content === 'string' ? content : '{}');
           }
         } catch (e) {
           console.error('Failed to parse LLM response:', e);
+          // Continue with default empty data
         }
 
         // Use provided GP ID directly if available, otherwise try to match by name
