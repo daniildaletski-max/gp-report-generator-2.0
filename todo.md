@@ -1489,3 +1489,27 @@
 - [x] Show attitude entries in table format (Date, Type, Comment, Score) in GP Portal
 - [x] All 147 tests passing
 
+
+
+## Fix Attitude Screenshot AI Analysis (v42)
+
+- [ ] Extract GP name from screenshot header/title
+- [ ] Extract ALL attitude entries from table (not just one)
+- [ ] For each entry extract: Date, Type (POSITIVE/NEGATIVE), Comment, Score
+- [ ] Auto-sync with GP data by name matching
+- [ ] Update UI to show multiple attitude entries
+- [ ] Test with real attitude screenshot
+
+
+
+## Fix Attitude Screenshot AI Analysis (v43)
+
+- [x] Extract GP name from screenshot header/title
+- [x] Extract ALL attitude entries from table (not just one)
+- [x] Parse Date, Type (POSITIVE/NEGATIVE), Comment, Score for each entry
+- [x] Auto-match GP name to database records
+- [x] Update monthly_gp_stats with aggregated attitude data
+- [x] Display all entries in Extracted Data panel with summary stats
+- [x] Update UI to show Total entries, Positive count, Negative count
+- [ ] Test with real attitude screenshot
+

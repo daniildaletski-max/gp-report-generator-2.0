@@ -3093,6 +3093,7 @@ Respond in JSON format:
         imageBase64: z.string(),
         filename: z.string(),
         mimeType: z.string().optional(),
+        gpName: z.string().optional(), // Optional GP name if known
       }))
       .mutation(async ({ ctx, input }) => {
         // Auto-detect month and year from current date
@@ -3107,35 +3108,40 @@ Respond in JSON format:
         
         const { url: screenshotUrl } = await storagePut(fileKey, imageBuffer, contentType);
         
-        // Use AI to analyze the attitude screenshot
+        // Use AI to analyze the attitude screenshot - extract ALL entries
         const analysisPrompt = `Analyze this attitude evaluation screenshot from a casino game presenter evaluation system.
 
 This screenshot shows an attitude entry table with columns: Date, Type (POSITIVE/NEGATIVE), Comment, Score.
 
-Extract the following information for EACH attitude entry visible in the screenshot:
-1. GP Name (Game Presenter name) - the person being evaluated (may be shown in header or context)
-2. Date - the date of the attitude entry (format: "3 Jan 2026, 21:00")
-3. Type - POSITIVE or NEGATIVE
-4. Comment - the text description of the attitude entry
-5. Score - the score value (+1 for positive, -1 for negative)
+IMPORTANT: Extract ALL attitude entries visible in the screenshot, not just one.
 
-If multiple entries are visible, extract the FIRST/MOST RECENT one.
+For EACH entry in the table, extract:
+1. Date - the date and time of the entry (e.g., "3 Jan 2026, 21:00")
+2. Type - POSITIVE or NEGATIVE (look for badges/labels)
+3. Comment - the full text description
+4. Score - the score value (+1 for positive, -1 for negative)
 
-Respond in JSON format:
+Also look for the GP Name (Game Presenter name) in the page header, title, or breadcrumb.
+
+Respond with a JSON object containing an array of ALL entries found:
 {
-  "gpName": "string or null",
-  "attitudeScore": number (1-5, where 1=very negative, 3=neutral, 5=very positive),
-  "attitudeCategory": "positive|neutral|negative",
-  "description": "the Comment text from the table",
-  "evaluatorName": "string or null",
-  "evaluationDate": "YYYY-MM-DD or null",
-  "entryType": "POSITIVE or NEGATIVE",
-  "entryScore": number (+1 or -1)
+  "gpName": "string or null - the Game Presenter name from header/title",
+  "entries": [
+    {
+      "date": "3 Jan 2026, 21:00",
+      "type": "NEGATIVE",
+      "comment": "Was late to the studio...",
+      "score": -1
+    }
+  ],
+  "totalEntries": number,
+  "totalNegative": number,
+  "totalPositive": number
 }`;
 
         const llmResponse = await invokeLLM({
           messages: [
-            { role: 'system', content: 'You are an expert at analyzing casino game presenter attitude evaluations. Extract information accurately from screenshots.' },
+            { role: 'system', content: 'You are an expert at analyzing casino game presenter attitude evaluations. Extract ALL entries from screenshots accurately. Return data as a JSON array.' },
             { 
               role: 'user', 
               content: [
@@ -3152,75 +3158,108 @@ Respond in JSON format:
               schema: {
                 type: 'object',
                 properties: {
-                  gpName: { type: ['string', 'null'] },
-                  attitudeScore: { type: 'integer', minimum: 1, maximum: 5 },
-                  attitudeCategory: { type: 'string', enum: ['positive', 'neutral', 'negative'] },
-                  description: { type: 'string' },
-                  evaluatorName: { type: ['string', 'null'] },
-                  evaluationDate: { type: ['string', 'null'] },
-                  entryType: { type: ['string', 'null'] },
-                  entryScore: { type: ['integer', 'null'] }
+                  gpName: { type: ['string', 'null'], description: 'Game Presenter name from header/title' },
+                  entries: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        date: { type: 'string', description: 'Date and time of entry' },
+                        type: { type: 'string', enum: ['POSITIVE', 'NEGATIVE'], description: 'Entry type' },
+                        comment: { type: 'string', description: 'Full comment text' },
+                        score: { type: 'integer', description: '+1 or -1' }
+                      },
+                      required: ['date', 'type', 'comment', 'score'],
+                      additionalProperties: false
+                    }
+                  },
+                  totalEntries: { type: 'integer' },
+                  totalNegative: { type: 'integer' },
+                  totalPositive: { type: 'integer' }
                 },
-                required: ['gpName', 'attitudeScore', 'attitudeCategory', 'description', 'evaluatorName', 'evaluationDate', 'entryType', 'entryScore'],
+                required: ['gpName', 'entries', 'totalEntries', 'totalNegative', 'totalPositive'],
                 additionalProperties: false
               }
             }
           }
         });
 
-        let extractedData: any = {};
+        let extractedData: any = { gpName: null, entries: [], totalEntries: 0, totalNegative: 0, totalPositive: 0 };
         try {
-          const content = llmResponse.choices[0].message.content;
-          extractedData = JSON.parse(typeof content === 'string' ? content : '{}');
+          const content = llmResponse.choices[0]?.message?.content;
+          if (content) {
+            extractedData = JSON.parse(typeof content === 'string' ? content : '{}');
+          }
         } catch (e) {
           console.error('Failed to parse LLM response:', e);
         }
 
+        // Use provided GP name if available, otherwise use extracted
+        const gpNameToUse = input.gpName || extractedData.gpName;
+
         // Try to match GP name to existing presenter
         let gamePresenterId: number | null = null;
-        if (extractedData.gpName) {
+        if (gpNameToUse) {
           const gps = await db.getAllGamePresenters();
           const matchedGp = gps.find(gp => 
-            gp.name.toLowerCase() === extractedData.gpName.toLowerCase() ||
-            gp.name.toLowerCase().includes(extractedData.gpName.toLowerCase()) ||
-            extractedData.gpName.toLowerCase().includes(gp.name.toLowerCase())
+            gp.name.toLowerCase() === gpNameToUse.toLowerCase() ||
+            gp.name.toLowerCase().includes(gpNameToUse.toLowerCase()) ||
+            gpNameToUse.toLowerCase().includes(gp.name.toLowerCase())
           );
           if (matchedGp) {
             gamePresenterId = matchedGp.id;
           }
         }
 
-        // Save to database with new fields
-        const attitudeScreenshot = await db.createAttitudeScreenshot({
-          gamePresenterId,
-          evaluationId: null, // Will be linked later if matching evaluation found
-          gpName: extractedData.gpName || 'Unknown',
-          evaluationDate: extractedData.evaluationDate ? new Date(extractedData.evaluationDate) : null,
-          attitudeType: extractedData.entryType?.toLowerCase() === 'positive' ? 'positive' : 
-                        extractedData.entryType?.toLowerCase() === 'negative' ? 'negative' : 'neutral',
-          attitudeScore: extractedData.entryScore || (extractedData.attitudeCategory === 'positive' ? 1 : -1),
-          attitudeCategory: extractedData.attitudeCategory || 'neutral',
-          comment: extractedData.description || '', // The Comment from the table
-          description: extractedData.description || '',
-          evaluatorName: extractedData.evaluatorName || null,
-          screenshotUrl,
-          screenshotKey: fileKey,
-          rawExtractedData: extractedData,
-          month,
-          year,
-          uploadedById: ctx.user.id,
-          processedAt: new Date(),
-        });
+        // Save each attitude entry to database
+        const savedEntries: any[] = [];
+        const entries = extractedData.entries || [];
+        
+        for (const entry of entries) {
+          const attitudeScreenshot = await db.createAttitudeScreenshot({
+            gamePresenterId,
+            evaluationId: null,
+            gpName: gpNameToUse || 'Unknown',
+            evaluationDate: entry.date ? new Date(entry.date.replace(/^(\d+)\s+(\w+)\s+(\d+),?\s*(\d+:\d+)?$/, (_: string, d: string, m: string, y: string, t: string) => {
+              const months: Record<string, string> = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
+              return `${y}-${months[m] || '01'}-${d.padStart(2, '0')}${t ? 'T' + t : ''}`;
+            })) : null,
+            attitudeType: entry.type?.toLowerCase() === 'positive' ? 'positive' : 'negative',
+            attitudeScore: entry.score || (entry.type === 'POSITIVE' ? 1 : -1),
+            attitudeCategory: entry.type?.toLowerCase() === 'positive' ? 'positive' : 'negative',
+            comment: entry.comment || '',
+            description: entry.comment || '',
+            evaluatorName: null,
+            screenshotUrl,
+            screenshotKey: fileKey,
+            rawExtractedData: entry,
+            month,
+            year,
+            uploadedById: ctx.user.id,
+            processedAt: new Date(),
+          });
+          savedEntries.push(attitudeScreenshot);
+        }
 
-        // Update monthly stats if GP was matched
-        if (gamePresenterId && extractedData.attitudeScore) {
-          await db.updateGPAttitude(gamePresenterId, month, year, extractedData.attitudeScore);
+        // Update monthly stats if GP was matched - sum all attitude scores
+        if (gamePresenterId && entries.length > 0) {
+          const totalScore = entries.reduce((sum: number, e: any) => sum + (e.score || 0), 0);
+          // Calculate attitude score on 1-5 scale based on ratio of positive to negative
+          const positiveCount = entries.filter((e: any) => e.type === 'POSITIVE').length;
+          const negativeCount = entries.filter((e: any) => e.type === 'NEGATIVE').length;
+          const attitudeScore = Math.max(1, Math.min(5, 3 + (positiveCount - negativeCount)));
+          await db.updateGPAttitude(gamePresenterId, month, year, attitudeScore);
         }
 
         return {
-          ...attitudeScreenshot,
+          screenshotUrl,
+          screenshotKey: fileKey,
           extractedData,
+          gpName: gpNameToUse,
           gpMatched: !!gamePresenterId,
+          gamePresenterId,
+          entriesCount: entries.length,
+          savedEntries,
         };
       }),
 

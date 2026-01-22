@@ -54,12 +54,19 @@ interface ExtractedData {
   gamePerformance?: { score: number; maxScore: number; comment?: string };
 }
 
-interface AttitudeData {
-  presenterName: string;
+interface AttitudeEntry {
   date: string;
   type: "POSITIVE" | "NEGATIVE";
   comment: string;
   score: number; // +1 or -1
+}
+
+interface AttitudeData {
+  gpName: string | null;
+  entries: AttitudeEntry[];
+  totalEntries: number;
+  totalNegative: number;
+  totalPositive: number;
 }
 
 interface ErrorData {
@@ -171,8 +178,9 @@ export default function UploadPage() {
         newGPs: successFiles.filter(f => f.matchInfo?.isNewGP).length,
       };
     } else if (activeTab === "attitude") {
-      const positive = successFiles.filter(f => f.attitudeData?.type === "POSITIVE").length;
-      const negative = successFiles.filter(f => f.attitudeData?.type === "NEGATIVE").length;
+      const positive = successFiles.reduce((sum, f) => sum + (f.attitudeData?.totalPositive || 0), 0);
+      const negative = successFiles.reduce((sum, f) => sum + (f.attitudeData?.totalNegative || 0), 0);
+      const totalEntries = successFiles.reduce((sum, f) => sum + (f.attitudeData?.totalEntries || 0), 0);
       return {
         total: files.length,
         success: successFiles.length,
@@ -182,6 +190,7 @@ export default function UploadPage() {
         avgTime: avgTime / 1000,
         positive,
         negative,
+        totalEntries,
       };
     } else {
       const critical = successFiles.filter(f => f.errorData?.severity === "critical").length;
@@ -888,11 +897,11 @@ export default function UploadPage() {
                           {/* File Info */}
                           <div className="p-2 space-y-1">
                             <p className="text-xs truncate font-medium">
-                              {file.extractedData?.presenterName || file.attitudeData?.presenterName || file.errorData?.presenterName || file.file.name}
+                              {file.extractedData?.presenterName || file.attitudeData?.gpName || file.errorData?.presenterName || file.file.name}
                             </p>
                             {activeTab === "attitude" && file.attitudeData && (
-                              <Badge variant={file.attitudeData.type === "POSITIVE" ? "default" : "destructive"} className="text-[10px] h-5">
-                                {file.attitudeData.type}
+                              <Badge variant={file.attitudeData.totalNegative > file.attitudeData.totalPositive ? "destructive" : "default"} className="text-[10px] h-5">
+                                {file.attitudeData.totalEntries} entries
                               </Badge>
                             )}
                             {activeTab === "errors" && file.errorData && (
@@ -950,7 +959,7 @@ export default function UploadPage() {
               <CardHeader>
                 <CardTitle className="text-lg">Extracted Data</CardTitle>
                 <CardDescription>
-                  {selectedFile ? `Viewing: ${selectedFile.extractedData?.presenterName || selectedFile.attitudeData?.presenterName || selectedFile.errorData?.presenterName}` : "Click a processed file to view details"}
+                  {selectedFile ? `Viewing: ${selectedFile.extractedData?.presenterName || selectedFile.attitudeData?.gpName || selectedFile.errorData?.presenterName || 'Unknown'}` : "Click a processed file to view details"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1070,39 +1079,50 @@ export default function UploadPage() {
                             <User className="h-4 w-4" />
                             <span>Game Presenter</span>
                           </div>
-                          <p className="pl-6 font-medium">{selectedFile.attitudeData.presenterName}</p>
+                          <p className="pl-6 font-medium">{selectedFile.attitudeData.gpName || 'Unknown'}</p>
                         </div>
 
+                        {/* Summary Stats */}
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="p-2 rounded-lg bg-muted/50 text-center">
+                            <p className="text-lg font-bold">{selectedFile.attitudeData.totalEntries}</p>
+                            <p className="text-xs text-muted-foreground">Total</p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-green-50 dark:bg-green-950 text-center">
+                            <p className="text-lg font-bold text-green-600">{selectedFile.attitudeData.totalPositive}</p>
+                            <p className="text-xs text-muted-foreground">Positive</p>
+                          </div>
+                          <div className="p-2 rounded-lg bg-red-50 dark:bg-red-950 text-center">
+                            <p className="text-lg font-bold text-red-600">{selectedFile.attitudeData.totalNegative}</p>
+                            <p className="text-xs text-muted-foreground">Negative</p>
+                          </div>
+                        </div>
+
+                        {/* Entries List */}
                         <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Calendar className="h-4 w-4" />
-                            <span>Date</span>
-                          </div>
-                          <p className="pl-6 text-sm">{selectedFile.attitudeData.date}</p>
-                        </div>
-
-                        <div className="p-4 rounded-lg bg-muted/50">
-                          <div className="flex items-center justify-between mb-3">
-                            <Badge 
-                              variant={selectedFile.attitudeData.type === "POSITIVE" ? "default" : "destructive"}
-                              className="text-sm"
-                            >
-                              {selectedFile.attitudeData.type === "POSITIVE" ? (
-                                <><ThumbsUp className="h-3 w-3 mr-1" /> POSITIVE</>
-                              ) : (
-                                <><ThumbsDown className="h-3 w-3 mr-1" /> NEGATIVE</>
-                              )}
-                            </Badge>
-                            <span className={`text-2xl font-bold ${selectedFile.attitudeData.score > 0 ? "text-green-600" : "text-red-600"}`}>
-                              {selectedFile.attitudeData.score > 0 ? "+" : ""}{selectedFile.attitudeData.score}
-                            </span>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <MessageSquare className="h-4 w-4" />
-                              <span>Comment</span>
-                            </div>
-                            <p className="text-sm pl-6">{selectedFile.attitudeData.comment}</p>
+                          <p className="text-sm font-medium text-muted-foreground">Entries ({selectedFile.attitudeData.entries?.length || 0})</p>
+                          <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {selectedFile.attitudeData.entries?.map((entry, idx) => (
+                              <div key={idx} className="p-3 rounded-lg bg-muted/50 border-l-2 border-l-transparent" style={{ borderLeftColor: entry.type === 'POSITIVE' ? '#22c55e' : '#ef4444' }}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <Badge 
+                                    variant={entry.type === "POSITIVE" ? "default" : "destructive"}
+                                    className="text-xs"
+                                  >
+                                    {entry.type === "POSITIVE" ? (
+                                      <><ThumbsUp className="h-3 w-3 mr-1" /> POSITIVE</>
+                                    ) : (
+                                      <><ThumbsDown className="h-3 w-3 mr-1" /> NEGATIVE</>
+                                    )}
+                                  </Badge>
+                                  <span className={`font-bold ${entry.score > 0 ? "text-green-600" : "text-red-600"}`}>
+                                    {entry.score > 0 ? "+" : ""}{entry.score}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground mb-1">{entry.date}</p>
+                                <p className="text-sm">{entry.comment}</p>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </>
