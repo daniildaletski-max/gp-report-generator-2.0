@@ -146,9 +146,13 @@ export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<FileWithPreview | null>(null);
   const [autoProcess, setAutoProcess] = useState(true);
   const [showKeyboardHints, setShowKeyboardHints] = useState(false);
+  const [selectedGpId, setSelectedGpId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const processingRef = useRef(false);
   const startTimeRef = useRef<number>(0);
+
+  // Fetch list of GPs for dropdown
+  const { data: gpList } = trpc.gamePresenter.list.useQuery();
 
   const uploadEvaluationMutation = trpc.evaluation.uploadAndExtract.useMutation();
   const uploadAttitudeMutation = trpc.attitudeScreenshot.upload.useMutation();
@@ -405,10 +409,14 @@ export default function UploadPage() {
                 : f
             ));
           } else if (activeTab === "attitude") {
+            if (!selectedGpId) {
+              throw new Error("Please select a Game Presenter before uploading");
+            }
             result = await uploadAttitudeMutation.mutateAsync({
               imageBase64: base64,
               filename: pendingFile.file.name,
               mimeType: 'image/jpeg',
+              gpId: selectedGpId,
             });
             
             setFiles((prev) => prev.map(f => 
@@ -430,10 +438,14 @@ export default function UploadPage() {
                 : f
             ));
           } else {
+            if (!selectedGpId) {
+              throw new Error("Please select a Game Presenter before uploading");
+            }
             result = await uploadErrorMutation.mutateAsync({
               imageBase64: base64,
               filename: pendingFile.file.name,
               mimeType: 'image/jpeg',
+              gpId: selectedGpId,
             });
             
             setFiles((prev) => prev.map(f => 
@@ -720,6 +732,34 @@ export default function UploadPage() {
                 </div>
               </CardHeader>
               <CardContent>
+                {/* GP Selector for Attitude and Errors tabs */}
+                {(activeTab === "attitude" || activeTab === "errors") && (
+                  <div className="mb-4">
+                    <Label htmlFor="gp-select" className="text-sm font-medium mb-2 block">
+                      Select Game Presenter <span className="text-destructive">*</span>
+                    </Label>
+                    <select
+                      id="gp-select"
+                      value={selectedGpId || ""}
+                      onChange={(e) => setSelectedGpId(e.target.value ? Number(e.target.value) : null)}
+                      className="w-full p-2 border rounded-md bg-background text-foreground focus:ring-2 focus:ring-primary focus:border-primary"
+                    >
+                      <option value="">-- Select a Game Presenter --</option>
+                      {gpList?.map((gp) => (
+                        <option key={gp.id} value={gp.id}>
+                          {gp.name}
+                        </option>
+                      ))}
+                    </select>
+                    {!selectedGpId && (
+                      <p className="text-sm text-amber-600 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        Please select a GP before uploading screenshots
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Drop Zone */}
                 <div
                   className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-all ${

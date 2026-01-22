@@ -1513,3 +1513,25 @@
 - [x] Update UI to show Total entries, Positive count, Negative count
 - [ ] Test with real attitude screenshot
 
+
+
+## GP Dropdown for Attitude/Error Screenshots (v44)
+
+- [ ] Add API endpoint to get list of all GPs for current user's team
+- [ ] Add GP dropdown selector in Upload page for Attitude tab
+- [ ] Add GP dropdown selector in Upload page for Errors tab
+- [ ] Update upload logic to use selected GP instead of AI extraction
+- [ ] Auto-populate GP name in Extracted Data panel after selection
+- [ ] Test workflow with GP selection and screenshot upload
+
+
+
+## GP Dropdown for Attitude/Errors Upload (v43)
+
+- [x] Add dropdown list of all GPs before upload zone
+- [x] Require GP selection before allowing upload
+- [x] Pass selected gpId to backend API
+- [x] Update backend to use gpId directly for linking
+- [x] Show warning when GP not selected
+- [x] Test workflow with GP selection
+

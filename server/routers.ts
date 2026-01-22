@@ -2927,6 +2927,7 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
         imageBase64: z.string(),
         filename: z.string(),
         mimeType: z.string().optional(),
+        gpId: z.number().optional(), // Optional GP ID for direct linking
       }))
       .mutation(async ({ ctx, input }) => {
         // Auto-detect month and year from current date
@@ -3009,9 +3010,18 @@ Respond in JSON format:
           console.error('Failed to parse LLM response:', e);
         }
 
-        // Try to match GP name to existing presenter
-        let gamePresenterId: number | null = null;
-        if (extractedData.gpName) {
+        // Use provided GP ID directly if available, otherwise try to match by name
+        let gamePresenterId: number | null = input.gpId || null;
+        let gpNameToUse: string | null = null;
+
+        if (input.gpId) {
+          // Get GP name from ID
+          const gps = await db.getAllGamePresenters();
+          const gp = gps.find(g => g.id === input.gpId);
+          gpNameToUse = gp?.name || null;
+        } else if (extractedData.gpName) {
+          // Fallback to name matching
+          gpNameToUse = extractedData.gpName;
           const gps = await db.getAllGamePresenters();
           const matchedGp = gps.find(gp => 
             gp.name.toLowerCase() === extractedData.gpName.toLowerCase() ||
@@ -3026,7 +3036,7 @@ Respond in JSON format:
         // Save to database
         const errorScreenshot = await db.createErrorScreenshot({
           gamePresenterId,
-          gpName: extractedData.gpName || 'Unknown',
+          gpName: gpNameToUse || extractedData.gpName || 'Unknown',
           errorDate: extractedData.errorDate ? new Date(extractedData.errorDate) : null,
           errorType: extractedData.errorType || 'other',
           errorCategory: extractedData.errorCategory || '',
@@ -3094,6 +3104,7 @@ Respond in JSON format:
         filename: z.string(),
         mimeType: z.string().optional(),
         gpName: z.string().optional(), // Optional GP name if known
+        gpId: z.number().optional(), // Optional GP ID for direct linking
       }))
       .mutation(async ({ ctx, input }) => {
         // Auto-detect month and year from current date
@@ -3194,20 +3205,28 @@ Respond with a JSON object containing an array of ALL entries found:
           console.error('Failed to parse LLM response:', e);
         }
 
-        // Use provided GP name if available, otherwise use extracted
-        const gpNameToUse = input.gpName || extractedData.gpName;
+        // Use provided GP ID directly if available, otherwise try to match by name
+        let gamePresenterId: number | null = input.gpId || null;
+        let gpNameToUse: string | null = null;
 
-        // Try to match GP name to existing presenter
-        let gamePresenterId: number | null = null;
-        if (gpNameToUse) {
+        if (input.gpId) {
+          // Get GP name from ID
           const gps = await db.getAllGamePresenters();
-          const matchedGp = gps.find(gp => 
-            gp.name.toLowerCase() === gpNameToUse.toLowerCase() ||
-            gp.name.toLowerCase().includes(gpNameToUse.toLowerCase()) ||
-            gpNameToUse.toLowerCase().includes(gp.name.toLowerCase())
-          );
-          if (matchedGp) {
-            gamePresenterId = matchedGp.id;
+          const gp = gps.find(g => g.id === input.gpId);
+          gpNameToUse = gp?.name || null;
+        } else {
+          // Fallback to name matching
+          gpNameToUse = input.gpName || extractedData.gpName;
+          if (gpNameToUse) {
+            const gps = await db.getAllGamePresenters();
+            const matchedGp = gps.find(gp => 
+              gp.name.toLowerCase() === gpNameToUse!.toLowerCase() ||
+              gp.name.toLowerCase().includes(gpNameToUse!.toLowerCase()) ||
+              gpNameToUse!.toLowerCase().includes(gp.name.toLowerCase())
+            );
+            if (matchedGp) {
+              gamePresenterId = matchedGp.id;
+            }
           }
         }
 
