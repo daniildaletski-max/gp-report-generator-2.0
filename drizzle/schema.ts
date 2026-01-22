@@ -253,3 +253,55 @@ export const invitations = mysqlTable("invitations", {
 export type Invitation = typeof invitations.$inferSelect;
 export type InsertInvitation = typeof invitations.$inferInsert;
 
+/**
+ * Error Screenshots - individual error screenshots uploaded by Floor Managers
+ */
+export const errorScreenshots = mysqlTable("error_screenshots", {
+  id: int("id").autoincrement().primaryKey(),
+  gamePresenterId: int("gamePresenterId"),
+  gpName: varchar("gpName", { length: 255 }), // Name extracted from screenshot
+  errorDate: timestamp("errorDate"),
+  errorType: varchar("errorType", { length: 100 }), // Classification: dealing_error, procedure_error, etc.
+  errorCategory: varchar("errorCategory", { length: 100 }), // Sub-category
+  errorDescription: text("errorDescription"), // Detailed description from screenshot
+  severity: mysqlEnum("severity", ["low", "medium", "high", "critical"]).default("medium"),
+  gameType: varchar("gameType", { length: 100 }),
+  tableId: varchar("tableId", { length: 100 }),
+  screenshotUrl: text("screenshotUrl"),
+  screenshotKey: varchar("screenshotKey", { length: 512 }),
+  rawExtractedData: json("rawExtractedData"), // Full AI extraction result
+  month: int("month").notNull(),
+  year: int("year").notNull(),
+  uploadedById: int("uploadedById"),
+  processedAt: timestamp("processedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ErrorScreenshot = typeof errorScreenshots.$inferSelect;
+export type InsertErrorScreenshot = typeof errorScreenshots.$inferInsert;
+
+/**
+ * Attitude Screenshots - attitude evaluation screenshots uploaded by Floor Managers
+ */
+export const attitudeScreenshots = mysqlTable("attitude_screenshots", {
+  id: int("id").autoincrement().primaryKey(),
+  gamePresenterId: int("gamePresenterId"),
+  gpName: varchar("gpName", { length: 255 }), // Name extracted from screenshot
+  evaluationDate: timestamp("evaluationDate"),
+  attitudeScore: int("attitudeScore"), // 1-5 score
+  attitudeCategory: varchar("attitudeCategory", { length: 100 }), // positive, neutral, negative
+  description: text("description"), // Detailed description from screenshot
+  evaluatorName: varchar("evaluatorName", { length: 255 }),
+  screenshotUrl: text("screenshotUrl"),
+  screenshotKey: varchar("screenshotKey", { length: 512 }),
+  rawExtractedData: json("rawExtractedData"), // Full AI extraction result
+  month: int("month").notNull(),
+  year: int("year").notNull(),
+  uploadedById: int("uploadedById"),
+  processedAt: timestamp("processedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AttitudeScreenshot = typeof attitudeScreenshots.$inferSelect;
+export type InsertAttitudeScreenshot = typeof attitudeScreenshots.$inferInsert;
+

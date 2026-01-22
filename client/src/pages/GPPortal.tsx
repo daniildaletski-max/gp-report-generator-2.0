@@ -695,9 +695,147 @@ export default function GPPortal() {
             </div>
           )}
         </div>
+
+        {/* Error Details Section */}
+        {data.errorDetails && data.errorDetails.length > 0 && (
+          <div>
+            <h2 className="text-base sm:text-xl font-semibold mb-3 sm:mb-4 text-white flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-orange-400" />
+              Error Details This Month
+              <Badge variant="secondary" className="ml-2 text-xs sm:text-sm bg-orange-500/20 text-orange-300">
+                {data.errorDetails.length}
+              </Badge>
+            </h2>
+            
+            <div className="space-y-3 sm:space-y-4">
+              {data.errorDetails.map((error: any) => (
+                <Card key={error.id} className="bg-white/5 backdrop-blur-lg border-orange-400/20 overflow-hidden">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                      {/* Error Screenshot */}
+                      {error.screenshotUrl && (
+                        <div className="w-full sm:w-24 h-24 flex-shrink-0">
+                          <img
+                            src={error.screenshotUrl}
+                            alt="Error screenshot"
+                            className="w-full h-full object-cover rounded-md"
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Error Details */}
+                      <div className="flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge className={`text-xs ${
+                            error.severity === 'critical' ? 'bg-red-500/30 text-red-300' :
+                            error.severity === 'high' ? 'bg-orange-500/30 text-orange-300' :
+                            error.severity === 'medium' ? 'bg-yellow-500/30 text-yellow-300' :
+                            'bg-green-500/30 text-green-300'
+                          }`}>
+                            {error.severity?.toUpperCase()}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs border-blue-400/30 text-blue-200">
+                            {error.errorType?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                          </Badge>
+                          {error.gameType && (
+                            <Badge variant="outline" className="text-xs border-purple-400/30 text-purple-200">
+                              {error.gameType}
+                            </Badge>
+                          )}
+                        </div>
+                        
+                        <p className="text-sm text-white">{error.errorDescription}</p>
+                        
+                        {error.errorCategory && (
+                          <p className="text-xs text-blue-200/60">Category: {error.errorCategory}</p>
+                        )}
+                        
+                        {error.tableId && (
+                          <p className="text-xs text-blue-200/60">Table: {error.tableId}</p>
+                        )}
+                        
+                        <p className="text-xs text-blue-200/40">
+                          {error.createdAt ? format(new Date(error.createdAt), "MMM d, yyyy 'at' HH:mm") : ''}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Attitude Details Section */}
+        {data.attitudeDetails && data.attitudeDetails.length > 0 && (
+          <div>
+            <h2 className="text-base sm:text-xl font-semibold mb-3 sm:mb-4 text-white flex items-center gap-2">
+              <ThumbsUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
+              Attitude Evaluations This Month
+              <Badge variant="secondary" className="ml-2 text-xs sm:text-sm bg-green-500/20 text-green-300">
+                {data.attitudeDetails.length}
+              </Badge>
+            </h2>
+            
+            <div className="space-y-3 sm:space-y-4">
+              {data.attitudeDetails.map((attitude: any) => (
+                <Card key={attitude.id} className="bg-white/5 backdrop-blur-lg border-green-400/20 overflow-hidden">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                      {/* Attitude Screenshot */}
+                      {attitude.screenshotUrl && (
+                        <div className="w-full sm:w-24 h-24 flex-shrink-0">
+                          <img
+                            src={attitude.screenshotUrl}
+                            alt="Attitude screenshot"
+                            className="w-full h-full object-cover rounded-md"
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Attitude Details */}
+                      <div className="flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge className={`text-xs ${
+                            attitude.attitudeCategory === 'positive' ? 'bg-green-500/30 text-green-300' :
+                            attitude.attitudeCategory === 'neutral' ? 'bg-gray-500/30 text-gray-300' :
+                            'bg-red-500/30 text-red-300'
+                          }`}>
+                            {attitude.attitudeCategory?.charAt(0).toUpperCase() + attitude.attitudeCategory?.slice(1)}
+                          </Badge>
+                          <div className="flex items-center gap-1">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star
+                                key={star}
+                                className={`h-3 w-3 ${
+                                  star <= (attitude.attitudeScore || 0)
+                                    ? 'fill-yellow-400 text-yellow-400'
+                                    : 'text-gray-500'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <p className="text-sm text-white">{attitude.description}</p>
+                        
+                        {attitude.evaluatorName && (
+                          <p className="text-xs text-blue-200/60">Evaluator: {attitude.evaluatorName}</p>
+                        )}
+                        
+                        <p className="text-xs text-blue-200/40">
+                          {attitude.createdAt ? format(new Date(attitude.createdAt), "MMM d, yyyy 'at' HH:mm") : ''}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
 
-      {/* Footer */}
       <footer className="bg-white/5 border-t border-white/10 py-4 sm:py-8 mt-4 sm:mt-8">
         <div className="container text-center px-4">
           <p className="text-blue-200/50 text-xs sm:text-sm">This is a read-only view of your evaluations.</p>

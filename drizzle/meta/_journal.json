@@ -71,6 +71,13 @@
       "when": 1768871639931,
       "tag": "0009_clumsy_chimera",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1769096140135,
+      "tag": "0010_remarkable_omega_sentinel",
+      "breakpoints": true
     }
   ]
 }

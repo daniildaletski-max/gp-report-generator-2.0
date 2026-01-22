@@ -1375,3 +1375,68 @@
 - [x] Shorten meta description to 126 characters (was 179)
 - [x] Add sr-only hidden div with SEO headings for non-JS crawlers
 
+
+## Error Screenshots Upload & AI Analysis System (v39)
+
+- [ ] Update database schema for detailed error information (classification, description, screenshot URL)
+- [ ] Create error screenshot upload interface for Floor Managers
+- [ ] Implement AI analysis of error screenshots to extract GP name, error type, description
+- [ ] Create attitude screenshot upload interface
+- [ ] Implement AI analysis of attitude screenshots
+- [ ] Update GP Dashboard to display error classification and descriptions
+- [ ] Add error history section to GP Portal with detailed breakdown
+- [ ] Test full workflow: upload → AI analysis → display in GP Dashboard
+
+
+
+## Error Screenshots Upload & AI Analysis (v51)
+
+### Database Schema - COMPLETED
+- [x] Create error_screenshots table (id, gpId, screenshotUrl, errorType, errorDescription, errorCategory, severity, gameType, tableId, month, year, analyzedAt, createdAt)
+- [x] Create attitude_screenshots table (id, gpId, screenshotUrl, attitudeScore, attitudeCategory, description, evaluatorName, month, year, analyzedAt, createdAt)
+
+### Backend API - COMPLETED
+- [x] Create errorScreenshot.upload endpoint with AI analysis
+- [x] Create errorScreenshot.list endpoint with month/year filter
+- [x] Create errorScreenshot.delete endpoint
+- [x] Create attitudeScreenshot.upload endpoint with AI analysis
+- [x] Create attitudeScreenshot.list endpoint with month/year filter
+- [x] Create attitudeScreenshot.delete endpoint
+- [x] Add getErrorScreenshotsForGP function for GP Portal
+- [x] Add getAttitudeScreenshotsForGP function for GP Portal
+
+### AI Analysis - COMPLETED
+- [x] LLM vision analysis for error screenshots (extract GP name, error type, description, severity)
+- [x] LLM vision analysis for attitude screenshots (extract GP name, score, category, description)
+- [x] Auto-match GP names with database records
+- [x] Auto-update monthly_gp_stats.mistakes count
+- [x] Auto-update monthly_gp_stats.attitude score
+
+### Frontend - Error Screenshots Page - COMPLETED
+- [x] Create /error-screenshots page with DashboardLayout
+- [x] Stats cards (Total Errors, Critical, High, GPs with Errors)
+- [x] Month/year selector
+- [x] Drag-and-drop upload zone
+- [x] Display uploaded screenshots with extracted data
+- [x] Delete screenshot functionality
+
+### Frontend - Attitude Screenshots Page - COMPLETED
+- [x] Create /attitude-screenshots page with DashboardLayout
+- [x] Stats cards (Total, Avg Score, Positive, Neutral, Negative)
+- [x] Month/year selector
+- [x] Drag-and-drop upload zone
+- [x] Display uploaded screenshots with extracted data
+- [x] Delete screenshot functionality
+
+### GP Portal Integration - COMPLETED
+- [x] Add errorDetails to getEvaluationsByToken response
+- [x] Add attitudeDetails to getEvaluationsByToken response
+- [x] Display error classification in GP Dashboard (type, description, severity, category)
+- [x] Display attitude evaluations in GP Dashboard (score, category, description)
+- [x] Color-coded severity badges (critical=red, high=orange, medium=yellow, low=green)
+- [x] Star rating display for attitude scores
+
+### Tests - COMPLETED
+- [x] 11 unit tests for screenshot processing logic
+- [x] All tests passing
+

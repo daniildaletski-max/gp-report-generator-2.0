@@ -1,0 +1,41 @@
+CREATE TABLE `attitude_screenshots` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`gamePresenterId` int,
+	`gpName` varchar(255),
+	`evaluationDate` timestamp,
+	`attitudeScore` int,
+	`attitudeCategory` varchar(100),
+	`description` text,
+	`evaluatorName` varchar(255),
+	`screenshotUrl` text,
+	`screenshotKey` varchar(512),
+	`rawExtractedData` json,
+	`month` int NOT NULL,
+	`year` int NOT NULL,
+	`uploadedById` int,
+	`processedAt` timestamp,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `attitude_screenshots_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `error_screenshots` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`gamePresenterId` int,
+	`gpName` varchar(255),
+	`errorDate` timestamp,
+	`errorType` varchar(100),
+	`errorCategory` varchar(100),
+	`errorDescription` text,
+	`severity` enum('low','medium','high','critical') DEFAULT 'medium',
+	`gameType` varchar(100),
+	`tableId` varchar(100),
+	`screenshotUrl` text,
+	`screenshotKey` varchar(512),
+	`rawExtractedData` json,
+	`month` int NOT NULL,
+	`year` int NOT NULL,
+	`uploadedById` int,
+	`processedAt` timestamp,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `error_screenshots_id` PRIMARY KEY(`id`)
+);

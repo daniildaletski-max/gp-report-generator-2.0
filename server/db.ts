@@ -11,7 +11,9 @@ import {
   errorFiles, InsertErrorFile, ErrorFile,
   gpErrors, InsertGpError, GpError,
   gpAccessTokens, InsertGpAccessToken, GpAccessToken,
-  monthlyGpStats, InsertMonthlyGpStats, MonthlyGpStats
+  monthlyGpStats, InsertMonthlyGpStats, MonthlyGpStats,
+  errorScreenshots, InsertErrorScreenshot, ErrorScreenshot,
+  attitudeScreenshots, InsertAttitudeScreenshot, AttitudeScreenshot
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -2541,4 +2543,252 @@ export async function getAllTeamsWithGPs() {
       reportCount: reportCount[0]?.count || 0,
     };
   }));
+}
+
+
+// ============================================
+// ERROR SCREENSHOTS FUNCTIONS
+// ============================================
+
+export async function createErrorScreenshot(data: InsertErrorScreenshot): Promise<ErrorScreenshot> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(errorScreenshots).values(data);
+  const insertId = result[0].insertId;
+  
+  const created = await db.select().from(errorScreenshots).where(eq(errorScreenshots.id, insertId)).limit(1);
+  return created[0];
+}
+
+export async function getErrorScreenshots(month: number, year: number, gamePresenterId?: number): Promise<ErrorScreenshot[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [
+    eq(errorScreenshots.month, month),
+    eq(errorScreenshots.year, year)
+  ];
+  
+  if (gamePresenterId) {
+    conditions.push(eq(errorScreenshots.gamePresenterId, gamePresenterId));
+  }
+
+  return await db.select().from(errorScreenshots)
+    .where(and(...conditions))
+    .orderBy(desc(errorScreenshots.createdAt));
+}
+
+export async function getErrorScreenshotsByGpId(gamePresenterId: number, month?: number, year?: number): Promise<ErrorScreenshot[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [eq(errorScreenshots.gamePresenterId, gamePresenterId)];
+  
+  if (month && year) {
+    conditions.push(eq(errorScreenshots.month, month));
+    conditions.push(eq(errorScreenshots.year, year));
+  }
+
+  return await db.select().from(errorScreenshots)
+    .where(and(...conditions))
+    .orderBy(desc(errorScreenshots.createdAt));
+}
+
+export async function deleteErrorScreenshot(id: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(errorScreenshots).where(eq(errorScreenshots.id, id));
+  return true;
+}
+
+export async function getErrorScreenshotStats(month: number, year: number) {
+  const db = await getDb();
+  if (!db) return { byType: [], bySeverity: [], byGp: [], total: 0 };
+
+  // Stats by error type
+  const byType = await db.select({
+    errorType: errorScreenshots.errorType,
+    count: sql<number>`COUNT(*)`,
+  })
+  .from(errorScreenshots)
+  .where(and(
+    eq(errorScreenshots.month, month),
+    eq(errorScreenshots.year, year)
+  ))
+  .groupBy(errorScreenshots.errorType);
+
+  // Stats by severity
+  const bySeverity = await db.select({
+    severity: errorScreenshots.severity,
+    count: sql<number>`COUNT(*)`,
+  })
+  .from(errorScreenshots)
+  .where(and(
+    eq(errorScreenshots.month, month),
+    eq(errorScreenshots.year, year)
+  ))
+  .groupBy(errorScreenshots.severity);
+
+  // Stats by GP
+  const byGp = await db.select({
+    gpName: errorScreenshots.gpName,
+    gamePresenterId: errorScreenshots.gamePresenterId,
+    count: sql<number>`COUNT(*)`,
+  })
+  .from(errorScreenshots)
+  .where(and(
+    eq(errorScreenshots.month, month),
+    eq(errorScreenshots.year, year)
+  ))
+  .groupBy(errorScreenshots.gpName, errorScreenshots.gamePresenterId)
+  .orderBy(desc(sql`COUNT(*)`));
+
+  // Total count
+  const totalResult = await db.select({
+    count: sql<number>`COUNT(*)`,
+  })
+  .from(errorScreenshots)
+  .where(and(
+    eq(errorScreenshots.month, month),
+    eq(errorScreenshots.year, year)
+  ));
+
+  return {
+    byType,
+    bySeverity,
+    byGp,
+    total: totalResult[0]?.count || 0,
+  };
+}
+
+export async function incrementGPMistakes(gamePresenterId: number, month: number, year: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  // Get or create monthly stats
+  const stats = await getOrCreateMonthlyGpStats(gamePresenterId, month, year);
+  
+  // Increment mistakes
+  await db.update(monthlyGpStats)
+    .set({ mistakes: (stats.mistakes || 0) + 1 })
+    .where(eq(monthlyGpStats.id, stats.id));
+}
+
+// ============================================
+// ATTITUDE SCREENSHOTS FUNCTIONS
+// ============================================
+
+export async function createAttitudeScreenshot(data: InsertAttitudeScreenshot): Promise<AttitudeScreenshot> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(attitudeScreenshots).values(data);
+  const insertId = result[0].insertId;
+  
+  const created = await db.select().from(attitudeScreenshots).where(eq(attitudeScreenshots.id, insertId)).limit(1);
+  return created[0];
+}
+
+export async function getAttitudeScreenshots(month: number, year: number, gamePresenterId?: number): Promise<AttitudeScreenshot[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [
+    eq(attitudeScreenshots.month, month),
+    eq(attitudeScreenshots.year, year)
+  ];
+  
+  if (gamePresenterId) {
+    conditions.push(eq(attitudeScreenshots.gamePresenterId, gamePresenterId));
+  }
+
+  return await db.select().from(attitudeScreenshots)
+    .where(and(...conditions))
+    .orderBy(desc(attitudeScreenshots.createdAt));
+}
+
+export async function getAttitudeScreenshotsByGpId(gamePresenterId: number, month?: number, year?: number): Promise<AttitudeScreenshot[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [eq(attitudeScreenshots.gamePresenterId, gamePresenterId)];
+  
+  if (month && year) {
+    conditions.push(eq(attitudeScreenshots.month, month));
+    conditions.push(eq(attitudeScreenshots.year, year));
+  }
+
+  return await db.select().from(attitudeScreenshots)
+    .where(and(...conditions))
+    .orderBy(desc(attitudeScreenshots.createdAt));
+}
+
+export async function deleteAttitudeScreenshot(id: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(attitudeScreenshots).where(eq(attitudeScreenshots.id, id));
+  return true;
+}
+
+export async function updateGPAttitude(gamePresenterId: number, month: number, year: number, attitudeScore: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  // Get or create monthly stats
+  const stats = await getOrCreateMonthlyGpStats(gamePresenterId, month, year);
+  
+  // Update attitude score (use latest score)
+  await db.update(monthlyGpStats)
+    .set({ attitude: attitudeScore })
+    .where(eq(monthlyGpStats.id, stats.id));
+}
+
+
+// ============================================
+// GP ERROR DETAILS FOR PORTAL
+// ============================================
+
+export async function getErrorScreenshotsForGP(gpId: number, month: number, year: number): Promise<ErrorScreenshot[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    const results = await db.select()
+      .from(errorScreenshots)
+      .where(and(
+        eq(errorScreenshots.gamePresenterId, gpId),
+        eq(errorScreenshots.month, month),
+        eq(errorScreenshots.year, year)
+      ))
+      .orderBy(desc(errorScreenshots.createdAt));
+    
+    return results;
+  } catch (error) {
+    console.error("[Database] Error getting error screenshots for GP:", error);
+    return [];
+  }
+}
+
+export async function getAttitudeScreenshotsForGP(gpId: number, month: number, year: number): Promise<AttitudeScreenshot[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    const results = await db.select()
+      .from(attitudeScreenshots)
+      .where(and(
+        eq(attitudeScreenshots.gamePresenterId, gpId),
+        eq(attitudeScreenshots.month, month),
+        eq(attitudeScreenshots.year, year)
+      ))
+      .orderBy(desc(attitudeScreenshots.createdAt));
+    
+    return results;
+  } catch (error) {
+    console.error("[Database] Error getting attitude screenshots for GP:", error);
+    return [];
+  }
 }

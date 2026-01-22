@@ -2652,6 +2652,10 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           }
         };
 
+        // Get detailed error screenshots for current month
+        const errorDetails = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
+        const attitudeDetails = await db.getAttitudeScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
+
         return {
           gpName: gp.name,
           gpId: gp.id,
@@ -2674,6 +2678,26 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
               bonus: calculateBonusStatus(prevMonthStats),
             } : null,
           },
+          errorDetails: errorDetails.map(e => ({
+            id: e.id,
+            errorType: e.errorType,
+            errorDescription: e.errorDescription,
+            errorCategory: e.errorCategory,
+            severity: e.severity,
+            gameType: e.gameType,
+            tableId: e.tableId,
+            screenshotUrl: e.screenshotUrl,
+            createdAt: e.createdAt,
+          })),
+          attitudeDetails: attitudeDetails.map(a => ({
+            id: a.id,
+            attitudeScore: a.attitudeScore,
+            attitudeCategory: a.attitudeCategory,
+            description: a.description,
+            evaluatorName: a.evaluatorName,
+            screenshotUrl: a.screenshotUrl,
+            createdAt: a.createdAt,
+          })),
         };
       }),
   }),
@@ -2892,6 +2916,312 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           failed: results.filter(r => !r.success).length,
           results,
         };
+      }),
+  }),
+
+  // Error Screenshots - individual error screenshot uploads with AI analysis
+  errorScreenshot: router({
+    // Upload and analyze error screenshot
+    upload: protectedProcedure
+      .input(z.object({
+        imageBase64: z.string(),
+        filename: z.string(),
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2030),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Decode and upload image to S3
+        const imageBuffer = Buffer.from(input.imageBase64, 'base64');
+        const fileKey = `error-screenshots/${input.year}/${input.month}/${Date.now()}-${input.filename}`;
+        const contentType = input.filename.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+        
+        const { url: screenshotUrl } = await storagePut(fileKey, imageBuffer, contentType);
+        
+        // Use AI to analyze the error screenshot
+        const analysisPrompt = `Analyze this error screenshot from a casino game presenter evaluation system.
+
+Extract the following information:
+1. GP Name (Game Presenter name) - the person who made the error
+2. Error Type - classify as one of: dealing_error, procedure_error, game_rules_error, communication_error, appearance_error, technical_error, other
+3. Error Category - more specific sub-category
+4. Error Description - detailed description of what went wrong
+5. Severity - classify as: low, medium, high, or critical
+6. Game Type - if visible (e.g., Blackjack, Roulette, Baccarat)
+7. Table ID - if visible
+8. Error Date - if visible
+
+Respond in JSON format:
+{
+  "gpName": "string or null",
+  "errorType": "string",
+  "errorCategory": "string",
+  "errorDescription": "string",
+  "severity": "low|medium|high|critical",
+  "gameType": "string or null",
+  "tableId": "string or null",
+  "errorDate": "YYYY-MM-DD or null"
+}`;
+
+        const llmResponse = await invokeLLM({
+          messages: [
+            { role: 'system', content: 'You are an expert at analyzing casino game presenter error reports. Extract information accurately from screenshots.' },
+            { 
+              role: 'user', 
+              content: [
+                { type: 'text', text: analysisPrompt },
+                { type: 'image_url', image_url: { url: `data:${contentType};base64,${input.imageBase64}` } }
+              ]
+            }
+          ],
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'error_analysis',
+              strict: true,
+              schema: {
+                type: 'object',
+                properties: {
+                  gpName: { type: ['string', 'null'] },
+                  errorType: { type: 'string' },
+                  errorCategory: { type: 'string' },
+                  errorDescription: { type: 'string' },
+                  severity: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
+                  gameType: { type: ['string', 'null'] },
+                  tableId: { type: ['string', 'null'] },
+                  errorDate: { type: ['string', 'null'] }
+                },
+                required: ['gpName', 'errorType', 'errorCategory', 'errorDescription', 'severity', 'gameType', 'tableId', 'errorDate'],
+                additionalProperties: false
+              }
+            }
+          }
+        });
+
+        let extractedData: any = {};
+        try {
+          const content = llmResponse.choices[0].message.content;
+          extractedData = JSON.parse(typeof content === 'string' ? content : '{}');
+        } catch (e) {
+          console.error('Failed to parse LLM response:', e);
+        }
+
+        // Try to match GP name to existing presenter
+        let gamePresenterId: number | null = null;
+        if (extractedData.gpName) {
+          const gps = await db.getAllGamePresenters();
+          const matchedGp = gps.find(gp => 
+            gp.name.toLowerCase() === extractedData.gpName.toLowerCase() ||
+            gp.name.toLowerCase().includes(extractedData.gpName.toLowerCase()) ||
+            extractedData.gpName.toLowerCase().includes(gp.name.toLowerCase())
+          );
+          if (matchedGp) {
+            gamePresenterId = matchedGp.id;
+          }
+        }
+
+        // Save to database
+        const errorScreenshot = await db.createErrorScreenshot({
+          gamePresenterId,
+          gpName: extractedData.gpName || 'Unknown',
+          errorDate: extractedData.errorDate ? new Date(extractedData.errorDate) : null,
+          errorType: extractedData.errorType || 'other',
+          errorCategory: extractedData.errorCategory || '',
+          errorDescription: extractedData.errorDescription || '',
+          severity: extractedData.severity || 'medium',
+          gameType: extractedData.gameType || null,
+          tableId: extractedData.tableId || null,
+          screenshotUrl,
+          screenshotKey: fileKey,
+          rawExtractedData: extractedData,
+          month: input.month,
+          year: input.year,
+          uploadedById: ctx.user.id,
+          processedAt: new Date(),
+        });
+
+        // Update monthly stats if GP was matched
+        if (gamePresenterId) {
+          await db.incrementGPMistakes(gamePresenterId, input.month, input.year);
+        }
+
+        return {
+          ...errorScreenshot,
+          extractedData,
+          gpMatched: !!gamePresenterId,
+        };
+      }),
+
+    // List error screenshots for a month
+    list: protectedProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2030),
+        gamePresenterId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getErrorScreenshots(input.month, input.year, input.gamePresenterId);
+      }),
+
+    // Delete error screenshot
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteErrorScreenshot(input.id);
+        return { success: true };
+      }),
+
+    // Get error statistics by type
+    stats: protectedProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2030),
+      }))
+      .query(async ({ input }) => {
+        return await db.getErrorScreenshotStats(input.month, input.year);
+      }),
+  }),
+
+  // Attitude Screenshots - attitude evaluation screenshot uploads with AI analysis
+  attitudeScreenshot: router({
+    // Upload and analyze attitude screenshot
+    upload: protectedProcedure
+      .input(z.object({
+        imageBase64: z.string(),
+        filename: z.string(),
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2030),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Decode and upload image to S3
+        const imageBuffer = Buffer.from(input.imageBase64, 'base64');
+        const fileKey = `attitude-screenshots/${input.year}/${input.month}/${Date.now()}-${input.filename}`;
+        const contentType = input.filename.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+        
+        const { url: screenshotUrl } = await storagePut(fileKey, imageBuffer, contentType);
+        
+        // Use AI to analyze the attitude screenshot
+        const analysisPrompt = `Analyze this attitude evaluation screenshot from a casino game presenter evaluation system.
+
+Extract the following information:
+1. GP Name (Game Presenter name) - the person being evaluated
+2. Attitude Score - a score from 1 to 5 (1=poor, 5=excellent)
+3. Attitude Category - classify as: positive, neutral, or negative
+4. Description - detailed description of the attitude evaluation
+5. Evaluator Name - if visible
+6. Evaluation Date - if visible
+
+Respond in JSON format:
+{
+  "gpName": "string or null",
+  "attitudeScore": number (1-5),
+  "attitudeCategory": "positive|neutral|negative",
+  "description": "string",
+  "evaluatorName": "string or null",
+  "evaluationDate": "YYYY-MM-DD or null"
+}`;
+
+        const llmResponse = await invokeLLM({
+          messages: [
+            { role: 'system', content: 'You are an expert at analyzing casino game presenter attitude evaluations. Extract information accurately from screenshots.' },
+            { 
+              role: 'user', 
+              content: [
+                { type: 'text', text: analysisPrompt },
+                { type: 'image_url', image_url: { url: `data:${contentType};base64,${input.imageBase64}` } }
+              ]
+            }
+          ],
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'attitude_analysis',
+              strict: true,
+              schema: {
+                type: 'object',
+                properties: {
+                  gpName: { type: ['string', 'null'] },
+                  attitudeScore: { type: 'integer', minimum: 1, maximum: 5 },
+                  attitudeCategory: { type: 'string', enum: ['positive', 'neutral', 'negative'] },
+                  description: { type: 'string' },
+                  evaluatorName: { type: ['string', 'null'] },
+                  evaluationDate: { type: ['string', 'null'] }
+                },
+                required: ['gpName', 'attitudeScore', 'attitudeCategory', 'description', 'evaluatorName', 'evaluationDate'],
+                additionalProperties: false
+              }
+            }
+          }
+        });
+
+        let extractedData: any = {};
+        try {
+          const content = llmResponse.choices[0].message.content;
+          extractedData = JSON.parse(typeof content === 'string' ? content : '{}');
+        } catch (e) {
+          console.error('Failed to parse LLM response:', e);
+        }
+
+        // Try to match GP name to existing presenter
+        let gamePresenterId: number | null = null;
+        if (extractedData.gpName) {
+          const gps = await db.getAllGamePresenters();
+          const matchedGp = gps.find(gp => 
+            gp.name.toLowerCase() === extractedData.gpName.toLowerCase() ||
+            gp.name.toLowerCase().includes(extractedData.gpName.toLowerCase()) ||
+            extractedData.gpName.toLowerCase().includes(gp.name.toLowerCase())
+          );
+          if (matchedGp) {
+            gamePresenterId = matchedGp.id;
+          }
+        }
+
+        // Save to database
+        const attitudeScreenshot = await db.createAttitudeScreenshot({
+          gamePresenterId,
+          gpName: extractedData.gpName || 'Unknown',
+          evaluationDate: extractedData.evaluationDate ? new Date(extractedData.evaluationDate) : null,
+          attitudeScore: extractedData.attitudeScore || 3,
+          attitudeCategory: extractedData.attitudeCategory || 'neutral',
+          description: extractedData.description || '',
+          evaluatorName: extractedData.evaluatorName || null,
+          screenshotUrl,
+          screenshotKey: fileKey,
+          rawExtractedData: extractedData,
+          month: input.month,
+          year: input.year,
+          uploadedById: ctx.user.id,
+          processedAt: new Date(),
+        });
+
+        // Update monthly stats if GP was matched
+        if (gamePresenterId && extractedData.attitudeScore) {
+          await db.updateGPAttitude(gamePresenterId, input.month, input.year, extractedData.attitudeScore);
+        }
+
+        return {
+          ...attitudeScreenshot,
+          extractedData,
+          gpMatched: !!gamePresenterId,
+        };
+      }),
+
+    // List attitude screenshots for a month
+    list: protectedProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2030),
+        gamePresenterId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return await db.getAttitudeScreenshots(input.month, input.year, input.gamePresenterId);
+      }),
+
+    // Delete attitude screenshot
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteAttitudeScreenshot(input.id);
+        return { success: true };
       }),
   }),
 
