@@ -2135,3 +2135,40 @@
 - [x] Charts with dark theme styling
 
 ### All 151 tests passing
+
+
+## Purple Theme Redesign (v66) - IN PROGRESS
+
+### Color Scheme Change
+- [ ] Replace cyan (#64d2ff) with purple/violet palette
+- [ ] Use deep black backgrounds (#0a0a0f, #0d0d14)
+- [ ] Purple accent colors (#a855f7, #8b5cf6, #7c3aed)
+- [ ] Gradient accents with purple-pink tones
+
+### Animations
+- [ ] Add hover scale animations to cards (transform: scale)
+- [ ] Add smooth color transitions on buttons
+- [ ] Add glow effects on hover for interactive elements
+- [ ] Add subtle shadow animations
+- [ ] Transition duration 200-300ms for smooth feel
+
+### Pages to Update
+- [ ] Home - Purple gradient hero
+- [ ] Dashboard - Purple stat cards
+- [ ] Admin - Purple accent elements
+- [ ] Upload - Purple upload area
+- [ ] Evaluations - Purple badges
+- [ ] Reports - Purple status indicators
+- [ ] GP Portal - Purple performance cards
+
+
+## Purple Theme Redesign (v66) - COMPLETED
+
+### Completed Items
+- [x] Update global CSS with purple color palette (#a855f7, #8b5cf6, #d946ef)
+- [x] Add smooth hover animations (translateY, scale, glow effects)
+- [x] Redesign Home page with purple gradients
+- [x] Redesign Dashboard with purple stat cards
+- [x] Update GP cards in Admin with dark glassmorphism
+- [x] Add attitude button animations
+- [x] All 151 tests passing

@@ -61,10 +61,10 @@ export default function Dashboard() {
     const needsWork = chartData.filter(gp => gp.totalScore > 0 && gp.totalScore < 16).length;
     const notEvaluated = chartData.filter(gp => gp.totalScore === 0).length;
     return [
-      { name: 'Excellent (20+)', value: excellent, color: '#30d158' },
-      { name: 'Good (16-19)', value: good, color: '#ffd60a' },
-      { name: 'Needs Work (<16)', value: needsWork, color: '#ff453a' },
-      { name: 'Not Evaluated', value: notEvaluated, color: '#48484a' },
+      { name: 'Excellent (20+)', value: excellent, color: '#22c55e' },
+      { name: 'Good (16-19)', value: good, color: '#f59e0b' },
+      { name: 'Needs Work (<16)', value: needsWork, color: '#ef4444' },
+      { name: 'Not Evaluated', value: notEvaluated, color: '#4b5563' },
     ].filter(d => d.value > 0);
   }, [chartData]);
 
@@ -86,15 +86,15 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="p-6 min-h-screen bg-[#0d0d14]">
+      <div className="p-6 min-h-screen bg-[#08080f]">
         <div className="animate-pulse space-y-6">
           <div className="flex gap-4">
-            <div className="h-10 w-40 bg-white/[0.04] rounded-xl" />
-            <div className="h-10 w-28 bg-white/[0.04] rounded-xl" />
+            <div className="h-10 w-40 bg-purple-500/10 rounded-xl" />
+            <div className="h-10 w-28 bg-purple-500/10 rounded-xl" />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-32 bg-white/[0.04] rounded-2xl" />
+              <div key={i} className="h-32 bg-purple-500/10 rounded-2xl skeleton" />
             ))}
           </div>
         </div>
@@ -103,7 +103,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6 min-h-screen bg-[#0d0d14]">
+    <div className="p-6 space-y-6 min-h-screen bg-[#08080f]">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
@@ -112,21 +112,21 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-3">
           <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(Number(v))}>
-            <SelectTrigger className="w-40 input-base">
-              <Calendar className="h-4 w-4 mr-2 text-white/40" />
+            <SelectTrigger className="w-40 glass-input rounded-xl">
+              <Calendar className="h-4 w-4 mr-2 text-purple-400" />
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-[#1a1a24] border-white/[0.08] rounded-xl">
+            <SelectContent className="bg-[#12121e] border-purple-500/20 rounded-xl">
               {MONTHS.map((month, idx) => (
                 <SelectItem key={idx} value={(idx + 1).toString()}>{month}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(Number(v))}>
-            <SelectTrigger className="w-24 input-base">
+            <SelectTrigger className="w-24 glass-input rounded-xl">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-[#1a1a24] border-white/[0.08] rounded-xl">
+            <SelectContent className="bg-[#12121e] border-purple-500/20 rounded-xl">
               {[2024, 2025, 2026].map((year) => (
                 <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
               ))}
@@ -140,16 +140,16 @@ export default function Dashboard() {
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3">
-              <div className="icon-container icon-container-cyan">
+              <div className="icon-container icon-container-purple">
                 <Target className="h-5 w-5" />
               </div>
               <span className="font-medium text-white/80">Evaluation Progress</span>
             </div>
             <div className="flex items-center gap-3">
               <div className="w-48">
-                <Progress value={evaluationProgress} className="h-2 bg-white/[0.06]" />
+                <Progress value={evaluationProgress} className="h-2 bg-purple-500/10" />
               </div>
-              <span className="font-bold text-[#64d2ff]">{evaluationProgress}%</span>
+              <span className="font-bold text-purple-400">{evaluationProgress}%</span>
               <span className="text-white/40 text-sm">({evaluatedGPs}/{totalGPs} GPs)</span>
             </div>
             {pendingGPs > 0 && (
@@ -171,9 +171,9 @@ export default function Dashboard() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="stat-card stat-card-cyan">
+        <div className="stat-card stat-card-purple">
           <div className="flex items-start justify-between mb-3">
-            <div className="icon-container icon-container-cyan">
+            <div className="icon-container icon-container-purple">
               <Users className="h-5 w-5" />
             </div>
           </div>
@@ -204,9 +204,9 @@ export default function Dashboard() {
           <p className="text-sm text-white/40">Team Average</p>
         </div>
 
-        <div className="stat-card stat-card-purple">
+        <div className="stat-card stat-card-fuchsia">
           <div className="flex items-start justify-between mb-3">
-            <div className="icon-container icon-container-purple">
+            <div className="icon-container icon-container-fuchsia">
               <FileSpreadsheet className="h-5 w-5" />
             </div>
           </div>
@@ -219,7 +219,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Top Performers */}
         <div className="card-base overflow-hidden">
-          <div className="p-4 border-b border-white/[0.04]">
+          <div className="p-4 border-b border-purple-500/10">
             <div className="flex items-center gap-3">
               <div className="icon-container icon-container-amber">
                 <Award className="h-5 w-5" />
@@ -233,11 +233,11 @@ export default function Dashboard() {
           <div className="p-4 space-y-2">
             {topPerformers.length > 0 ? (
               topPerformers.map((gp, idx) => (
-                <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02]">
+                <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-purple-500/5 hover:bg-purple-500/10 transition-all duration-300">
                   <div className={`flex items-center justify-center w-9 h-9 rounded-lg font-bold text-sm ${
-                    idx === 0 ? 'bg-[#ffd60a]/20 text-[#ffd60a]' : 
+                    idx === 0 ? 'bg-amber-500/20 text-amber-400' : 
                     idx === 1 ? 'bg-white/10 text-white/60' : 
-                    'bg-[#ac8e68]/20 text-[#ac8e68]'
+                    'bg-orange-500/20 text-orange-400'
                   }`}>
                     {idx + 1}
                   </div>
@@ -256,9 +256,9 @@ export default function Dashboard() {
 
         {/* Performance Distribution */}
         <div className="card-base overflow-hidden lg:col-span-2">
-          <div className="p-4 border-b border-white/[0.04]">
+          <div className="p-4 border-b border-purple-500/10">
             <div className="flex items-center gap-3">
-              <div className="icon-container icon-container-purple">
+              <div className="icon-container icon-container-violet">
                 <PieChart className="h-5 w-5" />
               </div>
               <div>
@@ -277,12 +277,12 @@ export default function Dashboard() {
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: '#1a1a24', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', color: '#fff' }} />
+                    <Tooltip contentStyle={{ backgroundColor: '#12121e', border: '1px solid rgba(139, 92, 246, 0.2)', borderRadius: '12px', color: '#fff' }} />
                   </RechartsPieChart>
                 </ResponsiveContainer>
                 <div className="flex-1 space-y-2">
                   {performanceDistribution.map((entry, idx) => (
-                    <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02]">
+                    <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-purple-500/5 hover:bg-purple-500/10 transition-all duration-300">
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
                       <span className="text-sm text-white/60 flex-1">{entry.name}</span>
                       <span className="font-bold text-white">{entry.value}</span>
@@ -299,12 +299,12 @@ export default function Dashboard() {
 
       {/* Low Performance Alert */}
       {lowPerformers.length > 0 && (
-        <div className="card-base p-4 border-[#ff453a]/20 bg-[#ff453a]/[0.04]">
+        <div className="card-base p-4 border-red-500/20 bg-red-500/5">
           <div className="flex items-center gap-3 mb-3">
             <div className="icon-container icon-container-red">
               <AlertTriangle className="h-5 w-5" />
             </div>
-            <span className="font-semibold text-[#ff453a]">
+            <span className="font-semibold text-red-400">
               Attention Required - {lowPerformers.length} GP{lowPerformers.length > 1 ? 's' : ''} Below Target
             </span>
           </div>
@@ -313,15 +313,15 @@ export default function Dashboard() {
               <span key={idx} className="badge-base badge-red">{gp.fullName}: {gp.totalScore.toFixed(1)}/22</span>
             ))}
           </div>
-          <p className="text-sm text-[#ff453a]/60">These GPs scored below 15 this month and may need additional support.</p>
+          <p className="text-sm text-red-400/60">These GPs scored below 15 this month and may need additional support.</p>
         </div>
       )}
 
       {/* Performance Chart */}
       <div className="card-base overflow-hidden">
-        <div className="p-4 border-b border-white/[0.04]">
+        <div className="p-4 border-b border-purple-500/10">
           <div className="flex items-center gap-3">
-            <div className="icon-container icon-container-cyan">
+            <div className="icon-container icon-container-purple">
               <BarChart3 className="h-5 w-5" />
             </div>
             <div>
@@ -334,18 +334,18 @@ export default function Dashboard() {
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={350}>
               <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.04)" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(139, 92, 246, 0.1)" />
                 <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)' }} />
                 <YAxis domain={[0, 24]} ticks={[0, 6, 12, 18, 24]} tick={{ fill: 'rgba(255,255,255,0.4)' }} />
                 <Tooltip 
                   formatter={(value: number, name: string) => [value.toFixed(1), name]}
                   labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
-                  contentStyle={{ backgroundColor: '#1a1a24', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', color: '#fff' }}
+                  contentStyle={{ backgroundColor: '#12121e', border: '1px solid rgba(139, 92, 246, 0.2)', borderRadius: '12px', color: '#fff' }}
                 />
                 <Legend verticalAlign="bottom" wrapperStyle={{ paddingTop: 20 }} />
-                <Bar dataKey="totalScore" name="Total Score" fill="#64d2ff" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="appearance" name="Appearance" fill="#30d158" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="performance" name="Performance" fill="#ffd60a" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="totalScore" name="Total Score" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="appearance" name="Appearance" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="performance" name="Performance" fill="#f59e0b" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -360,9 +360,9 @@ export default function Dashboard() {
 
       {/* Statistics Table */}
       <div className="card-base overflow-hidden">
-        <div className="p-4 border-b border-white/[0.04]">
+        <div className="p-4 border-b border-purple-500/10">
           <div className="flex items-center gap-3">
-            <div className="icon-container icon-container-cyan">
+            <div className="icon-container icon-container-violet">
               <BarChart3 className="h-5 w-5" />
             </div>
             <div>
@@ -376,7 +376,7 @@ export default function Dashboard() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-white/[0.04] hover:bg-transparent">
+                  <TableRow className="border-purple-500/10 hover:bg-transparent">
                     <TableHead className="text-white/50 font-medium text-xs uppercase tracking-wide">Game Presenter</TableHead>
                     <TableHead className="text-center text-white/50 font-medium text-xs uppercase tracking-wide">Evals</TableHead>
                     <TableHead className="text-center text-white/50 font-medium text-xs uppercase tracking-wide">Total</TableHead>
@@ -394,9 +394,9 @@ export default function Dashboard() {
                     const getScoreColor = (score: string, max: number = 3) => {
                       const val = Number(score);
                       const pct = val / max;
-                      if (pct >= 0.8) return "text-[#30d158]";
-                      if (pct >= 0.6) return "text-[#ffd60a]";
-                      if (pct < 0.4 && val > 0) return "text-[#ff453a]";
+                      if (pct >= 0.8) return "text-green-400";
+                      if (pct >= 0.6) return "text-amber-400";
+                      if (pct < 0.4 && val > 0) return "text-red-400";
                       return "text-white/40";
                     };
                     const getTotalBadge = () => {
@@ -406,7 +406,7 @@ export default function Dashboard() {
                       return "badge-gray";
                     };
                     return (
-                      <TableRow key={gp.gpId} className="border-white/[0.04] hover:bg-white/[0.02]">
+                      <TableRow key={gp.gpId} className="border-purple-500/10 hover:bg-purple-500/5 transition-colors duration-200">
                         <TableCell className="font-medium text-white/90">{gp.gpName}</TableCell>
                         <TableCell className="text-center">
                           <span className="badge-base badge-gray">{gp.evalCount}</span>
