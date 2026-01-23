@@ -1803,3 +1803,14 @@
 - [x] Fix duplicate error records - Alicia Bel-Haj shows 12 errors instead of 6
 - [x] Added deleteGpErrorsByMonthYear function to clear existing records before upload
 - [x] Cleared existing duplicate records from database
+
+
+## Feature - GP Detail Modal in GP Stats
+
+- [x] Add clickable GP cards that open detail modal
+- [x] Show all evaluations for the GP (date, scores, evaluator)
+- [x] Show attitude history/current value
+- [x] Show all errors with descriptions from Excel file
+- [x] Add tabs for Evaluations, Attitude, Errors sections
+- [x] Created backend getDetails endpoint with all GP data
+- [x] Created GPDetailModal component with stats summary and tabbed interface

@@ -2337,6 +2337,9 @@ function GPStatsTab({
   const [editTotalGames, setEditTotalGames] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState("");
   
+  // GP Detail Modal state
+  const [detailGpId, setDetailGpId] = useState<number | null>(null);
+  
   // Bulk selection state
   const [selectedGpIds, setSelectedGpIds] = useState<number[]>([]);
   const [bulkAttitude, setBulkAttitude] = useState<number>(0);
@@ -2953,7 +2956,8 @@ function GPStatsTab({
                 return (
                   <div 
                     key={gp.id} 
-                    className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 border shadow-sm hover:shadow-xl transition-all duration-300 ${getBorderColor()} ${selectedGpIds.includes(gp.id) ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                    className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 border shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer ${getBorderColor()} ${selectedGpIds.includes(gp.id) ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                    onClick={() => setDetailGpId(gp.id)}
                   >
                     {/* Header with checkbox */}
                     <div className="flex items-start justify-between p-4 pb-2">
@@ -2964,12 +2968,13 @@ function GPStatsTab({
                       <Checkbox 
                         checked={selectedGpIds.includes(gp.id)}
                         onCheckedChange={() => toggleGpSelection(gp.id)}
+                        onClick={(e) => e.stopPropagation()}
                         className="mt-1"
                       />
                     </div>
                     
                     {/* Attitude Section */}
-                    <div className="px-4 py-3">
+                    <div className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Attitude</span>
                         <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold ${attitudeDisplay.color}`}>
@@ -3007,7 +3012,7 @@ function GPStatsTab({
                         size="sm"
                         variant="ghost"
                         className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => startEditing(gp)}
+                        onClick={(e) => { e.stopPropagation(); startEditing(gp); }}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -3027,7 +3032,233 @@ function GPStatsTab({
           )}
         </CardContent>
       </Card>
+
+      {/* GP Detail Modal */}
+      <GPDetailModal
+        gpId={detailGpId}
+        month={selectedMonth}
+        year={selectedYear}
+        onClose={() => setDetailGpId(null)}
+      />
     </TabsContent>
+  );
+}
+
+// GP Detail Modal Component
+function GPDetailModal({
+  gpId,
+  month,
+  year,
+  onClose,
+}: {
+  gpId: number | null;
+  month: number;
+  year: number;
+  onClose: () => void;
+}) {
+  const { data, isLoading } = trpc.gamePresenter.getDetails.useQuery(
+    { gpId: gpId!, month, year },
+    { enabled: !!gpId }
+  );
+
+  const [activeTab, setActiveTab] = useState<'evaluations' | 'errors' | 'attitude'>('evaluations');
+
+  if (!gpId) return null;
+
+  return (
+    <Dialog open={!!gpId} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : data ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                  <Users className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <span className="text-xl">{data.gp.name}</span>
+                  <p className="text-sm font-normal text-muted-foreground">{data.gp.teamName}</p>
+                </div>
+              </DialogTitle>
+            </DialogHeader>
+
+            {/* Stats Summary */}
+            <div className="grid grid-cols-3 gap-4 py-4">
+              <div className="text-center p-4 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/50 dark:to-blue-900/30">
+                <p className="text-2xl font-bold text-blue-600">{data.evaluations.length}</p>
+                <p className="text-sm text-muted-foreground">Evaluations</p>
+              </div>
+              <div className={`text-center p-4 rounded-lg ${(data.stats.attitude ?? 0) > 0 ? 'bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/50 dark:to-green-900/30' : (data.stats.attitude ?? 0) < 0 ? 'bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/50 dark:to-red-900/30' : 'bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950/50 dark:to-gray-900/30'}`}>
+                <p className={`text-2xl font-bold ${(data.stats.attitude ?? 0) > 0 ? 'text-green-600' : (data.stats.attitude ?? 0) < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                  {(data.stats.attitude ?? 0) > 0 ? '+' : ''}{data.stats.attitude ?? 0}
+                </p>
+                <p className="text-sm text-muted-foreground">Attitude</p>
+              </div>
+              <div className={`text-center p-4 rounded-lg ${(data.stats.mistakes ?? 0) > 0 ? 'bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/50 dark:to-red-900/30' : 'bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950/50 dark:to-gray-900/30'}`}>
+                <p className={`text-2xl font-bold ${(data.stats.mistakes ?? 0) > 0 ? 'text-red-600' : 'text-gray-600'}`}>{data.stats.mistakes ?? 0}</p>
+                <p className="text-sm text-muted-foreground">Errors</p>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-2 border-b pb-2">
+              <Button
+                variant={activeTab === 'evaluations' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setActiveTab('evaluations')}
+              >
+                <Star className="h-4 w-4 mr-2" />
+                Evaluations ({data.evaluations.length})
+              </Button>
+              <Button
+                variant={activeTab === 'errors' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setActiveTab('errors')}
+              >
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                Errors ({data.errors.length})
+              </Button>
+              <Button
+                variant={activeTab === 'attitude' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setActiveTab('attitude')}
+              >
+                <ThumbsUp className="h-4 w-4 mr-2" />
+                Attitude ({data.attitudeScreenshots.length})
+              </Button>
+            </div>
+
+            {/* Tab Content */}
+            <div className="flex-1 overflow-y-auto min-h-[300px]">
+              {activeTab === 'evaluations' && (
+                <div className="space-y-3 py-4">
+                  {data.evaluations.length > 0 ? (
+                    data.evaluations.map((evaluation) => (
+                      <div key={evaluation.id} className="p-4 rounded-lg border bg-card hover:shadow-sm transition-shadow">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm text-muted-foreground">
+                            {format(new Date(evaluation.date), 'MMM dd, yyyy')}
+                          </span>
+                          <Badge variant="secondary">
+                            Total: {evaluation.totalScore}/24
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Appearance:</span>
+                            <span className="ml-2 font-medium">{evaluation.appearanceScore}/12</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Game Performance:</span>
+                            <span className="ml-2 font-medium">{evaluation.gamePerformanceScore}/10</span>
+                          </div>
+                        </div>
+                        {evaluation.comments && (
+                          <p className="mt-2 text-sm text-muted-foreground italic">"{evaluation.comments}"</p>
+                        )}
+                        {evaluation.evaluatedBy && (
+                          <p className="mt-1 text-xs text-muted-foreground">Evaluated by: {evaluation.evaluatedBy}</p>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-12">
+                      <Star className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No evaluations for this month</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'errors' && (
+                <div className="space-y-3 py-4">
+                  {data.errors.length > 0 ? (
+                    data.errors.map((error) => (
+                      <div key={error.id} className="p-4 rounded-lg border border-red-200 bg-red-50/50 dark:bg-red-950/20 dark:border-red-900/50">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                              Excel
+                            </Badge>
+                            {error.errorCode && (
+                              <Badge variant="secondary">{error.errorCode}</Badge>
+                            )}
+                          </div>
+                          {error.date && (
+                            <span className="text-sm text-muted-foreground">
+                              {format(new Date(error.date), 'MMM dd, yyyy')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-medium">{error.description || 'No description'}</p>
+                        {(error.gameType || error.tableId) && (
+                          <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                            {error.gameType && <span>Game: {error.gameType}</span>}
+                            {error.tableId && <span>Table: {error.tableId}</span>}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-12">
+                      <AlertTriangle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No errors recorded for this month</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'attitude' && (
+                <div className="space-y-3 py-4">
+                  {data.attitudeScreenshots.length > 0 ? (
+                    data.attitudeScreenshots.map((screenshot) => (
+                      <div key={screenshot.id} className="p-4 rounded-lg border bg-card">
+                        <div className="flex items-center justify-between mb-2">
+                          <Badge variant="outline">Screenshot</Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {format(new Date(screenshot.createdAt), 'MMM dd, yyyy HH:mm')}
+                          </span>
+                        </div>
+                        {screenshot.extractedData && (
+                          <div className="mt-2 p-3 rounded bg-muted/50">
+                            <p className="text-sm whitespace-pre-wrap">{screenshot.extractedData}</p>
+                          </div>
+                        )}
+                        {screenshot.url && (
+                          <a
+                            href={screenshot.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 mt-2 text-sm text-primary hover:underline"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            View Screenshot
+                          </a>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-12">
+                      <ThumbsUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">No attitude screenshots for this month</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-12">
+            <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">Failed to load GP details</p>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

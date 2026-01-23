@@ -915,6 +915,93 @@ export const appRouter = router({
         
         return result;
       }),
+
+    // Get detailed GP information including evaluations, attitude, and errors
+    getDetails: protectedProcedure
+      .input(z.object({
+        gpId: z.number(),
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        // Get GP basic info
+        const gp = await db.getGamePresenterById(input.gpId);
+        if (!gp) throw new Error("Game Presenter not found");
+        
+        // Team-based data isolation
+        if (ctx.user.role !== 'admin' && gp.teamId !== ctx.user.teamId) {
+          throw new Error("Access denied: You can only view your team's GP details");
+        }
+        
+        // Get team info
+        const team = gp.teamId ? await db.getTeamById(gp.teamId) : null;
+        
+        // Get monthly stats
+        const stats = await db.getMonthlyGpStats(input.gpId, input.month, input.year);
+        
+        // Get evaluations for this month
+        const startDate = new Date(input.year, input.month - 1, 1);
+        const endDate = new Date(input.year, input.month, 0, 23, 59, 59);
+        const allEvaluations = await db.getEvaluationsByGP(input.gpId);
+        const monthlyEvaluations = allEvaluations.filter(e => {
+          const evalDate = new Date(e.evaluationDate);
+          return evalDate >= startDate && evalDate <= endDate;
+        });
+        
+        // Get errors from gpErrors table (parsed from Excel)
+        const errors = await db.getGpErrorsForPortal(input.gpId, input.month, input.year);
+        
+        // Get attitude screenshots
+        const attitudeScreenshots = await db.getAttitudeScreenshotsForGP(input.gpId, input.month, input.year);
+        
+        // Get error screenshots
+        const errorScreenshots = await db.getErrorScreenshotsForGP(input.gpId, input.month, input.year);
+        
+        return {
+          gp: {
+            id: gp.id,
+            name: gp.name,
+            teamId: gp.teamId,
+            teamName: team?.name || 'Unassigned',
+            createdAt: gp.createdAt,
+          },
+          stats: stats || {
+            attitude: 0,
+            mistakes: 0,
+            totalGames: 0,
+            notes: null,
+          },
+          evaluations: monthlyEvaluations.map(e => ({
+            id: e.id,
+            date: e.evaluationDate,
+            totalScore: e.totalScore,
+            appearanceScore: e.appearanceScore,
+            gamePerformanceScore: e.gamePerformanceScore,
+            comments: e.comments,
+            evaluatedBy: e.evaluatedBy,
+          })),
+          errors: errors.map(e => ({
+            id: e.id,
+            date: e.errorDate,
+            description: e.errorDescription,
+            errorCode: e.errorCode,
+            gameType: e.gameType,
+            tableId: e.tableId,
+          })),
+          attitudeScreenshots: attitudeScreenshots.map(s => ({
+            id: s.id,
+            url: s.screenshotUrl,
+            extractedData: s.extractedData,
+            createdAt: s.createdAt,
+          })),
+          errorScreenshots: errorScreenshots.map(s => ({
+            id: s.id,
+            url: s.screenshotUrl,
+            extractedData: s.extractedData,
+            createdAt: s.createdAt,
+          })),
+        };
+      }),
   }),
 
   // User/FM management
