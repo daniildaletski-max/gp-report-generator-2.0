@@ -1814,3 +1814,9 @@
 - [x] Add tabs for Evaluations, Attitude, Errors sections
 - [x] Created backend getDetails endpoint with all GP data
 - [x] Created GPDetailModal component with stats summary and tabbed interface
+
+
+## Bug Fix - GP Detail Modal Errors
+
+- [x] Add missing getTeamById function to db.ts
+- [x] Fix DialogTitle accessibility warning in GPDetailModal (added title for loading and error states)

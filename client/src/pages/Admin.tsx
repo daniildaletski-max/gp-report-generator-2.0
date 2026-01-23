@@ -3069,9 +3069,14 @@ function GPDetailModal({
     <Dialog open={!!gpId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
+          <>
+            <DialogHeader>
+              <DialogTitle>Loading GP Details...</DialogTitle>
+            </DialogHeader>
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          </>
         ) : data ? (
           <>
             <DialogHeader>
@@ -3252,10 +3257,15 @@ function GPDetailModal({
             </div>
           </>
         ) : (
-          <div className="text-center py-12">
-            <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">Failed to load GP details</p>
-          </div>
+          <>
+            <DialogHeader>
+              <DialogTitle>Error</DialogTitle>
+            </DialogHeader>
+            <div className="text-center py-12">
+              <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">Failed to load GP details</p>
+            </div>
+          </>
         )}
       </DialogContent>
     </Dialog>

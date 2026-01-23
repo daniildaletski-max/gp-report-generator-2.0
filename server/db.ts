@@ -1941,6 +1941,15 @@ export async function deleteFmTeam(teamId: number): Promise<void> {
   await db.delete(fmTeams).where(eq(fmTeams.id, teamId));
 }
 
+// Get team by ID
+export async function getTeamById(teamId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const team = await db.select().from(fmTeams).where(eq(fmTeams.id, teamId)).limit(1);
+  return team.length > 0 ? team[0] : null;
+}
+
 // Get team with assigned users
 export async function getTeamWithUsers(teamId: number) {
   const db = await getDb();
