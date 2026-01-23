@@ -1961,3 +1961,28 @@
 - [x] Improve header with glass styling
 - [x] Update achievements with glass badges
 - [x] Add colorful gradient score cards
+
+
+## Dark Glassmorphism Redesign (v61) - COMPLETED
+
+### Color Palette (from Dribbble reference)
+- Primary background: #0C0833 (deep blue/purple)
+- Secondary: #323D9A (deep blue)
+- Accent: #5B62B2 (purple-blue)
+- Highlight: #67B2E7 (light blue)
+- Glass: #9DCDEE (soft cyan)
+- Text: #E4F4FC (light blue/white)
+
+### Global Styles
+- [x] Update index.css with dark theme colors
+- [x] Add glass card styles with blur and transparency
+- [x] Add gradient backgrounds with animated orbs
+- [x] Update all color variables
+
+### Module Redesigns
+- [x] Home page - dark hero with glass cards
+- [x] Dashboard - dark background with glass stat cards
+- [x] Upload - dark theme with glass upload area
+- [x] Admin - dark tables and glass containers
+- [x] Reports - dark theme with glass report cards
+- [x] GP Portal - dark glassmorphism with colorful gradient score cards

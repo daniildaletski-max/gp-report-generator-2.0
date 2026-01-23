@@ -210,15 +210,15 @@ export default function GPPortal() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-mesh flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <AnimatedBackground />
         <div className="text-center relative z-10">
           <div className="relative">
-            <div className="absolute inset-0 bg-primary/30 rounded-full blur-2xl animate-pulse" />
-            <Loader2 className="h-20 w-20 animate-spin text-primary mx-auto mb-6 relative" />
+            <div className="absolute inset-0 bg-[#67B2E7]/30 rounded-full blur-2xl animate-pulse" />
+            <Loader2 className="h-20 w-20 animate-spin text-[#67B2E7] mx-auto mb-6 relative" />
           </div>
-          <p className="text-foreground/80 text-xl font-medium">Loading your dashboard...</p>
-          <p className="text-muted-foreground text-sm mt-2">Please wait a moment</p>
+          <p className="text-[#E4F4FC] text-xl font-medium">Loading your dashboard...</p>
+          <p className="text-[#94A2D6] text-sm mt-2">Please wait a moment</p>
         </div>
       </div>
     );
@@ -292,7 +292,7 @@ export default function GPPortal() {
   };
 
   return (
-    <div className="min-h-screen bg-mesh relative">
+    <div className="min-h-screen relative">
       <AnimatedBackground />
       
       {/* Header */}
@@ -302,13 +302,13 @@ export default function GPPortal() {
             {/* Logo and Greeting */}
             <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary to-purple-600 rounded-2xl blur-lg opacity-50" />
-                <div className="relative bg-gradient-to-br from-primary to-purple-600 text-white p-3 sm:p-4 rounded-2xl shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#67B2E7] to-[#5B62B2] rounded-2xl blur-lg opacity-50" />
+                <div className="relative bg-gradient-to-br from-[#67B2E7] to-[#5B62B2] text-white p-3 sm:p-4 rounded-2xl shadow-2xl">
                   <Star className="h-6 w-6 sm:h-8 sm:w-8" />
                 </div>
               </div>
               <div>
-                <p className="text-muted-foreground text-sm">{getGreeting()},</p>
+                <p className="text-[#94A2D6] text-sm">{getGreeting()},</p>
                 <h1 className="text-xl sm:text-2xl font-bold gradient-text">{data.gpName}</h1>
               </div>
             </div>

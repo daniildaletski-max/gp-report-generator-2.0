@@ -327,12 +327,12 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6 bg-mesh min-h-screen">
+    <div className="space-y-6 p-4 md:p-6 min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold gradient-text">Reports</h1>
-          <p className="text-muted-foreground mt-1">Generate and manage Team Monthly Overview reports</p>
+          <p className="text-[#94A2D6] mt-1">Generate and manage Team Monthly Overview reports</p>
         </div>
         
         <Dialog open={showNewReport} onOpenChange={setShowNewReport}>

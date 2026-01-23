@@ -56,11 +56,11 @@ function FMRestrictedView() {
   const team = teams?.[0]; // FM only sees their team
 
   return (
-    <div className="space-y-6 p-4 md:p-6 bg-mesh min-h-screen">
+    <div className="space-y-6 p-4 md:p-6 min-h-screen">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold gradient-text">Team Management</h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-[#94A2D6] mt-1">
             Manage your team: {team?.teamName || "Loading..."}
           </p>
         </div>
@@ -134,7 +134,7 @@ function FullAdminPanel() {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6 bg-mesh min-h-screen">
+    <div className="space-y-6 p-4 md:p-6 min-h-screen">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold gradient-text flex items-center gap-3">
@@ -143,7 +143,7 @@ function FullAdminPanel() {
             </div>
             Admin Panel
           </h1>
-          <p className="text-muted-foreground mt-1">System administration and management</p>
+          <p className="text-[#94A2D6] mt-1">System administration and management</p>
         </div>
         <Badge className="bg-gradient-to-r from-primary to-purple-600 text-white rounded-xl px-4 py-2">
           Administrator

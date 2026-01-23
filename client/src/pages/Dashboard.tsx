@@ -16,7 +16,7 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December"
 ];
 
-const COLORS = ['#8b5cf6', '#06b6d4', '#f59e0b', '#ef4444', '#10b981', '#ec4899'];
+const COLORS = ['#67B2E7', '#5B62B2', '#fbbf24', '#f87171', '#4ade80', '#a855f7'];
 
 interface GPStat {
   gpId: number;
@@ -101,7 +101,7 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="p-6 bg-mesh min-h-screen">
+      <div className="p-6 min-h-screen">
         <div className="animate-pulse space-y-6">
           <div className="flex gap-4">
             <Skeleton className="h-10 w-40 glass" />
@@ -122,12 +122,12 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6 bg-mesh min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       {/* Header with Month/Year Selector */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold gradient-text">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Team performance overview and analytics</p>
+          <p className="text-[#94A2D6] mt-1">Team performance overview and analytics</p>
         </div>
         <div className="flex items-center gap-3">
           <Select
@@ -328,11 +328,12 @@ export default function Dashboard() {
                     </Pie>
                     <Tooltip 
                       contentStyle={{ 
-                        backgroundColor: 'rgba(255,255,255,0.9)', 
-                        backdropFilter: 'blur(8px)',
-                        border: 'none',
+                        backgroundColor: 'rgba(20, 20, 70, 0.95)', 
+                        backdropFilter: 'blur(12px)',
+                        border: '1px solid rgba(100, 120, 200, 0.3)',
                         borderRadius: '12px',
-                        boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                        color: '#E4F4FC'
                       }} 
                     />
                   </RechartsPieChart>
@@ -410,11 +411,12 @@ export default function Dashboard() {
                   formatter={(value: number, name: string) => [value.toFixed(1), name]}
                   labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
                   contentStyle={{ 
-                    backgroundColor: 'rgba(255,255,255,0.95)', 
+                    backgroundColor: 'rgba(20, 20, 70, 0.95)', 
                     backdropFilter: 'blur(12px)',
-                    border: 'none',
+                    border: '1px solid rgba(100, 120, 200, 0.3)',
                     borderRadius: '12px',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.12)'
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                    color: '#E4F4FC'
                   }}
                 />
                 <Legend verticalAlign="bottom" wrapperStyle={{ paddingTop: 20 }} />
