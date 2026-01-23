@@ -73,7 +73,7 @@ export default function InvitePage() {
       <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-orange-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
         <Card className="w-full max-w-md border-red-200 dark:border-red-900">
           <CardHeader className="text-center">
-            <div className="h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-4">
+            <div className="h-16 w-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
               <XCircle className="h-8 w-8 text-red-500" />
             </div>
             <CardTitle className="text-2xl">Invalid Invitation</CardTitle>
@@ -82,9 +82,9 @@ export default function InvitePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 text-center">
+            <div className="bg-red-500/10 rounded-lg p-4 text-center border border-red-500/20">
               <AlertTriangle className="h-5 w-5 text-red-500 mx-auto mb-2" />
-              <p className="text-sm text-red-700 dark:text-red-300">
+              <p className="text-sm text-red-400">
                 Please contact your administrator to request a new invitation link.
               </p>
             </div>
@@ -108,7 +108,7 @@ export default function InvitePage() {
         <Card className="w-full max-w-md">
           <CardContent className="pt-8 pb-8">
             <div className="text-center space-y-4">
-              <div className="h-16 w-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto animate-pulse">
+              <div className="h-16 w-16 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto animate-pulse">
                 <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
               </div>
               <h2 className="text-xl font-semibold">Setting up your account...</h2>
@@ -129,7 +129,7 @@ export default function InvitePage() {
         <Card className="w-full max-w-md border-green-200 dark:border-green-900">
           <CardContent className="pt-8 pb-8">
             <div className="text-center space-y-4">
-              <div className="h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto">
+              <div className="h-16 w-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto">
                 <CheckCircle2 className="h-8 w-8 text-green-500" />
               </div>
               <h2 className="text-xl font-semibold">Welcome aboard!</h2>
@@ -203,11 +203,11 @@ export default function InvitePage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+            <div className="flex items-center gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
               <Clock className="h-5 w-5 text-amber-600" />
               <div>
-                <p className="text-xs text-amber-700 dark:text-amber-400">Expires</p>
-                <p className="font-medium text-amber-800 dark:text-amber-300">
+                <p className="text-xs text-amber-400">Expires</p>
+                <p className="font-medium text-amber-300">
                   {format(new Date(invitation.expiresAt), "MMMM d, yyyy 'at' h:mm a")}
                 </p>
               </div>

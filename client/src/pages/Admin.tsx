@@ -249,36 +249,36 @@ function AdminOverviewTab() {
       title: "Total Users", 
       value: adminStats?.totalUsers || 0, 
       icon: Users, 
-      color: "text-blue-500",
-      bgColor: "bg-blue-50 dark:bg-blue-950/30"
+      color: "text-blue-400",
+      bgColor: "bg-blue-500/10 border border-blue-500/20"
     },
     { 
       title: "Teams", 
       value: adminStats?.totalTeams || 0, 
       icon: Building2, 
-      color: "text-purple-500",
-      bgColor: "bg-purple-50 dark:bg-purple-950/30"
+      color: "text-purple-400",
+      bgColor: "bg-purple-500/10 border border-purple-500/20"
     },
     { 
       title: "Game Presenters", 
       value: adminStats?.totalGPs || 0, 
       icon: Star, 
-      color: "text-yellow-500",
-      bgColor: "bg-yellow-50 dark:bg-yellow-950/30"
+      color: "text-yellow-400",
+      bgColor: "bg-yellow-500/10 border border-yellow-500/20"
     },
     { 
       title: "Evaluations", 
       value: adminStats?.totalEvaluations || 0, 
       icon: Target, 
-      color: "text-green-500",
-      bgColor: "bg-green-50 dark:bg-green-950/30"
+      color: "text-green-400",
+      bgColor: "bg-green-500/10 border border-green-500/20"
     },
     { 
       title: "Reports", 
       value: adminStats?.totalReports || 0, 
       icon: FileSpreadsheet, 
-      color: "text-orange-500",
-      bgColor: "bg-orange-50 dark:bg-orange-950/30"
+      color: "text-orange-400",
+      bgColor: "bg-orange-500/10 border border-orange-500/20"
     },
   ];
 
@@ -1357,7 +1357,7 @@ function GPAccessLinksTab({
                                 </TableCell>
                                 <TableCell>
                                   {token ? (
-                                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                    <Badge className="bg-green-500/20 text-green-400 border border-green-500/30">
                                       <Check className="h-3 w-3 mr-1" />
                                       Active
                                     </Badge>
@@ -1803,7 +1803,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
   const getStatusBadge = (invitation: any) => {
     const now = new Date();
     if (invitation.status === "accepted") {
-      return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"><MailCheck className="h-3 w-3 mr-1" />Accepted</Badge>;
+      return <Badge className="bg-green-500/20 text-green-400 border border-green-500/30"><MailCheck className="h-3 w-3 mr-1" />Accepted</Badge>;
     }
     if (invitation.status === "revoked") {
       return <Badge variant="destructive"><MailX className="h-3 w-3 mr-1" />Revoked</Badge>;
@@ -1811,7 +1811,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
     if (invitation.status === "expired" || new Date(invitation.expiresAt) < now) {
       return <Badge variant="secondary"><Timer className="h-3 w-3 mr-1" />Expired</Badge>;
     }
-    return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"><MailQuestion className="h-3 w-3 mr-1" />Pending</Badge>;
+    return <Badge className="bg-blue-500/20 text-blue-400 border border-blue-500/30"><MailQuestion className="h-3 w-3 mr-1" />Pending</Badge>;
   };
 
   const filteredInvitations = useMemo(() => {
@@ -1854,7 +1854,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                 <p className="text-sm text-muted-foreground">Total Invitations</p>
                 <p className="text-3xl font-bold">{stats?.total || 0}</p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
                 <Mail className="h-6 w-6 text-blue-500" />
               </div>
             </div>
@@ -1868,7 +1868,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                 <p className="text-sm text-muted-foreground">Pending</p>
                 <p className="text-3xl font-bold">{stats?.pending || 0}</p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-full bg-amber-500/20 flex items-center justify-center">
                 <MailQuestion className="h-6 w-6 text-amber-500" />
               </div>
             </div>
@@ -1882,7 +1882,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                 <p className="text-sm text-muted-foreground">Accepted</p>
                 <p className="text-3xl font-bold">{stats?.accepted || 0}</p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
                 <MailCheck className="h-6 w-6 text-green-500" />
               </div>
             </div>
@@ -1896,7 +1896,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                 <p className="text-sm text-muted-foreground">Expired/Revoked</p>
                 <p className="text-3xl font-bold">{(stats?.expired || 0) + (stats?.revoked || 0)}</p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-gray-100 dark:bg-gray-900/30 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-full bg-gray-500/20 flex items-center justify-center">
                 <MailX className="h-6 w-6 text-gray-500" />
               </div>
             </div>
@@ -2770,7 +2770,7 @@ function GPStatsTab({
                     </h4>
                     <div className="space-y-2">
                       {statsSummary.topByAttitude.slice(0, 5).map((gp: any, idx: number) => (
-                        <div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/30">
+                        <div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
                           <span className="text-xs font-bold text-green-600 w-5">#{idx + 1}</span>
                           <span className="text-sm truncate flex-1">{gp.name}</span>
                           <Badge className="bg-green-500">+1</Badge>
@@ -2789,7 +2789,7 @@ function GPStatsTab({
                     </h4>
                     <div className="space-y-2">
                       {statsSummary.needsAttention?.slice(0, 5).map((gp: any, idx: number) => (
-                        <div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/30">
+                        <div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
                           <span className="text-xs font-bold text-red-600 w-5">#{idx + 1}</span>
                           <span className="text-sm truncate flex-1">{gp.name}</span>
                           <Badge variant="destructive">-1</Badge>
@@ -3185,7 +3185,7 @@ function GPDetailModal({
                 <div className="space-y-3 py-4">
                   {data.errors.length > 0 ? (
                     data.errors.map((error) => (
-                      <div key={error.id} className="p-4 rounded-lg border border-red-200 bg-red-50/50 dark:bg-red-950/20 dark:border-red-900/50">
+                      <div key={error.id} className="p-4 rounded-lg border border-red-500/20 bg-red-500/10">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
@@ -3227,21 +3227,21 @@ function GPDetailModal({
                         key={screenshot.id} 
                         className={`p-4 rounded-lg border-l-4 bg-card ${
                           screenshot.attitudeType === 'positive' 
-                            ? 'border-l-green-500 bg-green-50/50 dark:bg-green-950/20' 
+                            ? 'border-l-green-500 bg-green-500/10' 
                             : screenshot.attitudeType === 'negative'
-                            ? 'border-l-red-500 bg-red-50/50 dark:bg-red-950/20'
+                            ? 'border-l-red-500 bg-red-500/10'
                             : 'border-l-gray-300'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             {screenshot.attitudeType === 'positive' ? (
-                              <Badge className="bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900 dark:text-green-300">
+                              <Badge className="bg-green-500/20 text-green-400 border border-green-500/30">
                                 <ThumbsUp className="h-3 w-3 mr-1" />
                                 POSITIVE
                               </Badge>
                             ) : screenshot.attitudeType === 'negative' ? (
-                              <Badge className="bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900 dark:text-red-300">
+                              <Badge className="bg-red-500/20 text-red-400 border border-red-500/30">
                                 <ThumbsDown className="h-3 w-3 mr-1" />
                                 NEGATIVE
                               </Badge>

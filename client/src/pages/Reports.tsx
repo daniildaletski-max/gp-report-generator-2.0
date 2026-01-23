@@ -293,7 +293,7 @@ export default function ReportsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'finalized':
-        return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Finalized</Badge>;
+        return <Badge className="bg-green-500/20 text-green-400 border border-green-500/30">Finalized</Badge>;
       case 'generated':
         return <Badge variant="secondary">Generated</Badge>;
       default:
@@ -787,7 +787,7 @@ export default function ReportsPage() {
               <div className="flex items-center gap-2">
                 {getStatusBadge(viewingReport.report.status)}
                 {viewingReport.report.excelFileUrl && (
-                  <Badge variant="outline" className="bg-green-50 text-green-700">
+                  <Badge variant="outline" className="bg-green-500/20 text-green-400 border-green-500/30">
                     <Download className="h-3 w-3 mr-1" />
                     Exported
                   </Badge>
@@ -875,7 +875,7 @@ export default function ReportsPage() {
                 )}
                 <Button 
                   variant="outline" 
-                  className="text-green-600 border-green-600 hover:bg-green-50"
+                  className="text-green-400 border-green-500/30 hover:bg-green-500/20"
                   onClick={() => handleExportGoogleSheets(viewingReport.report.id)} 
                   disabled={isExportingGoogleSheets === viewingReport.report.id}
                 >

@@ -2002,3 +2002,54 @@
 - [x] Admin - dark containers and tabs
 - [x] Reports - dark theme applied
 - [x] GP Portal - dark glassmorphism verified
+
+
+## Complete Dark Theme Fix (v63)
+
+### Dashboard Fixes
+- [ ] Fix stat cards - make them dark glass instead of light pastel
+- [ ] Fix table styling - dark background, proper borders
+- [ ] Fix all text colors for dark theme
+
+### Admin Module Fixes
+- [ ] Fix all stat cards - dark glass style
+- [ ] Fix tables - dark background
+- [ ] Fix tabs and containers
+
+### Upload Module Fixes
+- [ ] Fix upload area - dark glass style
+- [ ] Fix stat cards - dark theme
+
+### Reports Module Fixes
+- [ ] Fix report cards - dark glass style
+- [ ] Fix stats display
+
+### GP Portal Fixes
+- [ ] Verify dark theme consistency
+- [ ] Fix any light elements
+
+### Global CSS
+- [ ] Update all component defaults to dark theme
+- [ ] Ensure glass cards have dark backgrounds
+
+
+## Dark Glassmorphism Design Update (v63) - COMPLETED
+
+### Design Consistency Fixes
+- [x] Fixed all light theme badge patterns (bg-green-100, bg-blue-100, etc.) across all modules
+- [x] Converted all badges to dark glassmorphism style (bg-color-500/20 with border)
+- [x] Fixed icon backgrounds in Admin invitations section
+- [x] Fixed attitude badges in Admin and Evaluations pages
+- [x] Fixed score badges in Evaluations page
+- [x] Fixed status badges in Reports page
+- [x] Fixed error/warning backgrounds in InvitePage
+- [x] All modules now have consistent dark theme:
+  - Home: Minimalist dark design with gradient text
+  - Dashboard: Dark cards with colored icons, dark tables
+  - Upload: Dark glassmorphism upload area and tabs
+  - Evaluations: Dark tables with colored score badges
+  - Reports: Dark cards and tables
+  - Admin: Dark overview cards, dark tabs, dark tables
+  - GP Portal: Colorful gradient score cards on dark background
+- [x] All 151 tests passing
+

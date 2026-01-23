@@ -325,10 +325,10 @@ export default function EvaluationsPage() {
 
   const getScoreBadge = (score: number, max: number = 24) => {
     const pct = score / max;
-    if (pct >= 0.85) return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-    if (pct >= 0.7) return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
-    if (score > 0) return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
-    return "bg-gray-100 text-gray-500";
+    if (pct >= 0.85) return "bg-green-500/20 text-green-400 border border-green-500/30";
+    if (pct >= 0.7) return "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30";
+    if (score > 0) return "bg-red-500/20 text-red-400 border border-red-500/30";
+    return "bg-gray-500/20 text-gray-400";
   };
 
   if (isLoading) {
@@ -871,8 +871,8 @@ export default function EvaluationsPage() {
                                 <Badge 
                                   variant="outline" 
                                   className={isPositive 
-                                    ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900 dark:text-green-200' 
-                                    : 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900 dark:text-red-200'
+                                    ? 'bg-green-500/20 text-green-400 border-green-500/30' 
+                                    : 'bg-red-500/20 text-red-400 border-red-500/30'
                                   }
                                 >
                                   {isPositive ? (
@@ -892,8 +892,8 @@ export default function EvaluationsPage() {
                           <TableCell className="text-center">
                             <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
                               (entry.attitudeScore || 0) > 0 
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                                : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                ? 'bg-green-500/20 text-green-400' 
+                                : 'bg-red-500/20 text-red-400'
                             }`}>
                               {(entry.attitudeScore || 0) > 0 ? '+' : ''}{entry.attitudeScore || 0}
                             </span>
@@ -901,7 +901,7 @@ export default function EvaluationsPage() {
                           <TableCell className="text-center">
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/20">
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </AlertDialogTrigger>
