@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, gpName, SUBSTRING(errorDescription, 1, 60) as description, errorCode, gameType FROM gp_errors LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT id, gpName, SUBSTRING(errorDescription, 1, 60) as description, errorCode, gameType FROM gp_errors LIMIT 5;",
+  "rows": [
+    {
+      "id": "60001",
+      "gpName": "Alina Jivoloup",
+      "description": "Dealer starts new game before finishing last game",
+      "errorCode": "R12",
+      "gameType": "Rou"
+    },
+    {
+      "id": "60002",
+      "gpName": "Kirke Kirs",
+      "description": "Ball falls out of the wheel",
+      "errorCode": "R05",
+      "gameType": "Rou"
+    },
+    {
+      "id": "60003",
+      "gpName": "Kirke Kirs",
+      "description": "Ball falls out of the wheel",
+      "errorCode": "R05",
+      "gameType": "Rou"
+    },
+    {
+      "id": "60004",
+      "gpName": "Kirke Kirs",
+      "description": "Ball falls out of the wheel",
+      "errorCode": "R05",
+      "gameType": "Rou"
+    },
+    {
+      "id": "60005",
+      "gpName": "Kirke Kirs",
+      "description": "Ball falls out of the wheel",
+      "errorCode": "R05",
+      "gameType": "Rou"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tgpName\tdescription\terrorCode\tgameType\n60001\tAlina Jivoloup\tDealer starts new game before finishing last game\tR12\tRou\n60002\tKirke Kirs\tBall falls out of the wheel\tR05\tRou\n60003\tKirke Kirs\tBall falls out of the wheel\tR05\tRou\n60004\tKirke Kirs\tBall falls out of the wheel\tR05\tRou\n60005\tKirke Kirs\tBall falls out of the wheel\tR05\tRou\n",
+  "stderr": "",
+  "execution_time_ms": 55
+}

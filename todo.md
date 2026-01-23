@@ -1789,3 +1789,10 @@
   - Table ID is column F (6)
 - [x] Added console logging for debugging column detection
 - [ ] User needs to re-upload error file to get descriptions (old data doesn't have them)
+
+
+## Bug Fix - Invalid Error Records Displayed
+
+- [x] Fix display of error records without descriptions showing "Error recorded" placeholder
+- [x] Deleted old invalid records without descriptions from database
+- [x] Added filter in GPPortal to only show errors with valid descriptions

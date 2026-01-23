@@ -707,18 +707,18 @@ export default function GPPortal() {
         </div>
 
         {/* Error Details Section */}
-        {data.errorDetails && data.errorDetails.length > 0 && (
+        {data.errorDetails && data.errorDetails.filter((e: any) => e.errorDescription && e.errorDescription.trim() !== '').length > 0 && (
           <div>
             <h2 className="text-base sm:text-xl font-semibold mb-3 sm:mb-4 text-white flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-orange-400" />
               Error Details This Month
               <Badge variant="secondary" className="ml-2 text-xs sm:text-sm bg-orange-500/20 text-orange-300">
-                {data.errorDetails.length}
+                {data.errorDetails.filter((e: any) => e.errorDescription && e.errorDescription.trim() !== '').length}
               </Badge>
             </h2>
             
             <div className="space-y-3 sm:space-y-4">
-              {data.errorDetails.map((error: any) => (
+              {data.errorDetails.filter((e: any) => e.errorDescription && e.errorDescription.trim() !== '').map((error: any) => (
                 <Card key={error.id} className="bg-white/5 backdrop-blur-lg border-orange-400/20 overflow-hidden">
                   <CardContent className="p-3 sm:p-4">
                     <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
