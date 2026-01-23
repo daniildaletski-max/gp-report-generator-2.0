@@ -1101,6 +1101,22 @@ export const appRouter = router({
         const monthName = MONTH_NAMES[input.reportMonth - 1];
         const stats = await db.getGPMonthlyStats(input.teamId, input.reportYear, input.reportMonth);
         const attendance = await db.getAttendanceByTeamMonth(input.teamId, input.reportMonth, input.reportYear);
+        
+        // Get error counts for each GP
+        const errorCounts = await db.getErrorCountByGP(input.reportMonth, input.reportYear);
+        
+        // Get attitude data for each GP in the team
+        const teamGPs = await db.getGamePresentersByTeam(input.teamId);
+        const attitudeData: { gpName: string; positive: number; negative: number; total: number }[] = [];
+        
+        for (const gp of teamGPs) {
+          const attitudes = await db.getAttitudeScreenshotsForGP(gp.id, input.reportMonth, input.reportYear);
+          const positive = attitudes.filter(a => a.attitudeType === 'POSITIVE').length;
+          const negative = attitudes.filter(a => a.attitudeType === 'NEGATIVE').length;
+          if (positive > 0 || negative > 0) {
+            attitudeData.push({ gpName: gp.name, positive, negative, total: positive - negative });
+          }
+        }
 
         if (stats.length === 0) {
           throw new Error("No evaluation data available for this month");
@@ -1123,31 +1139,88 @@ export const appRouter = router({
         const totalLate = attendance.reduce((sum, a) => sum + (a.attendance?.lateToWork || 0), 0);
         const totalMissed = attendance.reduce((sum, a) => sum + (a.attendance?.missedDays || 0), 0);
         const totalSick = attendance.reduce((sum, a) => sum + (a.attendance?.sickLeaves || 0), 0);
+        
+        // Build detailed GP performance data
+        const gpDetailedData = stats.map(gp => {
+          const gpErrors = errorCounts.find(e => e.gpName === gp.gpName);
+          const gpAttitude = attitudeData.find(a => a.gpName === gp.gpName);
+          const gpAttendance = attendance.find(a => a.gamePresenter.name === gp.gpName);
+          
+          return {
+            name: gp.gpName,
+            avgScore: Number(gp.avgTotalScore || 0).toFixed(1),
+            appearanceScore: Number(gp.avgAppearanceScore || 0).toFixed(1),
+            gamePerformanceScore: Number(gp.avgGamePerfScore || 0).toFixed(1),
+            evaluationCount: gp.evaluationCount,
+            errorCount: gpErrors?.errorCount || 0,
+            attitudePositive: gpAttitude?.positive || 0,
+            attitudeNegative: gpAttitude?.negative || 0,
+            attitudeTotal: gpAttitude?.total || 0,
+            lateArrivals: gpAttendance?.attendance?.lateToWork || 0,
+            missedDays: gpAttendance?.attendance?.missedDays || 0,
+          };
+        });
+        
+        // Identify GPs with most errors
+        const gpsWithErrors = gpDetailedData.filter(gp => gp.errorCount > 0)
+          .sort((a, b) => b.errorCount - a.errorCount);
+        
+        // Identify GPs with negative attitude
+        const gpsWithNegativeAttitude = gpDetailedData.filter(gp => gp.attitudeNegative > 0)
+          .sort((a, b) => b.attitudeNegative - a.attitudeNegative);
+        
+        // Identify GPs with positive attitude
+        const gpsWithPositiveAttitude = gpDetailedData.filter(gp => gp.attitudePositive > 0)
+          .sort((a, b) => b.attitudePositive - a.attitudePositive);
 
-        // Build context for LLM
+        // Build comprehensive context for LLM
         const dataContext = `
 Team: ${team.teamName}
 Floor Manager: ${team.floorManagerName}
 Period: ${monthName} ${input.reportYear}
 
-Team Statistics:
+=== EVALUATION STATISTICS ===
 - Total GPs Evaluated: ${stats.length}
-- Average Total Score: ${avgTotal.toFixed(1)}/24
+- Average Total Score: ${avgTotal.toFixed(1)}/24 (${avgTotal >= 20 ? 'Excellent' : avgTotal >= 18 ? 'Good' : avgTotal >= 16 ? 'Needs Improvement' : 'Critical'})
 - Average Appearance Score: ${avgAppearance.toFixed(1)}/12
 - Average Game Performance Score: ${avgGamePerf.toFixed(1)}/10
 
-Top Performers:
-${topPerformers.map((gp, i) => `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/24`).join('\n')}
+=== TOP PERFORMERS (by evaluation score) ===
+${topPerformers.map((gp, i) => {
+  const detail = gpDetailedData.find(d => d.name === gp.gpName);
+  return `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/24 (${detail?.evaluationCount || 0} evaluations, ${detail?.errorCount || 0} errors, attitude: +${detail?.attitudePositive || 0}/-${detail?.attitudeNegative || 0})`;
+}).join('\n')}
 
-${needsImprovement.length > 0 ? `GPs Needing Improvement (score < 18):
-${needsImprovement.map(gp => `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/24`).join('\n')}` : 'All GPs are performing well (score >= 18)'}
+${needsImprovement.length > 0 ? `=== GPs NEEDING IMPROVEMENT (score < 18) ===
+${needsImprovement.map(gp => {
+  const detail = gpDetailedData.find(d => d.name === gp.gpName);
+  return `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/24 (Appearance: ${detail?.appearanceScore}/12, Game Perf: ${detail?.gamePerformanceScore}/10)`;
+}).join('\n')}` : '=== All GPs are performing well (score >= 18) ==='}
 
-Attendance Summary:
-- Total Mistakes: ${totalMistakes}
+=== ERROR ANALYSIS ===
+- Total Team Errors: ${gpsWithErrors.reduce((sum, gp) => sum + gp.errorCount, 0)}
+${gpsWithErrors.length > 0 ? `GPs with errors:
+${gpsWithErrors.slice(0, 5).map(gp => `- ${gp.name}: ${gp.errorCount} errors`).join('\n')}` : 'No errors recorded this month'}
+
+=== ATTITUDE ANALYSIS ===
+- Total Positive Feedback: ${attitudeData.reduce((sum, a) => sum + a.positive, 0)}
+- Total Negative Feedback: ${attitudeData.reduce((sum, a) => sum + a.negative, 0)}
+${gpsWithPositiveAttitude.length > 0 ? `GPs with positive attitude feedback:
+${gpsWithPositiveAttitude.slice(0, 3).map(gp => `- ${gp.name}: +${gp.attitudePositive}`).join('\n')}` : ''}
+${gpsWithNegativeAttitude.length > 0 ? `GPs with negative attitude feedback:
+${gpsWithNegativeAttitude.slice(0, 3).map(gp => `- ${gp.name}: -${gp.attitudeNegative}`).join('\n')}` : ''}
+
+=== ATTENDANCE SUMMARY ===
+- Total Mistakes/Errors: ${totalMistakes}
 - Extra Shifts Worked: ${totalExtraShifts}
 - Late Arrivals: ${totalLate}
 - Missed Days: ${totalMissed}
 - Sick Leaves: ${totalSick}
+
+=== INDIVIDUAL GP BREAKDOWN ===
+${gpDetailedData.map(gp => 
+  `${gp.name}: Score ${gp.avgScore}/24, Errors: ${gp.errorCount}, Attitude: +${gp.attitudePositive}/-${gp.attitudeNegative}, Late: ${gp.lateArrivals}`
+).join('\n')}
 `;
 
         // Generate FM Performance text
@@ -1155,39 +1228,92 @@ Attendance Summary:
           messages: [
             {
               role: "system",
-              content: `You are a Floor Manager writing a self-evaluation for a monthly report. Write in first person, professionally but concisely. Focus on team management, studio operations, and achievements. Keep it to 3-4 sentences. Do not use bullet points.`
+              content: `You are an experienced Floor Manager writing a self-evaluation for a monthly casino operations report. 
+
+Guidelines:
+- Write in first person, professionally and concisely
+- Focus on: team management achievements, studio operations improvements, handling of challenges
+- Reference specific metrics from the data (scores, error reduction, attitude improvements)
+- Keep it to 3-4 sentences
+- Do NOT use bullet points
+- Be specific about what was accomplished this month`
             },
             {
               role: "user",
-              content: `Based on this team data, write a brief FM self-evaluation:\n${dataContext}`
+              content: `Based on this comprehensive team data, write a brief FM self-evaluation that highlights your management achievements:\n${dataContext}`
             }
           ]
         });
 
-        // Generate Goals text
+        // Generate Goals text with enhanced prompt
         const goalsResponse = await invokeLLM({
           messages: [
             {
               role: "system",
-              content: `You are a Floor Manager writing about goals for a monthly report. Write professionally and concisely. Include 2-3 specific goals based on team performance data. Focus on areas that need improvement and maintaining strengths. Keep it to 3-4 sentences.`
+              content: `You are an experienced Floor Manager creating SMART goals for a monthly casino operations report.
+
+Guidelines for writing optimal Team Goals:
+1. Analyze the data to identify the TOP 3 priority areas:
+   - GPs with low evaluation scores (< 18/24) need improvement plans
+   - GPs with high error counts need error reduction targets
+   - GPs with negative attitude feedback need behavior coaching
+   - Attendance issues (late arrivals, missed days) need addressing
+
+2. For each goal, be SPECIFIC:
+   - Name the GPs who need improvement (if applicable)
+   - Set measurable targets (e.g., "reduce errors by 50%", "improve score to 19+")
+   - Focus on actionable improvements
+
+3. Balance the goals:
+   - 1 goal for maintaining/rewarding top performers
+   - 1-2 goals for addressing weaknesses (errors, scores, attitude)
+   - Consider team-wide improvements if no individual issues
+
+4. Format: Write 3-4 concise sentences. Do NOT use bullet points.
+
+IMPORTANT: Be specific with names and numbers from the data. Generic goals are not acceptable.`
             },
             {
               role: "user",
-              content: `Based on this team data, write brief goals for the team:\n${dataContext}`
+              content: `Based on this comprehensive team performance data, create specific, actionable Team Goals for next month:\n${dataContext}`
             }
           ]
         });
 
-        // Generate Team Overview text
+        // Generate Team Overview text with enhanced prompt
         const teamOverviewResponse = await invokeLLM({
           messages: [
             {
               role: "system",
-              content: `You are a Floor Manager writing a team overview for a monthly report. Write professionally and concisely. Summarize team performance, highlight top performers, mention any concerns, and note attendance patterns. Keep it to 4-5 sentences.`
+              content: `You are an experienced Floor Manager writing a comprehensive Team Overview for a monthly casino operations report.
+
+Guidelines for writing an optimal Team Overview:
+1. Start with overall team performance assessment:
+   - Team average score and what it indicates (Excellent/Good/Needs Work)
+   - Compare appearance vs game performance scores
+
+2. Highlight achievements:
+   - Name top 2-3 performers with their scores
+   - Mention any GPs with positive attitude feedback
+   - Note extra shifts or exceptional dedication
+
+3. Address concerns honestly:
+   - Name GPs with scores below 18 and their specific issues
+   - Mention error counts for GPs with multiple errors
+   - Note any negative attitude feedback recipients
+   - Address attendance issues (late arrivals, missed days)
+
+4. Provide balanced perspective:
+   - Acknowledge both strengths and areas for improvement
+   - Be factual and data-driven
+
+5. Format: Write 4-5 concise sentences. Do NOT use bullet points.
+
+IMPORTANT: Use specific names and numbers from the data. A good overview is honest, specific, and actionable.`
             },
             {
               role: "user",
-              content: `Based on this team data, write a brief team overview:\n${dataContext}`
+              content: `Based on this comprehensive team performance data, write a detailed Team Overview that accurately reflects the team's performance this month:\n${dataContext}`
             }
           ]
         });
@@ -1252,6 +1378,22 @@ Attendance Summary:
         const stats = await db.getGPMonthlyStats(input.teamId, input.reportYear, input.reportMonth);
         const attendance = await db.getAttendanceByTeamMonth(input.teamId, input.reportMonth, input.reportYear);
         const monthName = MONTH_NAMES[input.reportMonth - 1];
+        
+        // Get error counts for each GP
+        const errorCounts = await db.getErrorCountByGP(input.reportMonth, input.reportYear);
+        
+        // Get attitude data for each GP in the team
+        const teamGPs = await db.getGamePresentersByTeam(input.teamId);
+        const attitudeData: { gpName: string; positive: number; negative: number; total: number }[] = [];
+        
+        for (const gp of teamGPs) {
+          const attitudes = await db.getAttitudeScreenshotsForGP(gp.id, input.reportMonth, input.reportYear);
+          const positive = attitudes.filter(a => a.attitudeType === 'POSITIVE').length;
+          const negative = attitudes.filter(a => a.attitudeType === 'NEGATIVE').length;
+          if (positive > 0 || negative > 0) {
+            attitudeData.push({ gpName: gp.name, positive, negative, total: positive - negative });
+          }
+        }
 
         // Auto-generate content if fields are empty and autoFill is enabled
         let fmPerformance = input.fmPerformance || null;
@@ -1274,29 +1416,90 @@ Attendance Summary:
           const totalMistakes = attendance.reduce((sum, a) => sum + (a.monthlyStats?.mistakes || a.attendance?.mistakes || 0), 0);
           const totalExtraShifts = attendance.reduce((sum, a) => sum + (a.attendance?.extraShifts || 0), 0);
           const totalLate = attendance.reduce((sum, a) => sum + (a.attendance?.lateToWork || 0), 0);
+          const totalMissed = attendance.reduce((sum, a) => sum + (a.attendance?.missedDays || 0), 0);
+          const totalSick = attendance.reduce((sum, a) => sum + (a.attendance?.sickLeaves || 0), 0);
+          
+          // Build detailed GP performance data
+          const gpDetailedData = stats.map(gp => {
+            const gpErrors = errorCounts.find(e => e.gpName === gp.gpName);
+            const gpAttitude = attitudeData.find(a => a.gpName === gp.gpName);
+            const gpAttendance = attendance.find(a => a.gamePresenter.name === gp.gpName);
+            
+            return {
+              name: gp.gpName,
+              avgScore: Number(gp.avgTotalScore || 0).toFixed(1),
+              appearanceScore: Number(gp.avgAppearanceScore || 0).toFixed(1),
+              gamePerformanceScore: Number(gp.avgGamePerfScore || 0).toFixed(1),
+              evaluationCount: gp.evaluationCount,
+              errorCount: gpErrors?.errorCount || 0,
+              attitudePositive: gpAttitude?.positive || 0,
+              attitudeNegative: gpAttitude?.negative || 0,
+              attitudeTotal: gpAttitude?.total || 0,
+              lateArrivals: gpAttendance?.attendance?.lateToWork || 0,
+              missedDays: gpAttendance?.attendance?.missedDays || 0,
+            };
+          });
+          
+          // Identify GPs with most errors
+          const gpsWithErrors = gpDetailedData.filter(gp => gp.errorCount > 0)
+            .sort((a, b) => b.errorCount - a.errorCount);
+          
+          // Identify GPs with negative attitude
+          const gpsWithNegativeAttitude = gpDetailedData.filter(gp => gp.attitudeNegative > 0)
+            .sort((a, b) => b.attitudeNegative - a.attitudeNegative);
+          
+          // Identify GPs with positive attitude
+          const gpsWithPositiveAttitude = gpDetailedData.filter(gp => gp.attitudePositive > 0)
+            .sort((a, b) => b.attitudePositive - a.attitudePositive);
 
-          // Build context for LLM
+          // Build comprehensive context for LLM
           const dataContext = `
 Team: ${team.teamName}
 Floor Manager: ${team.floorManagerName}
 Period: ${monthName} ${input.reportYear}
 
-Team Statistics:
+=== EVALUATION STATISTICS ===
 - Total GPs Evaluated: ${stats.length}
-- Average Total Score: ${avgTotal.toFixed(1)}/24
+- Average Total Score: ${avgTotal.toFixed(1)}/24 (${avgTotal >= 20 ? 'Excellent' : avgTotal >= 18 ? 'Good' : avgTotal >= 16 ? 'Needs Improvement' : 'Critical'})
 - Average Appearance Score: ${avgAppearance.toFixed(1)}/12
 - Average Game Performance Score: ${avgGamePerf.toFixed(1)}/10
 
-Top Performers:
-${topPerformers.map((gp, i) => `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/24`).join('\n')}
+=== TOP PERFORMERS (by evaluation score) ===
+${topPerformers.map((gp, i) => {
+  const detail = gpDetailedData.find(d => d.name === gp.gpName);
+  return `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/24 (${detail?.evaluationCount || 0} evaluations, ${detail?.errorCount || 0} errors, attitude: +${detail?.attitudePositive || 0}/-${detail?.attitudeNegative || 0})`;
+}).join('\n')}
 
-${needsImprovement.length > 0 ? `GPs Needing Improvement (score < 18):
-${needsImprovement.map(gp => `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/24`).join('\n')}` : 'All GPs are performing well (score >= 18)'}
+${needsImprovement.length > 0 ? `=== GPs NEEDING IMPROVEMENT (score < 18) ===
+${needsImprovement.map(gp => {
+  const detail = gpDetailedData.find(d => d.name === gp.gpName);
+  return `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/24 (Appearance: ${detail?.appearanceScore}/12, Game Perf: ${detail?.gamePerformanceScore}/10)`;
+}).join('\n')}` : '=== All GPs are performing well (score >= 18) ==='}
 
-Attendance Summary:
-- Total Mistakes: ${totalMistakes}
+=== ERROR ANALYSIS ===
+- Total Team Errors: ${gpsWithErrors.reduce((sum, gp) => sum + gp.errorCount, 0)}
+${gpsWithErrors.length > 0 ? `GPs with errors:
+${gpsWithErrors.slice(0, 5).map(gp => `- ${gp.name}: ${gp.errorCount} errors`).join('\n')}` : 'No errors recorded this month'}
+
+=== ATTITUDE ANALYSIS ===
+- Total Positive Feedback: ${attitudeData.reduce((sum, a) => sum + a.positive, 0)}
+- Total Negative Feedback: ${attitudeData.reduce((sum, a) => sum + a.negative, 0)}
+${gpsWithPositiveAttitude.length > 0 ? `GPs with positive attitude feedback:
+${gpsWithPositiveAttitude.slice(0, 3).map(gp => `- ${gp.name}: +${gp.attitudePositive}`).join('\n')}` : ''}
+${gpsWithNegativeAttitude.length > 0 ? `GPs with negative attitude feedback:
+${gpsWithNegativeAttitude.slice(0, 3).map(gp => `- ${gp.name}: -${gp.attitudeNegative}`).join('\n')}` : ''}
+
+=== ATTENDANCE SUMMARY ===
+- Total Mistakes/Errors: ${totalMistakes}
 - Extra Shifts Worked: ${totalExtraShifts}
 - Late Arrivals: ${totalLate}
+- Missed Days: ${totalMissed}
+- Sick Leaves: ${totalSick}
+
+=== INDIVIDUAL GP BREAKDOWN ===
+${gpDetailedData.map(gp => 
+  `${gp.name}: Score ${gp.avgScore}/24, Errors: ${gp.errorCount}, Attitude: +${gp.attitudePositive}/-${gp.attitudeNegative}, Late: ${gp.lateArrivals}`
+).join('\n')}
 `;
 
           // Auto-generate Team Overview if empty
@@ -1306,17 +1509,35 @@ Attendance Summary:
                 messages: [
                   {
                     role: "system",
-                    content: `You are a Floor Manager writing a team overview for a monthly report. Write professionally and concisely in 5-7 sentences. Include:
-1. Overall team performance summary with specific numbers
-2. Recognition of top performers by name
-3. Areas where the team excelled
-4. Any concerns or challenges observed
-5. Attendance patterns and their impact
-Do not use bullet points or numbered lists. Write in flowing paragraphs.`
+                    content: `You are an experienced Floor Manager writing a comprehensive Team Overview for a monthly casino operations report.
+
+Guidelines for writing an optimal Team Overview:
+1. Start with overall team performance assessment:
+   - Team average score and what it indicates (Excellent/Good/Needs Work)
+   - Compare appearance vs game performance scores
+
+2. Highlight achievements:
+   - Name top 2-3 performers with their scores
+   - Mention any GPs with positive attitude feedback
+   - Note extra shifts or exceptional dedication
+
+3. Address concerns honestly:
+   - Name GPs with scores below 18 and their specific issues
+   - Mention error counts for GPs with multiple errors
+   - Note any negative attitude feedback recipients
+   - Address attendance issues (late arrivals, missed days)
+
+4. Provide balanced perspective:
+   - Acknowledge both strengths and areas for improvement
+   - Be factual and data-driven
+
+5. Format: Write 4-5 concise sentences. Do NOT use bullet points.
+
+IMPORTANT: Use specific names and numbers from the data. A good overview is honest, specific, and actionable.`
                   },
                   {
                     role: "user",
-                    content: `Based on this team data, write a comprehensive team overview:\n${dataContext}`
+                    content: `Based on this comprehensive team performance data, write a detailed Team Overview that accurately reflects the team's performance this month:\n${dataContext}`
                   }
                 ]
               });
@@ -1334,17 +1555,32 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs.`
                 messages: [
                   {
                     role: "system",
-                    content: `You are a Floor Manager writing team goals for a monthly report. Write professionally in 4-6 sentences. Include:
-1. 2-3 specific, measurable goals based on the data analysis
-2. Focus on improving weak areas identified in the data
-3. Goals for maintaining or building on current strengths
-4. Specific targets (e.g., "improve average appearance score from X to Y")
-5. Action items for achieving these goals
-Do not use bullet points or numbered lists. Write in flowing paragraphs with clear objectives.`
+                    content: `You are an experienced Floor Manager creating SMART goals for a monthly casino operations report.
+
+Guidelines for writing optimal Team Goals:
+1. Analyze the data to identify the TOP 3 priority areas:
+   - GPs with low evaluation scores (< 18/24) need improvement plans
+   - GPs with high error counts need error reduction targets
+   - GPs with negative attitude feedback need behavior coaching
+   - Attendance issues (late arrivals, missed days) need addressing
+
+2. For each goal, be SPECIFIC:
+   - Name the GPs who need improvement (if applicable)
+   - Set measurable targets (e.g., "reduce errors by 50%", "improve score to 19+")
+   - Focus on actionable improvements
+
+3. Balance the goals:
+   - 1 goal for maintaining/rewarding top performers
+   - 1-2 goals for addressing weaknesses (errors, scores, attitude)
+   - Consider team-wide improvements if no individual issues
+
+4. Format: Write 3-4 concise sentences. Do NOT use bullet points.
+
+IMPORTANT: Be specific with names and numbers from the data. Generic goals are not acceptable.`
                   },
                   {
                     role: "user",
-                    content: `Based on this team data, write specific and actionable team goals:\n${dataContext}`
+                    content: `Based on this comprehensive team performance data, create specific, actionable Team Goals for next month:\n${dataContext}`
                   }
                 ]
               });
