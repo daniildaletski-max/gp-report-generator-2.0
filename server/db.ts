@@ -648,6 +648,21 @@ export async function createGpError(data: InsertGpError): Promise<GpError> {
   return newError[0];
 }
 
+export async function deleteGpErrorsByMonthYear(month: number, year: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
+
+  await db.delete(gpErrors).where(
+    and(
+      gte(gpErrors.errorDate, startDate),
+      lte(gpErrors.errorDate, endDate)
+    )
+  );
+}
+
 export async function getErrorCountByGP(month: number, year: number) {
   const db = await getDb();
   if (!db) return [];

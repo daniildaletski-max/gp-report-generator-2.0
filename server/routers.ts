@@ -2597,6 +2597,9 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           uploadedById: ctx.user.id,
         });
 
+        // Delete any existing error records for this month/year to prevent duplicates
+        await db.deleteGpErrorsByMonthYear(input.month, input.year);
+        
         // Update GP mistakes directly from parsed error counts
         const notFoundGPs: string[] = [];
         const updatedGPs: string[] = [];

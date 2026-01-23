@@ -1796,3 +1796,10 @@
 - [x] Fix display of error records without descriptions showing "Error recorded" placeholder
 - [x] Deleted old invalid records without descriptions from database
 - [x] Added filter in GPPortal to only show errors with valid descriptions
+
+
+## Bug Fix - Duplicate Error Records
+
+- [x] Fix duplicate error records - Alicia Bel-Haj shows 12 errors instead of 6
+- [x] Added deleteGpErrorsByMonthYear function to clear existing records before upload
+- [x] Cleared existing duplicate records from database

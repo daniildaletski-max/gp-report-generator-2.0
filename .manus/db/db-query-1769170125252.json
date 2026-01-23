@@ -1,0 +1,9 @@
+{
+  "query": "DELETE t1 FROM gp_errors t1 INNER JOIN gp_errors t2 WHERE t1.id > t2.id AND t1.gpName = t2.gpName AND t1.errorDescription = t2.errorDescription AND t1.errorDate = t2.errorDate;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute DELETE t1 FROM gp_errors t1 INNER JOIN gp_errors t2 WHERE t1.id > t2.id AND t1.gpName = t2.gpName AND t1.errorDescription = t2.errorDescription AND t1.errorDate = t2.errorDate;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 62
+}

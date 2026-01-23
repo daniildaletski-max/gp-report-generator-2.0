@@ -1,0 +1,15 @@
+{
+  "query": "SELECT id, fileName, createdAt FROM error_files ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT id, fileName, createdAt FROM error_files ORDER BY id;",
+  "rows": [
+    {
+      "id": "90002",
+      "fileName": "Copy of 01. January Playgon Errors File.xlsx .xlsx",
+      "createdAt": "2026-01-23 12:04:59"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfileName\tcreatedAt\n90002\tCopy of 01. January Playgon Errors File.xlsx .xlsx\t2026-01-23 12:04:59\n",
+  "stderr": "",
+  "execution_time_ms": 50
+}

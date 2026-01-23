@@ -1,0 +1,94 @@
+{
+  "query": "SELECT id, gpName, errorDescription, errorDate, errorFileId FROM gp_errors WHERE gpName LIKE '%Alicia%' ORDER BY errorDate, errorDescription;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT id, gpName, errorDescription, errorDate, errorFileId FROM gp_errors WHERE gpName LIKE '%Alicia%' ORDER BY errorDate, errorDescription;",
+  "rows": [
+    {
+      "id": "60036",
+      "gpName": "Alicia Bel-Haj",
+      "errorDescription": "Ball did not make 4 revolutions",
+      "errorDate": "2026-01-02 05:00:00",
+      "errorFileId": "90001"
+    },
+    {
+      "id": "60037",
+      "gpName": "Alicia Bel-Haj",
+      "errorDescription": "Ball did not make 4 revolutions",
+      "errorDate": "2026-01-02 05:00:00",
+      "errorFileId": "90001"
+    },
+    {
+      "id": "60241",
+      "gpName": "Alicia Bel-Haj",
+      "errorDescription": "Ball did not make 4 revolutions",
+      "errorDate": "2026-01-02 05:00:00",
+      "errorFileId": "90002"
+    },
+    {
+      "id": "60242",
+      "gpName": "Alicia Bel-Haj",
+      "errorDescription": "Ball did not make 4 revolutions",
+      "errorDate": "2026-01-02 05:00:00",
+      "errorFileId": "90002"
+    },
+    {
+      "id": "60039",
+      "gpName": "Alicia Bel-Haj",
+      "errorDescription": "Ball did not make 4 revolutions",
+      "errorDate": "2026-01-03 05:00:00",
+      "errorFileId": "90001"
+    },
+    {
+      "id": "60244",
+      "gpName": "Alicia Bel-Haj",
+      "errorDescription": "Ball did not make 4 revolutions",
+      "errorDate": "2026-01-03 05:00:00",
+      "errorFileId": "90002"
+    },
+    {
+      "id": "60038",
+      "gpName": "Alicia Bel-Haj",
+      "errorDescription": "GP doesn't wait for 3 seconds after the card change which causes card not scanned/cards scanned in wrong order",
+      "errorDate": "2026-01-03 05:00:00",
+      "errorFileId": "90001"
+    },
+    {
+      "id": "60243",
+      "gpName": "Alicia Bel-Haj",
+      "errorDescription": "GP doesn't wait for 3 seconds after the card change which causes card not scanned/cards scanned in wrong order",
+      "errorDate": "2026-01-03 05:00:00",
+      "errorFileId": "90002"
+    },
+    {
+      "id": "60040",
+      "gpName": "Alicia Bel-Haj",
+      "errorDescription": "Ball did not make 4 revolutions",
+      "errorDate": "2026-01-04 05:00:00",
+      "errorFileId": "90001"
+    },
+    {
+      "id": "60245",
+      "gpName": "Alicia Bel-Haj",
+      "errorDescription": "Ball did not make 4 revolutions",
+      "errorDate": "2026-01-04 05:00:00",
+      "errorFileId": "90002"
+    },
+    {
+      "id": "60041",
+      "gpName": "Alicia Bel-Haj",
+      "errorDescription": "Dealer drops cards in shoe/table while changing cards.",
+      "errorDate": "2026-01-08 05:00:00",
+      "errorFileId": "90001"
+    },
+    {
+      "id": "60246",
+      "gpName": "Alicia Bel-Haj",
+      "errorDescription": "Dealer drops cards in shoe/table while changing cards.",
+      "errorDate": "2026-01-08 05:00:00",
+      "errorFileId": "90002"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tgpName\terrorDescription\terrorDate\terrorFileId\n60036\tAlicia Bel-Haj\tBall did not make 4 revolutions\t2026-01-02 05:00:00\t90001\n60037\tAlicia Bel-Haj\tBall did not make 4 revolutions\t2026-01-02 05:00:00\t90001\n60241\tAlicia Bel-Haj\tBall did not make 4 revolutions\t2026-01-02 05:00:00\t90002\n60242\tAlicia Bel-Haj\tBall did not make 4 revolutions\t2026-01-02 05:00:00\t90002\n60039\tAlicia Bel-Haj\tBall did not make 4 revolutions\t2026-01-03 05:00:00\t90001\n60244\tAlicia Bel-Haj\tBall did not make 4 revolutions\t2026-01-03 05:00:00\t90002\n60038\tAlicia Bel-Haj\tGP doesn't wait for 3 seconds after the card change which causes card not scanned/cards scanned in wrong order\t2026-01-03 05:00:00\t90001\n60243\tAlicia Bel-Haj\tGP doesn't wait for 3 seconds after the card change which causes card not scanned/cards scanned in wrong order\t2026-01-03 05:00:00\t90002\n60040\tAlicia Bel-Haj\tBall did not make 4 revolutions\t2026-01-04 05:00:00\t90001\n60245\tAlicia Bel-Haj\tBall did not make 4 revolutions\t2026-01-04 05:00:00\t90002\n60041\tAlicia Bel-Haj\tDealer drops cards in shoe/table while changing cards.\t2026-01-08 05:00:00\t90001\n60246\tAlicia Bel-Haj\tDealer drops cards in shoe/table while changing cards.\t2026-01-08 05:00:00\t90002\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

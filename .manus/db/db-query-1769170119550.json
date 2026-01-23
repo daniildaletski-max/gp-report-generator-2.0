@@ -1,0 +1,18 @@
+{
+  "query": "SELECT errorFileId, COUNT(*) as cnt FROM gp_errors GROUP BY errorFileId;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT errorFileId, COUNT(*) as cnt FROM gp_errors GROUP BY errorFileId;",
+  "rows": [
+    {
+      "errorFileId": "90001",
+      "cnt": "205"
+    },
+    {
+      "errorFileId": "90002",
+      "cnt": "205"
+    }
+  ],
+  "messages": [],
+  "stdout": "errorFileId\tcnt\n90001\t205\n90002\t205\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}
