@@ -122,23 +122,23 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6 min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen bg-[#0a0a0f]">
       {/* Header with Month/Year Selector */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold gradient-text">Dashboard</h1>
-          <p className="text-[#94A2D6] mt-1">Team performance overview and analytics</p>
+          <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+          <p className="text-white/50 mt-1">Team performance overview and analytics</p>
         </div>
         <div className="flex items-center gap-3">
           <Select
             value={selectedMonth.toString()}
             onValueChange={(v) => setSelectedMonth(Number(v))}
           >
-            <SelectTrigger className="w-44 glass-input rounded-xl border-0">
-              <Calendar className="h-4 w-4 mr-2 text-primary" />
+            <SelectTrigger className="w-44 bg-white/5 border-white/10 rounded-xl text-white">
+              <Calendar className="h-4 w-4 mr-2 text-white/60" />
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="glass-strong rounded-xl border-0">
+            <SelectContent className="bg-[#1a1a2e] border-white/10 rounded-xl">
               {MONTHS.map((month, idx) => (
                 <SelectItem key={idx} value={(idx + 1).toString()}>
                   {month}
@@ -150,10 +150,10 @@ export default function Dashboard() {
             value={selectedYear.toString()}
             onValueChange={(v) => setSelectedYear(Number(v))}
           >
-            <SelectTrigger className="w-28 glass-input rounded-xl border-0">
+            <SelectTrigger className="w-28 bg-white/5 border-white/10 rounded-xl text-white">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="glass-strong rounded-xl border-0">
+            <SelectContent className="bg-[#1a1a2e] border-white/10 rounded-xl">
               {[2024, 2025, 2026].map((year) => (
                 <SelectItem key={year} value={year.toString()}>
                   {year}
@@ -165,7 +165,7 @@ export default function Dashboard() {
       </div>
 
       {/* Quick Actions Bar */}
-      <div className="glass-card p-5 rounded-2xl">
+      <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/5">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3">
@@ -203,8 +203,8 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Cards Row 1 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 stagger-children">
-        <div className="glass-card p-6 rounded-2xl group">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 group hover:border-white/10 transition-all">
           <div className="flex items-start justify-between mb-4">
             <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 group-hover:scale-110 transition-transform">
               <Users className="h-6 w-6 text-blue-500" />
@@ -215,10 +215,10 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground">Game Presenters</p>
         </div>
 
-        <div className="glass-card p-6 rounded-2xl group">
+        <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 group hover:border-white/10 transition-all">
           <div className="flex items-start justify-between mb-4">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 group-hover:scale-110 transition-transform">
-              <FileCheck className="h-6 w-6 text-green-500" />
+            <div className="p-3 rounded-xl bg-emerald-500/10 group-hover:scale-110 transition-transform">
+              <FileCheck className="h-6 w-6 text-emerald-400" />
             </div>
             <Sparkles className="h-4 w-4 text-green-500/50" />
           </div>
@@ -226,10 +226,10 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground">Total Evaluations</p>
         </div>
 
-        <div className="glass-card p-6 rounded-2xl group">
+        <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 group hover:border-white/10 transition-all">
           <div className="flex items-start justify-between mb-4">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 group-hover:scale-110 transition-transform">
-              <TrendingUp className="h-6 w-6 text-amber-500" />
+            <div className="p-3 rounded-xl bg-amber-500/10 group-hover:scale-110 transition-transform">
+              <TrendingUp className="h-6 w-6 text-amber-400" />
             </div>
             <Sparkles className="h-4 w-4 text-amber-500/50" />
           </div>
@@ -240,10 +240,10 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground">Team Average</p>
         </div>
 
-        <div className="glass-card p-6 rounded-2xl group">
+        <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 group hover:border-white/10 transition-all">
           <div className="flex items-start justify-between mb-4">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 group-hover:scale-110 transition-transform">
-              <FileSpreadsheet className="h-6 w-6 text-purple-500" />
+            <div className="p-3 rounded-xl bg-purple-500/10 group-hover:scale-110 transition-transform">
+              <FileSpreadsheet className="h-6 w-6 text-purple-400" />
             </div>
             <Sparkles className="h-4 w-4 text-purple-500/50" />
           </div>
@@ -255,7 +255,7 @@ export default function Dashboard() {
       {/* Top Performers & Performance Distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Top Performers */}
-        <div className="glass-card rounded-2xl overflow-hidden">
+        <div className="rounded-2xl overflow-hidden bg-white/[0.02] border border-white/5">
           <div className="p-5 border-b border-border/30">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20">
@@ -296,7 +296,7 @@ export default function Dashboard() {
         </div>
 
         {/* Performance Distribution Pie Chart */}
-        <div className="glass-card rounded-2xl overflow-hidden lg:col-span-2">
+        <div className="rounded-2xl overflow-hidden lg:col-span-2 bg-white/[0.02] border border-white/5">
           <div className="p-5 border-b border-border/30">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20">
@@ -359,7 +359,7 @@ export default function Dashboard() {
 
       {/* Low Performance Alert */}
       {lowPerformers.length > 0 && (
-        <div className="glass-card rounded-2xl p-5 border-amber-500/30 bg-amber-500/5">
+        <div className="rounded-2xl p-5 bg-amber-500/5 border border-amber-500/20">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2 rounded-xl bg-amber-500/20">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
@@ -382,7 +382,7 @@ export default function Dashboard() {
       )}
 
       {/* Monthly Performance Overview Chart */}
-      <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="rounded-2xl overflow-hidden bg-white/[0.02] border border-white/5">
         <div className="p-5 border-b border-border/30">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20">
@@ -452,7 +452,7 @@ export default function Dashboard() {
       </div>
 
       {/* Monthly Statistics Table */}
-      <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="rounded-2xl overflow-hidden bg-white/[0.02] border border-white/5">
         <div className="p-5 border-b border-border/30">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20">

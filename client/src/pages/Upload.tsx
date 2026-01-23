@@ -485,15 +485,15 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6 min-h-screen">
+    <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0f]">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold gradient-text">Upload Screenshots</h1>
-          <p className="text-[#94A2D6] mt-1">{getTabDescription()}</p>
+          <h1 className="text-3xl font-bold text-white">Upload Screenshots</h1>
+          <p className="text-white/50 mt-1">{getTabDescription()}</p>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 glass-subtle px-3 py-2 rounded-xl">
+          <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl">
             <Switch
               id="auto-process"
               checked={autoProcess}
@@ -507,7 +507,7 @@ export default function UploadPage() {
             variant="ghost"
             size="sm"
             onClick={() => setShowKeyboardHints(prev => !prev)}
-            className="glass-button rounded-xl border-0"
+            className="bg-white/5 border border-white/10 rounded-xl text-white/70 hover:text-white hover:bg-white/10"
           >
             <Keyboard className="h-4 w-4 mr-1" />
             <span className="hidden sm:inline">Shortcuts</span>
@@ -517,7 +517,7 @@ export default function UploadPage() {
 
       {/* Keyboard Hints */}
       {showKeyboardHints && (
-        <div className="glass-card p-4 rounded-2xl">
+        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
           <div className="flex flex-wrap gap-4 text-sm">
             {[
               { key: "Ctrl+V", desc: "Paste from clipboard" },
@@ -537,7 +537,7 @@ export default function UploadPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as UploadType)}>
-        <TabsList className="glass-strong rounded-xl p-1 border-0 w-full sm:w-auto">
+        <TabsList className="bg-white/5 border border-white/10 rounded-xl p-1 w-full sm:w-auto">
           <TabsTrigger value="evaluations" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white/20 data-[state=active]:shadow-lg">
             <FileCheck className="h-4 w-4" />
             <span>Evaluations</span>
@@ -551,7 +551,7 @@ export default function UploadPage() {
         {/* Stats Cards */}
         {stats.success > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
-            <div className="glass-card p-4 rounded-2xl">
+            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-green-500/20">
                   <CheckCircle className="h-6 w-6 text-green-500" />
@@ -562,10 +562,10 @@ export default function UploadPage() {
                 </div>
               </div>
             </div>
-            <div className="glass-card p-4 rounded-2xl">
+            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-blue-500/20">
-                  <Clock className="h-6 w-6 text-blue-500" />
+                <div className="p-2 rounded-xl bg-blue-500/10">
+                  <Clock className="h-6 w-6 text-blue-400" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{stats.avgTime.toFixed(1)}s</p>
@@ -575,10 +575,10 @@ export default function UploadPage() {
             </div>
             {activeTab === "evaluations" && "avgScore" in stats && (
               <>
-                <div className="glass-card p-4 rounded-2xl">
+                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-amber-500/20">
-                      <Star className="h-6 w-6 text-amber-500" />
+                    <div className="p-2 rounded-xl bg-amber-500/10">
+                      <Star className="h-6 w-6 text-amber-400" />
                     </div>
                     <div>
                       <p className="text-2xl font-bold">{(stats as any).avgScore.toFixed(1)}</p>
@@ -586,10 +586,10 @@ export default function UploadPage() {
                     </div>
                   </div>
                 </div>
-                <div className="glass-card p-4 rounded-2xl">
+                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-purple-500/20">
-                      <User className="h-6 w-6 text-purple-500" />
+                    <div className="p-2 rounded-xl bg-purple-500/10">
+                      <User className="h-6 w-6 text-purple-400" />
                     </div>
                     <div>
                       <p className="text-2xl font-bold">{(stats as any).newGPs}</p>
