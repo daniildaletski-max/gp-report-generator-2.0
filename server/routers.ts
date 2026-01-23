@@ -7,6 +7,7 @@ import { z } from "zod";
 import { invokeLLM } from "./_core/llm";
 import { storagePut } from "./storage";
 import { notifyOwner } from "./_core/notification";
+import { sendReportEmail } from "./_core/email";
 import { nanoid } from "nanoid";
 import * as db from "./db";
 import ExcelJS from "exceljs";
@@ -2266,9 +2267,27 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           status: "finalized",
         });
 
+        // Send email with report to user if they have an email
+        let emailSent = false;
+        if (ctx.user.email) {
+          emailSent = await sendReportEmail({
+            userEmail: ctx.user.email,
+            userName: ctx.user.name || 'Floor Manager',
+            teamName,
+            monthName,
+            year: report.reportYear,
+            excelUrl,
+          });
+          console.log(`[exportToExcel] Email sent to ${ctx.user.email}: ${emailSent}`);
+        } else {
+          console.log(`[exportToExcel] User has no email configured, skipping email notification`);
+        }
+
         return {
           success: true,
           excelUrl,
+          emailSent,
+          emailAddress: ctx.user.email || null,
         };
       }),
 
@@ -2470,10 +2489,26 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
 
           console.log(`[exportToGoogleSheets] Uploaded to Google Drive: ${googleSheetsUrl}`);
 
+          // Send email with report to user if they have an email
+          let emailSent = false;
+          if (ctx.user.email) {
+            emailSent = await sendReportEmail({
+              userEmail: ctx.user.email,
+              userName: ctx.user.name || 'Floor Manager',
+              teamName,
+              monthName,
+              year: report.reportYear,
+              excelUrl: googleSheetsUrl,
+            });
+            console.log(`[exportToGoogleSheets] Email sent to ${ctx.user.email}: ${emailSent}`);
+          }
+
           return {
             success: true,
             googleSheetsUrl,
-            message: `Report with chart uploaded to Google Drive: ${gdrivePath}/${fileName}`
+            message: `Report with chart uploaded to Google Drive: ${gdrivePath}/${fileName}`,
+            emailSent,
+            emailAddress: ctx.user.email || null,
           };
         } catch (error) {
           console.error('[exportToGoogleSheets] Google Drive upload failed:', error);

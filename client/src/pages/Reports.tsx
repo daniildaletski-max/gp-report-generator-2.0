@@ -233,7 +233,22 @@ export default function ReportsPage() {
     setIsExporting(reportId);
     try {
       const result = await exportMutation.mutateAsync({ reportId });
-      toast.success("Excel file generated with embedded chart");
+      
+      // Show success message with email status
+      if (result.emailSent && result.emailAddress) {
+        toast.success(
+          <div className="flex flex-col gap-1">
+            <span>Excel file generated with embedded chart</span>
+            <span className="text-xs text-green-200">📧 Report sent to {result.emailAddress}</span>
+          </div>,
+          { duration: 5000 }
+        );
+      } else if (result.emailAddress) {
+        toast.success("Excel file generated. Email delivery pending...");
+      } else {
+        toast.success("Excel file generated with embedded chart");
+      }
+      
       window.open(result.excelUrl, "_blank");
       refetch();
     } catch (error: any) {
@@ -247,7 +262,20 @@ export default function ReportsPage() {
     setIsExportingGoogleSheets(reportId);
     try {
       const result = await exportGoogleSheetsMutation.mutateAsync({ reportId });
-      toast.success("Report uploaded to Google Drive!");
+      
+      // Show success message with email status
+      if (result.emailSent && result.emailAddress) {
+        toast.success(
+          <div className="flex flex-col gap-1">
+            <span>Report uploaded to Google Drive!</span>
+            <span className="text-xs text-green-200">📧 Report sent to {result.emailAddress}</span>
+          </div>,
+          { duration: 5000 }
+        );
+      } else {
+        toast.success("Report uploaded to Google Drive!");
+      }
+      
       window.open(result.googleSheetsUrl, "_blank");
       refetch();
     } catch (error: any) {
