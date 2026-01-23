@@ -736,17 +736,25 @@ export default function GPPortal() {
                       {/* Error Details */}
                       <div className="flex-1 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
+                          {/* Source badge */}
+                          <Badge className={`text-xs ${
+                            error.source === 'excel' ? 'bg-blue-500/30 text-blue-300' : 'bg-purple-500/30 text-purple-300'
+                          }`}>
+                            {error.source === 'excel' ? 'Excel' : 'Screenshot'}
+                          </Badge>
                           <Badge className={`text-xs ${
                             error.severity === 'critical' ? 'bg-red-500/30 text-red-300' :
                             error.severity === 'high' ? 'bg-orange-500/30 text-orange-300' :
                             error.severity === 'medium' ? 'bg-yellow-500/30 text-yellow-300' :
                             'bg-green-500/30 text-green-300'
                           }`}>
-                            {error.severity?.toUpperCase()}
+                            {error.severity?.toUpperCase() || 'MEDIUM'}
                           </Badge>
-                          <Badge variant="outline" className="text-xs border-blue-400/30 text-blue-200">
-                            {error.errorType?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                          </Badge>
+                          {error.errorType && error.errorType !== 'excel_error' && (
+                            <Badge variant="outline" className="text-xs border-blue-400/30 text-blue-200">
+                              {error.errorType?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                            </Badge>
+                          )}
                           {error.gameType && (
                             <Badge variant="outline" className="text-xs border-purple-400/30 text-purple-200">
                               {error.gameType}
@@ -754,7 +762,7 @@ export default function GPPortal() {
                           )}
                         </div>
                         
-                        <p className="text-sm text-white">{error.errorDescription}</p>
+                        <p className="text-sm text-white">{error.errorDescription || 'Error recorded'}</p>
                         
                         {error.errorCategory && (
                           <p className="text-xs text-blue-200/60">Category: {error.errorCategory}</p>
@@ -765,7 +773,8 @@ export default function GPPortal() {
                         )}
                         
                         <p className="text-xs text-blue-200/40">
-                          {error.createdAt ? format(new Date(error.createdAt), "MMM d, yyyy 'at' HH:mm") : ''}
+                          {error.errorDate ? format(new Date(error.errorDate), "MMM d, yyyy") : 
+                           error.createdAt ? format(new Date(error.createdAt), "MMM d, yyyy 'at' HH:mm") : ''}
                         </p>
                       </div>
                     </div>

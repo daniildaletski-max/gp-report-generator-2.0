@@ -1755,3 +1755,21 @@
 ## Bug Fix - Attitude Validation Error
 
 - [x] Fix backend validation for attitude field to support -1/0/+1 values (currently validates >=1)
+
+
+## Cumulative Attitude & Error Descriptions (v52)
+
+### Cumulative Attitude System
+- [x] Change attitude from single value to cumulative counter
+- [x] +1 button adds to positive count, -1 button subtracts
+- [x] Display total attitude as sum (e.g., +3 or -2)
+- [x] Update UI to show positive and negative counts separately
+- [x] Update backend validation to allow any integer value
+- [x] Reset button to set attitude back to 0
+
+### Error File Parsing with Descriptions
+- [x] Parse error descriptions from Excel files (Errors sheet)
+- [x] Auto-detect column headers (Date, GP Name, Description, Code, Game Type, Table)
+- [x] Store error details in database (date, type, description, code, gameType, tableId)
+- [x] Display error descriptions in GP Portal with source badge (Excel/Screenshot)
+- [x] Show error date from Excel file

@@ -807,7 +807,7 @@ export const appRouter = router({
         gpId: z.number(),
         month: z.number().min(1).max(12),
         year: z.number(),
-        attitude: z.number().min(-1).max(1).nullable().optional(),
+        attitude: z.number().nullable().optional(),
         mistakes: z.number().min(0).optional(),
         totalGames: z.number().min(0).optional(),
         notes: z.string().nullable().optional(),
@@ -834,7 +834,7 @@ export const appRouter = router({
       .input(z.object({
         updates: z.array(z.object({
           gpId: z.number(),
-          attitude: z.number().min(-1).max(1).nullable().optional(),
+          attitude: z.number().nullable().optional(),
           mistakes: z.number().min(0).optional(),
           notes: z.string().nullable().optional(),
         })),
@@ -866,7 +866,7 @@ export const appRouter = router({
     bulkSetAttitude: protectedProcedure
       .input(z.object({
         gpIds: z.array(z.number().positive()).max(100), // Max 100 GPs at once
-        attitude: z.number().min(-1).max(1),
+        attitude: z.number(),
         month: z.number().min(1).max(12),
         year: z.number().min(2020).max(2100),
       }))
@@ -2460,96 +2460,113 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
         await workbook.xlsx.load(fileBuffer as any);
         
         const gpErrorCounts: Record<string, number> = {};
+        const gpErrorDetails: Record<string, Array<{ date?: Date; description?: string; errorCode?: string; gameType?: string; tableId?: string }>> = {};
         let totalErrorsCount = 0;
 
-        // Find the "Error Count" sheet - this contains aggregated error counts per GP
-        const errorCountSheet = workbook.getWorksheet('Error Count');
-        if (errorCountSheet) {
-          // GP Name is in column B (index 2), Total Errors is in column D (index 4)
-          // Data starts from row 2 (row 1 is header)
-          errorCountSheet.eachRow((row, rowNumber) => {
-            if (rowNumber >= 2) { // Skip header row (row 1)
-              const gpNameCell = row.getCell(2); // Column B
-              const totalErrorsCell = row.getCell(4); // Column D
-              
-              let gpName: string | null = null;
-              let errorCount = 0;
-              
-              // Handle GP Name cell - different value types
-              if (gpNameCell.value) {
-                if (typeof gpNameCell.value === 'string') {
-                  gpName = gpNameCell.value.trim();
-                } else if (typeof gpNameCell.value === 'object' && 'text' in gpNameCell.value) {
-                  // Rich text
-                  gpName = (gpNameCell.value as any).text?.trim();
-                } else if (typeof gpNameCell.value === 'object' && 'result' in gpNameCell.value) {
-                  // Formula with cached result
-                  const result = (gpNameCell.value as any).result;
-                  if (typeof result === 'string') {
-                    gpName = result.trim();
-                  }
-                }
-              }
-              
-              // Handle Total Errors cell - can be number or formula result
-              if (totalErrorsCell.value !== null && totalErrorsCell.value !== undefined) {
-                if (typeof totalErrorsCell.value === 'number') {
-                  errorCount = Math.round(totalErrorsCell.value);
-                } else if (typeof totalErrorsCell.value === 'object' && 'result' in totalErrorsCell.value) {
-                  // Formula with cached result
-                  const result = (totalErrorsCell.value as any).result;
-                  if (typeof result === 'number') {
-                    errorCount = Math.round(result);
-                  }
-                } else if (typeof totalErrorsCell.value === 'string') {
-                  const parsed = parseInt(totalErrorsCell.value, 10);
-                  if (!isNaN(parsed)) {
-                    errorCount = parsed;
-                  }
-                }
-              }
-              
-              // Validate GP name and store error count
-              if (gpName && gpName.length > 0 && !gpName.startsWith('=') && gpName !== 'GP Name' && gpName !== 'Name') {
-                // Check if it looks like a real name (contains letters, possibly space)
-                if (/^[A-Za-z\u00C0-\u024F\s'-]+$/.test(gpName) && gpName.length < 100) {
-                  gpErrorCounts[gpName] = errorCount;
-                  totalErrorsCount += errorCount;
-                }
-              }
-            }
-          });
-        } else {
-          // Fallback: try the old "Errors" sheet format
-          const errorsSheet = workbook.getWorksheet('Errors');
-          if (errorsSheet) {
-            errorsSheet.eachRow((row, rowNumber) => {
-              if (rowNumber >= 3) {
-                const gpNameCell = row.getCell(2);
-                let gpName: string | null = null;
-                
-                if (gpNameCell.value) {
-                  if (typeof gpNameCell.value === 'string') {
-                    gpName = gpNameCell.value.trim();
-                  } else if (typeof gpNameCell.value === 'object' && 'text' in gpNameCell.value) {
-                    gpName = (gpNameCell.value as any).text?.trim();
-                  } else if (typeof gpNameCell.value === 'object' && 'result' in gpNameCell.value) {
-                    const result = (gpNameCell.value as any).result;
-                    if (typeof result === 'string') {
-                      gpName = result.trim();
-                    }
-                  }
-                }
-                
-                if (gpName && gpName.length > 0 && !gpName.startsWith('=') && gpName !== 'GP Name') {
-                  if (/^[A-Za-z\u00C0-\u024F\s'-]+$/.test(gpName) && gpName.length < 100) {
-                    gpErrorCounts[gpName] = (gpErrorCounts[gpName] || 0) + 1;
-                    totalErrorsCount++;
-                  }
-                }
-              }
+        // Helper to extract cell value
+        const getCellValue = (cell: any): string | null => {
+          if (!cell.value) return null;
+          if (typeof cell.value === 'string') return cell.value.trim();
+          if (typeof cell.value === 'object' && 'text' in cell.value) return (cell.value as any).text?.trim();
+          if (typeof cell.value === 'object' && 'result' in cell.value) {
+            const result = (cell.value as any).result;
+            return typeof result === 'string' ? result.trim() : String(result);
+          }
+          return String(cell.value).trim();
+        };
+
+        const getNumericValue = (cell: any): number => {
+          if (cell.value === null || cell.value === undefined) return 0;
+          if (typeof cell.value === 'number') return Math.round(cell.value);
+          if (typeof cell.value === 'object' && 'result' in cell.value) {
+            const result = (cell.value as any).result;
+            return typeof result === 'number' ? Math.round(result) : 0;
+          }
+          const parsed = parseInt(String(cell.value), 10);
+          return isNaN(parsed) ? 0 : parsed;
+        };
+
+        const isValidGpName = (name: string | null): boolean => {
+          if (!name || name.length === 0 || name.startsWith('=')) return false;
+          if (['GP Name', 'Name', 'Total', 'Grand Total'].includes(name)) return false;
+          return /^[A-Za-z\u00C0-\u024F\s'-]+$/.test(name) && name.length < 100;
+        };
+
+        // First, try to parse detailed errors from "Errors" sheet (individual error records)
+        const errorsSheet = workbook.getWorksheet('Errors');
+        if (errorsSheet) {
+          // Look for columns: Date, GP Name, Error Description, Error Code, Game Type, Table ID
+          // Try to detect header row and column positions
+          let headerRow = 1;
+          let gpNameCol = 2; // Default column B
+          let dateCol = 1;   // Default column A
+          let descCol = 3;   // Default column C
+          let codeCol = 4;   // Default column D
+          let gameTypeCol = 5; // Default column E
+          let tableIdCol = 6;  // Default column F
+          
+          // Check first few rows for headers
+          for (let r = 1; r <= 3; r++) {
+            const row = errorsSheet.getRow(r);
+            row.eachCell((cell, colNumber) => {
+              const val = getCellValue(cell)?.toLowerCase() || '';
+              if (val.includes('gp') && val.includes('name')) { gpNameCol = colNumber; headerRow = r; }
+              else if (val === 'date' || val.includes('error date')) { dateCol = colNumber; }
+              else if (val.includes('description') || val.includes('error type')) { descCol = colNumber; }
+              else if (val.includes('code') || val === 'error code') { codeCol = colNumber; }
+              else if (val.includes('game') && val.includes('type')) { gameTypeCol = colNumber; }
+              else if (val.includes('table')) { tableIdCol = colNumber; }
             });
           }
+          
+          // Parse error records starting after header
+          errorsSheet.eachRow((row, rowNumber) => {
+            if (rowNumber <= headerRow) return;
+            
+            const gpName = getCellValue(row.getCell(gpNameCol));
+            if (!isValidGpName(gpName)) return;
+            
+            // Extract error details
+            const errorDetail: { date?: Date; description?: string; errorCode?: string; gameType?: string; tableId?: string } = {};
+            
+            const dateCell = row.getCell(dateCol);
+            if (dateCell.value instanceof Date) {
+              errorDetail.date = dateCell.value;
+            } else if (typeof dateCell.value === 'number') {
+              // Excel serial date
+              errorDetail.date = new Date((dateCell.value - 25569) * 86400 * 1000);
+            }
+            
+            errorDetail.description = getCellValue(row.getCell(descCol)) || undefined;
+            errorDetail.errorCode = getCellValue(row.getCell(codeCol)) || undefined;
+            errorDetail.gameType = getCellValue(row.getCell(gameTypeCol)) || undefined;
+            errorDetail.tableId = getCellValue(row.getCell(tableIdCol)) || undefined;
+            
+            // Add to counts and details
+            gpErrorCounts[gpName!] = (gpErrorCounts[gpName!] || 0) + 1;
+            if (!gpErrorDetails[gpName!]) gpErrorDetails[gpName!] = [];
+            gpErrorDetails[gpName!].push(errorDetail);
+            totalErrorsCount++;
+          });
+        }
+
+        // Also check "Error Count" sheet for summary counts (may have different/additional GPs)
+        const errorCountSheet = workbook.getWorksheet('Error Count');
+        if (errorCountSheet) {
+          errorCountSheet.eachRow((row, rowNumber) => {
+            if (rowNumber < 2) return; // Skip header
+            
+            const gpName = getCellValue(row.getCell(2)); // Column B
+            const errorCount = getNumericValue(row.getCell(4)); // Column D
+            
+            if (!isValidGpName(gpName)) return;
+            
+            // If we didn't get details from Errors sheet, use count from Error Count sheet
+            if (!gpErrorCounts[gpName!] || gpErrorCounts[gpName!] === 0) {
+              gpErrorCounts[gpName!] = errorCount;
+              totalErrorsCount += errorCount;
+            }
+          });
         }
 
         // Save error file to database
@@ -2564,9 +2581,9 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
         });
 
         // Update GP mistakes directly from parsed error counts
-        // This is more efficient than creating individual error records
         const notFoundGPs: string[] = [];
         const updatedGPs: string[] = [];
+        const createdErrorRecords: number[] = [];
         
         for (const [gpName, count] of Object.entries(gpErrorCounts)) {
           // Find GP by name and update their mistakes count
@@ -2577,13 +2594,31 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
             notFoundGPs.push(gpName);
           }
           
-          // Also create a single summary error record for tracking
-          if (count > 0) {
-            await db.createGpError({
+          // Create individual error records with descriptions if available
+          const details = gpErrorDetails[gpName] || [];
+          if (details.length > 0) {
+            // Create individual error records with full details
+            for (const detail of details) {
+              const errorRecord = await db.createGpError({
+                gpName,
+                errorFileId: errorFile.id,
+                errorDate: detail.date || new Date(input.year, input.month - 1, 15),
+                errorDescription: detail.description,
+                errorCode: detail.errorCode,
+                gameType: detail.gameType,
+                tableId: detail.tableId,
+              });
+              createdErrorRecords.push(errorRecord.id);
+            }
+          } else if (count > 0) {
+            // Fallback: create summary record without details
+            const errorRecord = await db.createGpError({
               gpName,
               errorFileId: errorFile.id,
-              errorDate: new Date(input.year, input.month - 1, 15), // Middle of month
+              errorDate: new Date(input.year, input.month - 1, 15),
+              errorDescription: `${count} error(s) recorded`,
             });
+            createdErrorRecords.push(errorRecord.id);
           }
         }
 
@@ -2591,8 +2626,10 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           ...errorFile, 
           parsedErrors: totalErrorsCount, 
           gpErrorCounts,
+          gpErrorDetails,
           updatedGPs,
-          notFoundGPs 
+          notFoundGPs,
+          createdErrorRecords: createdErrorRecords.length
         };
       }),
 
@@ -2778,8 +2815,40 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
         };
 
         // Get detailed error screenshots for current month
-        const errorDetails = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
+        const errorScreenshots = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
         const attitudeDetails = await db.getAttitudeScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
+        
+        // Also get GP errors from Excel file parsing
+        const gpErrors = await db.getGpErrorsForPortal(accessToken.gamePresenterId, currentMonth, currentYear);
+        
+        // Combine error sources: screenshots and Excel-parsed errors
+        const errorDetails = [
+          ...errorScreenshots.map(e => ({
+            id: e.id,
+            source: 'screenshot' as const,
+            errorType: e.errorType,
+            errorDescription: e.errorDescription,
+            errorCategory: e.errorCategory,
+            severity: e.severity,
+            gameType: e.gameType,
+            tableId: e.tableId,
+            screenshotUrl: e.screenshotUrl,
+            createdAt: e.createdAt,
+          })),
+          ...gpErrors.map(e => ({
+            id: e.id + 100000, // Offset to avoid ID collision
+            source: 'excel' as const,
+            errorType: e.errorCode || 'excel_error',
+            errorDescription: e.errorDescription,
+            errorCategory: null,
+            severity: 'medium' as const,
+            gameType: e.gameType,
+            tableId: e.tableId,
+            screenshotUrl: null,
+            createdAt: e.createdAt,
+            errorDate: e.errorDate,
+          })),
+        ];
 
         return {
           gpName: gp.name,
@@ -2805,6 +2874,7 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
           },
           errorDetails: errorDetails.map(e => ({
             id: e.id,
+            source: e.source,
             errorType: e.errorType,
             errorDescription: e.errorDescription,
             errorCategory: e.errorCategory,
@@ -2813,6 +2883,7 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
             tableId: e.tableId,
             screenshotUrl: e.screenshotUrl,
             createdAt: e.createdAt,
+            errorDate: 'errorDate' in e ? e.errorDate : null,
           })),
           attitudeDetails: attitudeDetails.map(a => ({
             id: a.id,

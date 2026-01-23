@@ -2450,30 +2450,44 @@ function GPStatsTab({
   // Stats summary with extended analytics
   const statsSummary = useMemo(() => {
     if (!filteredGPs || filteredGPs.length === 0) return null;
-    const withAttitude = filteredGPs.filter((gp: any) => gp.stats?.attitude != null);
-    const totalAttitudeSum = withAttitude.reduce((sum: number, gp: any) => sum + (gp.stats?.attitude || 0), 0);
+    const withAttitude = filteredGPs.filter((gp: any) => gp.stats?.attitude != null && gp.stats?.attitude !== 0);
+    const totalAttitudeSum = filteredGPs.reduce((sum: number, gp: any) => sum + (gp.stats?.attitude || 0), 0);
     const totalMistakes = filteredGPs.reduce((sum: number, gp: any) => sum + (gp.stats?.mistakes || 0), 0);
-    // For -1/+1 system: positive = +1, negative = -1
-    const positiveAttitude = filteredGPs.filter((gp: any) => gp.stats?.attitude === 1).length;
-    const negativeAttitude = filteredGPs.filter((gp: any) => gp.stats?.attitude === -1).length;
-    const neutralAttitude = filteredGPs.filter((gp: any) => gp.stats?.attitude === 0 || gp.stats?.attitude == null).length;
+    // For cumulative system: count GPs with positive/negative totals
+    const positiveAttitude = filteredGPs.filter((gp: any) => (gp.stats?.attitude ?? 0) > 0).length;
+    const negativeAttitude = filteredGPs.filter((gp: any) => (gp.stats?.attitude ?? 0) < 0).length;
+    const neutralAttitude = filteredGPs.filter((gp: any) => (gp.stats?.attitude ?? 0) === 0).length;
     const totalGames = filteredGPs.reduce((sum: number, gp: any) => sum + (gp.stats?.totalGames || 0), 0);
     
-    // Attitude distribution for -1/0/+1 system
+    // Sum of all positive and negative attitude points
+    const totalPositivePoints = filteredGPs.reduce((sum: number, gp: any) => {
+      const att = gp.stats?.attitude ?? 0;
+      return sum + (att > 0 ? att : 0);
+    }, 0);
+    const totalNegativePoints = filteredGPs.reduce((sum: number, gp: any) => {
+      const att = gp.stats?.attitude ?? 0;
+      return sum + (att < 0 ? Math.abs(att) : 0);
+    }, 0);
+    
+    // Attitude distribution for cumulative system
     const attitudeDistribution = {
       negative: negativeAttitude,
       neutral: neutralAttitude,
-      positive: positiveAttitude
+      positive: positiveAttitude,
+      totalPositivePoints,
+      totalNegativePoints
     };
     
-    // Top performers by attitude (positive first)
+    // Top performers by attitude (highest positive totals)
     const topByAttitude = [...filteredGPs]
-      .filter((gp: any) => gp.stats?.attitude === 1)
+      .filter((gp: any) => (gp.stats?.attitude ?? 0) > 0)
+      .sort((a: any, b: any) => (b.stats?.attitude ?? 0) - (a.stats?.attitude ?? 0))
       .slice(0, 5);
     
-    // Negative attitude (needs attention)
+    // Negative attitude (needs attention - lowest totals)
     const needsAttention = [...filteredGPs]
-      .filter((gp: any) => gp.stats?.attitude === -1);
+      .filter((gp: any) => (gp.stats?.attitude ?? 0) < 0)
+      .sort((a: any, b: any) => (a.stats?.attitude ?? 0) - (b.stats?.attitude ?? 0));
     
     // Most mistakes
     const topByMistakes = [...filteredGPs]
@@ -2490,10 +2504,12 @@ function GPStatsTab({
       }
       teamStats[teamName].count++;
       teamStats[teamName].totalMistakes += gp.stats?.mistakes || 0;
-      if (gp.stats?.attitude === 1) {
-        teamStats[teamName].positiveCount++;
-      } else if (gp.stats?.attitude === -1) {
-        teamStats[teamName].negativeCount++;
+      // Sum up cumulative attitude values
+      const attitudeValue = gp.stats?.attitude ?? 0;
+      if (attitudeValue > 0) {
+        teamStats[teamName].positiveCount += attitudeValue;
+      } else if (attitudeValue < 0) {
+        teamStats[teamName].negativeCount += Math.abs(attitudeValue);
       }
     });
     
@@ -2917,18 +2933,19 @@ function GPStatsTab({
                 const totalGames = gp.stats?.totalGames || 0;
                 const teamName = teams.find(t => t.id === gp.teamId)?.teamName || 'Unassigned';
                 
+                // Border color based on cumulative attitude
                 const getBorderColor = () => {
-                  if (attitude === null || attitude === undefined) return 'border-muted';
-                  if (attitude === 1) return 'border-green-400';
-                  if (attitude === 0) return 'border-gray-300';
-                  if (attitude === -1) return 'border-red-400';
+                  const value = attitude ?? 0;
+                  if (value > 0) return 'border-green-400';
+                  if (value < 0) return 'border-red-400';
                   return 'border-muted';
                 };
                 
-                // Get attitude display
+                // Get attitude display for cumulative values
                 const getAttitudeDisplay = () => {
-                  if (attitude === 1) return { icon: <ThumbsUp className="h-5 w-5" />, label: '+1', color: 'text-green-600 bg-green-100 dark:bg-green-950' };
-                  if (attitude === -1) return { icon: <ThumbsDown className="h-5 w-5" />, label: '-1', color: 'text-red-600 bg-red-100 dark:bg-red-950' };
+                  const value = attitude ?? 0;
+                  if (value > 0) return { icon: <ThumbsUp className="h-5 w-5" />, label: `+${value}`, color: 'text-green-600 bg-green-100 dark:bg-green-950' };
+                  if (value < 0) return { icon: <ThumbsDown className="h-5 w-5" />, label: `${value}`, color: 'text-red-600 bg-red-100 dark:bg-red-950' };
                   return { icon: null, label: '0', color: 'text-gray-500 bg-gray-100 dark:bg-gray-800' };
                 };
                 const attitudeDisplay = getAttitudeDisplay();
@@ -3014,7 +3031,7 @@ function GPStatsTab({
   );
 }
 
-// Quick Attitude Buttons Component - Uses -1/+1 system
+// Quick Attitude Buttons Component - Cumulative system: each click adds/subtracts from total
 function QuickAttitudeButtons({ 
   gpId, 
   currentAttitude, 
@@ -3030,21 +3047,24 @@ function QuickAttitudeButtons({
   selectedYear: number;
   onUpdate: () => void;
 }) {
-  const [isUpdating, setIsUpdating] = useState<number | null>(null);
+  const [isUpdating, setIsUpdating] = useState<string | null>(null);
   const updateStatsMutation = trpc.gamePresenter.updateStats.useMutation();
 
-  const handleQuickSet = async (attitude: number) => {
-    setIsUpdating(attitude);
+  // Add to current attitude (cumulative)
+  const handleAddAttitude = async (delta: number) => {
+    const action = delta > 0 ? 'add' : 'subtract';
+    setIsUpdating(action);
     try {
+      const newAttitude = (currentAttitude ?? 0) + delta;
       await updateStatsMutation.mutateAsync({
         gpId,
         month: selectedMonth,
         year: selectedYear,
-        attitude,
+        attitude: newAttitude,
         mistakes: currentMistakes,
       });
-      const label = attitude === 1 ? '+1 (Positive)' : attitude === -1 ? '-1 (Negative)' : 'Neutral';
-      toast.success(`Attitude set to ${label}`);
+      const label = delta > 0 ? '+1 added' : '-1 added';
+      toast.success(`Attitude: ${label} (Total: ${newAttitude >= 0 ? '+' : ''}${newAttitude})`);
       onUpdate();
     } catch (error: any) {
       toast.error(error.message || "Failed to update");
@@ -3053,63 +3073,76 @@ function QuickAttitudeButtons({
     }
   };
 
+  // Reset attitude to 0
+  const handleReset = async () => {
+    setIsUpdating('reset');
+    try {
+      await updateStatsMutation.mutateAsync({
+        gpId,
+        month: selectedMonth,
+        year: selectedYear,
+        attitude: 0,
+        mistakes: currentMistakes,
+      });
+      toast.success('Attitude reset to 0');
+      onUpdate();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to reset");
+    } finally {
+      setIsUpdating(null);
+    }
+  };
+
+  const attitudeValue = currentAttitude ?? 0;
+  const attitudeColor = attitudeValue > 0 ? 'text-green-600' : attitudeValue < 0 ? 'text-red-600' : 'text-gray-500';
+
   return (
-    <div className="flex items-center justify-center gap-2">
+    <div className="flex items-center justify-center gap-1">
+      {/* Subtract button */}
       <Button
         size="sm"
         variant="ghost"
-        className={`px-3 h-9 text-sm font-medium transition-all ${
-          currentAttitude === -1 
-            ? "bg-red-500 text-white hover:bg-red-600 shadow-md" 
-            : "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900"
-        }`}
-        onClick={() => handleQuickSet(-1)}
+        className="px-2 h-8 bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900"
+        onClick={() => handleAddAttitude(-1)}
         disabled={isUpdating !== null}
+        title="Add -1 to attitude"
       >
-        {isUpdating === -1 ? (
+        {isUpdating === 'subtract' ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          <span className="flex items-center gap-1">
-            <ThumbsDown className="h-4 w-4" />
-            -1
-          </span>
+          <ThumbsDown className="h-4 w-4" />
         )}
       </Button>
+      
+      {/* Current value display with reset on click */}
       <Button
         size="sm"
         variant="ghost"
-        className={`px-3 h-9 text-sm font-medium transition-all ${
-          currentAttitude === 0 || currentAttitude === null
-            ? "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300" 
-            : "bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-500"
-        }`}
-        onClick={() => handleQuickSet(0)}
+        className={`px-3 h-8 min-w-[50px] font-bold ${attitudeColor} hover:bg-gray-100 dark:hover:bg-gray-800`}
+        onClick={handleReset}
         disabled={isUpdating !== null}
+        title="Click to reset to 0"
       >
-        {isUpdating === 0 ? (
+        {isUpdating === 'reset' ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          <span>0</span>
+          <span>{attitudeValue >= 0 ? '+' : ''}{attitudeValue}</span>
         )}
       </Button>
+      
+      {/* Add button */}
       <Button
         size="sm"
         variant="ghost"
-        className={`px-3 h-9 text-sm font-medium transition-all ${
-          currentAttitude === 1 
-            ? "bg-green-500 text-white hover:bg-green-600 shadow-md" 
-            : "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-950 dark:text-green-400 dark:hover:bg-green-900"
-        }`}
-        onClick={() => handleQuickSet(1)}
+        className="px-2 h-8 bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-950 dark:text-green-400 dark:hover:bg-green-900"
+        onClick={() => handleAddAttitude(1)}
         disabled={isUpdating !== null}
+        title="Add +1 to attitude"
       >
-        {isUpdating === 1 ? (
+        {isUpdating === 'add' ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          <span className="flex items-center gap-1">
-            <ThumbsUp className="h-4 w-4" />
-            +1
-          </span>
+          <ThumbsUp className="h-4 w-4" />
         )}
       </Button>
     </div>

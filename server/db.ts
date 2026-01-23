@@ -2772,6 +2772,36 @@ export async function getErrorScreenshotsForGP(gpId: number, month: number, year
   }
 }
 
+// Get GP errors from gpErrors table (parsed from Excel files)
+export async function getGpErrorsForPortal(gpId: number, month: number, year: number): Promise<GpError[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    // Get GP name first
+    const gp = await db.select().from(gamePresenters).where(eq(gamePresenters.id, gpId)).limit(1);
+    if (gp.length === 0) return [];
+    
+    const gpName = gp[0].name;
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+    
+    const results = await db.select()
+      .from(gpErrors)
+      .where(and(
+        eq(gpErrors.gpName, gpName),
+        gte(gpErrors.errorDate, startDate),
+        lte(gpErrors.errorDate, endDate)
+      ))
+      .orderBy(desc(gpErrors.errorDate));
+    
+    return results;
+  } catch (error) {
+    console.error("[Database] Error getting GP errors for portal:", error);
+    return [];
+  }
+}
+
 export async function getAttitudeScreenshotsForGP(gpId: number, month: number, year: number): Promise<AttitudeScreenshot[]> {
   const db = await getDb();
   if (!db) return [];
