@@ -210,15 +210,15 @@ export default function GPPortal() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 flex items-center justify-center">
+      <div className="min-h-screen bg-mesh flex items-center justify-center">
         <AnimatedBackground />
         <div className="text-center relative z-10">
           <div className="relative">
-            <div className="absolute inset-0 bg-blue-500/30 rounded-full blur-2xl animate-pulse" />
-            <Loader2 className="h-20 w-20 animate-spin text-blue-400 mx-auto mb-6 relative" />
+            <div className="absolute inset-0 bg-primary/30 rounded-full blur-2xl animate-pulse" />
+            <Loader2 className="h-20 w-20 animate-spin text-primary mx-auto mb-6 relative" />
           </div>
-          <p className="text-blue-200 text-xl font-medium">Loading your dashboard...</p>
-          <p className="text-blue-300/50 text-sm mt-2">Please wait a moment</p>
+          <p className="text-foreground/80 text-xl font-medium">Loading your dashboard...</p>
+          <p className="text-muted-foreground text-sm mt-2">Please wait a moment</p>
         </div>
       </div>
     );
@@ -292,39 +292,39 @@ export default function GPPortal() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 relative">
+    <div className="min-h-screen bg-mesh relative">
       <AnimatedBackground />
       
       {/* Header */}
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 sticky top-0 z-50">
+      <header className="glass-strong border-b border-white/10 sticky top-0 z-50">
         <div className="container py-4 sm:py-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             {/* Logo and Greeting */}
             <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl blur-lg opacity-50" />
-                <div className="relative bg-gradient-to-br from-blue-500 to-purple-600 text-white p-3 sm:p-4 rounded-2xl shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary to-purple-600 rounded-2xl blur-lg opacity-50" />
+                <div className="relative bg-gradient-to-br from-primary to-purple-600 text-white p-3 sm:p-4 rounded-2xl shadow-2xl">
                   <Star className="h-6 w-6 sm:h-8 sm:w-8" />
                 </div>
               </div>
               <div>
-                <p className="text-blue-300/70 text-sm">{getGreeting()},</p>
-                <h1 className="text-xl sm:text-2xl font-bold text-white">{data.gpName}</h1>
+                <p className="text-muted-foreground text-sm">{getGreeting()},</p>
+                <h1 className="text-xl sm:text-2xl font-bold gradient-text">{data.gpName}</h1>
               </div>
             </div>
             
             {/* Actions */}
             <div className="flex items-center gap-3">
               <div className="hidden sm:block text-right">
-                <p className="text-xs text-blue-300/50">Last updated</p>
-                <p className="text-sm text-blue-200">{formatDistanceToNow(lastRefresh, { addSuffix: true })}</p>
+                <p className="text-xs text-muted-foreground">Last updated</p>
+                <p className="text-sm text-foreground/80">{formatDistanceToNow(lastRefresh, { addSuffix: true })}</p>
               </div>
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={handleManualRefresh}
                 disabled={isFetching}
-                className="border-white/20 text-white hover:bg-white/10 bg-white/5"
+                className="glass border-white/20 hover:bg-white/10"
               >
                 <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
                 <span className="ml-2">Refresh</span>
@@ -333,8 +333,8 @@ export default function GPPortal() {
           </div>
           
           {/* Motivational message */}
-          <div className="mt-3 px-4 py-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg border border-white/5">
-            <p className="text-sm text-blue-200/80">{getMotivationalMessage()}</p>
+          <div className="mt-3 px-4 py-2 glass rounded-xl border border-white/5">
+            <p className="text-sm text-foreground/80">{getMotivationalMessage()}</p>
           </div>
         </div>
       </header>

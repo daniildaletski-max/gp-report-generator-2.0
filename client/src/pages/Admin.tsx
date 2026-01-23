@@ -56,22 +56,22 @@ function FMRestrictedView() {
   const team = teams?.[0]; // FM only sees their team
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 md:p-6 bg-mesh min-h-screen">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Team Management</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl font-bold gradient-text">Team Management</h1>
+          <p className="text-muted-foreground mt-1">
             Manage your team: {team?.teamName || "Loading..."}
           </p>
         </div>
-        <Badge variant="secondary" className="text-sm">
+        <Badge className="glass-strong text-sm rounded-xl px-4 py-2">
           <Users className="h-3 w-3 mr-1" />
           Floor Manager
         </Badge>
       </div>
 
       <Tabs defaultValue="stats" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 h-auto p-1">
+        <TabsList className="glass-strong rounded-xl p-1 border-0 grid w-full grid-cols-2 h-auto">
           <TabsTrigger value="stats" className="flex items-center justify-center gap-2 py-2">
             <Star className="h-4 w-4 shrink-0" />
             <span>GP Stats</span>
@@ -134,22 +134,24 @@ function FullAdminPanel() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 md:p-6 bg-mesh min-h-screen">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Shield className="h-6 w-6 text-primary" />
+          <h1 className="text-3xl font-bold gradient-text flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20">
+              <Shield className="h-6 w-6 text-primary" />
+            </div>
             Admin Panel
           </h1>
-          <p className="text-muted-foreground">System administration and management</p>
+          <p className="text-muted-foreground mt-1">System administration and management</p>
         </div>
-        <Badge variant="default" className="bg-primary">
+        <Badge className="bg-gradient-to-r from-primary to-purple-600 text-white rounded-xl px-4 py-2">
           Administrator
         </Badge>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-7 h-auto p-1">
+        <TabsList className="glass-strong rounded-xl p-1 border-0 grid w-full grid-cols-7 h-auto">
           <TabsTrigger value="overview" className="flex items-center justify-center gap-2 py-2">
             <BarChart3 className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Overview</span>

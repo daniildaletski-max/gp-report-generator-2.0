@@ -35,7 +35,8 @@ import {
   AlertTriangle,
   ThumbsUp,
   ThumbsDown,
-  MessageSquare
+  MessageSquare,
+  CloudUpload
 } from "lucide-react";
 
 // ============ TYPES ============
@@ -58,7 +59,7 @@ interface AttitudeEntry {
   date: string;
   type: "POSITIVE" | "NEGATIVE";
   comment: string;
-  score: number; // +1 or -1
+  score: number;
 }
 
 interface AttitudeData {
@@ -151,7 +152,6 @@ export default function UploadPage() {
   const processingRef = useRef(false);
   const startTimeRef = useRef<number>(0);
 
-  // Fetch list of GPs for dropdown
   const { data: gpList } = trpc.gamePresenter.list.useQuery();
 
   const uploadEvaluationMutation = trpc.evaluation.uploadAndExtract.useMutation();
@@ -159,7 +159,6 @@ export default function UploadPage() {
 
   const generateId = () => Math.random().toString(36).substring(2, 9);
 
-  // Statistics based on active tab
   const stats = useMemo(() => {
     const successFiles = files.filter(f => f.status === "success");
     const avgTime = successFiles.length > 0 
@@ -181,7 +180,6 @@ export default function UploadPage() {
         newGPs: successFiles.filter(f => f.matchInfo?.isNewGP).length,
       };
     } else {
-      // Attitude tab stats
       const positive = successFiles.reduce((sum, f) => sum + (f.attitudeData?.totalPositive || 0), 0);
       const negative = successFiles.reduce((sum, f) => sum + (f.attitudeData?.totalNegative || 0), 0);
       const totalEntries = successFiles.reduce((sum, f) => sum + (f.attitudeData?.totalEntries || 0), 0);
@@ -199,7 +197,6 @@ export default function UploadPage() {
     }
   }, [files, activeTab]);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -218,7 +215,6 @@ export default function UploadPage() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [selectedFile]);
 
-  // Handle paste from clipboard
   useEffect(() => {
     const handlePaste = async (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -248,7 +244,6 @@ export default function UploadPage() {
     return () => document.removeEventListener("paste", handlePaste);
   }, [autoProcess]);
 
-  // Auto-process when files are added
   useEffect(() => {
     if (autoProcess && !processingRef.current) {
       const pendingFiles = files.filter(f => f.status === "pending");
@@ -258,7 +253,6 @@ export default function UploadPage() {
     }
   }, [files, autoProcess]);
 
-  // Clear files when switching tabs
   useEffect(() => {
     setFiles([]);
     setSelectedFile(null);
@@ -482,14 +476,6 @@ export default function UploadPage() {
     ));
   };
 
-  const getTabIcon = () => {
-    switch (activeTab) {
-      case "evaluations": return <FileCheck className="h-4 w-4" />;
-      case "attitude": return <Heart className="h-4 w-4" />;
-      default: return <FileCheck className="h-4 w-4" />;
-    }
-  };
-
   const getTabDescription = () => {
     switch (activeTab) {
       case "evaluations": return "Upload evaluation screenshots for AI extraction";
@@ -499,15 +485,15 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="space-y-6 p-4 md:p-6 bg-mesh min-h-screen">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Upload Screenshots</h1>
-          <p className="text-muted-foreground">{getTabDescription()}</p>
+          <h1 className="text-3xl font-bold gradient-text">Upload Screenshots</h1>
+          <p className="text-muted-foreground mt-1">{getTabDescription()}</p>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 glass-subtle px-3 py-2 rounded-xl">
             <Switch
               id="auto-process"
               checked={autoProcess}
@@ -521,7 +507,7 @@ export default function UploadPage() {
             variant="ghost"
             size="sm"
             onClick={() => setShowKeyboardHints(prev => !prev)}
-            className="text-muted-foreground"
+            className="glass-button rounded-xl border-0"
           >
             <Keyboard className="h-4 w-4 mr-1" />
             <span className="hidden sm:inline">Shortcuts</span>
@@ -531,173 +517,154 @@ export default function UploadPage() {
 
       {/* Keyboard Hints */}
       {showKeyboardHints && (
-        <Card className="bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-          <CardContent className="py-3">
-            <div className="flex flex-wrap gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <kbd className="px-2 py-1 bg-white dark:bg-slate-800 rounded border text-xs">Ctrl+V</kbd>
-                <span className="text-muted-foreground">Paste from clipboard</span>
+        <div className="glass-card p-4 rounded-2xl">
+          <div className="flex flex-wrap gap-4 text-sm">
+            {[
+              { key: "Ctrl+V", desc: "Paste from clipboard" },
+              { key: "Ctrl+O", desc: "Open file picker" },
+              { key: "Esc", desc: "Deselect" },
+              { key: "Del", desc: "Remove selected" },
+              { key: "?", desc: "Toggle hints" },
+            ].map(({ key, desc }) => (
+              <div key={key} className="flex items-center gap-2">
+                <kbd className="px-2 py-1 glass-strong rounded-lg text-xs font-mono">{key}</kbd>
+                <span className="text-muted-foreground">{desc}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <kbd className="px-2 py-1 bg-white dark:bg-slate-800 rounded border text-xs">Ctrl+O</kbd>
-                <span className="text-muted-foreground">Open file picker</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <kbd className="px-2 py-1 bg-white dark:bg-slate-800 rounded border text-xs">Esc</kbd>
-                <span className="text-muted-foreground">Deselect</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <kbd className="px-2 py-1 bg-white dark:bg-slate-800 rounded border text-xs">Del</kbd>
-                <span className="text-muted-foreground">Remove selected</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <kbd className="px-2 py-1 bg-white dark:bg-slate-800 rounded border text-xs">?</kbd>
-                <span className="text-muted-foreground">Toggle hints</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as UploadType)}>
-        <TabsList className="grid w-full grid-cols-2 lg:w-[300px]">
-          <TabsTrigger value="evaluations" className="flex items-center gap-2">
+        <TabsList className="glass-strong rounded-xl p-1 border-0 w-full sm:w-auto">
+          <TabsTrigger value="evaluations" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white/20 data-[state=active]:shadow-lg">
             <FileCheck className="h-4 w-4" />
-            <span className="hidden sm:inline">Evaluations</span>
+            <span>Evaluations</span>
           </TabsTrigger>
-          <TabsTrigger value="attitude" className="flex items-center gap-2">
+          <TabsTrigger value="attitude" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white/20 data-[state=active]:shadow-lg">
             <Heart className="h-4 w-4" />
-            <span className="hidden sm:inline">Attitude</span>
+            <span>Attitude</span>
           </TabsTrigger>
         </TabsList>
 
         {/* Stats Cards */}
         {stats.success > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-            <Card className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
-              <CardContent className="py-3 flex items-center gap-3">
-                <CheckCircle className="h-8 w-8 text-green-600" />
-                <div>
-                  <p className="text-2xl font-bold text-green-700 dark:text-green-400">{stats.success}</p>
-                  <p className="text-xs text-green-600 dark:text-green-500">Processed</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
+            <div className="glass-card p-4 rounded-2xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-green-500/20">
+                  <CheckCircle className="h-6 w-6 text-green-500" />
                 </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
-              <CardContent className="py-3 flex items-center gap-3">
-                <Clock className="h-8 w-8 text-blue-600" />
                 <div>
-                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.avgTime.toFixed(1)}s</p>
-                  <p className="text-xs text-blue-600 dark:text-blue-500">Avg. Time</p>
+                  <p className="text-2xl font-bold">{stats.success}</p>
+                  <p className="text-xs text-muted-foreground">Processed</p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
+            <div className="glass-card p-4 rounded-2xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-blue-500/20">
+                  <Clock className="h-6 w-6 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{stats.avgTime.toFixed(1)}s</p>
+                  <p className="text-xs text-muted-foreground">Avg. Time</p>
+                </div>
+              </div>
+            </div>
             {activeTab === "evaluations" && "avgScore" in stats && (
               <>
-                <Card className="bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800">
-                  <CardContent className="py-3 flex items-center gap-3">
-                    <Star className="h-8 w-8 text-amber-600" />
-                    <div>
-                      <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{(stats as any).avgScore.toFixed(1)}</p>
-                      <p className="text-xs text-amber-600 dark:text-amber-500">Avg. Score</p>
+                <div className="glass-card p-4 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-amber-500/20">
+                      <Star className="h-6 w-6 text-amber-500" />
                     </div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800">
-                  <CardContent className="py-3 flex items-center gap-3">
-                    <User className="h-8 w-8 text-purple-600" />
                     <div>
-                      <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">{(stats as any).newGPs}</p>
-                      <p className="text-xs text-purple-600 dark:text-purple-500">New GPs</p>
+                      <p className="text-2xl font-bold">{(stats as any).avgScore.toFixed(1)}</p>
+                      <p className="text-xs text-muted-foreground">Avg. Score</p>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
+                <div className="glass-card p-4 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-purple-500/20">
+                      <User className="h-6 w-6 text-purple-500" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{(stats as any).newGPs}</p>
+                      <p className="text-xs text-muted-foreground">New GPs</p>
+                    </div>
+                  </div>
+                </div>
               </>
             )}
             {activeTab === "attitude" && "positive" in stats && (
               <>
-                <Card className="bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800">
-                  <CardContent className="py-3 flex items-center gap-3">
-                    <ThumbsUp className="h-8 w-8 text-emerald-600" />
-                    <div>
-                      <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{(stats as any).positive}</p>
-                      <p className="text-xs text-emerald-600 dark:text-emerald-500">Positive</p>
+                <div className="glass-card p-4 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-green-500/20">
+                      <ThumbsUp className="h-6 w-6 text-green-500" />
                     </div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800">
-                  <CardContent className="py-3 flex items-center gap-3">
-                    <ThumbsDown className="h-8 w-8 text-red-600" />
                     <div>
-                      <p className="text-2xl font-bold text-red-700 dark:text-red-400">{(stats as any).negative}</p>
-                      <p className="text-xs text-red-600 dark:text-red-500">Negative</p>
+                      <p className="text-2xl font-bold text-green-500">+{(stats as any).positive}</p>
+                      <p className="text-xs text-muted-foreground">Positive</p>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
+                <div className="glass-card p-4 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-red-500/20">
+                      <ThumbsDown className="h-6 w-6 text-red-500" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-red-500">-{(stats as any).negative}</p>
+                      <p className="text-xs text-muted-foreground">Negative</p>
+                    </div>
+                  </div>
+                </div>
               </>
             )}
-
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4">
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
           {/* Upload Area */}
           <div className="lg:col-span-2">
-            <Card>
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      {getTabIcon()}
-                      Upload {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Screenshots
-                    </CardTitle>
-                    <CardDescription>
-                      Drag, drop, paste, or click to add screenshots
-                    </CardDescription>
+            <div className="glass-card rounded-2xl overflow-hidden">
+              <div className="p-5 border-b border-border/30">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20">
+                    <CloudUpload className="h-5 w-5 text-primary" />
                   </div>
-                  {files.length > 0 && (
-                    <Button variant="outline" size="sm" onClick={clearAll}>
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Clear All
-                    </Button>
-                  )}
+                  <div>
+                    <h3 className="font-semibold">Upload Area</h3>
+                    <p className="text-sm text-muted-foreground">Drag & drop or paste screenshots</p>
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                {/* GP Selector for Attitude tab */}
+              </div>
+              <div className="p-5">
+                {/* GP Selector for Attitude Tab */}
                 {activeTab === "attitude" && (
-                  <div className="mb-4">
-                    <Label htmlFor="gp-select" className="text-sm font-medium mb-2 block">
-                      Select Game Presenter <span className="text-destructive">*</span>
-                    </Label>
+                  <div className="mb-5 p-4 glass-subtle rounded-xl">
+                    <Label className="text-sm font-medium mb-2 block">Select Game Presenter</Label>
                     <select
-                      id="gp-select"
+                      className="w-full glass-input rounded-xl px-4 py-3 border-0 focus:ring-2 focus:ring-primary/50"
                       value={selectedGpId || ""}
                       onChange={(e) => setSelectedGpId(e.target.value ? Number(e.target.value) : null)}
-                      className="w-full p-2 border rounded-md bg-background text-foreground focus:ring-2 focus:ring-primary focus:border-primary"
                     >
-                      <option value="">-- Select a Game Presenter --</option>
+                      <option value="">Choose a GP...</option>
                       {gpList?.map((gp) => (
                         <option key={gp.id} value={gp.id}>
-                          {gp.name}
+                          {gp.firstName} {gp.lastName}
                         </option>
                       ))}
                     </select>
-                    {selectedGpId && (
-                      <div className="mt-2 p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-green-600" />
-                          <span className="text-sm font-medium text-green-700 dark:text-green-400">
-                            Uploading for: {gpList?.find(gp => gp.id === selectedGpId)?.name || 'Unknown'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
                     {!selectedGpId && (
-                      <p className="text-sm text-amber-600 mt-1 flex items-center gap-1">
+                      <p className="text-xs text-amber-500 mt-2 flex items-center gap-1">
                         <AlertTriangle className="h-3 w-3" />
-                        Please select a GP before uploading screenshots
+                        Please select a GP before uploading attitude screenshots
                       </p>
                     )}
                   </div>
@@ -705,10 +672,10 @@ export default function UploadPage() {
 
                 {/* Drop Zone */}
                 <div
-                  className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-all ${
+                  className={`relative border-2 border-dashed rounded-2xl p-10 text-center transition-all cursor-pointer ${
                     isDragging
-                      ? "border-primary bg-primary/10 scale-[1.02]"
-                      : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50"
+                      ? "border-primary bg-primary/10 scale-[1.02] shadow-glow"
+                      : "border-border/50 hover:border-primary/50 hover:bg-primary/5"
                   }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
@@ -723,15 +690,15 @@ export default function UploadPage() {
                     accept="image/*"
                     onChange={handleFileSelect}
                   />
-                  <div className="cursor-pointer flex flex-col items-center gap-3">
-                    <div className={`p-4 rounded-full transition-colors ${isDragging ? "bg-primary/20" : "bg-primary/10"}`}>
-                      <UploadIcon className={`h-10 w-10 transition-colors ${isDragging ? "text-primary" : "text-primary/70"}`} />
+                  <div className="flex flex-col items-center gap-4">
+                    <div className={`p-5 rounded-2xl transition-all ${isDragging ? "bg-primary/20 scale-110" : "bg-gradient-to-br from-primary/10 to-purple-500/10"}`}>
+                      <UploadIcon className={`h-12 w-12 transition-colors ${isDragging ? "text-primary" : "text-primary/70"}`} />
                     </div>
                     <div>
-                      <p className="font-semibold text-lg">
+                      <p className="font-semibold text-xl">
                         {isDragging ? "Drop files here!" : "Drop screenshots or click to upload"}
                       </p>
-                      <p className="text-sm text-muted-foreground mt-1">
+                      <p className="text-sm text-muted-foreground mt-2">
                         PNG, JPG, WEBP • Multiple files • Paste with Ctrl+V
                       </p>
                     </div>
@@ -742,25 +709,25 @@ export default function UploadPage() {
                 {files.length > 0 && (
                   <div className="mt-6 space-y-4">
                     {/* Stats Bar */}
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex gap-3 text-sm">
-                        <span className="text-muted-foreground font-medium">
+                    <div className="flex items-center justify-between flex-wrap gap-3 p-3 glass-subtle rounded-xl">
+                      <div className="flex gap-4 text-sm">
+                        <span className="font-medium">
                           {files.length} file{files.length !== 1 ? "s" : ""}
                         </span>
                         {stats.uploading > 0 && (
-                          <span className="text-blue-600 flex items-center gap-1">
+                          <span className="text-blue-500 flex items-center gap-1">
                             <Loader2 className="h-3 w-3 animate-spin" />
                             {stats.uploading} processing
                           </span>
                         )}
                         {stats.success > 0 && (
-                          <span className="text-green-600 flex items-center gap-1">
+                          <span className="text-green-500 flex items-center gap-1">
                             <CheckCircle className="h-3 w-3" />
                             {stats.success} done
                           </span>
                         )}
                         {stats.error > 0 && (
-                          <span className="text-red-600 flex items-center gap-1">
+                          <span className="text-red-500 flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" />
                             {stats.error} failed
                           </span>
@@ -768,13 +735,13 @@ export default function UploadPage() {
                       </div>
                       <div className="flex gap-2">
                         {stats.error > 0 && (
-                          <Button variant="outline" size="sm" onClick={retryFailed}>
+                          <Button variant="outline" size="sm" onClick={retryFailed} className="glass-button rounded-lg border-0">
                             <RotateCcw className="h-3 w-3 mr-1" />
                             Retry Failed
                           </Button>
                         )}
                         {stats.success > 0 && (
-                          <Button variant="outline" size="sm" onClick={clearCompleted}>
+                          <Button variant="outline" size="sm" onClick={clearCompleted} className="glass-button rounded-lg border-0">
                             Clear Done
                           </Button>
                         )}
@@ -783,6 +750,7 @@ export default function UploadPage() {
                             onClick={processFiles}
                             disabled={isProcessing}
                             size="sm"
+                            className="rounded-lg bg-gradient-to-r from-primary to-purple-600"
                           >
                             {isProcessing ? (
                               <>
@@ -802,8 +770,8 @@ export default function UploadPage() {
 
                     {/* Overall Progress */}
                     {isProcessing && (
-                      <div className="space-y-1">
-                        <Progress value={overallProgress} className="h-2" />
+                      <div className="space-y-2 p-3 glass-subtle rounded-xl">
+                        <Progress value={overallProgress} className="h-2 rounded-full" />
                         <p className="text-xs text-muted-foreground text-center">
                           Processing... {Math.round(overallProgress)}%
                         </p>
@@ -811,12 +779,12 @@ export default function UploadPage() {
                     )}
 
                     {/* File Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                       {files.map((file) => (
                         <div
                           key={file.id}
-                          className={`relative group border rounded-lg overflow-hidden bg-card cursor-pointer transition-all ${
-                            selectedFile?.id === file.id ? "ring-2 ring-primary shadow-lg" : "hover:border-primary/50 hover:shadow-md"
+                          className={`relative group glass-card rounded-xl overflow-hidden cursor-pointer transition-all ${
+                            selectedFile?.id === file.id ? "ring-2 ring-primary shadow-glow" : "hover:shadow-lg hover:scale-[1.02]"
                           }`}
                           onClick={() => file.status === "success" && setSelectedFile(file)}
                         >
@@ -830,30 +798,31 @@ export default function UploadPage() {
                             <div
                               className={`absolute inset-0 flex items-center justify-center transition-all ${
                                 file.status === "uploading"
-                                  ? "bg-black/60"
+                                  ? "bg-black/60 backdrop-blur-sm"
                                   : file.status === "success"
                                   ? "bg-green-500/20"
                                   : file.status === "error"
-                                  ? "bg-red-500/30"
+                                  ? "bg-red-500/30 backdrop-blur-sm"
                                   : "bg-black/20"
                               }`}
                             >
                               {file.status === "uploading" && (
                                 <div className="text-center">
-                                  <Loader2 className="h-8 w-8 text-white animate-spin mx-auto" />
-                                  <p className="text-white text-xs mt-1">{file.progress}%</p>
+                                  <Loader2 className="h-10 w-10 text-white animate-spin mx-auto" />
+                                  <p className="text-white text-sm mt-2 font-medium">{file.progress}%</p>
                                 </div>
                               )}
                               {file.status === "success" && (
-                                <CheckCircle className="h-10 w-10 text-green-500 drop-shadow-lg" />
+                                <div className="p-3 rounded-full bg-green-500/30 backdrop-blur-sm">
+                                  <CheckCircle className="h-10 w-10 text-green-400" />
+                                </div>
                               )}
                               {file.status === "error" && (
-                                <div className="text-center p-2">
-                                  <AlertCircle className="h-8 w-8 text-red-500 mx-auto" />
+                                <div className="text-center p-3">
+                                  <AlertCircle className="h-10 w-10 text-red-400 mx-auto" />
                                   <Button
                                     size="sm"
-                                    variant="secondary"
-                                    className="mt-2 h-7 text-xs"
+                                    className="mt-3 glass-button rounded-lg"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       retryFile(file.id);
@@ -865,54 +834,43 @@ export default function UploadPage() {
                                 </div>
                               )}
                               {file.status === "pending" && (
-                                <div className="p-2 bg-black/50 rounded-full">
-                                  <UploadIcon className="h-6 w-6 text-white/80" />
+                                <div className="p-3 glass-strong rounded-full">
+                                  <UploadIcon className="h-8 w-8 text-white/80" />
                                 </div>
                               )}
                             </div>
                             {/* Progress Bar for uploading */}
                             {file.status === "uploading" && (
                               <div className="absolute bottom-0 left-0 right-0">
-                                <Progress value={file.progress} className="h-1 rounded-none" />
+                                <Progress value={file.progress} className="h-1.5 rounded-none" />
                               </div>
                             )}
                           </div>
                           {/* File Info */}
-                          <div className="p-2 space-y-1">
-                            <p className="text-xs truncate font-medium">
+                          <div className="p-3 space-y-2">
+                            <p className="text-sm truncate font-medium">
                               {file.extractedData?.presenterName || file.attitudeData?.gpName || file.errorData?.presenterName || file.file.name}
                             </p>
-                            {activeTab === "attitude" && file.attitudeData && (
-                              <Badge variant={file.attitudeData.totalNegative > file.attitudeData.totalPositive ? "destructive" : "default"} className="text-[10px] h-5">
-                                {file.attitudeData.totalEntries} entries
-                              </Badge>
-                            )}
-                            {activeTab === "errors" && file.errorData && (
-                              <Badge 
-                                variant="outline" 
-                                className={`text-[10px] h-5 ${
-                                  file.errorData.severity === "critical" ? "bg-red-100 text-red-700 border-red-300" :
-                                  file.errorData.severity === "high" ? "bg-orange-100 text-orange-700 border-orange-300" :
-                                  file.errorData.severity === "medium" ? "bg-yellow-100 text-yellow-700 border-yellow-300" :
-                                  "bg-green-100 text-green-700 border-green-300"
-                                }`}
-                              >
-                                {file.errorData.severity}
-                              </Badge>
-                            )}
-                            {file.matchInfo?.isNewGP && (
-                              <Badge variant="outline" className="text-[10px] h-5 bg-green-50 text-green-700 border-green-200">
-                                New GP
-                              </Badge>
-                            )}
-                            {file.processingTime && file.status === "success" && (
-                              <div className="flex items-center gap-1 text-muted-foreground">
-                                <Clock className="h-3 w-3" />
-                                <span className="text-[10px]">{(file.processingTime / 1000).toFixed(1)}s</span>
-                              </div>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {activeTab === "attitude" && file.attitudeData && (
+                                <Badge className={`text-xs rounded-lg ${file.attitudeData.totalNegative > file.attitudeData.totalPositive ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}>
+                                  {file.attitudeData.totalEntries} entries
+                                </Badge>
+                              )}
+                              {file.matchInfo?.isNewGP && (
+                                <Badge className="text-xs rounded-lg bg-purple-500/20 text-purple-400">
+                                  New GP
+                                </Badge>
+                              )}
+                              {file.processingTime && file.status === "success" && (
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {(file.processingTime / 1000).toFixed(1)}s
+                                </span>
+                              )}
+                            </div>
                             {file.error && (
-                              <p className="text-[10px] text-red-500 truncate">{file.error}</p>
+                              <p className="text-xs text-red-400 truncate">{file.error}</p>
                             )}
                           </div>
                           {/* Remove Button */}
@@ -922,9 +880,9 @@ export default function UploadPage() {
                                 e.stopPropagation();
                                 removeFile(file.id);
                               }}
-                              className="absolute top-1 right-1 p-1.5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                              className="absolute top-2 right-2 p-2 rounded-full glass-strong text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/50"
                             >
-                              <X className="h-3 w-3" />
+                              <X className="h-4 w-4" />
                             </button>
                           )}
                         </div>
@@ -932,22 +890,29 @@ export default function UploadPage() {
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           {/* Details Panel */}
           <div className="lg:col-span-1">
-            <Card className="sticky top-4">
-              <CardHeader>
-                <CardTitle className="text-lg">Extracted Data</CardTitle>
-                <CardDescription>
-                  {selectedFile ? `Viewing: ${selectedFile.extractedData?.presenterName || selectedFile.attitudeData?.gpName || selectedFile.errorData?.presenterName || 'Unknown'}` : "Click a processed file to view details"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+            <div className="glass-card rounded-2xl sticky top-4 overflow-hidden">
+              <div className="p-5 border-b border-border/30">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20">
+                    <Sparkles className="h-5 w-5 text-cyan-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Extracted Data</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedFile ? `${selectedFile.extractedData?.presenterName || selectedFile.attitudeData?.gpName || 'Unknown'}` : "Select a file"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-5">
                 {selectedFile?.status === "success" ? (
-                  <div className="space-y-4">
+                  <div className="space-y-5">
                     {/* Evaluation Details */}
                     {activeTab === "evaluations" && selectedFile.extractedData && (
                       <>
@@ -958,23 +923,23 @@ export default function UploadPage() {
                             <span>Game Presenter</span>
                           </div>
                           <div className="pl-6">
-                            <p className="font-medium">{selectedFile.extractedData.presenterName}</p>
+                            <p className="font-semibold text-lg">{selectedFile.extractedData.presenterName}</p>
                             {selectedFile.matchInfo && !selectedFile.matchInfo.isExactMatch && !selectedFile.matchInfo.isNewGP && (
-                              <div className="mt-1 p-2 bg-blue-50 dark:bg-blue-950 rounded-md">
+                              <div className="mt-2 p-3 glass-subtle rounded-xl">
                                 <div className="flex items-center gap-2 text-sm">
-                                  <Link2 className="h-4 w-4 text-blue-500" />
-                                  <span className="text-blue-700 dark:text-blue-300">
+                                  <Link2 className="h-4 w-4 text-primary" />
+                                  <span>
                                     Matched to: <strong>{selectedFile.matchInfo.matchedName}</strong>
                                   </span>
                                 </div>
-                                <div className="mt-1 flex items-center gap-2">
-                                  <Progress value={selectedFile.matchInfo.similarity} className="h-1.5 flex-1" />
-                                  <span className="text-xs text-blue-600">{selectedFile.matchInfo.similarity}%</span>
+                                <div className="mt-2 flex items-center gap-2">
+                                  <Progress value={selectedFile.matchInfo.similarity} className="h-2 flex-1 rounded-full" />
+                                  <span className="text-xs font-medium">{selectedFile.matchInfo.similarity}%</span>
                                 </div>
                               </div>
                             )}
                             {selectedFile.matchInfo?.isNewGP && (
-                              <Badge className="mt-1 bg-green-100 text-green-800 hover:bg-green-100">
+                              <Badge className="mt-2 bg-green-500/20 text-green-400 rounded-lg">
                                 New GP Created
                               </Badge>
                             )}
@@ -984,42 +949,42 @@ export default function UploadPage() {
                         {/* Date & Game */}
                         <div className="grid grid-cols-2 gap-4">
                           {selectedFile.extractedData.date && (
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Calendar className="h-4 w-4" />
+                            <div className="glass-subtle p-3 rounded-xl">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                                <Calendar className="h-3 w-3" />
                                 <span>Date</span>
                               </div>
-                              <p className="pl-6 text-sm">{selectedFile.extractedData.date}</p>
+                              <p className="text-sm font-medium">{selectedFile.extractedData.date}</p>
                             </div>
                           )}
                           {selectedFile.extractedData.game && (
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Gamepad2 className="h-4 w-4" />
+                            <div className="glass-subtle p-3 rounded-xl">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                                <Gamepad2 className="h-3 w-3" />
                                 <span>Game</span>
                               </div>
-                              <p className="pl-6 text-sm">{selectedFile.extractedData.game}</p>
+                              <p className="text-sm font-medium">{selectedFile.extractedData.game}</p>
                             </div>
                           )}
                         </div>
 
                         {/* Total Score */}
                         {selectedFile.extractedData.totalScore !== undefined && (
-                          <div className="p-3 bg-primary/5 rounded-lg">
+                          <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20">
                             <div className="flex items-center justify-between">
                               <span className="text-sm font-medium">Total Score</span>
-                              <div className="flex items-center gap-1">
-                                <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
-                                <span className="text-2xl font-bold">{selectedFile.extractedData.totalScore}</span>
+                              <div className="flex items-center gap-2">
+                                <Star className="h-6 w-6 text-amber-400 fill-amber-400" />
+                                <span className="text-3xl font-bold">{selectedFile.extractedData.totalScore}</span>
                               </div>
                             </div>
                           </div>
                         )}
 
                         {/* Scores Breakdown */}
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           <p className="text-sm font-medium text-muted-foreground">Scores Breakdown</p>
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             {[
                               { key: "hair", label: "Hair" },
                               { key: "makeup", label: "Makeup" },
@@ -1032,17 +997,19 @@ export default function UploadPage() {
                               if (!data) return null;
                               const percentage = (data.score / data.maxScore) * 100;
                               return (
-                                <div key={key} className="space-y-1">
+                                <div key={key} className="glass-subtle p-3 rounded-xl space-y-2">
                                   <div className="flex items-center justify-between text-sm">
-                                    <span>{label}</span>
-                                    <span className="font-medium">{data.score}/{data.maxScore}</span>
+                                    <span className="font-medium">{label}</span>
+                                    <span className={`font-bold ${percentage >= 80 ? "text-green-400" : percentage >= 60 ? "text-amber-400" : "text-red-400"}`}>
+                                      {data.score}/{data.maxScore}
+                                    </span>
                                   </div>
                                   <Progress 
                                     value={percentage} 
-                                    className={`h-1.5 ${percentage >= 80 ? "[&>div]:bg-green-500" : percentage >= 60 ? "[&>div]:bg-yellow-500" : "[&>div]:bg-red-500"}`}
+                                    className={`h-2 rounded-full ${percentage >= 80 ? "[&>div]:bg-green-500" : percentage >= 60 ? "[&>div]:bg-amber-500" : "[&>div]:bg-red-500"}`}
                                   />
                                   {data.comment && (
-                                    <p className="text-xs text-muted-foreground italic pl-2 border-l-2 border-muted">
+                                    <p className="text-xs text-muted-foreground italic">
                                       {data.comment}
                                     </p>
                                   )}
@@ -1062,43 +1029,40 @@ export default function UploadPage() {
                             <User className="h-4 w-4" />
                             <span>Game Presenter</span>
                           </div>
-                          <p className="pl-6 font-medium">{selectedFile.attitudeData.gpName || 'Unknown'}</p>
+                          <p className="pl-6 font-semibold text-lg">{selectedFile.attitudeData.gpName || 'Unknown'}</p>
                         </div>
 
                         {/* Summary Stats */}
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="p-2 rounded-lg bg-muted/50 text-center">
-                            <p className="text-lg font-bold">{selectedFile.attitudeData.totalEntries}</p>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="glass-subtle p-3 rounded-xl text-center">
+                            <p className="text-2xl font-bold">{selectedFile.attitudeData.totalEntries}</p>
                             <p className="text-xs text-muted-foreground">Total</p>
                           </div>
-                          <div className="p-2 rounded-lg bg-green-50 dark:bg-green-950 text-center">
-                            <p className="text-lg font-bold text-green-600">{selectedFile.attitudeData.totalPositive}</p>
+                          <div className="p-3 rounded-xl text-center bg-green-500/20">
+                            <p className="text-2xl font-bold text-green-400">+{selectedFile.attitudeData.totalPositive}</p>
                             <p className="text-xs text-muted-foreground">Positive</p>
                           </div>
-                          <div className="p-2 rounded-lg bg-red-50 dark:bg-red-950 text-center">
-                            <p className="text-lg font-bold text-red-600">{selectedFile.attitudeData.totalNegative}</p>
+                          <div className="p-3 rounded-xl text-center bg-red-500/20">
+                            <p className="text-2xl font-bold text-red-400">-{selectedFile.attitudeData.totalNegative}</p>
                             <p className="text-xs text-muted-foreground">Negative</p>
                           </div>
                         </div>
 
                         {/* Entries List */}
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           <p className="text-sm font-medium text-muted-foreground">Entries ({selectedFile.attitudeData.entries?.length || 0})</p>
-                          <div className="space-y-2 max-h-64 overflow-y-auto">
+                          <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
                             {selectedFile.attitudeData.entries?.map((entry, idx) => (
-                              <div key={idx} className="p-3 rounded-lg bg-muted/50 border-l-2 border-l-transparent" style={{ borderLeftColor: entry.type === 'POSITIVE' ? '#22c55e' : '#ef4444' }}>
-                                <div className="flex items-center justify-between mb-1">
-                                  <Badge 
-                                    variant={entry.type === "POSITIVE" ? "default" : "destructive"}
-                                    className="text-xs"
-                                  >
+                              <div key={idx} className={`p-3 rounded-xl ${entry.type === 'POSITIVE' ? 'bg-green-500/10 border-l-2 border-green-500' : 'bg-red-500/10 border-l-2 border-red-500'}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <Badge className={`text-xs rounded-lg ${entry.type === "POSITIVE" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
                                     {entry.type === "POSITIVE" ? (
                                       <><ThumbsUp className="h-3 w-3 mr-1" /> POSITIVE</>
                                     ) : (
                                       <><ThumbsDown className="h-3 w-3 mr-1" /> NEGATIVE</>
                                     )}
                                   </Badge>
-                                  <span className={`font-bold ${entry.score > 0 ? "text-green-600" : "text-red-600"}`}>
+                                  <span className={`font-bold ${entry.score > 0 ? "text-green-400" : "text-red-400"}`}>
                                     {entry.score > 0 ? "+" : ""}{entry.score}
                                   </span>
                                 </div>
@@ -1111,20 +1075,20 @@ export default function UploadPage() {
                       </>
                     )}
 
-
-
                     {/* Processing Time */}
                     {selectedFile.processingTime && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground bg-slate-50 dark:bg-slate-900 p-2 rounded">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground glass-subtle p-3 rounded-xl">
                         <Clock className="h-4 w-4" />
                         <span>Processed in {(selectedFile.processingTime / 1000).toFixed(1)}s</span>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Sparkles className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                    <p className="text-sm">
+                  <div className="text-center py-12">
+                    <div className="p-4 rounded-2xl bg-gradient-to-br from-primary/10 to-purple-500/10 inline-block mb-4">
+                      <Sparkles className="h-12 w-12 text-primary/50" />
+                    </div>
+                    <p className="text-muted-foreground">
                       Upload and process screenshots to see extracted data
                     </p>
                     <p className="text-xs mt-2 text-muted-foreground/70">
@@ -1132,8 +1096,8 @@ export default function UploadPage() {
                     </p>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         </div>
       </Tabs>

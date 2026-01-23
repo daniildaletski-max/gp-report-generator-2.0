@@ -327,12 +327,12 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 md:p-6 bg-mesh min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
-          <p className="text-muted-foreground">Generate and manage Team Monthly Overview reports</p>
+          <h1 className="text-3xl font-bold gradient-text">Reports</h1>
+          <p className="text-muted-foreground mt-1">Generate and manage Team Monthly Overview reports</p>
         </div>
         
         <Dialog open={showNewReport} onOpenChange={setShowNewReport}>
@@ -509,50 +509,42 @@ export default function ReportsPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <FileSpreadsheet className="h-4 w-4" />
-              Total Reports
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              This Month
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.thisMonth}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              Finalized
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.finalized}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Download className="h-4 w-4" />
-              Exported
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.exported}</div>
-          </CardContent>
-        </Card>
+        <div className="glass-card rounded-2xl p-5 hover-lift">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20">
+              <FileSpreadsheet className="h-5 w-5 text-blue-400" />
+            </div>
+            <span className="text-sm text-muted-foreground">Total Reports</span>
+          </div>
+          <div className="text-3xl font-bold">{stats.total}</div>
+        </div>
+        <div className="glass-card rounded-2xl p-5 hover-lift">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20">
+              <Calendar className="h-5 w-5 text-purple-400" />
+            </div>
+            <span className="text-sm text-muted-foreground">This Month</span>
+          </div>
+          <div className="text-3xl font-bold">{stats.thisMonth}</div>
+        </div>
+        <div className="glass-card rounded-2xl p-5 hover-lift">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500/20 to-green-500/20">
+              <CheckCircle className="h-5 w-5 text-emerald-400" />
+            </div>
+            <span className="text-sm text-muted-foreground">Finalized</span>
+          </div>
+          <div className="text-3xl font-bold text-emerald-400">{stats.finalized}</div>
+        </div>
+        <div className="glass-card rounded-2xl p-5 hover-lift">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20">
+              <Download className="h-5 w-5 text-amber-400" />
+            </div>
+            <span className="text-sm text-muted-foreground">Exported</span>
+          </div>
+          <div className="text-3xl font-bold">{stats.exported}</div>
+        </div>
       </div>
 
       <Card>
