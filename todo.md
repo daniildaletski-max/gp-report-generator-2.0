@@ -1820,3 +1820,9 @@
 
 - [x] Add missing getTeamById function to db.ts
 - [x] Fix DialogTitle accessibility warning in GPDetailModal (added title for loading and error states)
+
+
+## Bug Fix - Game Performance Display
+
+- [x] Fix Game Performance showing incorrect values (5/10, 4/10) in GP Detail Modal
+- [x] Changed to use gamePerformanceTotalScore (Dealing + GamePerf) instead of just gamePerformanceScore

@@ -976,7 +976,7 @@ export const appRouter = router({
             date: e.evaluationDate,
             totalScore: e.totalScore,
             appearanceScore: e.appearanceScore,
-            gamePerformanceScore: e.gamePerformanceScore,
+            gamePerformanceScore: e.gamePerformanceTotalScore, // Use total (Dealing + GamePerf)
             comments: e.comments,
             evaluatedBy: e.evaluatedBy,
           })),
