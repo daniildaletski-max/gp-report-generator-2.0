@@ -56,15 +56,15 @@ function FMRestrictedView() {
   const team = teams?.[0]; // FM only sees their team
 
   return (
-    <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0f]">
+    <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Team Management</h1>
-          <p className="text-white/50 mt-1">
+        <div className="page-header">
+          <h1 className="page-title">Team Management</h1>
+          <p className="page-subtitle">
             Manage your team: {team?.teamName || "Loading..."}
           </p>
         </div>
-        <Badge className="bg-white/5 border border-white/10 text-sm rounded-xl px-4 py-2">
+        <Badge className="bg-gradient-to-r from-purple-500/20 to-fuchsia-500/20 border border-purple-500/30 text-sm rounded-xl px-4 py-2">
           <Users className="h-3 w-3 mr-1" />
           Floor Manager
         </Badge>
@@ -120,32 +120,41 @@ function FullAdminPanel() {
 
   if (teamsLoading || filesLoading || gpsLoading || tokensLoading) {
     return (
-      <div className="space-y-6 p-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Admin Panel</h1>
-          <p className="text-muted-foreground">System administration and management</p>
+      <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
+        <div className="page-header">
+          <div className="skeleton-enhanced h-8 w-48 rounded-lg" />
+          <div className="skeleton-enhanced h-4 w-64 rounded mt-2" />
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
+        <div className="grid gap-4 md:grid-cols-5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="stat-card-enhanced stat-card-purple p-5">
+              <div className="flex items-center gap-3">
+                <div className="skeleton-enhanced h-10 w-10 rounded-xl" />
+                <div className="flex-1">
+                  <div className="skeleton-enhanced h-3 w-20 rounded mb-2" />
+                  <div className="skeleton-enhanced h-6 w-16 rounded" />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0f]">
+    <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-purple-500/10">
-              <Shield className="h-6 w-6 text-purple-400" />
-            </div>
-            Admin Panel
-          </h1>
-          <p className="text-white/50 mt-1">System administration and management</p>
+        <div className="page-header flex items-center gap-4">
+          <div className="icon-box p-3">
+            <Shield className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="page-title">Admin Panel</h1>
+            <p className="page-subtitle">System administration and management</p>
+          </div>
         </div>
-        <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-xl px-4 py-2">
+        <Badge className="bg-gradient-to-r from-purple-500/20 to-fuchsia-500/20 text-purple-300 border border-purple-500/30 rounded-xl px-4 py-2">
           Administrator
         </Badge>
       </div>
@@ -249,123 +258,120 @@ function AdminOverviewTab() {
       title: "Total Users", 
       value: adminStats?.totalUsers || 0, 
       icon: Users, 
-      color: "text-blue-400",
-      bgColor: "bg-blue-500/10 border border-blue-500/20"
+      cardClass: "stat-card-purple"
     },
     { 
       title: "Teams", 
       value: adminStats?.totalTeams || 0, 
       icon: Building2, 
-      color: "text-purple-400",
-      bgColor: "bg-purple-500/10 border border-purple-500/20"
+      cardClass: "stat-card-fuchsia"
     },
     { 
       title: "Game Presenters", 
       value: adminStats?.totalGPs || 0, 
       icon: Star, 
-      color: "text-yellow-400",
-      bgColor: "bg-yellow-500/10 border border-yellow-500/20"
+      cardClass: "stat-card-amber"
     },
     { 
       title: "Evaluations", 
       value: adminStats?.totalEvaluations || 0, 
       icon: Target, 
-      color: "text-green-400",
-      bgColor: "bg-green-500/10 border border-green-500/20"
+      cardClass: "stat-card-green"
     },
     { 
       title: "Reports", 
       value: adminStats?.totalReports || 0, 
       icon: FileSpreadsheet, 
-      color: "text-orange-400",
-      bgColor: "bg-orange-500/10 border border-orange-500/20"
+      cardClass: "stat-card-cyan"
     },
   ];
 
   return (
     <TabsContent value="overview" className="space-y-6">
       {/* Main Stats */}
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-5 animate-stagger">
         {statCards.map((stat, idx) => (
-          <Card key={idx} className={`${stat.bgColor} border-0`}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                {stat.title}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{stat.value}</div>
-            </CardContent>
-          </Card>
+          <div key={idx} className={`stat-card-enhanced ${stat.cardClass}`}>
+            <div className="icon-box">
+              <stat.icon className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">{stat.title}</p>
+              <p className="text-2xl font-bold">{stat.value}</p>
+            </div>
+          </div>
         ))}
       </div>
 
       {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-yellow-500" />
-            Quick Actions
-          </CardTitle>
-          <CardDescription>Common administrative tasks</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="unified-card">
+        <div className="unified-card-header">
+          <div className="section-header" style={{ paddingLeft: 0 }}>
+            <h3 className="section-title flex items-center gap-2">
+              <Zap className="h-5 w-5 text-yellow-500" />
+              Quick Actions
+            </h3>
+            <p className="section-subtitle">Common administrative tasks</p>
+          </div>
+        </div>
+        <div className="unified-card-body">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button variant="outline" className="h-20 flex-col gap-2" onClick={() => toast.info("Navigate to Users tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-purple-500/10 hover:border-purple-500/30 transition-all" onClick={() => toast.info("Navigate to Users tab")}>
               <UserCog className="h-6 w-6" />
               <span>Manage Users</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2" onClick={() => toast.info("Navigate to Teams tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-fuchsia-500/10 hover:border-fuchsia-500/30 transition-all" onClick={() => toast.info("Navigate to Teams tab")}>
               <Building2 className="h-6 w-6" />
               <span>Manage Teams</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2" onClick={() => toast.info("Navigate to GP Stats tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-amber-500/10 hover:border-amber-500/30 transition-all" onClick={() => toast.info("Navigate to GP Stats tab")}>
               <Star className="h-6 w-6" />
               <span>View GP Stats</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2" onClick={() => toast.info("Navigate to Errors tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-red-500/10 hover:border-red-500/30 transition-all" onClick={() => toast.info("Navigate to Errors tab")}>
               <AlertTriangle className="h-6 w-6" />
               <span>Check Errors</span>
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* System Health */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5 text-green-500" />
-            System Health
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <div className="unified-card">
+        <div className="unified-card-header">
+          <div className="section-header" style={{ paddingLeft: 0 }}>
+            <h3 className="section-title flex items-center gap-2">
+              <Activity className="h-5 w-5 text-green-500" />
+              System Health
+            </h3>
+          </div>
+        </div>
+        <div className="unified-card-body">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Database</span>
-                <span className="text-green-500 font-medium">Healthy</span>
+            <div className="p-4 rounded-xl bg-green-500/5 border border-green-500/20">
+              <div className="flex justify-between text-sm mb-3">
+                <span className="text-muted-foreground">Database</span>
+                <span className="text-green-400 font-medium">Healthy</span>
               </div>
               <Progress value={100} className="h-2" />
             </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Storage</span>
-                <span className="text-green-500 font-medium">Available</span>
+            <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
+              <div className="flex justify-between text-sm mb-3">
+                <span className="text-muted-foreground">Storage</span>
+                <span className="text-blue-400 font-medium">Available</span>
               </div>
               <Progress value={35} className="h-2" />
             </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>API</span>
-                <span className="text-green-500 font-medium">Operational</span>
+            <div className="p-4 rounded-xl bg-green-500/5 border border-green-500/20">
+              <div className="flex justify-between text-sm mb-3">
+                <span className="text-muted-foreground">API</span>
+                <span className="text-green-400 font-medium">Operational</span>
               </div>
               <Progress value={100} className="h-2" />
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </TabsContent>
   );
 }
@@ -425,24 +431,24 @@ function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[
 
   return (
     <TabsContent value="users" className="space-y-4">
-      <Card>
-        <CardHeader>
+      <div className="unified-card">
+        <div className="unified-card-header">
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
+            <div className="section-header" style={{ paddingLeft: 0 }}>
+              <h3 className="section-title flex items-center gap-2">
                 <UserCog className="h-5 w-5" />
                 User Management
-              </CardTitle>
-              <CardDescription>
+              </h3>
+              <p className="section-subtitle">
                 {filteredUsers.length} of {users?.length || 0} users
                 {hasActiveFilters && " (filtered)"}
-              </CardDescription>
+              </p>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </div>
+        <div className="unified-card-body space-y-4">
           {/* Filters */}
-          <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/50 rounded-lg">
+          <div className="filter-bar">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -473,16 +479,16 @@ function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[
           </div>
 
           {isLoading ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
+                <div key={i} className="skeleton-enhanced h-16 w-full rounded-lg" />
               ))}
             </div>
           ) : filteredUsers.length > 0 ? (
-            <div className="border rounded-lg overflow-hidden">
+            <div className="table-enhanced">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/50">
+                  <TableRow>
                     <TableHead>User</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Team</TableHead>
@@ -494,7 +500,7 @@ function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[
                   {filteredUsers.map((u) => {
                     const user = u.user;
                     return (
-                    <TableRow key={user.id} className="hover:bg-muted/50">
+                    <TableRow key={user.id} className="table-row-enhanced">
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -591,12 +597,20 @@ function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[
               </Table>
             </div>
           ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              {hasActiveFilters ? "No users match your filters" : "No users found"}
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <UserCog className="h-8 w-8" />
+              </div>
+              <h3 className="empty-state-title">
+                {hasActiveFilters ? "No users match your filters" : "No users found"}
+              </h3>
+              <p className="empty-state-description">
+                {hasActiveFilters ? "Try adjusting your filters" : "Users will appear here once registered"}
+              </p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </TabsContent>
   );
 }
@@ -699,17 +713,17 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
 
   return (
     <TabsContent value="teams" className="space-y-4">
-      <Card>
-        <CardHeader>
+      <div className="unified-card">
+        <div className="unified-card-header">
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
+            <div className="section-header" style={{ paddingLeft: 0 }}>
+              <h3 className="section-title flex items-center gap-2">
                 <Building2 className="h-5 w-5" />
                 Teams Management
-              </CardTitle>
-              <CardDescription>
+              </h3>
+              <p className="section-subtitle">
                 Create and manage FM teams. Assign Game Presenters to each team.
-              </CardDescription>
+              </p>
             </div>
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
@@ -760,12 +774,12 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
               </DialogContent>
             </Dialog>
           </div>
-        </CardHeader>
-        <CardContent>
+        </div>
+        <div className="unified-card-body">
           {isLoading ? (
-            <div className="space-y-2">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
+                <div key={i} className="skeleton-enhanced h-48 w-full rounded-xl" />
               ))}
             </div>
           ) : teamsWithGPs && teamsWithGPs.length > 0 ? (
@@ -1044,33 +1058,37 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12">
-              <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="font-semibold mb-1">No teams yet</h3>
-              <p className="text-muted-foreground mb-4">Create your first team to get started</p>
-              <Button onClick={() => setIsCreateOpen(true)}>
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <Building2 className="h-8 w-8" />
+              </div>
+              <h3 className="empty-state-title">No teams yet</h3>
+              <p className="empty-state-description">Create your first team to get started</p>
+              <Button onClick={() => setIsCreateOpen(true)} className="mt-4">
                 <Plus className="h-4 w-4 mr-2" />
                 Create Team
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Unassigned GPs Section */}
       {unassignedGPs && unassignedGPs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Star className="h-5 w-5 text-yellow-500" />
-              Unassigned Game Presenters
-              <Badge variant="secondary">{unassignedGPs.length}</Badge>
-            </CardTitle>
-            <CardDescription>
-              These GPs are not assigned to any team. Edit a team above to assign them.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <div className="unified-card">
+          <div className="unified-card-header">
+            <div className="section-header" style={{ paddingLeft: 0 }}>
+              <h3 className="section-title flex items-center gap-2">
+                <Star className="h-5 w-5 text-yellow-500" />
+                Unassigned Game Presenters
+                <Badge variant="secondary">{unassignedGPs.length}</Badge>
+              </h3>
+              <p className="section-subtitle">
+                These GPs are not assigned to any team. Edit a team above to assign them.
+              </p>
+            </div>
+          </div>
+          <div className="unified-card-body">
             <div className="flex flex-wrap gap-2">
               {unassignedGPs.slice(0, 20).map((gp: any) => (
                 <Badge key={gp.id} variant="outline" className="py-1">
@@ -1083,8 +1101,8 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                 </Badge>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </TabsContent>
   );
@@ -1241,15 +1259,17 @@ function GPAccessLinksTab({
 
   return (
     <TabsContent value="access" className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Link className="h-5 w-5" />
-            GP Access Links
-          </CardTitle>
-          <CardDescription>
-            Generate unique access links for Game Presenters to view their evaluations.
-          </CardDescription>
+      <div className="unified-card">
+        <div className="unified-card-header">
+          <div className="section-header" style={{ paddingLeft: 0 }}>
+            <h3 className="section-title flex items-center gap-2">
+              <Link className="h-5 w-5" />
+              GP Access Links
+            </h3>
+            <p className="section-subtitle">
+              Generate unique access links for Game Presenters to view their evaluations.
+            </p>
+          </div>
           <div className="pt-2 flex gap-2">
             <Button 
               onClick={handleGenerateAll}
@@ -1275,8 +1295,8 @@ function GPAccessLinksTab({
               )}
             </Button>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </div>
+        <div className="unified-card-body space-y-4">
           {/* Search */}
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1289,9 +1309,9 @@ function GPAccessLinksTab({
           </div>
 
           {isLoading ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
+                <div key={i} className="skeleton-enhanced h-16 w-full rounded-lg" />
               ))}
             </div>
           ) : filteredGPs.length > 0 ? (
@@ -1304,10 +1324,10 @@ function GPAccessLinksTab({
                       <Building2 className="h-4 w-4" />
                       {team?.teamName || "Unassigned"}
                     </h3>
-                    <div className="border rounded-lg overflow-hidden">
+                    <div className="table-enhanced">
                       <Table>
                         <TableHeader>
-                          <TableRow className="bg-muted/50">
+                          <TableRow>
                             <TableHead>Name</TableHead>
                             <TableHead>Team</TableHead>
                             <TableHead>Status</TableHead>
@@ -1321,7 +1341,7 @@ function GPAccessLinksTab({
                             const tokenData = accessTokens.find(t => t.token?.gamePresenterId === gp.id && t.token?.isActive === 1);
                             const token = tokenData ? { ...tokenData.token, gpId: tokenData.token?.gamePresenterId } : null;
                             return (
-                              <TableRow key={gp.id} className="hover:bg-muted/50">
+                              <TableRow key={gp.id} className="table-row-enhanced">
                                 <TableCell className="font-medium">{gp.name}</TableCell>
                                 <TableCell>
                                   <Select
@@ -1454,12 +1474,20 @@ function GPAccessLinksTab({
               })}
             </div>
           ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              {searchQuery ? "No Game Presenters match your search" : "No Game Presenters found"}
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <Link className="h-8 w-8" />
+              </div>
+              <h3 className="empty-state-title">
+                {searchQuery ? "No Game Presenters match your search" : "No Game Presenters found"}
+              </h3>
+              <p className="empty-state-description">
+                {searchQuery ? "Try adjusting your search" : "GPs will appear here once added"}
+              </p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </TabsContent>
   );
 }
@@ -1541,17 +1569,19 @@ filename: file.name,
 
   return (
     <TabsContent value="errors" className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-yellow-500" />
-            Upload Error Files
-          </CardTitle>
-          <CardDescription>
-            Upload Playgon or MG error files for tracking GP mistakes.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="unified-card">
+        <div className="unified-card-header">
+          <div className="section-header" style={{ paddingLeft: 0 }}>
+            <h3 className="section-title flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-500" />
+              Upload Error Files
+            </h3>
+            <p className="section-subtitle">
+              Upload Playgon or MG error files for tracking GP mistakes.
+            </p>
+          </div>
+        </div>
+        <div className="unified-card-body space-y-4">
           <div className="grid gap-4 md:grid-cols-4">
             <div className="space-y-2">
               <Label>Error Type</Label>
@@ -1601,20 +1631,22 @@ filename: file.name,
               />
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Uploaded Error Files</CardTitle>
-          <CardDescription>{errorFiles.length} files uploaded</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="unified-card">
+        <div className="unified-card-header">
+          <div className="section-header" style={{ paddingLeft: 0 }}>
+            <h3 className="section-title">Uploaded Error Files</h3>
+            <p className="section-subtitle">{errorFiles.length} files uploaded</p>
+          </div>
+        </div>
+        <div className="unified-card-body">
           {errorFiles && errorFiles.length > 0 ? (
-            <div className="border rounded-lg overflow-hidden">
+            <div className="table-enhanced">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/50">
+                  <TableRow>
                     <TableHead>Filename</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Period</TableHead>
@@ -1624,7 +1656,7 @@ filename: file.name,
                 </TableHeader>
                 <TableBody>
                   {errorFiles.map((file) => (
-                    <TableRow key={file.id} className="hover:bg-muted/50">
+                    <TableRow key={file.id} className="table-row-enhanced">
                       <TableCell className="font-medium">{file.fileName}</TableCell>
                       <TableCell>
                         <Badge variant={file.fileType === 'playgon' ? 'default' : 'secondary'}>
@@ -1678,14 +1710,16 @@ filename: file.name,
               </Table>
             </div>
           ) : (
-            <div className="text-center py-12">
-              <AlertTriangle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="font-semibold mb-1">No error files uploaded</h3>
-              <p className="text-muted-foreground">Upload your first error file to track GP mistakes</p>
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <AlertTriangle className="h-8 w-8" />
+              </div>
+              <h3 className="empty-state-title">No error files uploaded</h3>
+              <p className="empty-state-description">Upload your first error file to track GP mistakes</p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </TabsContent>
   );
 }
@@ -1845,77 +1879,57 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
   return (
     <TabsContent value="invitations" className="space-y-4">
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-400" />
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Invitations</p>
-                <p className="text-3xl font-bold">{stats?.total || 0}</p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
-                <Mail className="h-6 w-6 text-blue-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-amber-400" />
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Pending</p>
-                <p className="text-3xl font-bold">{stats?.pending || 0}</p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-amber-500/20 flex items-center justify-center">
-                <MailQuestion className="h-6 w-6 text-amber-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-green-400" />
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Accepted</p>
-                <p className="text-3xl font-bold">{stats?.accepted || 0}</p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
-                <MailCheck className="h-6 w-6 text-green-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gray-500 to-gray-400" />
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Expired/Revoked</p>
-                <p className="text-3xl font-bold">{(stats?.expired || 0) + (stats?.revoked || 0)}</p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-gray-500/20 flex items-center justify-center">
-                <MailX className="h-6 w-6 text-gray-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-4 animate-stagger">
+        <div className="stat-card-enhanced stat-card-cyan">
+          <div className="icon-box">
+            <Mail className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Total Invitations</p>
+            <p className="text-2xl font-bold">{stats?.total || 0}</p>
+          </div>
+        </div>
+        <div className="stat-card-enhanced stat-card-amber">
+          <div className="icon-box">
+            <MailQuestion className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Pending</p>
+            <p className="text-2xl font-bold">{stats?.pending || 0}</p>
+          </div>
+        </div>
+        <div className="stat-card-enhanced stat-card-green">
+          <div className="icon-box">
+            <MailCheck className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Accepted</p>
+            <p className="text-2xl font-bold text-green-400">{stats?.accepted || 0}</p>
+          </div>
+        </div>
+        <div className="stat-card-enhanced stat-card-red">
+          <div className="icon-box">
+            <MailX className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Expired/Revoked</p>
+            <p className="text-2xl font-bold">{(stats?.expired || 0) + (stats?.revoked || 0)}</p>
+          </div>
+        </div>
       </div>
 
       {/* Main Card */}
-      <Card>
-        <CardHeader>
+      <div className="unified-card">
+        <div className="unified-card-header">
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
+            <div className="section-header" style={{ paddingLeft: 0 }}>
+              <h3 className="section-title flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
                 FM Invitations
-              </CardTitle>
-              <CardDescription>
+              </h3>
+              <p className="section-subtitle">
                 Invite Floor Managers to join the system. They can only register with a valid invitation link.
-              </CardDescription>
+              </p>
             </div>
             <div className="flex gap-2">
               <Dialog open={isBulkOpen} onOpenChange={setIsBulkOpen}>

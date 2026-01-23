@@ -333,36 +333,52 @@ export default function EvaluationsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 p-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Evaluations</h1>
-          <p className="text-muted-foreground">View all uploaded evaluation data</p>
+      <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
+        {/* Page Header Skeleton */}
+        <div className="page-header">
+          <div className="skeleton-enhanced h-8 w-48 rounded-lg" />
+          <div className="skeleton-enhanced h-4 w-64 rounded mt-2" />
         </div>
+        
+        {/* Stats Cards Skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-24" />
+            <div key={i} className="stat-card-enhanced stat-card-purple p-5">
+              <div className="flex items-center gap-3">
+                <div className="skeleton-enhanced h-10 w-10 rounded-xl" />
+                <div className="flex-1">
+                  <div className="skeleton-enhanced h-3 w-20 rounded mb-2" />
+                  <div className="skeleton-enhanced h-6 w-16 rounded" />
+                </div>
+              </div>
+            </div>
           ))}
         </div>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-4">
+        
+        {/* Table Skeleton */}
+        <div className="unified-card">
+          <div className="unified-card-header">
+            <div className="skeleton-enhanced h-5 w-32 rounded" />
+          </div>
+          <div className="unified-card-body">
+            <div className="space-y-3">
               {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
+                <div key={i} className="skeleton-enhanced h-14 w-full rounded-lg" />
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Evaluations</h1>
-          <p className="text-muted-foreground">
+        <div className="page-header">
+          <h1 className="page-title">Evaluations</h1>
+          <p className="page-subtitle">
             View and manage evaluation data
           </p>
         </div>
@@ -449,82 +465,74 @@ export default function EvaluationsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <FileSpreadsheet className="h-4 w-4" />
-              Total Evaluations
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              This Month
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.thisMonth}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Average Score
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.avgScore}<span className="text-lg text-muted-foreground">/24</span></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-green-500" />
-              Top Score
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.topScore}</div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-stagger">
+        <div className="stat-card-enhanced stat-card-purple">
+          <div className="icon-box">
+            <FileSpreadsheet className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Total Evaluations</p>
+            <p className="text-2xl font-bold">{stats.total}</p>
+          </div>
+        </div>
+        <div className="stat-card-enhanced stat-card-fuchsia">
+          <div className="icon-box">
+            <Calendar className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">This Month</p>
+            <p className="text-2xl font-bold">{stats.thisMonth}</p>
+          </div>
+        </div>
+        <div className="stat-card-enhanced stat-card-amber">
+          <div className="icon-box">
+            <TrendingUp className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Average Score</p>
+            <p className="text-2xl font-bold">{stats.avgScore}<span className="text-lg text-muted-foreground">/24</span></p>
+          </div>
+        </div>
+        <div className="stat-card-enhanced stat-card-green">
+          <div className="icon-box">
+            <TrendingUp className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Top Score</p>
+            <p className="text-2xl font-bold text-green-400">{stats.topScore}</p>
+          </div>
+        </div>
       </div>
 
       {/* Tabs for Evaluations and Attitude */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "evaluations" | "attitude")} className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="evaluations" className="flex items-center gap-2">
+        <TabsList className="grid w-full max-w-md grid-cols-2 bg-white/5 border border-white/10 rounded-xl p-1">
+          <TabsTrigger value="evaluations" className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500/20 data-[state=active]:to-fuchsia-500/20 data-[state=active]:border-purple-500/30 rounded-lg transition-all">
             <FileSpreadsheet className="h-4 w-4" />
             Evaluations ({stats.total})
           </TabsTrigger>
-          <TabsTrigger value="attitude" className="flex items-center gap-2">
+          <TabsTrigger value="attitude" className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500/20 data-[state=active]:to-rose-500/20 data-[state=active]:border-pink-500/30 rounded-lg transition-all">
             <Heart className="h-4 w-4" />
             Attitude ({attitudeStats.total})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="evaluations" className="mt-4">
-          <Card>
-            <CardHeader>
+          <div className="unified-card">
+            <div className="unified-card-header">
               <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>All Evaluations</CardTitle>
-                  <CardDescription>
+                <div className="section-header" style={{ paddingLeft: 0 }}>
+                  <h3 className="section-title">All Evaluations</h3>
+                  <p className="section-subtitle">
                     {filteredEvaluations.length} of {evaluations?.length || 0} evaluations
                     {hasActiveFilters && " (filtered)"}
-                  </CardDescription>
+                  </p>
                 </div>
               </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+            </div>
+        <div className="unified-card-body space-y-4">
           {/* Search and Filter Bar */}
-          <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/50 rounded-lg">
+          <div className="filter-bar">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -613,10 +621,10 @@ export default function EvaluationsPage() {
 
           {/* Evaluations Table */}
           {filteredEvaluations.length > 0 ? (
-            <div className="overflow-x-auto border rounded-lg">
+            <div className="table-enhanced">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/50">
+                  <TableRow>
                     <TableHead className="w-[40px]">
                       <Checkbox
                         checked={selectedIds.size === filteredEvaluations.length && filteredEvaluations.length > 0}
@@ -640,7 +648,7 @@ export default function EvaluationsPage() {
                     const performanceScore = (evaluation.dealingStyleScore || 0) + (evaluation.gamePerformanceScore || 0);
                     
                     return (
-                      <TableRow key={evaluation.id} className="hover:bg-muted/50">
+                      <TableRow key={evaluation.id} className="table-row-enhanced">
                         <TableCell>
                           <Checkbox
                             checked={selectedIds.has(evaluation.id)}
@@ -662,17 +670,17 @@ export default function EvaluationsPage() {
                           {evaluation.evaluatorName || "-"}
                         </TableCell>
                         <TableCell className="text-center">
-                          <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-sm font-medium ${getScoreBadge(appearanceScore, 12)}`}>
+                          <span className={`score-pill-${appearanceScore >= 10 ? 'excellent' : appearanceScore >= 8 ? 'good' : 'poor'}`}>
                             {appearanceScore}/12
                           </span>
                         </TableCell>
                         <TableCell className="text-center">
-                          <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-sm font-medium ${getScoreBadge(performanceScore, 12)}`}>
+                          <span className={`score-pill-${performanceScore >= 10 ? 'excellent' : performanceScore >= 8 ? 'good' : 'poor'}`}>
                             {performanceScore}/12
                           </span>
                         </TableCell>
                         <TableCell className="text-center">
-                          <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded font-bold ${getScoreBadge(evaluation.totalScore || 0, 24)}`}>
+                          <span className={`score-pill-${(evaluation.totalScore || 0) >= 20 ? 'excellent' : (evaluation.totalScore || 0) >= 16 ? 'good' : 'poor'} text-base font-bold`}>
                             {evaluation.totalScore || 0}
                           </span>
                         </TableCell>
@@ -724,12 +732,14 @@ export default function EvaluationsPage() {
               </Table>
             </div>
           ) : (
-            <div className="text-center py-12">
-              <Image className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="font-semibold mb-1">
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <Image className="h-8 w-8" />
+              </div>
+              <h3 className="empty-state-title">
                 {hasActiveFilters ? "No matching evaluations" : "No evaluations yet"}
               </h3>
-              <p className="text-muted-foreground">
+              <p className="empty-state-description">
                 {hasActiveFilters 
                   ? "Try adjusting your filters or search query"
                   : "Upload evaluation screenshots to get started"}
@@ -741,20 +751,20 @@ export default function EvaluationsPage() {
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
         </TabsContent>
 
         {/* Attitude Tab */}
         <TabsContent value="attitude" className="mt-4">
-          <Card>
-            <CardHeader>
+          <div className="unified-card">
+            <div className="unified-card-header">
               <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Attitude Entries</CardTitle>
-                  <CardDescription>
+                <div className="section-header" style={{ paddingLeft: 0 }}>
+                  <h3 className="section-title">Attitude Entries</h3>
+                  <p className="section-subtitle">
                     {filteredAttitudeEntries.length} of {attitudeEntries?.length || 0} entries
-                  </CardDescription>
+                  </p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
@@ -767,10 +777,10 @@ export default function EvaluationsPage() {
                   </div>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div className="unified-card-body">
               {/* Filters */}
-              <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-muted/50 rounded-lg">
+              <div className="filter-bar mb-4">
                 <div className="relative flex-1 min-w-[200px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -839,10 +849,10 @@ export default function EvaluationsPage() {
                   ))}
                 </div>
               ) : filteredAttitudeEntries.length > 0 ? (
-                <div className="overflow-x-auto border rounded-lg">
+                <div className="table-enhanced">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-muted/50">
+                      <TableRow>
                         <TableHead>Game Presenter</TableHead>
                         <TableHead>Date</TableHead>
                         <TableHead>Type</TableHead>
@@ -853,7 +863,7 @@ export default function EvaluationsPage() {
                     </TableHeader>
                     <TableBody>
                       {filteredAttitudeEntries.map((entry) => (
-                        <TableRow key={entry.id} className="hover:bg-muted/50">
+                        <TableRow key={entry.id} className="table-row-enhanced">
                           <TableCell className="font-medium">
                             {entry.gamePresenter?.name || entry.gpName || 'Unknown'}
                           </TableCell>
@@ -930,16 +940,18 @@ export default function EvaluationsPage() {
                   </Table>
                 </div>
               ) : (
-                <div className="text-center py-12">
-                  <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="font-semibold mb-1">No attitude entries yet</h3>
-                  <p className="text-muted-foreground">
+                <div className="empty-state">
+                  <div className="empty-state-icon">
+                    <Heart className="h-8 w-8" />
+                  </div>
+                  <h3 className="empty-state-title">No attitude entries yet</h3>
+                  <p className="empty-state-description">
                     Upload attitude screenshots in the Upload section to track GP behavior
                   </p>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
 
