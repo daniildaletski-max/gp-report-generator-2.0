@@ -3221,16 +3221,47 @@ function GPDetailModal({
                 <div className="space-y-3 py-4">
                   {data.attitudeScreenshots.length > 0 ? (
                     data.attitudeScreenshots.map((screenshot) => (
-                      <div key={screenshot.id} className="p-4 rounded-lg border bg-card">
+                      <div 
+                        key={screenshot.id} 
+                        className={`p-4 rounded-lg border-l-4 bg-card ${
+                          screenshot.attitudeType === 'positive' 
+                            ? 'border-l-green-500 bg-green-50/50 dark:bg-green-950/20' 
+                            : screenshot.attitudeType === 'negative'
+                            ? 'border-l-red-500 bg-red-50/50 dark:bg-red-950/20'
+                            : 'border-l-gray-300'
+                        }`}
+                      >
                         <div className="flex items-center justify-between mb-2">
-                          <Badge variant="outline">Screenshot</Badge>
+                          <div className="flex items-center gap-2">
+                            {screenshot.attitudeType === 'positive' ? (
+                              <Badge className="bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900 dark:text-green-300">
+                                <ThumbsUp className="h-3 w-3 mr-1" />
+                                POSITIVE
+                              </Badge>
+                            ) : screenshot.attitudeType === 'negative' ? (
+                              <Badge className="bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900 dark:text-red-300">
+                                <ThumbsDown className="h-3 w-3 mr-1" />
+                                NEGATIVE
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline">Unknown</Badge>
+                            )}
+                            <span className={`font-bold text-lg ${
+                              (screenshot.attitudeScore ?? 0) > 0 ? 'text-green-600' : 
+                              (screenshot.attitudeScore ?? 0) < 0 ? 'text-red-600' : 'text-gray-600'
+                            }`}>
+                              {(screenshot.attitudeScore ?? 0) > 0 ? '+' : ''}{screenshot.attitudeScore ?? 0}
+                            </span>
+                          </div>
                           <span className="text-sm text-muted-foreground">
-                            {format(new Date(screenshot.createdAt), 'MMM dd, yyyy HH:mm')}
+                            {screenshot.evaluationDate 
+                              ? format(new Date(screenshot.evaluationDate), 'MMM dd, yyyy HH:mm')
+                              : format(new Date(screenshot.createdAt), 'MMM dd, yyyy HH:mm')}
                           </span>
                         </div>
-                        {screenshot.extractedData && (
+                        {screenshot.comment && (
                           <div className="mt-2 p-3 rounded bg-muted/50">
-                            <p className="text-sm whitespace-pre-wrap">{screenshot.extractedData}</p>
+                            <p className="text-sm">{screenshot.comment}</p>
                           </div>
                         )}
                         {screenshot.url && (
@@ -3249,7 +3280,8 @@ function GPDetailModal({
                   ) : (
                     <div className="text-center py-12">
                       <ThumbsUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                      <p className="text-muted-foreground">No attitude screenshots for this month</p>
+                      <p className="text-muted-foreground">No attitude entries for this month</p>
+                      <p className="text-xs text-muted-foreground mt-1">Upload attitude screenshots to see entries here</p>
                     </div>
                   )}
                 </div>

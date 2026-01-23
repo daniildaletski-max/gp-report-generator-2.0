@@ -376,12 +376,12 @@ export default function GPPortal() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* Attitude */}
+                    {/* Attitude - Cumulative +/- System */}
                     <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                       <div className="flex items-center gap-2">
-                        {data.monthlyStats.current.attitude === 1 ? (
+                        {(data.monthlyStats.current.attitude ?? 0) > 0 ? (
                           <ThumbsUp className="h-4 w-4 text-green-400" />
-                        ) : data.monthlyStats.current.attitude === -1 ? (
+                        ) : (data.monthlyStats.current.attitude ?? 0) < 0 ? (
                           <ThumbsDown className="h-4 w-4 text-red-400" />
                         ) : (
                           <Star className="h-4 w-4 text-gray-400" />
@@ -389,14 +389,13 @@ export default function GPPortal() {
                         <span className="text-sm font-medium text-white">Attitude</span>
                       </div>
                       <Badge className={`${
-                        data.monthlyStats.current.attitude === 1 
+                        (data.monthlyStats.current.attitude ?? 0) > 0 
                           ? "bg-green-500/30 text-green-300" 
-                          : data.monthlyStats.current.attitude === -1 
+                          : (data.monthlyStats.current.attitude ?? 0) < 0 
                           ? "bg-red-500/30 text-red-300" 
                           : "bg-gray-500/30 text-gray-300"
                       }`}>
-                        {data.monthlyStats.current.attitude === 1 ? "+1 Positive" : 
-                         data.monthlyStats.current.attitude === -1 ? "-1 Negative" : "Neutral"}
+                        {(data.monthlyStats.current.attitude ?? 0) > 0 ? "+" : ""}{data.monthlyStats.current.attitude ?? 0}
                       </Badge>
                     </div>
                     
@@ -508,9 +507,14 @@ export default function GPPortal() {
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                       <span className="text-sm text-blue-200/70">Attitude</span>
-                      <Badge variant="secondary">
-                        {data.monthlyStats.previous.attitude === 1 ? "+1" : 
-                         data.monthlyStats.previous.attitude === -1 ? "-1" : "0"}
+                      <Badge variant="secondary" className={`${
+                        (data.monthlyStats.previous.attitude ?? 0) > 0 
+                          ? "bg-green-500/30 text-green-300" 
+                          : (data.monthlyStats.previous.attitude ?? 0) < 0 
+                          ? "bg-red-500/30 text-red-300" 
+                          : ""
+                      }`}>
+                        {(data.monthlyStats.previous.attitude ?? 0) > 0 ? "+" : ""}{data.monthlyStats.previous.attitude ?? 0}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">

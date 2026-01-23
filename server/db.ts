@@ -2764,9 +2764,12 @@ export async function updateGPAttitude(gamePresenterId: number, month: number, y
   // Get or create monthly stats
   const stats = await getOrCreateMonthlyGpStats(gamePresenterId, month, year);
   
-  // Update attitude score (use latest score)
+  // Update attitude score - cumulative system: add the score to current total
+  const currentAttitude = stats.attitude ?? 0;
+  const newAttitude = currentAttitude + attitudeScore;
+  
   await db.update(monthlyGpStats)
-    .set({ attitude: attitudeScore })
+    .set({ attitude: newAttitude })
     .where(eq(monthlyGpStats.id, stats.id));
 }
 

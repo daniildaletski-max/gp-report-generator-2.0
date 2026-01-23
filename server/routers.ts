@@ -993,6 +993,11 @@ export const appRouter = router({
             url: s.screenshotUrl,
             extractedData: s.extractedData,
             createdAt: s.createdAt,
+            // Enhanced attitude entry data
+            attitudeType: s.attitudeType,
+            attitudeScore: s.attitudeScore,
+            comment: s.comment,
+            evaluationDate: s.evaluationDate,
           })),
           errorScreenshots: errorScreenshots.map(s => ({
             id: s.id,
@@ -3572,14 +3577,12 @@ Respond with a JSON object containing an array of ALL entries found:
           savedEntries.push(attitudeScreenshot);
         }
 
-        // Update monthly stats if GP was matched - sum all attitude scores
+        // Update monthly stats if GP was matched - cumulative +1/-1 system
         if (gamePresenterId && entries.length > 0) {
+          // Sum all attitude scores from entries (+1 for positive, -1 for negative)
           const totalScore = entries.reduce((sum: number, e: any) => sum + (e.score || 0), 0);
-          // Calculate attitude score on 1-5 scale based on ratio of positive to negative
-          const positiveCount = entries.filter((e: any) => e.type === 'POSITIVE').length;
-          const negativeCount = entries.filter((e: any) => e.type === 'NEGATIVE').length;
-          const attitudeScore = Math.max(1, Math.min(5, 3 + (positiveCount - negativeCount)));
-          await db.updateGPAttitude(gamePresenterId, month, year, attitudeScore);
+          // Add cumulative score to GP's monthly attitude
+          await db.updateGPAttitude(gamePresenterId, month, year, totalScore);
         }
 
         return {

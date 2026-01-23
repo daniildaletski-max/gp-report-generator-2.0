@@ -98,7 +98,7 @@ interface FileWithPreview {
   processingTime?: number;
 }
 
-type UploadType = "evaluations" | "attitude" | "errors";
+type UploadType = "evaluations" | "attitude";
 
 // ============ UTILITIES ============
 
@@ -156,7 +156,6 @@ export default function UploadPage() {
 
   const uploadEvaluationMutation = trpc.evaluation.uploadAndExtract.useMutation();
   const uploadAttitudeMutation = trpc.attitudeScreenshot.upload.useMutation();
-  const uploadErrorMutation = trpc.errorScreenshot.upload.useMutation();
 
   const generateId = () => Math.random().toString(36).substring(2, 9);
 
@@ -181,7 +180,8 @@ export default function UploadPage() {
         avgScore,
         newGPs: successFiles.filter(f => f.matchInfo?.isNewGP).length,
       };
-    } else if (activeTab === "attitude") {
+    } else {
+      // Attitude tab stats
       const positive = successFiles.reduce((sum, f) => sum + (f.attitudeData?.totalPositive || 0), 0);
       const negative = successFiles.reduce((sum, f) => sum + (f.attitudeData?.totalNegative || 0), 0);
       const totalEntries = successFiles.reduce((sum, f) => sum + (f.attitudeData?.totalEntries || 0), 0);
@@ -195,19 +195,6 @@ export default function UploadPage() {
         positive,
         negative,
         totalEntries,
-      };
-    } else {
-      const critical = successFiles.filter(f => f.errorData?.severity === "critical").length;
-      const high = successFiles.filter(f => f.errorData?.severity === "high").length;
-      return {
-        total: files.length,
-        success: successFiles.length,
-        pending: files.filter(f => f.status === "pending").length,
-        uploading: files.filter(f => f.status === "uploading").length,
-        error: files.filter(f => f.status === "error").length,
-        avgTime: avgTime / 1000,
-        critical,
-        high,
       };
     }
   }, [files, activeTab]);
@@ -437,35 +424,6 @@ export default function UploadPage() {
                   } 
                 : f
             ));
-          } else if (activeTab === "errors") {
-            if (!selectedGpId) {
-              throw new Error("Please select a Game Presenter before uploading");
-            }
-            result = await uploadErrorMutation.mutateAsync({
-              imageBase64: base64,
-              filename: pendingFile.file.name,
-              mimeType: 'image/jpeg',
-              gpId: selectedGpId,
-            });
-            
-            setFiles((prev) => prev.map(f => 
-              f.id === fileId ? { ...f, progress: 80 } : f
-            ));
-
-            const processingTime = Date.now() - fileStartTime;
-            
-            setFiles((prev) => prev.map(f => 
-              f.id === fileId 
-                ? { 
-                    ...f, 
-                    status: "success" as const, 
-                    errorData: result.extractedData,
-                    matchInfo: result.matchInfo,
-                    progress: 100,
-                    processingTime,
-                  } 
-                : f
-            ));
           }
           
           processed++;
@@ -528,7 +486,7 @@ export default function UploadPage() {
     switch (activeTab) {
       case "evaluations": return <FileCheck className="h-4 w-4" />;
       case "attitude": return <Heart className="h-4 w-4" />;
-      case "errors": return <AlertTriangle className="h-4 w-4" />;
+      default: return <FileCheck className="h-4 w-4" />;
     }
   };
 
@@ -536,7 +494,7 @@ export default function UploadPage() {
     switch (activeTab) {
       case "evaluations": return "Upload evaluation screenshots for AI extraction";
       case "attitude": return "Upload attitude entry screenshots (POSITIVE/NEGATIVE)";
-      case "errors": return "Upload error screenshots for tracking";
+      default: return "Upload screenshots for AI extraction";
     }
   };
 
@@ -603,7 +561,7 @@ export default function UploadPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as UploadType)}>
-        <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+        <TabsList className="grid w-full grid-cols-2 lg:w-[300px]">
           <TabsTrigger value="evaluations" className="flex items-center gap-2">
             <FileCheck className="h-4 w-4" />
             <span className="hidden sm:inline">Evaluations</span>
@@ -611,10 +569,6 @@ export default function UploadPage() {
           <TabsTrigger value="attitude" className="flex items-center gap-2">
             <Heart className="h-4 w-4" />
             <span className="hidden sm:inline">Attitude</span>
-          </TabsTrigger>
-          <TabsTrigger value="errors" className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="hidden sm:inline">Errors</span>
           </TabsTrigger>
         </TabsList>
 
@@ -683,28 +637,7 @@ export default function UploadPage() {
                 </Card>
               </>
             )}
-            {activeTab === "errors" && "critical" in stats && (
-              <>
-                <Card className="bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800">
-                  <CardContent className="py-3 flex items-center gap-3">
-                    <AlertCircle className="h-8 w-8 text-red-600" />
-                    <div>
-                      <p className="text-2xl font-bold text-red-700 dark:text-red-400">{(stats as any).critical}</p>
-                      <p className="text-xs text-red-600 dark:text-red-500">Critical</p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800">
-                  <CardContent className="py-3 flex items-center gap-3">
-                    <AlertTriangle className="h-8 w-8 text-orange-600" />
-                    <div>
-                      <p className="text-2xl font-bold text-orange-700 dark:text-orange-400">{(stats as any).high}</p>
-                      <p className="text-xs text-orange-600 dark:text-orange-500">High</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
+
           </div>
         )}
 
@@ -732,8 +665,8 @@ export default function UploadPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {/* GP Selector for Attitude and Errors tabs */}
-                {(activeTab === "attitude" || activeTab === "errors") && (
+                {/* GP Selector for Attitude tab */}
+                {activeTab === "attitude" && (
                   <div className="mb-4">
                     <Label htmlFor="gp-select" className="text-sm font-medium mb-2 block">
                       Select Game Presenter <span className="text-destructive">*</span>
@@ -1178,54 +1111,7 @@ export default function UploadPage() {
                       </>
                     )}
 
-                    {/* Error Details */}
-                    {activeTab === "errors" && selectedFile.errorData && (
-                      <>
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <User className="h-4 w-4" />
-                            <span>Game Presenter</span>
-                          </div>
-                          <p className="pl-6 font-medium">{selectedFile.errorData.presenterName}</p>
-                        </div>
 
-                        {selectedFile.errorData.date && (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Calendar className="h-4 w-4" />
-                              <span>Date</span>
-                            </div>
-                            <p className="pl-6 text-sm">{selectedFile.errorData.date}</p>
-                          </div>
-                        )}
-
-                        <div className="p-4 rounded-lg bg-muted/50">
-                          <div className="flex items-center justify-between mb-3">
-                            <Badge 
-                              variant="outline"
-                              className={`text-sm ${
-                                selectedFile.errorData.severity === "critical" ? "bg-red-100 text-red-700 border-red-300" :
-                                selectedFile.errorData.severity === "high" ? "bg-orange-100 text-orange-700 border-orange-300" :
-                                selectedFile.errorData.severity === "medium" ? "bg-yellow-100 text-yellow-700 border-yellow-300" :
-                                "bg-green-100 text-green-700 border-green-300"
-                              }`}
-                            >
-                              {selectedFile.errorData.severity.toUpperCase()}
-                            </Badge>
-                            <span className="text-sm font-medium text-muted-foreground">
-                              {selectedFile.errorData.errorType}
-                            </span>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <MessageSquare className="h-4 w-4" />
-                              <span>Description</span>
-                            </div>
-                            <p className="text-sm pl-6">{selectedFile.errorData.description}</p>
-                          </div>
-                        </div>
-                      </>
-                    )}
 
                     {/* Processing Time */}
                     {selectedFile.processingTime && (
