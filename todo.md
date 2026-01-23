@@ -1750,3 +1750,8 @@
 
 ### Tests
 - [x] All 147 tests passing
+
+
+## Bug Fix - Attitude Validation Error
+
+- [x] Fix backend validation for attitude field to support -1/0/+1 values (currently validates >=1)

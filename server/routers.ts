@@ -807,7 +807,7 @@ export const appRouter = router({
         gpId: z.number(),
         month: z.number().min(1).max(12),
         year: z.number(),
-        attitude: z.number().min(1).max(5).nullable().optional(),
+        attitude: z.number().min(-1).max(1).nullable().optional(),
         mistakes: z.number().min(0).optional(),
         totalGames: z.number().min(0).optional(),
         notes: z.string().nullable().optional(),
@@ -834,7 +834,7 @@ export const appRouter = router({
       .input(z.object({
         updates: z.array(z.object({
           gpId: z.number(),
-          attitude: z.number().min(1).max(5).nullable().optional(),
+          attitude: z.number().min(-1).max(1).nullable().optional(),
           mistakes: z.number().min(0).optional(),
           notes: z.string().nullable().optional(),
         })),
@@ -866,7 +866,7 @@ export const appRouter = router({
     bulkSetAttitude: protectedProcedure
       .input(z.object({
         gpIds: z.array(z.number().positive()).max(100), // Max 100 GPs at once
-        attitude: z.number().min(1).max(5),
+        attitude: z.number().min(-1).max(1),
         month: z.number().min(1).max(12),
         year: z.number().min(2020).max(2100),
       }))
