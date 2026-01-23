@@ -1,3 +1,4 @@
+import { Resend } from "resend";
 import { ENV } from "./env";
 
 export type EmailPayload = {
@@ -8,61 +9,45 @@ export type EmailPayload = {
   attachmentName?: string;
 };
 
-const buildEndpointUrl = (baseUrl: string): string => {
-  const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
-  return new URL("webdevtoken.v1.WebDevService/SendEmail", normalizedBase).toString();
-};
-
 /**
- * Sends an email through the Manus Email Service.
- * Returns `true` if the request was accepted, `false` when the upstream service
- * cannot be reached.
+ * Sends an email through Resend API.
+ * Returns `true` if the email was sent successfully, `false` otherwise.
  */
 export async function sendEmail(payload: EmailPayload): Promise<boolean> {
-  if (!ENV.forgeApiUrl) {
-    console.warn("[Email] Forge API URL is not configured.");
+  if (!ENV.resendApiKey) {
+    console.warn("[Email] RESEND_API_KEY is not configured. Email will not be sent.");
     return false;
   }
 
-  if (!ENV.forgeApiKey) {
-    console.warn("[Email] Forge API key is not configured.");
-    return false;
-  }
-
-  const endpoint = buildEndpointUrl(ENV.forgeApiUrl);
+  const resend = new Resend(ENV.resendApiKey);
 
   try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${ENV.forgeApiKey}`,
-        "content-type": "application/json",
-        "connect-protocol-version": "1",
-      },
-      body: JSON.stringify({
-        to: payload.to,
-        subject: payload.subject,
-        body: payload.body,
-        attachment_url: payload.attachmentUrl,
-        attachment_name: payload.attachmentName,
-      }),
+    // Build attachments array if URL provided
+    const attachments: { filename: string; path: string }[] = [];
+    if (payload.attachmentUrl && payload.attachmentName) {
+      attachments.push({
+        filename: payload.attachmentName,
+        path: payload.attachmentUrl,
+      });
+    }
+
+    const { data, error } = await resend.emails.send({
+      from: "GP Report Generator <reports@resend.dev>",
+      to: [payload.to],
+      subject: payload.subject,
+      text: payload.body,
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
 
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.warn(
-        `[Email] Failed to send email (${response.status} ${response.statusText})${
-          detail ? `: ${detail}` : ""
-        }`
-      );
+    if (error) {
+      console.warn(`[Email] Failed to send email: ${error.message}`);
       return false;
     }
 
-    console.log(`[Email] Successfully sent email to ${payload.to}`);
+    console.log(`[Email] Successfully sent email to ${payload.to}, id: ${data?.id}`);
     return true;
   } catch (error) {
-    console.warn("[Email] Error calling email service:", error);
+    console.warn("[Email] Error sending email:", error);
     return false;
   }
 }
