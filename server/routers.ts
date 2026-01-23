@@ -2495,29 +2495,32 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
         // First, try to parse detailed errors from "Errors" sheet (individual error records)
         const errorsSheet = workbook.getWorksheet('Errors');
         if (errorsSheet) {
-          // Look for columns: Date, GP Name, Error Description, Error Code, Game Type, Table ID
-          // Try to detect header row and column positions
-          let headerRow = 1;
-          let gpNameCol = 2; // Default column B
-          let dateCol = 1;   // Default column A
-          let descCol = 3;   // Default column C
-          let codeCol = 4;   // Default column D
-          let gameTypeCol = 5; // Default column E
-          let tableIdCol = 6;  // Default column F
+          // Based on actual file structure:
+          // Row 2 is the header row with: Nr(A), GP Name(B), GP Alias(C), Date(D), Timestamp(E), Table ID(F), 
+          // Shoe ID(G), SystemRound ID(H), Error code(I), Game Type(J), Error description(K), Solution(L), etc.
+          let headerRow = 2; // Header is in row 2
+          let gpNameCol = 2; // Column B - GP Name
+          let dateCol = 4;   // Column D - Date
+          let descCol = 11;  // Column K - Error description
+          let codeCol = 9;   // Column I - Error code
+          let gameTypeCol = 10; // Column J - Game Type
+          let tableIdCol = 6;  // Column F - Table ID
           
-          // Check first few rows for headers
+          // Check first few rows for headers to auto-detect if structure is different
           for (let r = 1; r <= 3; r++) {
             const row = errorsSheet.getRow(r);
             row.eachCell((cell, colNumber) => {
               const val = getCellValue(cell)?.toLowerCase() || '';
-              if (val.includes('gp') && val.includes('name')) { gpNameCol = colNumber; headerRow = r; }
-              else if (val === 'date' || val.includes('error date')) { dateCol = colNumber; }
-              else if (val.includes('description') || val.includes('error type')) { descCol = colNumber; }
-              else if (val.includes('code') || val === 'error code') { codeCol = colNumber; }
-              else if (val.includes('game') && val.includes('type')) { gameTypeCol = colNumber; }
-              else if (val.includes('table')) { tableIdCol = colNumber; }
+              if (val === 'gp name' || (val.includes('gp') && val.includes('name'))) { gpNameCol = colNumber; headerRow = r; }
+              else if (val === 'date') { dateCol = colNumber; }
+              else if (val === 'error description' || val.includes('error description')) { descCol = colNumber; }
+              else if (val === 'error code' || val.includes('error code')) { codeCol = colNumber; }
+              else if (val === 'game type' || (val.includes('game') && val.includes('type'))) { gameTypeCol = colNumber; }
+              else if (val === 'table id' || val.includes('table id')) { tableIdCol = colNumber; }
             });
           }
+          
+          console.log(`[Error Parsing] Detected columns - Header row: ${headerRow}, GP Name: ${gpNameCol}, Date: ${dateCol}, Description: ${descCol}, Code: ${codeCol}, Game Type: ${gameTypeCol}, Table ID: ${tableIdCol}`);
           
           // Parse error records starting after header
           errorsSheet.eachRow((row, rowNumber) => {
@@ -2535,6 +2538,20 @@ Do not use bullet points or numbered lists. Write in flowing paragraphs with cle
             } else if (typeof dateCell.value === 'number') {
               // Excel serial date
               errorDetail.date = new Date((dateCell.value - 25569) * 86400 * 1000);
+            } else if (typeof dateCell.value === 'string') {
+              // Parse string date like '01.01.2026' or '2026-01-01'
+              const dateStr = dateCell.value.trim();
+              if (dateStr.includes('.')) {
+                // DD.MM.YYYY format
+                const parts = dateStr.split('.');
+                if (parts.length === 3) {
+                  const [day, month, year] = parts.map(p => parseInt(p, 10));
+                  errorDetail.date = new Date(year, month - 1, day);
+                }
+              } else if (dateStr.includes('-')) {
+                // YYYY-MM-DD format
+                errorDetail.date = new Date(dateStr);
+              }
             }
             
             errorDetail.description = getCellValue(row.getCell(descCol)) || undefined;

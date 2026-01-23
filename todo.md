@@ -1773,3 +1773,19 @@
 - [x] Store error details in database (date, type, description, code, gameType, tableId)
 - [x] Display error descriptions in GP Portal with source badge (Excel/Screenshot)
 - [x] Show error date from Excel file
+
+
+## Bug Fix - Error Descriptions Not Showing
+
+- [x] Investigate why error descriptions from Excel files are not displayed
+- [x] Check if gpErrors table has description data (old data was uploaded before parsing fix)
+- [x] Fix parsing logic - updated column detection for actual file structure:
+  - Header row is row 2 (not row 1)
+  - GP Name is column B (2)
+  - Date is column D (4) - added string date parsing for DD.MM.YYYY format
+  - Error description is column K (11)
+  - Error code is column I (9)
+  - Game Type is column J (10)
+  - Table ID is column F (6)
+- [x] Added console logging for debugging column detection
+- [ ] User needs to re-upload error file to get descriptions (old data doesn't have them)
