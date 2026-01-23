@@ -8,7 +8,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { 
   Star, Calendar, Gamepad2, Eye, Sparkles, Scissors, Palette, Shirt, 
   PersonStanding, Loader2, AlertCircle, TrendingUp, AlertTriangle, Trophy, 
-  Target, Gift, ThumbsUp, RefreshCw, ChevronDown, ChevronUp, BarChart3,
+  Target, Gift, ThumbsUp, ThumbsDown, RefreshCw, ChevronDown, ChevronUp, BarChart3,
   Clock, Award, Zap, TrendingDown
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -379,17 +379,24 @@ export default function GPPortal() {
                     {/* Attitude */}
                     <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                       <div className="flex items-center gap-2">
-                        <ThumbsUp className="h-4 w-4 text-green-400" />
-                        <span className="text-sm font-medium text-white">Attitude Score</span>
+                        {data.monthlyStats.current.attitude === 1 ? (
+                          <ThumbsUp className="h-4 w-4 text-green-400" />
+                        ) : data.monthlyStats.current.attitude === -1 ? (
+                          <ThumbsDown className="h-4 w-4 text-red-400" />
+                        ) : (
+                          <Star className="h-4 w-4 text-gray-400" />
+                        )}
+                        <span className="text-sm font-medium text-white">Attitude</span>
                       </div>
                       <Badge className={`${
-                        data.monthlyStats.current.attitude && data.monthlyStats.current.attitude >= 4 
+                        data.monthlyStats.current.attitude === 1 
                           ? "bg-green-500/30 text-green-300" 
-                          : data.monthlyStats.current.attitude && data.monthlyStats.current.attitude >= 3 
-                          ? "bg-yellow-500/30 text-yellow-300" 
-                          : "bg-red-500/30 text-red-300"
+                          : data.monthlyStats.current.attitude === -1 
+                          ? "bg-red-500/30 text-red-300" 
+                          : "bg-gray-500/30 text-gray-300"
                       }`}>
-                        {data.monthlyStats.current.attitude ?? "Not set"}/5
+                        {data.monthlyStats.current.attitude === 1 ? "+1 Positive" : 
+                         data.monthlyStats.current.attitude === -1 ? "-1 Negative" : "Neutral"}
                       </Badge>
                     </div>
                     
@@ -501,7 +508,10 @@ export default function GPPortal() {
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                       <span className="text-sm text-blue-200/70">Attitude</span>
-                      <Badge variant="secondary">{data.monthlyStats.previous.attitude ?? "—"}/5</Badge>
+                      <Badge variant="secondary">
+                        {data.monthlyStats.previous.attitude === 1 ? "+1" : 
+                         data.monthlyStats.previous.attitude === -1 ? "-1" : "0"}
+                      </Badge>
                     </div>
                     <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                       <span className="text-sm text-blue-200/70">Mistakes</span>

@@ -20,7 +20,7 @@ import {
   Building2, Plus, Edit, BarChart3, Activity, CheckSquare, Square, RotateCcw,
   TrendingUp, TrendingDown, Search, Filter, X, Eye, EyeOff, Calendar,
   Award, Target, Zap, Clock, ChevronUp, ChevronDown, Mail, Send, UserPlus,
-  MailCheck, MailX, MailQuestion, Sparkles, Timer, Trophy
+  MailCheck, MailX, MailQuestion, Sparkles, Timer, Trophy, ThumbsUp, ThumbsDown
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -2339,7 +2339,7 @@ function GPStatsTab({
   
   // Bulk selection state
   const [selectedGpIds, setSelectedGpIds] = useState<number[]>([]);
-  const [bulkAttitude, setBulkAttitude] = useState<number>(3);
+  const [bulkAttitude, setBulkAttitude] = useState<number>(0);
 
   const { data: gpsWithStats, isLoading, refetch } = trpc.gamePresenter.listWithStats.useQuery({
     teamId: selectedTeamId || undefined,
@@ -2451,28 +2451,29 @@ function GPStatsTab({
   const statsSummary = useMemo(() => {
     if (!filteredGPs || filteredGPs.length === 0) return null;
     const withAttitude = filteredGPs.filter((gp: any) => gp.stats?.attitude != null);
-    const avgAttitude = withAttitude.length > 0 
-      ? withAttitude.reduce((sum: number, gp: any) => sum + (gp.stats?.attitude || 0), 0) / withAttitude.length 
-      : 0;
+    const totalAttitudeSum = withAttitude.reduce((sum: number, gp: any) => sum + (gp.stats?.attitude || 0), 0);
     const totalMistakes = filteredGPs.reduce((sum: number, gp: any) => sum + (gp.stats?.mistakes || 0), 0);
-    const highPerformers = filteredGPs.filter((gp: any) => (gp.stats?.attitude || 0) >= 4).length;
-    const lowPerformers = filteredGPs.filter((gp: any) => (gp.stats?.attitude || 0) <= 2 && gp.stats?.attitude != null).length;
+    // For -1/+1 system: positive = +1, negative = -1
+    const positiveAttitude = filteredGPs.filter((gp: any) => gp.stats?.attitude === 1).length;
+    const negativeAttitude = filteredGPs.filter((gp: any) => gp.stats?.attitude === -1).length;
+    const neutralAttitude = filteredGPs.filter((gp: any) => gp.stats?.attitude === 0 || gp.stats?.attitude == null).length;
     const totalGames = filteredGPs.reduce((sum: number, gp: any) => sum + (gp.stats?.totalGames || 0), 0);
     
-    // Attitude distribution for chart
-    const attitudeDistribution = [0, 0, 0, 0, 0]; // For 1-5
-    filteredGPs.forEach((gp: any) => {
-      const att = gp.stats?.attitude;
-      if (att && att >= 1 && att <= 5) {
-        attitudeDistribution[att - 1]++;
-      }
-    });
+    // Attitude distribution for -1/0/+1 system
+    const attitudeDistribution = {
+      negative: negativeAttitude,
+      neutral: neutralAttitude,
+      positive: positiveAttitude
+    };
     
-    // Top performers by attitude
+    // Top performers by attitude (positive first)
     const topByAttitude = [...filteredGPs]
-      .filter((gp: any) => gp.stats?.attitude != null)
-      .sort((a: any, b: any) => (b.stats?.attitude || 0) - (a.stats?.attitude || 0))
+      .filter((gp: any) => gp.stats?.attitude === 1)
       .slice(0, 5);
+    
+    // Negative attitude (needs attention)
+    const needsAttention = [...filteredGPs]
+      .filter((gp: any) => gp.stats?.attitude === -1);
     
     // Most mistakes
     const topByMistakes = [...filteredGPs]
@@ -2481,32 +2482,32 @@ function GPStatsTab({
       .slice(0, 5);
     
     // Team breakdown
-    const teamStats: Record<string, { count: number; avgAttitude: number; totalMistakes: number }> = {};
+    const teamStats: Record<string, { count: number; positiveCount: number; negativeCount: number; totalMistakes: number }> = {};
     filteredGPs.forEach((gp: any) => {
       const teamName = gp.teamName || 'Unassigned';
       if (!teamStats[teamName]) {
-        teamStats[teamName] = { count: 0, avgAttitude: 0, totalMistakes: 0 };
+        teamStats[teamName] = { count: 0, positiveCount: 0, negativeCount: 0, totalMistakes: 0 };
       }
       teamStats[teamName].count++;
       teamStats[teamName].totalMistakes += gp.stats?.mistakes || 0;
-      if (gp.stats?.attitude) {
-        teamStats[teamName].avgAttitude += gp.stats.attitude;
+      if (gp.stats?.attitude === 1) {
+        teamStats[teamName].positiveCount++;
+      } else if (gp.stats?.attitude === -1) {
+        teamStats[teamName].negativeCount++;
       }
-    });
-    Object.keys(teamStats).forEach(team => {
-      const s = teamStats[team];
-      s.avgAttitude = s.count > 0 ? s.avgAttitude / s.count : 0;
     });
     
     return { 
-      avgAttitude, 
+      totalAttitudeSum, 
       totalMistakes, 
-      highPerformers, 
-      lowPerformers,
+      positiveAttitude, 
+      negativeAttitude,
+      neutralAttitude,
       total: filteredGPs.length,
       totalGames,
       attitudeDistribution,
       topByAttitude,
+      needsAttention,
       topByMistakes,
       teamStats,
       withAttitudeCount: withAttitude.length
@@ -2601,27 +2602,27 @@ function GPStatsTab({
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Top Performers</p>
-                    <p className="text-3xl font-bold text-green-600">{statsSummary.highPerformers}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Attitude 4-5</p>
+                    <p className="text-sm font-medium text-muted-foreground">Positive (+1)</p>
+                    <p className="text-3xl font-bold text-green-600">{statsSummary.positiveAttitude}</p>
+                    <p className="text-xs text-muted-foreground mt-1">GPs with positive attitude</p>
                   </div>
                   <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
-                    <TrendingUp className="h-6 w-6 text-green-500" />
+                    <ThumbsUp className="h-6 w-6 text-green-500" />
                   </div>
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border-yellow-200/50 dark:border-yellow-800/50">
+            <Card className="bg-gradient-to-br from-gray-500/10 to-gray-600/5 border-gray-200/50 dark:border-gray-800/50">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Avg Attitude</p>
-                    <p className="text-3xl font-bold">{statsSummary.avgAttitude.toFixed(1)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">out of 5.0</p>
+                    <p className="text-sm font-medium text-muted-foreground">Neutral (0)</p>
+                    <p className="text-3xl font-bold text-gray-600">{statsSummary.neutralAttitude}</p>
+                    <p className="text-xs text-muted-foreground mt-1">GPs with no rating</p>
                   </div>
-                  <div className="h-12 w-12 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                    <Star className="h-6 w-6 text-yellow-500" />
+                  <div className="h-12 w-12 rounded-full bg-gray-500/20 flex items-center justify-center">
+                    <Star className="h-6 w-6 text-gray-500" />
                   </div>
                 </div>
               </CardContent>
@@ -2631,14 +2632,14 @@ function GPStatsTab({
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Total Mistakes</p>
-                    <p className="text-3xl font-bold text-red-600">{statsSummary.totalMistakes}</p>
+                    <p className="text-sm font-medium text-muted-foreground">Negative (-1)</p>
+                    <p className="text-3xl font-bold text-red-600">{statsSummary.negativeAttitude}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {statsSummary.lowPerformers} need attention
+                      {statsSummary.totalMistakes} total mistakes
                     </p>
                   </div>
                   <div className="h-12 w-12 rounded-full bg-red-500/20 flex items-center justify-center">
-                    <AlertTriangle className="h-6 w-6 text-red-500" />
+                    <ThumbsDown className="h-6 w-6 text-red-500" />
                   </div>
                 </div>
               </CardContent>
@@ -2662,101 +2663,119 @@ function GPStatsTab({
 
           {/* Charts Row */}
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Attitude Distribution */}
+            {/* Attitude Distribution - Simple -1/0/+1 */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Target className="h-5 w-5 text-primary" />
                   Attitude Distribution
                 </CardTitle>
-                <CardDescription>How GPs are rated this month</CardDescription>
+                <CardDescription>Attitude breakdown for this month</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {[5, 4, 3, 2, 1].map((level) => {
-                    const count = statsSummary.attitudeDistribution[level - 1];
-                    const percentage = statsSummary.withAttitudeCount > 0 
-                      ? (count / statsSummary.withAttitudeCount) * 100 
-                      : 0;
-                    const colors: Record<number, string> = {
-                      5: 'bg-green-500',
-                      4: 'bg-emerald-400',
-                      3: 'bg-yellow-400',
-                      2: 'bg-orange-400',
-                      1: 'bg-red-500'
-                    };
-                    return (
-                      <div key={level} className="flex items-center gap-3">
-                        <div className="w-8 text-center">
-                          <Badge variant="outline" className="font-bold">{level}</Badge>
-                        </div>
-                        <div className="flex-1">
-                          <div className="h-8 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full ${colors[level]} transition-all duration-500 flex items-center justify-end pr-2`}
-                              style={{ width: `${Math.max(percentage, 2)}%` }}
-                            >
-                              {percentage > 10 && (
-                                <span className="text-xs font-medium text-white">{count}</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="w-16 text-right text-sm text-muted-foreground">
-                          {percentage.toFixed(0)}%
+                <div className="space-y-6">
+                  {/* Positive */}
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 w-28">
+                      <ThumbsUp className="h-5 w-5 text-green-500" />
+                      <span className="text-sm font-medium">Positive</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="h-10 bg-muted rounded-lg overflow-hidden">
+                        <div 
+                          className="h-full bg-green-500 transition-all duration-500 flex items-center justify-end pr-3"
+                          style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.positiveAttitude / statsSummary.total) * 100, 5) : 5}%` }}
+                        >
+                          <span className="text-sm font-bold text-white">{statsSummary.positiveAttitude}</span>
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  </div>
+                  
+                  {/* Neutral */}
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 w-28">
+                      <Star className="h-5 w-5 text-gray-400" />
+                      <span className="text-sm font-medium">Neutral</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="h-10 bg-muted rounded-lg overflow-hidden">
+                        <div 
+                          className="h-full bg-gray-400 transition-all duration-500 flex items-center justify-end pr-3"
+                          style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.neutralAttitude / statsSummary.total) * 100, 5) : 5}%` }}
+                        >
+                          <span className="text-sm font-bold text-white">{statsSummary.neutralAttitude}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Negative */}
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 w-28">
+                      <ThumbsDown className="h-5 w-5 text-red-500" />
+                      <span className="text-sm font-medium">Negative</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="h-10 bg-muted rounded-lg overflow-hidden">
+                        <div 
+                          className="h-full bg-red-500 transition-all duration-500 flex items-center justify-end pr-3"
+                          style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.negativeAttitude / statsSummary.total) * 100, 5) : 5}%` }}
+                        >
+                          <span className="text-sm font-bold text-white">{statsSummary.negativeAttitude}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Top Performers & Needs Attention */}
+            {/* Positive Attitude & Needs Attention */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Trophy className="h-5 w-5 text-yellow-500" />
-                  Leaderboard
+                  Attitude Overview
                 </CardTitle>
-                <CardDescription>Top performers and those needing attention</CardDescription>
+                <CardDescription>Positive performers and those needing attention</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-4">
-                  {/* Top Performers */}
+                  {/* Positive Attitude */}
                   <div>
                     <h4 className="text-sm font-semibold text-green-600 mb-3 flex items-center gap-1">
-                      <TrendingUp className="h-4 w-4" /> Top Rated
+                      <ThumbsUp className="h-4 w-4" /> Positive Attitude
                     </h4>
                     <div className="space-y-2">
                       {statsSummary.topByAttitude.slice(0, 5).map((gp: any, idx: number) => (
                         <div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/30">
                           <span className="text-xs font-bold text-green-600 w-5">#{idx + 1}</span>
                           <span className="text-sm truncate flex-1">{gp.name}</span>
-                          <Badge className="bg-green-500">{gp.stats?.attitude}</Badge>
+                          <Badge className="bg-green-500">+1</Badge>
                         </div>
                       ))}
                       {statsSummary.topByAttitude.length === 0 && (
-                        <p className="text-sm text-muted-foreground">No data</p>
+                        <p className="text-sm text-muted-foreground">No positive ratings</p>
                       )}
                     </div>
                   </div>
                   
-                  {/* Most Mistakes */}
+                  {/* Negative Attitude / Needs Attention */}
                   <div>
                     <h4 className="text-sm font-semibold text-red-600 mb-3 flex items-center gap-1">
-                      <AlertTriangle className="h-4 w-4" /> Most Mistakes
+                      <ThumbsDown className="h-4 w-4" /> Needs Attention
                     </h4>
                     <div className="space-y-2">
-                      {statsSummary.topByMistakes.slice(0, 5).map((gp: any, idx: number) => (
+                      {statsSummary.needsAttention?.slice(0, 5).map((gp: any, idx: number) => (
                         <div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/30">
                           <span className="text-xs font-bold text-red-600 w-5">#{idx + 1}</span>
                           <span className="text-sm truncate flex-1">{gp.name}</span>
-                          <Badge variant="destructive">{gp.stats?.mistakes}</Badge>
+                          <Badge variant="destructive">-1</Badge>
                         </div>
                       ))}
-                      {statsSummary.topByMistakes.length === 0 && (
-                        <p className="text-sm text-muted-foreground">No mistakes recorded</p>
+                      {(!statsSummary.needsAttention || statsSummary.needsAttention.length === 0) && (
+                        <p className="text-sm text-muted-foreground">No negative ratings</p>
                       )}
                     </div>
                   </div>
@@ -2777,20 +2796,24 @@ function GPStatsTab({
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  {Object.entries(statsSummary.teamStats).map(([teamName, stats]) => (
+                  {Object.entries(statsSummary.teamStats).map(([teamName, stats]: [string, any]) => (
                     <div key={teamName} className="p-4 rounded-lg border bg-card hover:shadow-md transition-shadow">
-                      <h4 className="font-semibold truncate mb-2">{teamName}</h4>
-                      <div className="grid grid-cols-3 gap-2 text-center">
+                      <h4 className="font-semibold truncate mb-3">{teamName}</h4>
+                      <div className="grid grid-cols-4 gap-2 text-center">
                         <div>
-                          <p className="text-2xl font-bold text-blue-600">{stats.count}</p>
+                          <p className="text-xl font-bold text-blue-600">{stats.count}</p>
                           <p className="text-xs text-muted-foreground">GPs</p>
                         </div>
                         <div>
-                          <p className="text-2xl font-bold text-yellow-600">{stats.avgAttitude.toFixed(1)}</p>
-                          <p className="text-xs text-muted-foreground">Avg</p>
+                          <p className="text-xl font-bold text-green-600">{stats.positiveCount}</p>
+                          <p className="text-xs text-muted-foreground">+1</p>
                         </div>
                         <div>
-                          <p className="text-2xl font-bold text-red-600">{stats.totalMistakes}</p>
+                          <p className="text-xl font-bold text-red-600">{stats.negativeCount}</p>
+                          <p className="text-xs text-muted-foreground">-1</p>
+                        </div>
+                        <div>
+                          <p className="text-xl font-bold text-orange-600">{stats.totalMistakes}</p>
                           <p className="text-xs text-muted-foreground">Errors</p>
                         </div>
                       </div>
@@ -2837,13 +2860,13 @@ function GPStatsTab({
               <div className="flex items-center gap-2">
                 <Label className="text-sm">Set Attitude:</Label>
                 <Select value={String(bulkAttitude)} onValueChange={(v) => setBulkAttitude(Number(v))}>
-                  <SelectTrigger className="w-[80px]">
+                  <SelectTrigger className="w-[120px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                    ))}
+                    <SelectItem value="-1">-1 (Negative)</SelectItem>
+                    <SelectItem value="0">0 (Neutral)</SelectItem>
+                    <SelectItem value="1">+1 (Positive)</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button 
@@ -2895,37 +2918,51 @@ function GPStatsTab({
                 const teamName = teams.find(t => t.id === gp.teamId)?.teamName || 'Unassigned';
                 
                 const getBorderColor = () => {
-                  if (!attitude) return 'border-muted';
-                  if (attitude >= 4) return 'border-green-400';
-                  if (attitude === 3) return 'border-yellow-400';
-                  return 'border-red-400';
+                  if (attitude === null || attitude === undefined) return 'border-muted';
+                  if (attitude === 1) return 'border-green-400';
+                  if (attitude === 0) return 'border-gray-300';
+                  if (attitude === -1) return 'border-red-400';
+                  return 'border-muted';
                 };
                 
+                // Get attitude display
+                const getAttitudeDisplay = () => {
+                  if (attitude === 1) return { icon: <ThumbsUp className="h-5 w-5" />, label: '+1', color: 'text-green-600 bg-green-100 dark:bg-green-950' };
+                  if (attitude === -1) return { icon: <ThumbsDown className="h-5 w-5" />, label: '-1', color: 'text-red-600 bg-red-100 dark:bg-red-950' };
+                  return { icon: null, label: '0', color: 'text-gray-500 bg-gray-100 dark:bg-gray-800' };
+                };
+                const attitudeDisplay = getAttitudeDisplay();
+
                 return (
                   <div 
                     key={gp.id} 
-                    className={`relative p-4 rounded-xl border-2 bg-card hover:shadow-lg transition-all ${getBorderColor()} ${selectedGpIds.includes(gp.id) ? 'ring-2 ring-primary' : ''}`}
+                    className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 border shadow-sm hover:shadow-xl transition-all duration-300 ${getBorderColor()} ${selectedGpIds.includes(gp.id) ? 'ring-2 ring-primary ring-offset-2' : ''}`}
                   >
-                    {/* Selection checkbox */}
-                    <div className="absolute top-2 right-2">
+                    {/* Header with checkbox */}
+                    <div className="flex items-start justify-between p-4 pb-2">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-base truncate">{gp.name}</h4>
+                        <p className="text-xs text-muted-foreground mt-0.5">{teamName}</p>
+                      </div>
                       <Checkbox 
                         checked={selectedGpIds.includes(gp.id)}
                         onCheckedChange={() => toggleGpSelection(gp.id)}
+                        className="mt-1"
                       />
                     </div>
                     
-                    {/* GP Info */}
-                    <div className="mb-3">
-                      <h4 className="font-semibold text-lg truncate pr-8">{gp.name}</h4>
-                      <p className="text-sm text-muted-foreground">{teamName}</p>
-                    </div>
-                    
-                    {/* Attitude Rating */}
-                    <div className="mb-3">
-                      <p className="text-xs text-muted-foreground mb-2">Attitude Rating</p>
+                    {/* Attitude Section */}
+                    <div className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Attitude</span>
+                        <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold ${attitudeDisplay.color}`}>
+                          {attitudeDisplay.icon}
+                          <span>{attitudeDisplay.label}</span>
+                        </div>
+                      </div>
                       <QuickAttitudeButtons
                         gpId={gp.id}
-                        currentAttitude={attitude || null}
+                        currentAttitude={attitude ?? null}
                         currentMistakes={mistakes}
                         selectedMonth={selectedMonth}
                         selectedYear={selectedYear}
@@ -2933,22 +2970,26 @@ function GPStatsTab({
                       />
                     </div>
                     
-                    {/* Stats Row */}
-                    <div className="flex items-center justify-between pt-3 border-t">
-                      <div className="text-center">
-                        <p className="text-xs text-muted-foreground">Mistakes</p>
-                        <Badge variant={mistakes > 0 ? "destructive" : "secondary"} className="mt-1">
-                          {mistakes}
-                        </Badge>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xs text-muted-foreground">Games</p>
-                        <p className="font-semibold">{totalGames.toLocaleString()}</p>
+                    {/* Stats Footer */}
+                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50/50 dark:bg-gray-800/30 border-t">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-1.5">
+                          <AlertTriangle className={`h-4 w-4 ${mistakes > 0 ? 'text-red-500' : 'text-gray-400'}`} />
+                          <span className={`text-sm font-medium ${mistakes > 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                            {mistakes}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Activity className="h-4 w-4 text-blue-500" />
+                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                            {totalGames.toLocaleString()}
+                          </span>
+                        </div>
                       </div>
                       <Button
-                        size="icon"
+                        size="sm"
                         variant="ghost"
-                        className="h-8 w-8"
+                        className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={() => startEditing(gp)}
                       >
                         <Edit className="h-4 w-4" />
@@ -2973,7 +3014,7 @@ function GPStatsTab({
   );
 }
 
-// Quick Attitude Buttons Component
+// Quick Attitude Buttons Component - Uses -1/+1 system
 function QuickAttitudeButtons({ 
   gpId, 
   currentAttitude, 
@@ -3002,7 +3043,8 @@ function QuickAttitudeButtons({
         attitude,
         mistakes: currentMistakes,
       });
-      toast.success(`Attitude set to ${attitude}`);
+      const label = attitude === 1 ? '+1 (Positive)' : attitude === -1 ? '-1 (Negative)' : 'Neutral';
+      toast.success(`Attitude set to ${label}`);
       onUpdate();
     } catch (error: any) {
       toast.error(error.message || "Failed to update");
@@ -3011,34 +3053,65 @@ function QuickAttitudeButtons({
     }
   };
 
-  const getButtonStyle = (n: number) => {
-    const isSelected = currentAttitude === n;
-    if (isSelected) {
-      if (n <= 2) return "bg-red-500 text-white hover:bg-red-600";
-      if (n === 3) return "bg-yellow-500 text-white hover:bg-yellow-600";
-      return "bg-green-500 text-white hover:bg-green-600";
-    }
-    return "bg-muted/50 hover:bg-muted";
-  };
-
   return (
-    <div className="flex items-center justify-center gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Button
-          key={n}
-          size="sm"
-          variant="ghost"
-          className={`w-8 h-8 p-0 text-xs font-medium ${getButtonStyle(n)}`}
-          onClick={() => handleQuickSet(n)}
-          disabled={isUpdating !== null}
-        >
-          {isUpdating === n ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            n
-          )}
-        </Button>
-      ))}
+    <div className="flex items-center justify-center gap-2">
+      <Button
+        size="sm"
+        variant="ghost"
+        className={`px-3 h-9 text-sm font-medium transition-all ${
+          currentAttitude === -1 
+            ? "bg-red-500 text-white hover:bg-red-600 shadow-md" 
+            : "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900"
+        }`}
+        onClick={() => handleQuickSet(-1)}
+        disabled={isUpdating !== null}
+      >
+        {isUpdating === -1 ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <span className="flex items-center gap-1">
+            <ThumbsDown className="h-4 w-4" />
+            -1
+          </span>
+        )}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className={`px-3 h-9 text-sm font-medium transition-all ${
+          currentAttitude === 0 || currentAttitude === null
+            ? "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300" 
+            : "bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-500"
+        }`}
+        onClick={() => handleQuickSet(0)}
+        disabled={isUpdating !== null}
+      >
+        {isUpdating === 0 ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <span>0</span>
+        )}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className={`px-3 h-9 text-sm font-medium transition-all ${
+          currentAttitude === 1 
+            ? "bg-green-500 text-white hover:bg-green-600 shadow-md" 
+            : "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-950 dark:text-green-400 dark:hover:bg-green-900"
+        }`}
+        onClick={() => handleQuickSet(1)}
+        disabled={isUpdating !== null}
+      >
+        {isUpdating === 1 ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <span className="flex items-center gap-1">
+            <ThumbsUp className="h-4 w-4" />
+            +1
+          </span>
+        )}
+      </Button>
     </div>
   );
 }

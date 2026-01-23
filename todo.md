@@ -1710,3 +1710,43 @@
 ## Bug Fix - Select.Item Empty Value Error
 
 - [x] Fix Select.Item with empty value on Admin page causing crash
+
+
+## Major Redesign v51 - Attitude System & GP Stats Design
+
+### Attitude System Change
+- [ ] Change attitude from 1-5 scale to -1/+1 system (negative/positive)
+- [ ] Update GP Stats cards to show -1/+1 instead of 1-5 rating buttons
+- [ ] Update bulk attitude operations to use -1/+1 system
+- [ ] Update attitude display in GP Portal
+- [ ] Update Excel report generation for new attitude format
+
+### GP Stats Card Redesign
+- [ ] Redesign GP cards with cleaner, more modern look
+- [ ] Remove 1-5 rating buttons, replace with simple -1/+1 indicator
+- [ ] Improve visual hierarchy and spacing
+- [ ] Add better color coding for attitude status
+
+
+## Major Redesign v51 - Attitude System Change & UI Redesign - COMPLETED
+
+### Attitude System Change (-1/0/+1)
+- [x] Changed QuickAttitudeButtons from 1-5 scale to -1/+1 buttons (ThumbsDown/ThumbsUp)
+- [x] Updated bulk attitude select dropdown to use -1/0/+1 options
+- [x] Updated GP card border colors for -1/+1 system
+- [x] Updated stats summary cards (Positive/Neutral/Negative instead of Top Performers/Avg Attitude)
+- [x] Updated attitude distribution chart for -1/0/+1 system
+- [x] Updated leaderboard to show Positive Attitude and Needs Attention lists
+- [x] Updated team comparison to show +1/-1 counts instead of average
+- [x] Updated GPPortal attitude display for -1/+1 system
+- [x] Updated previous month stats display for -1/+1
+
+### UI Redesign
+- [x] Redesigned GP cards with modern gradient backgrounds
+- [x] Added attitude indicator badges with icons
+- [x] Improved stats footer with icons for mistakes and games
+- [x] Added hover effects for edit button
+- [x] Improved visual hierarchy with better spacing
+
+### Tests
+- [x] All 147 tests passing
