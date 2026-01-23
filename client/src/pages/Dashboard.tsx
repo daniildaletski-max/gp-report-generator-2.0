@@ -1,22 +1,17 @@
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, FileCheck, TrendingUp, FileSpreadsheet, AlertCircle, CheckCircle2, Clock, ArrowRight, AlertTriangle, Award, Target, TrendingDown, Calendar, BarChart3, PieChart, Sparkles } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Users, FileCheck, TrendingUp, FileSpreadsheet, AlertTriangle, Award, Target, Calendar, BarChart3, PieChart, ArrowRight, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useLocation } from "wouter";
 import { useState, useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart as RechartsPieChart, Pie, Cell, RadialBarChart, RadialBar } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell } from "recharts";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"
 ];
-
-const COLORS = ['#67B2E7', '#5B62B2', '#fbbf24', '#f87171', '#4ade80', '#a855f7'];
 
 interface GPStat {
   gpId: number;
@@ -37,7 +32,6 @@ export default function Dashboard() {
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
-
   const [, setLocation] = useLocation();
   
   const { data: stats, isLoading } = trpc.dashboard.stats.useQuery({
@@ -45,16 +39,14 @@ export default function Dashboard() {
     year: selectedYear,
   });
 
-  // Calculate progress metrics
   const totalGPs = stats?.totalGPs || 0;
   const evaluatedGPs = (stats as { thisMonthGPs?: number })?.thisMonthGPs || 0;
   const evaluationProgress = totalGPs > 0 ? Math.round((evaluatedGPs / totalGPs) * 100) : 0;
   const pendingGPs = totalGPs - evaluatedGPs;
 
-  // Prepare chart data
   const gpStats = (stats as { gpStats?: GPStat[] })?.gpStats || [];
   const chartData = useMemo(() => gpStats.map((gp: GPStat) => ({
-    name: gp.gpName || "Unknown",
+    name: gp.gpName?.split(' ')[0] || "Unknown",
     fullName: gp.gpName,
     totalScore: Number(gp.avgTotal),
     appearance: Number(gp.avgAppearance),
@@ -62,7 +54,6 @@ export default function Dashboard() {
     evalCount: gp.evalCount,
   })), [gpStats]);
 
-  // Performance distribution for pie chart
   const performanceDistribution = useMemo(() => {
     if (!chartData.length) return [];
     const excellent = chartData.filter(gp => gp.totalScore >= 20).length;
@@ -70,29 +61,23 @@ export default function Dashboard() {
     const needsWork = chartData.filter(gp => gp.totalScore > 0 && gp.totalScore < 16).length;
     const notEvaluated = chartData.filter(gp => gp.totalScore === 0).length;
     return [
-      { name: 'Excellent (20+)', value: excellent, color: '#10b981' },
-      { name: 'Good (16-19)', value: good, color: '#f59e0b' },
-      { name: 'Needs Work (<16)', value: needsWork, color: '#ef4444' },
-      { name: 'Not Evaluated', value: notEvaluated, color: '#64748b' },
+      { name: 'Excellent (20+)', value: excellent, color: '#30d158' },
+      { name: 'Good (16-19)', value: good, color: '#ffd60a' },
+      { name: 'Needs Work (<16)', value: needsWork, color: '#ff453a' },
+      { name: 'Not Evaluated', value: notEvaluated, color: '#48484a' },
     ].filter(d => d.value > 0);
   }, [chartData]);
 
-  // Top performers
   const topPerformers = useMemo(() => 
-    [...chartData]
-      .filter(gp => gp.totalScore > 0)
-      .sort((a, b) => b.totalScore - a.totalScore)
-      .slice(0, 3),
+    [...chartData].filter(gp => gp.totalScore > 0).sort((a, b) => b.totalScore - a.totalScore).slice(0, 3),
     [chartData]
   );
 
-  // Low performers
   const lowPerformers = useMemo(() => 
     chartData.filter(gp => gp.totalScore > 0 && gp.totalScore < 15),
     [chartData]
   );
 
-  // Average team score
   const avgTeamScore = useMemo(() => {
     const validScores = chartData.filter(gp => gp.totalScore > 0);
     if (!validScores.length) return 0;
@@ -101,20 +86,16 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="p-6 min-h-screen">
+      <div className="p-6 min-h-screen bg-[#0d0d14]">
         <div className="animate-pulse space-y-6">
           <div className="flex gap-4">
-            <Skeleton className="h-10 w-40 glass" />
-            <Skeleton className="h-10 w-28 glass" />
+            <div className="h-10 w-40 bg-white/[0.04] rounded-xl" />
+            <div className="h-10 w-28 bg-white/[0.04] rounded-xl" />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-32 glass rounded-2xl" />
+              <div key={i} className="h-32 bg-white/[0.04] rounded-2xl" />
             ))}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <Skeleton className="h-64 lg:col-span-2 glass rounded-2xl" />
-            <Skeleton className="h-64 glass rounded-2xl" />
           </div>
         </div>
       </div>
@@ -122,236 +103,195 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6 min-h-screen bg-[#0a0a0f]">
-      {/* Header with Month/Year Selector */}
+    <div className="p-6 space-y-6 min-h-screen bg-[#0d0d14]">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-          <p className="text-white/50 mt-1">Team performance overview and analytics</p>
+          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <p className="text-white/40 text-sm mt-1">Team performance overview</p>
         </div>
         <div className="flex items-center gap-3">
-          <Select
-            value={selectedMonth.toString()}
-            onValueChange={(v) => setSelectedMonth(Number(v))}
-          >
-            <SelectTrigger className="w-44 bg-white/5 border-white/10 rounded-xl text-white">
-              <Calendar className="h-4 w-4 mr-2 text-white/60" />
+          <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(Number(v))}>
+            <SelectTrigger className="w-40 input-base">
+              <Calendar className="h-4 w-4 mr-2 text-white/40" />
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-[#1a1a2e] border-white/10 rounded-xl">
+            <SelectContent className="bg-[#1a1a24] border-white/[0.08] rounded-xl">
               {MONTHS.map((month, idx) => (
-                <SelectItem key={idx} value={(idx + 1).toString()}>
-                  {month}
-                </SelectItem>
+                <SelectItem key={idx} value={(idx + 1).toString()}>{month}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Select
-            value={selectedYear.toString()}
-            onValueChange={(v) => setSelectedYear(Number(v))}
-          >
-            <SelectTrigger className="w-28 bg-white/5 border-white/10 rounded-xl text-white">
+          <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(Number(v))}>
+            <SelectTrigger className="w-24 input-base">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-[#1a1a2e] border-white/10 rounded-xl">
+            <SelectContent className="bg-[#1a1a24] border-white/[0.08] rounded-xl">
               {[2024, 2025, 2026].map((year) => (
-                <SelectItem key={year} value={year.toString()}>
-                  {year}
-                </SelectItem>
+                <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {/* Quick Actions Bar */}
-      <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/5">
+      {/* Progress Bar */}
+      <div className="card-base p-5">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20">
-                <Target className="h-5 w-5 text-primary" />
+              <div className="icon-container icon-container-cyan">
+                <Target className="h-5 w-5" />
               </div>
-              <span className="font-semibold">Evaluation Progress</span>
+              <span className="font-medium text-white/80">Evaluation Progress</span>
             </div>
-            <div className="h-8 w-px bg-border/50" />
             <div className="flex items-center gap-3">
-              <div className="relative w-48">
-                <Progress value={evaluationProgress} className="h-3 rounded-full bg-muted/50" />
+              <div className="w-48">
+                <Progress value={evaluationProgress} className="h-2 bg-white/[0.06]" />
               </div>
-              <span className="font-bold text-primary text-lg">{evaluationProgress}%</span>
-              <span className="text-muted-foreground text-sm">({evaluatedGPs}/{totalGPs} GPs)</span>
+              <span className="font-bold text-[#64d2ff]">{evaluationProgress}%</span>
+              <span className="text-white/40 text-sm">({evaluatedGPs}/{totalGPs} GPs)</span>
             </div>
             {pendingGPs > 0 && (
-              <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30 rounded-lg px-3">
-                {pendingGPs} pending
-              </Badge>
+              <span className="badge-base badge-amber">{pendingGPs} pending</span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setLocation('/upload')} className="glass-button rounded-xl border-0">
-              Upload Evaluations
+            <Button variant="outline" size="sm" onClick={() => setLocation('/upload')} className="btn-secondary text-sm">
+              <Upload className="h-4 w-4 mr-2" />
+              Upload
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setLocation('/admin')} className="glass-button rounded-xl border-0">
-              Manage GP Stats
-            </Button>
-            <Button size="sm" onClick={() => setLocation('/reports')} className="rounded-xl bg-gradient-to-r from-primary to-purple-600 hover:opacity-90">
-              Generate Report <ArrowRight className="ml-1 h-4 w-4" />
+            <Button size="sm" onClick={() => setLocation('/reports')} className="btn-primary text-sm">
+              Generate Report
+              <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Stats Cards Row 1 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 group hover:border-white/10 transition-all">
-          <div className="flex items-start justify-between mb-4">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 group-hover:scale-110 transition-transform">
-              <Users className="h-6 w-6 text-blue-500" />
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="stat-card stat-card-cyan">
+          <div className="flex items-start justify-between mb-3">
+            <div className="icon-container icon-container-cyan">
+              <Users className="h-5 w-5" />
             </div>
-            <Sparkles className="h-4 w-4 text-blue-500/50" />
           </div>
-          <div className="text-4xl font-bold tabular-nums mb-1">{stats?.totalGPs || 0}</div>
-          <p className="text-sm text-muted-foreground">Game Presenters</p>
+          <div className="text-3xl font-bold text-white mb-1">{stats?.totalGPs || 0}</div>
+          <p className="text-sm text-white/40">Game Presenters</p>
         </div>
 
-        <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 group hover:border-white/10 transition-all">
-          <div className="flex items-start justify-between mb-4">
-            <div className="p-3 rounded-xl bg-emerald-500/10 group-hover:scale-110 transition-transform">
-              <FileCheck className="h-6 w-6 text-emerald-400" />
+        <div className="stat-card stat-card-green">
+          <div className="flex items-start justify-between mb-3">
+            <div className="icon-container icon-container-green">
+              <FileCheck className="h-5 w-5" />
             </div>
-            <Sparkles className="h-4 w-4 text-green-500/50" />
           </div>
-          <div className="text-4xl font-bold tabular-nums mb-1">{stats?.totalEvaluations || 0}</div>
-          <p className="text-sm text-muted-foreground">Total Evaluations</p>
+          <div className="text-3xl font-bold text-white mb-1">{stats?.totalEvaluations || 0}</div>
+          <p className="text-sm text-white/40">Total Evaluations</p>
         </div>
 
-        <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 group hover:border-white/10 transition-all">
-          <div className="flex items-start justify-between mb-4">
-            <div className="p-3 rounded-xl bg-amber-500/10 group-hover:scale-110 transition-transform">
-              <TrendingUp className="h-6 w-6 text-amber-400" />
+        <div className="stat-card stat-card-amber">
+          <div className="flex items-start justify-between mb-3">
+            <div className="icon-container icon-container-amber">
+              <TrendingUp className="h-5 w-5" />
             </div>
-            <Sparkles className="h-4 w-4 text-amber-500/50" />
           </div>
-          <div className="text-4xl font-bold tabular-nums mb-1">
+          <div className="text-3xl font-bold text-white mb-1">
             {avgTeamScore > 0 ? avgTeamScore.toFixed(1) : '-'}
-            <span className="text-xl text-muted-foreground font-normal">/22</span>
+            <span className="text-lg text-white/30 font-normal">/22</span>
           </div>
-          <p className="text-sm text-muted-foreground">Team Average</p>
+          <p className="text-sm text-white/40">Team Average</p>
         </div>
 
-        <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 group hover:border-white/10 transition-all">
-          <div className="flex items-start justify-between mb-4">
-            <div className="p-3 rounded-xl bg-purple-500/10 group-hover:scale-110 transition-transform">
-              <FileSpreadsheet className="h-6 w-6 text-purple-400" />
+        <div className="stat-card stat-card-purple">
+          <div className="flex items-start justify-between mb-3">
+            <div className="icon-container icon-container-purple">
+              <FileSpreadsheet className="h-5 w-5" />
             </div>
-            <Sparkles className="h-4 w-4 text-purple-500/50" />
           </div>
-          <div className="text-4xl font-bold tabular-nums mb-1">{stats?.totalReports || 0}</div>
-          <p className="text-sm text-muted-foreground">Reports Generated</p>
+          <div className="text-3xl font-bold text-white mb-1">{stats?.totalReports || 0}</div>
+          <p className="text-sm text-white/40">Reports Generated</p>
         </div>
       </div>
 
-      {/* Top Performers & Performance Distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* Top Performers & Distribution */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Top Performers */}
-        <div className="rounded-2xl overflow-hidden bg-white/[0.02] border border-white/5">
-          <div className="p-5 border-b border-border/30">
+        <div className="card-base overflow-hidden">
+          <div className="p-4 border-b border-white/[0.04]">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20">
-                <Award className="h-5 w-5 text-amber-500" />
+              <div className="icon-container icon-container-amber">
+                <Award className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="font-semibold">Top Performers</h3>
-                <p className="text-sm text-muted-foreground">Highest scoring GPs</p>
+                <h3 className="font-semibold text-white">Top Performers</h3>
+                <p className="text-xs text-white/40">Highest scoring GPs</p>
               </div>
             </div>
           </div>
-          <div className="p-5 space-y-3">
+          <div className="p-4 space-y-2">
             {topPerformers.length > 0 ? (
               topPerformers.map((gp, idx) => (
-                <div key={idx} className="flex items-center gap-3 p-3 rounded-xl glass-subtle">
-                  <div className={`flex items-center justify-center w-10 h-10 rounded-xl font-bold text-white shadow-lg ${
-                    idx === 0 ? 'bg-gradient-to-br from-amber-400 to-amber-600' : 
-                    idx === 1 ? 'bg-gradient-to-br from-gray-300 to-gray-500' : 
-                    'bg-gradient-to-br from-amber-600 to-amber-800'
+                <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02]">
+                  <div className={`flex items-center justify-center w-9 h-9 rounded-lg font-bold text-sm ${
+                    idx === 0 ? 'bg-[#ffd60a]/20 text-[#ffd60a]' : 
+                    idx === 1 ? 'bg-white/10 text-white/60' : 
+                    'bg-[#ac8e68]/20 text-[#ac8e68]'
                   }`}>
                     {idx + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{gp.fullName}</p>
-                    <p className="text-xs text-muted-foreground">{gp.evalCount} evaluations</p>
+                    <p className="font-medium text-white/90 truncate text-sm">{gp.fullName}</p>
+                    <p className="text-xs text-white/30">{gp.evalCount} evaluations</p>
                   </div>
-                  <Badge className="bg-green-500/20 text-green-400 border-green-500/30 rounded-lg font-bold">
-                    {gp.totalScore.toFixed(1)}
-                  </Badge>
+                  <span className="badge-base badge-green font-bold">{gp.totalScore.toFixed(1)}</span>
                 </div>
               ))
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                No evaluation data yet
-              </div>
+              <div className="text-center py-8 text-white/30 text-sm">No evaluation data yet</div>
             )}
           </div>
         </div>
 
-        {/* Performance Distribution Pie Chart */}
-        <div className="rounded-2xl overflow-hidden lg:col-span-2 bg-white/[0.02] border border-white/5">
-          <div className="p-5 border-b border-border/30">
+        {/* Performance Distribution */}
+        <div className="card-base overflow-hidden lg:col-span-2">
+          <div className="p-4 border-b border-white/[0.04]">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20">
-                <PieChart className="h-5 w-5 text-primary" />
+              <div className="icon-container icon-container-purple">
+                <PieChart className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="font-semibold">Performance Distribution</h3>
-                <p className="text-sm text-muted-foreground">GP breakdown for {MONTHS[selectedMonth - 1]}</p>
+                <h3 className="font-semibold text-white">Performance Distribution</h3>
+                <p className="text-xs text-white/40">GP breakdown for {MONTHS[selectedMonth - 1]}</p>
               </div>
             </div>
           </div>
-          <div className="p-5">
+          <div className="p-4">
             {performanceDistribution.length > 0 ? (
               <div className="flex items-center gap-6">
-                <ResponsiveContainer width="50%" height={200}>
+                <ResponsiveContainer width="50%" height={180}>
                   <RechartsPieChart>
-                    <Pie
-                      data={performanceDistribution}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={80}
-                      paddingAngle={4}
-                      dataKey="value"
-                    >
+                    <Pie data={performanceDistribution} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3} dataKey="value">
                       {performanceDistribution.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'rgba(20, 20, 70, 0.95)', 
-                        backdropFilter: 'blur(12px)',
-                        border: '1px solid rgba(100, 120, 200, 0.3)',
-                        borderRadius: '12px',
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                        color: '#E4F4FC'
-                      }} 
-                    />
+                    <Tooltip contentStyle={{ backgroundColor: '#1a1a24', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', color: '#fff' }} />
                   </RechartsPieChart>
                 </ResponsiveContainer>
-                <div className="flex-1 space-y-3">
+                <div className="flex-1 space-y-2">
                   {performanceDistribution.map((entry, idx) => (
-                    <div key={idx} className="flex items-center gap-3 p-2 rounded-lg glass-subtle">
-                      <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: entry.color }} />
-                      <span className="text-sm flex-1">{entry.name}</span>
-                      <span className="font-bold text-lg">{entry.value}</span>
+                    <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02]">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
+                      <span className="text-sm text-white/60 flex-1">{entry.name}</span>
+                      <span className="font-bold text-white">{entry.value}</span>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-48 text-muted-foreground">
-                No data available
-              </div>
+              <div className="flex items-center justify-center h-44 text-white/30 text-sm">No data available</div>
             )}
           </div>
         </div>
@@ -359,126 +299,93 @@ export default function Dashboard() {
 
       {/* Low Performance Alert */}
       {lowPerformers.length > 0 && (
-        <div className="rounded-2xl p-5 bg-amber-500/5 border border-amber-500/20">
+        <div className="card-base p-4 border-[#ff453a]/20 bg-[#ff453a]/[0.04]">
           <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 rounded-xl bg-amber-500/20">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <div className="icon-container icon-container-red">
+              <AlertTriangle className="h-5 w-5" />
             </div>
-            <span className="font-semibold text-amber-400">
+            <span className="font-semibold text-[#ff453a]">
               Attention Required - {lowPerformers.length} GP{lowPerformers.length > 1 ? 's' : ''} Below Target
             </span>
           </div>
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex flex-wrap gap-2 mb-2">
             {lowPerformers.map((gp, idx) => (
-              <Badge key={idx} className="bg-amber-500/10 border-amber-500/30 text-amber-300 rounded-lg">
-                {gp.fullName}: {gp.totalScore.toFixed(1)}/22
-              </Badge>
+              <span key={idx} className="badge-base badge-red">{gp.fullName}: {gp.totalScore.toFixed(1)}/22</span>
             ))}
           </div>
-          <p className="text-sm text-amber-400/80">
-            These GPs scored below 15 this month and may need additional support or training.
-          </p>
+          <p className="text-sm text-[#ff453a]/60">These GPs scored below 15 this month and may need additional support.</p>
         </div>
       )}
 
-      {/* Monthly Performance Overview Chart */}
-      <div className="rounded-2xl overflow-hidden bg-white/[0.02] border border-white/5">
-        <div className="p-5 border-b border-border/30">
+      {/* Performance Chart */}
+      <div className="card-base overflow-hidden">
+        <div className="p-4 border-b border-white/[0.04]">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20">
-              <BarChart3 className="h-5 w-5 text-primary" />
+            <div className="icon-container icon-container-cyan">
+              <BarChart3 className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="font-semibold">Monthly Performance Overview</h3>
-              <p className="text-sm text-muted-foreground">Average scores for {MONTHS[selectedMonth - 1]} {selectedYear}</p>
+              <h3 className="font-semibold text-white">Monthly Performance Overview</h3>
+              <p className="text-xs text-white/40">Average scores for {MONTHS[selectedMonth - 1]} {selectedYear}</p>
             </div>
           </div>
         </div>
-        <div className="p-5">
+        <div className="p-4">
           {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={400}>
+            <ResponsiveContainer width="100%" height={350}>
               <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148,163,184,0.2)" />
-                <XAxis 
-                  dataKey="name" 
-                  angle={-45} 
-                  textAnchor="end" 
-                  height={80}
-                  tick={{ fontSize: 12, fill: 'rgba(148,163,184,0.8)' }}
-                />
-                <YAxis domain={[0, 24]} ticks={[0, 6, 12, 18, 24]} tick={{ fill: 'rgba(148,163,184,0.8)' }} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.04)" />
+                <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.4)' }} />
+                <YAxis domain={[0, 24]} ticks={[0, 6, 12, 18, 24]} tick={{ fill: 'rgba(255,255,255,0.4)' }} />
                 <Tooltip 
                   formatter={(value: number, name: string) => [value.toFixed(1), name]}
                   labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(20, 20, 70, 0.95)', 
-                    backdropFilter: 'blur(12px)',
-                    border: '1px solid rgba(100, 120, 200, 0.3)',
-                    borderRadius: '12px',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                    color: '#E4F4FC'
-                  }}
+                  contentStyle={{ backgroundColor: '#1a1a24', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', color: '#fff' }}
                 />
                 <Legend verticalAlign="bottom" wrapperStyle={{ paddingTop: 20 }} />
-                <Bar dataKey="totalScore" name="Total Score" fill="url(#gradientPrimary)" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="appearance" name="Appearance" fill="url(#gradientGreen)" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="performance" name="Performance" fill="url(#gradientAmber)" radius={[6, 6, 0, 0]} />
-                <defs>
-                  <linearGradient id="gradientPrimary" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8b5cf6" />
-                    <stop offset="100%" stopColor="#6366f1" />
-                  </linearGradient>
-                  <linearGradient id="gradientGreen" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" />
-                    <stop offset="100%" stopColor="#059669" />
-                  </linearGradient>
-                  <linearGradient id="gradientAmber" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f59e0b" />
-                    <stop offset="100%" stopColor="#d97706" />
-                  </linearGradient>
-                </defs>
+                <Bar dataKey="totalScore" name="Total Score" fill="#64d2ff" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="appearance" name="Appearance" fill="#30d158" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="performance" name="Performance" fill="#ffd60a" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-              <FileCheck className="h-16 w-16 mb-4 opacity-30" />
-              <p className="text-lg">No evaluation data for {MONTHS[selectedMonth - 1]} {selectedYear}</p>
-              <Button variant="outline" className="mt-4 glass-button rounded-xl" onClick={() => setLocation('/upload')}>
-                Upload Evaluations
-              </Button>
+            <div className="flex flex-col items-center justify-center h-64 text-white/30">
+              <FileCheck className="h-12 w-12 mb-4 opacity-30" />
+              <p>No evaluation data for {MONTHS[selectedMonth - 1]} {selectedYear}</p>
+              <Button variant="outline" className="mt-4 btn-secondary" onClick={() => setLocation('/upload')}>Upload Evaluations</Button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Monthly Statistics Table */}
-      <div className="rounded-2xl overflow-hidden bg-white/[0.02] border border-white/5">
-        <div className="p-5 border-b border-border/30">
+      {/* Statistics Table */}
+      <div className="card-base overflow-hidden">
+        <div className="p-4 border-b border-white/[0.04]">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20">
-              <BarChart3 className="h-5 w-5 text-cyan-500" />
+            <div className="icon-container icon-container-cyan">
+              <BarChart3 className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="font-semibold">Detailed Statistics</h3>
-              <p className="text-sm text-muted-foreground">Complete breakdown for {MONTHS[selectedMonth - 1]} {selectedYear}</p>
+              <h3 className="font-semibold text-white">Detailed Statistics</h3>
+              <p className="text-xs text-white/40">Complete breakdown for {MONTHS[selectedMonth - 1]} {selectedYear}</p>
             </div>
           </div>
         </div>
-        <div className="p-5">
+        <div className="p-4">
           {gpStats && gpStats.length > 0 ? (
-            <div className="overflow-x-auto custom-scrollbar">
+            <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-border/30">
-                    <TableHead className="font-semibold">Game Presenter</TableHead>
-                    <TableHead className="text-center font-semibold">Evals</TableHead>
-                    <TableHead className="text-center font-semibold">Total</TableHead>
-                    <TableHead className="text-center font-semibold">Hair</TableHead>
-                    <TableHead className="text-center font-semibold">Makeup</TableHead>
-                    <TableHead className="text-center font-semibold">Outfit</TableHead>
-                    <TableHead className="text-center font-semibold">Posture</TableHead>
-                    <TableHead className="text-center font-semibold">Dealing</TableHead>
-                    <TableHead className="text-center font-semibold">Game Perf</TableHead>
+                  <TableRow className="border-white/[0.04] hover:bg-transparent">
+                    <TableHead className="text-white/50 font-medium text-xs uppercase tracking-wide">Game Presenter</TableHead>
+                    <TableHead className="text-center text-white/50 font-medium text-xs uppercase tracking-wide">Evals</TableHead>
+                    <TableHead className="text-center text-white/50 font-medium text-xs uppercase tracking-wide">Total</TableHead>
+                    <TableHead className="text-center text-white/50 font-medium text-xs uppercase tracking-wide">Hair</TableHead>
+                    <TableHead className="text-center text-white/50 font-medium text-xs uppercase tracking-wide">Makeup</TableHead>
+                    <TableHead className="text-center text-white/50 font-medium text-xs uppercase tracking-wide">Outfit</TableHead>
+                    <TableHead className="text-center text-white/50 font-medium text-xs uppercase tracking-wide">Posture</TableHead>
+                    <TableHead className="text-center text-white/50 font-medium text-xs uppercase tracking-wide">Dealing</TableHead>
+                    <TableHead className="text-center text-white/50 font-medium text-xs uppercase tracking-wide">Game Perf</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -487,29 +394,25 @@ export default function Dashboard() {
                     const getScoreColor = (score: string, max: number = 3) => {
                       const val = Number(score);
                       const pct = val / max;
-                      if (pct >= 0.8) return "text-green-500 font-semibold";
-                      if (pct >= 0.6) return "text-amber-500 font-medium";
-                      if (pct < 0.4 && val > 0) return "text-red-500 font-medium";
-                      return "text-muted-foreground";
+                      if (pct >= 0.8) return "text-[#30d158]";
+                      if (pct >= 0.6) return "text-[#ffd60a]";
+                      if (pct < 0.4 && val > 0) return "text-[#ff453a]";
+                      return "text-white/40";
                     };
                     const getTotalBadge = () => {
-                      if (total >= 20) return "bg-green-500/20 text-green-400 border-green-500/30";
-                      if (total >= 16) return "bg-amber-500/20 text-amber-400 border-amber-500/30";
-                      if (total > 0) return "bg-red-500/20 text-red-400 border-red-500/30";
-                      return "bg-muted/50 text-muted-foreground border-border/30";
+                      if (total >= 20) return "badge-green";
+                      if (total >= 16) return "badge-amber";
+                      if (total > 0) return "badge-red";
+                      return "badge-gray";
                     };
                     return (
-                      <TableRow key={gp.gpId} className="table-row-hover border-border/20">
-                        <TableCell className="font-medium">{gp.gpName}</TableCell>
+                      <TableRow key={gp.gpId} className="border-white/[0.04] hover:bg-white/[0.02]">
+                        <TableCell className="font-medium text-white/90">{gp.gpName}</TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="secondary" className="font-mono glass-subtle border-0 rounded-lg">
-                            {gp.evalCount}
-                          </Badge>
+                          <span className="badge-base badge-gray">{gp.evalCount}</span>
                         </TableCell>
                         <TableCell className="text-center">
-                          <span className={`inline-flex items-center justify-center px-3 py-1.5 rounded-lg font-bold border ${getTotalBadge()}`}>
-                            {gp.avgTotal}
-                          </span>
+                          <span className={`badge-base font-bold ${getTotalBadge()}`}>{gp.avgTotal}</span>
                         </TableCell>
                         <TableCell className={`text-center ${getScoreColor(gp.avgHair)}`}>{gp.avgHair}</TableCell>
                         <TableCell className={`text-center ${getScoreColor(gp.avgMakeup)}`}>{gp.avgMakeup}</TableCell>
@@ -524,7 +427,7 @@ export default function Dashboard() {
               </Table>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-32 text-muted-foreground">
+            <div className="flex items-center justify-center h-32 text-white/30 text-sm">
               No evaluation data for {MONTHS[selectedMonth - 1]} {selectedYear}
             </div>
           )}
