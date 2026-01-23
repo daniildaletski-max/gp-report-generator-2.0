@@ -2602,7 +2602,7 @@ function GPStatsTab({
         <>
           {/* Stats Summary Cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-            <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-200/50 dark:border-blue-800/50">
+            <Card className="stat-card stat-card-blue">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -2619,12 +2619,12 @@ function GPStatsTab({
               </CardContent>
             </Card>
             
-            <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-200/50 dark:border-green-800/50">
+            <Card className="stat-card stat-card-green">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Positive (+1)</p>
-                    <p className="text-3xl font-bold text-green-600">{statsSummary.positiveAttitude}</p>
+                    <p className="text-3xl font-bold text-green-400">{statsSummary.positiveAttitude}</p>
                     <p className="text-xs text-muted-foreground mt-1">GPs with positive attitude</p>
                   </div>
                   <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
@@ -2634,12 +2634,12 @@ function GPStatsTab({
               </CardContent>
             </Card>
             
-            <Card className="bg-gradient-to-br from-gray-500/10 to-gray-600/5 border-gray-200/50 dark:border-gray-800/50">
+            <Card className="stat-card">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Neutral (0)</p>
-                    <p className="text-3xl font-bold text-gray-600">{statsSummary.neutralAttitude}</p>
+                    <p className="text-3xl font-bold text-foreground">{statsSummary.neutralAttitude}</p>
                     <p className="text-xs text-muted-foreground mt-1">GPs with no rating</p>
                   </div>
                   <div className="h-12 w-12 rounded-full bg-gray-500/20 flex items-center justify-center">
@@ -2649,12 +2649,12 @@ function GPStatsTab({
               </CardContent>
             </Card>
             
-            <Card className="bg-gradient-to-br from-red-500/10 to-red-600/5 border-red-200/50 dark:border-red-800/50">
+            <Card className="stat-card stat-card-red">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Negative (-1)</p>
-                    <p className="text-3xl font-bold text-red-600">{statsSummary.negativeAttitude}</p>
+                    <p className="text-3xl font-bold text-red-400">{statsSummary.negativeAttitude}</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {statsSummary.totalMistakes} total mistakes
                     </p>
@@ -2666,7 +2666,7 @@ function GPStatsTab({
               </CardContent>
             </Card>
             
-            <Card className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-200/50 dark:border-purple-800/50">
+            <Card className="stat-card stat-card-purple">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -2770,8 +2770,8 @@ function GPStatsTab({
                     </h4>
                     <div className="space-y-2">
                       {statsSummary.topByAttitude.slice(0, 5).map((gp: any, idx: number) => (
-                        <div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
-                          <span className="text-xs font-bold text-green-600 w-5">#{idx + 1}</span>
+<div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                           <span className="text-xs font-bold text-green-400 w-5">#{idx + 1}</span>
                           <span className="text-sm truncate flex-1">{gp.name}</span>
                           <Badge className="bg-green-500">+1</Badge>
                         </div>
@@ -2789,8 +2789,8 @@ function GPStatsTab({
                     </h4>
                     <div className="space-y-2">
                       {statsSummary.needsAttention?.slice(0, 5).map((gp: any, idx: number) => (
-                        <div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                          <span className="text-xs font-bold text-red-600 w-5">#{idx + 1}</span>
+<div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                           <span className="text-xs font-bold text-red-400 w-5">#{idx + 1}</span>
                           <span className="text-sm truncate flex-1">{gp.name}</span>
                           <Badge variant="destructive">-1</Badge>
                         </div>
@@ -2939,33 +2939,28 @@ function GPStatsTab({
                 const teamName = teams.find(t => t.id === gp.teamId)?.teamName || 'Unassigned';
                 
                 // Border color based on cumulative attitude
-                const getBorderColor = () => {
-                  const value = attitude ?? 0;
-                  if (value > 0) return 'border-green-400';
-                  if (value < 0) return 'border-red-400';
-                  return 'border-muted';
-                };
+// Border color handled by gp-card CSS classes
                 
                 // Get attitude display for cumulative values
-                const getAttitudeDisplay = () => {
-                  const value = attitude ?? 0;
-                  if (value > 0) return { icon: <ThumbsUp className="h-5 w-5" />, label: `+${value}`, color: 'text-green-600 bg-green-100 dark:bg-green-950' };
-                  if (value < 0) return { icon: <ThumbsDown className="h-5 w-5" />, label: `${value}`, color: 'text-red-600 bg-red-100 dark:bg-red-950' };
-                  return { icon: null, label: '0', color: 'text-gray-500 bg-gray-100 dark:bg-gray-800' };
-                };
-                const attitudeDisplay = getAttitudeDisplay();
+const getAttitudeDisplay = () => {
+                                  const value = attitude ?? 0;
+                                  if (value > 0) return { icon: <ThumbsUp className="h-5 w-5" />, label: `+${value}`, className: 'gp-attitude-positive' };
+                                  if (value < 0) return { icon: <ThumbsDown className="h-5 w-5" />, label: `${value}`, className: 'gp-attitude-negative' };
+                                  return { icon: null, label: '0', className: 'gp-attitude-neutral' };
+                                };
+                                const attitudeDisplay = getAttitudeDisplay();
 
                 return (
                   <div 
                     key={gp.id} 
-                    className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 border shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer ${getBorderColor()} ${selectedGpIds.includes(gp.id) ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                    className={`gp-card ${(attitude ?? 0) > 0 ? 'gp-card-positive' : (attitude ?? 0) < 0 ? 'gp-card-negative' : ''} cursor-pointer ${selectedGpIds.includes(gp.id) ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
                     onClick={() => setDetailGpId(gp.id)}
                   >
                     {/* Header with checkbox */}
-                    <div className="flex items-start justify-between p-4 pb-2">
+                    <div className="gp-card-header flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-base truncate">{gp.name}</h4>
-                        <p className="text-xs text-muted-foreground mt-0.5">{teamName}</p>
+<h4 className="gp-card-name truncate">{gp.name}</h4>
+                                        <p className="gp-card-team">{teamName}</p>
                       </div>
                       <Checkbox 
                         checked={selectedGpIds.includes(gp.id)}
@@ -2976,10 +2971,10 @@ function GPStatsTab({
                     </div>
                     
                     {/* Attitude Section */}
-                    <div className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <div className="gp-card-body" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Attitude</span>
-                        <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold ${attitudeDisplay.color}`}>
+                        <div className={`gp-attitude-badge ${attitudeDisplay.className}`}>
                           {attitudeDisplay.icon}
                           <span>{attitudeDisplay.label}</span>
                         </div>
@@ -2995,17 +2990,17 @@ function GPStatsTab({
                     </div>
                     
                     {/* Stats Footer */}
-                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50/50 dark:bg-gray-800/30 border-t">
+                    <div className="gp-card-footer flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-1.5">
-                          <AlertTriangle className={`h-4 w-4 ${mistakes > 0 ? 'text-red-500' : 'text-gray-400'}`} />
-                          <span className={`text-sm font-medium ${mistakes > 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                          <AlertTriangle className={`h-4 w-4 ${mistakes > 0 ? 'text-red-400' : 'text-muted-foreground'}`} />
+                          <span className={`text-sm font-medium ${mistakes > 0 ? 'gp-stat-danger' : ''}`}>
                             {mistakes}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <Activity className="h-4 w-4 text-blue-500" />
-                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                          <Activity className="h-4 w-4 text-blue-400" />
+                          <span className="gp-stat-value">
                             {totalGames.toLocaleString()}
                           </span>
                         </div>
@@ -3095,18 +3090,18 @@ function GPDetailModal({
 
             {/* Stats Summary */}
             <div className="grid grid-cols-3 gap-4 py-4">
-              <div className="text-center p-4 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/50 dark:to-blue-900/30">
-                <p className="text-2xl font-bold text-blue-600">{data.evaluations.length}</p>
+              <div className="text-center p-4 rounded-lg stat-card-blue">
+                <p className="text-2xl font-bold text-blue-400">{data.evaluations.length}</p>
                 <p className="text-sm text-muted-foreground">Evaluations</p>
               </div>
-              <div className={`text-center p-4 rounded-lg ${(data.stats.attitude ?? 0) > 0 ? 'bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/50 dark:to-green-900/30' : (data.stats.attitude ?? 0) < 0 ? 'bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/50 dark:to-red-900/30' : 'bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950/50 dark:to-gray-900/30'}`}>
-                <p className={`text-2xl font-bold ${(data.stats.attitude ?? 0) > 0 ? 'text-green-600' : (data.stats.attitude ?? 0) < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+              <div className={`text-center p-4 rounded-lg ${(data.stats.attitude ?? 0) > 0 ? 'stat-card-green' : (data.stats.attitude ?? 0) < 0 ? 'stat-card-red' : 'stat-card'}`}>
+                <p className={`text-2xl font-bold ${(data.stats.attitude ?? 0) > 0 ? 'text-green-400' : (data.stats.attitude ?? 0) < 0 ? 'text-red-400' : 'text-foreground'}`}>
                   {(data.stats.attitude ?? 0) > 0 ? '+' : ''}{data.stats.attitude ?? 0}
                 </p>
                 <p className="text-sm text-muted-foreground">Attitude</p>
               </div>
-              <div className={`text-center p-4 rounded-lg ${(data.stats.mistakes ?? 0) > 0 ? 'bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/50 dark:to-red-900/30' : 'bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950/50 dark:to-gray-900/30'}`}>
-                <p className={`text-2xl font-bold ${(data.stats.mistakes ?? 0) > 0 ? 'text-red-600' : 'text-gray-600'}`}>{data.stats.mistakes ?? 0}</p>
+              <div className={`text-center p-4 rounded-lg ${(data.stats.mistakes ?? 0) > 0 ? 'stat-card-red' : 'stat-card'}`}>
+                <p className={`text-2xl font-bold ${(data.stats.mistakes ?? 0) > 0 ? 'text-red-400' : 'text-foreground'}`}>{data.stats.mistakes ?? 0}</p>
                 <p className="text-sm text-muted-foreground">Errors</p>
               </div>
             </div>
@@ -3188,7 +3183,7 @@ function GPDetailModal({
                       <div key={error.id} className="p-4 rounded-lg border border-red-500/20 bg-red-500/10">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                            <Badge variant="outline" className="badge-warning">
                               Excel
                             </Badge>
                             {error.errorCode && (
@@ -3249,8 +3244,8 @@ function GPDetailModal({
                               <Badge variant="outline">Unknown</Badge>
                             )}
                             <span className={`font-bold text-lg ${
-                              (screenshot.attitudeScore ?? 0) > 0 ? 'text-green-600' : 
-                              (screenshot.attitudeScore ?? 0) < 0 ? 'text-red-600' : 'text-gray-600'
+                              (screenshot.attitudeScore ?? 0) > 0 ? 'text-green-400' : 
+                              (screenshot.attitudeScore ?? 0) < 0 ? 'text-red-400' : 'text-foreground'
                             }`}>
                               {(screenshot.attitudeScore ?? 0) > 0 ? '+' : ''}{screenshot.attitudeScore ?? 0}
                             </span>
@@ -3369,7 +3364,7 @@ function QuickAttitudeButtons({
   };
 
   const attitudeValue = currentAttitude ?? 0;
-  const attitudeColor = attitudeValue > 0 ? 'text-green-600' : attitudeValue < 0 ? 'text-red-600' : 'text-gray-500';
+  const attitudeColor = attitudeValue > 0 ? 'text-green-400' : attitudeValue < 0 ? 'text-red-400' : 'text-muted-foreground';
 
   return (
     <div className="flex items-center justify-center gap-1">
@@ -3377,7 +3372,7 @@ function QuickAttitudeButtons({
       <Button
         size="sm"
         variant="ghost"
-        className="px-2 h-8 bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900"
+        className="gp-attitude-button-negative"
         onClick={() => handleAddAttitude(-1)}
         disabled={isUpdating !== null}
         title="Add -1 to attitude"
@@ -3393,7 +3388,7 @@ function QuickAttitudeButtons({
       <Button
         size="sm"
         variant="ghost"
-        className={`px-3 h-8 min-w-[50px] font-bold ${attitudeColor} hover:bg-gray-100 dark:hover:bg-gray-800`}
+        className={`px-3 h-8 min-w-[50px] font-bold ${attitudeColor} hover:bg-white/10`}
         onClick={handleReset}
         disabled={isUpdating !== null}
         title="Click to reset to 0"
@@ -3409,7 +3404,7 @@ function QuickAttitudeButtons({
       <Button
         size="sm"
         variant="ghost"
-        className="px-2 h-8 bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-950 dark:text-green-400 dark:hover:bg-green-900"
+        className="gp-attitude-button-positive"
         onClick={() => handleAddAttitude(1)}
         disabled={isUpdating !== null}
         title="Add +1 to attitude"

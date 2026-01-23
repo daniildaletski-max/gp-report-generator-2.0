@@ -282,7 +282,7 @@ export default function Dashboard() {
                     <p className="font-medium truncate">{gp.fullName}</p>
                     <p className="text-xs text-muted-foreground">{gp.evalCount} evaluations</p>
                   </div>
-                  <Badge className="bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30 rounded-lg font-bold">
+                  <Badge className="bg-green-500/20 text-green-400 border-green-500/30 rounded-lg font-bold">
                     {gp.totalScore.toFixed(1)}
                   </Badge>
                 </div>
@@ -364,18 +364,18 @@ export default function Dashboard() {
             <div className="p-2 rounded-xl bg-amber-500/20">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
             </div>
-            <span className="font-semibold text-amber-600 dark:text-amber-400">
+            <span className="font-semibold text-amber-400">
               Attention Required - {lowPerformers.length} GP{lowPerformers.length > 1 ? 's' : ''} Below Target
             </span>
           </div>
           <div className="flex flex-wrap gap-2 mb-3">
             {lowPerformers.map((gp, idx) => (
-              <Badge key={idx} className="bg-white/50 dark:bg-black/20 border-amber-500/30 text-amber-700 dark:text-amber-300 rounded-lg">
+              <Badge key={idx} className="bg-amber-500/10 border-amber-500/30 text-amber-300 rounded-lg">
                 {gp.fullName}: {gp.totalScore.toFixed(1)}/22
               </Badge>
             ))}
           </div>
-          <p className="text-sm text-amber-600/80 dark:text-amber-400/80">
+          <p className="text-sm text-amber-400/80">
             These GPs scored below 15 this month and may need additional support or training.
           </p>
         </div>
@@ -493,9 +493,9 @@ export default function Dashboard() {
                       return "text-muted-foreground";
                     };
                     const getTotalBadge = () => {
-                      if (total >= 20) return "bg-green-500/20 text-green-600 dark:text-green-400 border-green-500/30";
-                      if (total >= 16) return "bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30";
-                      if (total > 0) return "bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30";
+                      if (total >= 20) return "bg-green-500/20 text-green-400 border-green-500/30";
+                      if (total >= 16) return "bg-amber-500/20 text-amber-400 border-amber-500/30";
+                      if (total > 0) return "bg-red-500/20 text-red-400 border-red-500/30";
                       return "bg-muted/50 text-muted-foreground border-border/30";
                     };
                     return (
