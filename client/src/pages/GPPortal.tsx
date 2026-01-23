@@ -30,62 +30,55 @@ function AnimatedBackground() {
   );
 }
 
-// Score ring component
-function ScoreRing({ score, maxScore, size = 120, strokeWidth = 8, label }: { 
+// Score card component - modern card-based design
+function ScoreCard({ score, maxScore, label, icon: Icon, gradient }: { 
   score: number; 
   maxScore: number; 
-  size?: number; 
-  strokeWidth?: number;
   label: string;
+  icon: typeof Star;
+  gradient: string;
 }) {
   const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const offset = circumference - (percentage / 100) * circumference;
   
-  const getColor = () => {
-    if (percentage >= 80) return { stroke: '#22c55e', bg: 'rgba(34, 197, 94, 0.1)' };
-    if (percentage >= 60) return { stroke: '#eab308', bg: 'rgba(234, 179, 8, 0.1)' };
-    return { stroke: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' };
+  const getStatus = () => {
+    if (percentage >= 90) return { text: 'Excellent', color: 'text-emerald-400' };
+    if (percentage >= 80) return { text: 'Great', color: 'text-green-400' };
+    if (percentage >= 70) return { text: 'Good', color: 'text-yellow-400' };
+    return { text: 'Needs Work', color: 'text-orange-400' };
   };
   
-  const colors = getColor();
+  const status = getStatus();
   
   return (
-    <div className="flex flex-col items-center">
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="transform -rotate-90">
-          {/* Background circle */}
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke="rgba(255,255,255,0.1)"
-            strokeWidth={strokeWidth}
+    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} p-5 sm:p-6`}>
+      {/* Background decoration */}
+      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+      <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+      
+      <div className="relative z-10">
+        <div className="flex items-center justify-between mb-4">
+          <div className="p-2.5 bg-white/10 rounded-xl">
+            <Icon className="h-5 w-5 text-white" />
+          </div>
+          <span className={`text-sm font-medium ${status.color}`}>{status.text}</span>
+        </div>
+        
+        <div className="mb-3">
+          <div className="flex items-baseline gap-1">
+            <span className="text-3xl sm:text-4xl font-bold text-white">{score.toFixed(1)}</span>
+            <span className="text-lg text-white/50">/{maxScore}</span>
+          </div>
+          <p className="text-sm text-white/70 mt-1">{label}</p>
+        </div>
+        
+        {/* Progress bar */}
+        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-white/80 rounded-full transition-all duration-1000 ease-out"
+            style={{ width: `${percentage}%` }}
           />
-          {/* Progress circle */}
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke={colors.stroke}
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            className="transition-all duration-1000 ease-out"
-            style={{ filter: `drop-shadow(0 0 6px ${colors.stroke})` }}
-          />
-        </svg>
-        {/* Center content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl sm:text-3xl font-bold text-white">{score.toFixed(1)}</span>
-          <span className="text-xs text-blue-200/60">/{maxScore}</span>
         </div>
       </div>
-      <span className="mt-2 text-sm text-blue-200/70">{label}</span>
     </div>
   );
 }
@@ -349,37 +342,36 @@ export default function GPPortal() {
       {/* Main Content */}
       <main className="container py-6 sm:py-10 space-y-6 sm:space-y-10 relative z-10">
         
-        {/* Performance Overview - Score Rings */}
+        {/* Performance Overview - Score Cards */}
         <section>
           <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
             <Trophy className="h-5 w-5 text-yellow-400" />
             Performance Overview
           </h2>
           
-          <Card className="bg-white/5 backdrop-blur-xl border-white/10 overflow-hidden">
-            <CardContent className="p-6 sm:p-8">
-              <div className="flex flex-wrap justify-center gap-8 sm:gap-16">
-                <ScoreRing 
-                  score={avgTotal} 
-                  maxScore={22} 
-                  size={140} 
-                  label="Overall Score" 
-                />
-                <ScoreRing 
-                  score={avgAppearance} 
-                  maxScore={12} 
-                  size={120} 
-                  label="Appearance" 
-                />
-                <ScoreRing 
-                  score={avgGamePerf} 
-                  maxScore={10} 
-                  size={120} 
-                  label="Game Performance" 
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <ScoreCard 
+              score={avgTotal} 
+              maxScore={22} 
+              label="Overall Score" 
+              icon={Trophy}
+              gradient="from-amber-600/80 to-orange-700/80"
+            />
+            <ScoreCard 
+              score={avgAppearance} 
+              maxScore={12} 
+              label="Appearance" 
+              icon={Sparkles}
+              gradient="from-pink-600/80 to-rose-700/80"
+            />
+            <ScoreCard 
+              score={avgGamePerf} 
+              maxScore={10} 
+              label="Game Performance" 
+              icon={Gamepad2}
+              gradient="from-violet-600/80 to-purple-700/80"
+            />
+          </div>
         </section>
 
         {/* Quick Stats */}
@@ -796,64 +788,94 @@ export default function GPPortal() {
         </section>
 
         {/* Error Details */}
-        {data.errors && data.errors.length > 0 && (
+        {data.errorDetails && data.errorDetails.length > 0 && (
           <section>
             <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
               <AlertTriangle className="h-5 w-5 text-orange-400" />
               Error Details This Month
               <Badge className="ml-2 bg-orange-500/20 text-orange-300 border-orange-500/30">
-                {data.errors.length}
+                {data.errorDetails.length}
               </Badge>
             </h2>
             
-            <div className="space-y-3">
-              {data.errors.map((error, index) => (
-                <Card key={index} className="bg-white/5 backdrop-blur-xl border-white/10 overflow-hidden">
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-4">
-                      <div className={`shrink-0 p-2 rounded-lg ${
-                        error.severity === 'HIGH' ? 'bg-red-500/20' :
-                        error.severity === 'MEDIUM' ? 'bg-orange-500/20' :
-                        'bg-yellow-500/20'
-                      }`}>
-                        <AlertTriangle className={`h-5 w-5 ${
-                          error.severity === 'HIGH' ? 'text-red-400' :
-                          error.severity === 'MEDIUM' ? 'text-orange-400' :
-                          'text-yellow-400'
-                        }`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <Badge className="bg-white/10 text-white/70">{error.source}</Badge>
-                          <Badge className={`${
-                            error.severity === 'HIGH' ? 'bg-red-500/20 text-red-300' :
-                            error.severity === 'MEDIUM' ? 'bg-orange-500/20 text-orange-300' :
-                            'bg-yellow-500/20 text-yellow-300'
-                          }`}>
-                            {error.severity}
-                          </Badge>
-                          {error.errorCode && (
-                            <Badge className="bg-blue-500/20 text-blue-300">{error.errorCode}</Badge>
-                          )}
-                          {error.gameType && (
-                            <Badge className="bg-purple-500/20 text-purple-300">{error.gameType}</Badge>
-                          )}
+            <Card className="bg-white/5 backdrop-blur-xl border-white/10 overflow-hidden">
+              <CardContent className="p-0">
+                <div className="divide-y divide-white/10">
+                  {data.errorDetails.map((error, index) => (
+                    <div key={error.id || index} className="p-4 hover:bg-white/5 transition-colors">
+                      <div className="flex items-start gap-4">
+                        <div className={`shrink-0 p-2.5 rounded-xl ${
+                          error.severity === 'high' || error.severity === 'HIGH' ? 'bg-red-500/20' :
+                          error.severity === 'medium' || error.severity === 'MEDIUM' ? 'bg-orange-500/20' :
+                          'bg-yellow-500/20'
+                        }`}>
+                          <AlertTriangle className={`h-5 w-5 ${
+                            error.severity === 'high' || error.severity === 'HIGH' ? 'text-red-400' :
+                            error.severity === 'medium' || error.severity === 'MEDIUM' ? 'text-orange-400' :
+                            'text-yellow-400'
+                          }`} />
                         </div>
-                        <p className="text-white font-medium">{error.description}</p>
-                        {error.tableName && (
-                          <p className="text-sm text-blue-200/60 mt-1">Table: {error.tableName}</p>
-                        )}
-                        <p className="text-xs text-blue-200/40 mt-2">
-                          {error.errorDate 
-                            ? format(new Date(error.errorDate), "MMM d, yyyy")
-                            : "Unknown date"}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            {error.errorType && (
+                              <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/30">
+                                {error.errorType}
+                              </Badge>
+                            )}
+                            {error.gameType && (
+                              <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
+                                {error.gameType}
+                              </Badge>
+                            )}
+                            {error.errorCategory && (
+                              <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
+                                {error.errorCategory}
+                              </Badge>
+                            )}
+                            <Badge className={`${
+                              error.source === 'screenshot' 
+                                ? 'bg-green-500/20 text-green-300 border-green-500/30' 
+                                : 'bg-gray-500/20 text-gray-300 border-gray-500/30'
+                            }`}>
+                              {error.source === 'screenshot' ? 'Screenshot' : 'Excel'}
+                            </Badge>
+                          </div>
+                          
+                          <p className="text-white font-medium text-base">
+                            {error.errorDescription || 'Error recorded'}
+                          </p>
+                          
+                          {error.tableId && (
+                            <p className="text-sm text-blue-200/60 mt-1">Table: {error.tableId}</p>
+                          )}
+                          
+                          <div className="flex items-center gap-4 mt-2">
+                            <p className="text-xs text-blue-200/40">
+                              {error.errorDate 
+                                ? format(new Date(error.errorDate), "MMM d, yyyy")
+                                : error.createdAt
+                                ? format(new Date(error.createdAt), "MMM d, yyyy")
+                                : "Unknown date"}
+                            </p>
+                            {error.screenshotUrl && (
+                              <a 
+                                href={error.screenshotUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                              >
+                                <Eye className="h-3 w-3" />
+                                View Screenshot
+                              </a>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </section>
         )}
       </main>
