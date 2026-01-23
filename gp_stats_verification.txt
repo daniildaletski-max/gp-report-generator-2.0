@@ -1,0 +1,32 @@
+GP Stats Verification - January 2026
+
+SUMMARY:
+- Total GPs: 49 (3 with ratings)
+- Positive (+1): 2 GPs with positive attitude
+- Neutral (0): 46 GPs with no rating
+- Negative (-1): 1 GP (106 total mistakes)
+- Total Games: 1,500 this month
+
+ATTITUDE DISTRIBUTION:
+- Positive: 2
+- Neutral: 46
+- Negative: 1
+
+ATTITUDE OVERVIEW:
+Positive Attitude:
+#1 Agnes Suvorov +1
+#2 Akemi Hashimura +1
+
+Needs Attention:
+#1 Alicia Bel-Haj -1
+
+GP LIST WITH ATTITUDE (sample):
+- Agnes Suvorov (Team Omnicron): +5 total, 0 mistakes, 1500 games
+- Akemi Hashimura (Unassigned): +5 total, 4 mistakes, 0 games
+- Alicia Bel-Haj (Team Nu): -1 total, 6 mistakes, 0 games
+- Alina Jivoloup (Team Zeta): 0 total, 1 mistake, 0 games
+
+VERIFICATION:
+- Attitude counts match: 2 positive + 46 neutral + 1 negative = 49 ✓
+- GP Stats shows cumulative attitude system working ✓
+- Positive/Negative indicators visible ✓
