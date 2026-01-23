@@ -2108,10 +2108,10 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
               </Dialog>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </div>
+        <div className="unified-card-body space-y-4">
           {/* Search and Filter */}
-          <div className="flex gap-4">
+          <div className="filter-bar">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -2138,16 +2138,16 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
 
           {/* Invitations Table */}
           {isLoading ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
+                <div key={i} className="skeleton-enhanced h-16 w-full rounded-lg" />
               ))}
             </div>
           ) : filteredInvitations.length > 0 ? (
-            <div className="border rounded-lg overflow-hidden">
+            <div className="table-enhanced">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/50">
+                  <TableRow>
                     <TableHead>Email</TableHead>
                     <TableHead>Team</TableHead>
                     <TableHead>Role</TableHead>
@@ -2162,7 +2162,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                     const isPending = inv.status === "pending" && !isExpired;
                     
                     return (
-                      <TableRow key={inv.id} className="hover:bg-muted/50">
+                      <TableRow key={inv.id} className="table-row-enhanced">
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
                             <Mail className="h-4 w-4 text-muted-foreground" />
@@ -2324,8 +2324,8 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </TabsContent>
   );
 }
