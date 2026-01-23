@@ -485,12 +485,12 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0f]">
+    <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#08080f]">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Upload Screenshots</h1>
-          <p className="text-white/50 mt-1">{getTabDescription()}</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+        <div className="page-header mb-0">
+          <h1 className="page-title">Upload Screenshots</h1>
+          <p className="page-subtitle">{getTabDescription()}</p>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl">
@@ -550,50 +550,50 @@ export default function UploadPage() {
 
         {/* Stats Cards */}
         {stats.success > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
-            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 animate-stagger">
+            <div className="stat-card-enhanced green">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-green-500/20">
-                  <CheckCircle className="h-6 w-6 text-green-500" />
+                <div className="icon-box icon-box-green">
+                  <CheckCircle className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{stats.success}</p>
-                  <p className="text-xs text-muted-foreground">Processed</p>
+                  <p className="text-2xl font-bold counter-value">{stats.success}</p>
+                  <p className="text-xs text-white/40">Processed</p>
                 </div>
               </div>
             </div>
-            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+            <div className="stat-card-enhanced cyan">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-blue-500/10">
-                  <Clock className="h-6 w-6 text-blue-400" />
+                <div className="icon-box icon-box-cyan">
+                  <Clock className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{stats.avgTime.toFixed(1)}s</p>
-                  <p className="text-xs text-muted-foreground">Avg. Time</p>
+                  <p className="text-2xl font-bold counter-value">{stats.avgTime.toFixed(1)}s</p>
+                  <p className="text-xs text-white/40">Avg. Time</p>
                 </div>
               </div>
             </div>
             {activeTab === "evaluations" && "avgScore" in stats && (
               <>
-                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+                <div className="stat-card-enhanced amber">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-amber-500/10">
-                      <Star className="h-6 w-6 text-amber-400" />
+                    <div className="icon-box icon-box-amber">
+                      <Star className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{(stats as any).avgScore.toFixed(1)}</p>
-                      <p className="text-xs text-muted-foreground">Avg. Score</p>
+                      <p className="text-2xl font-bold counter-value">{(stats as any).avgScore.toFixed(1)}</p>
+                      <p className="text-xs text-white/40">Avg. Score</p>
                     </div>
                   </div>
                 </div>
-                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+                <div className="stat-card-enhanced purple">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-purple-500/10">
-                      <User className="h-6 w-6 text-purple-400" />
+                    <div className="icon-box icon-box-purple">
+                      <User className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{(stats as any).newGPs}</p>
-                      <p className="text-xs text-muted-foreground">New GPs</p>
+                      <p className="text-2xl font-bold counter-value">{(stats as any).newGPs}</p>
+                      <p className="text-xs text-white/40">New GPs</p>
                     </div>
                   </div>
                 </div>
@@ -601,25 +601,25 @@ export default function UploadPage() {
             )}
             {activeTab === "attitude" && "positive" in stats && (
               <>
-                <div className="glass-card p-4 rounded-2xl">
+                <div className="stat-card-enhanced green">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-green-500/20">
-                      <ThumbsUp className="h-6 w-6 text-green-500" />
+                    <div className="icon-box icon-box-green">
+                      <ThumbsUp className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-green-500">+{(stats as any).positive}</p>
-                      <p className="text-xs text-muted-foreground">Positive</p>
+                      <p className="text-2xl font-bold text-green-400 counter-value">+{(stats as any).positive}</p>
+                      <p className="text-xs text-white/40">Positive</p>
                     </div>
                   </div>
                 </div>
-                <div className="glass-card p-4 rounded-2xl">
+                <div className="stat-card-enhanced red">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-red-500/20">
-                      <ThumbsDown className="h-6 w-6 text-red-500" />
+                    <div className="icon-box icon-box-red">
+                      <ThumbsDown className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-red-500">-{(stats as any).negative}</p>
-                      <p className="text-xs text-muted-foreground">Negative</p>
+                      <p className="text-2xl font-bold text-red-400 counter-value">-{(stats as any).negative}</p>
+                      <p className="text-xs text-white/40">Negative</p>
                     </div>
                   </div>
                 </div>
@@ -631,17 +631,15 @@ export default function UploadPage() {
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
           {/* Upload Area */}
-          <div className="lg:col-span-2">
-            <div className="glass-card rounded-2xl overflow-hidden">
-              <div className="p-5 border-b border-border/30">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20">
-                    <CloudUpload className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">Upload Area</h3>
-                    <p className="text-sm text-muted-foreground">Drag & drop or paste screenshots</p>
-                  </div>
+          <div className="lg:col-span-2 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+            <div className="unified-card overflow-hidden">
+              <div className="unified-card-header">
+                <div className="icon-box icon-box-purple">
+                  <CloudUpload className="h-5 w-5" />
+                </div>
+                <div className="section-header">
+                  <h3 className="section-title">Upload Area</h3>
+                  <p className="section-subtitle">Drag & drop or paste screenshots</p>
                 </div>
               </div>
               <div className="p-5">
@@ -672,11 +670,7 @@ export default function UploadPage() {
 
                 {/* Drop Zone */}
                 <div
-                  className={`relative border-2 border-dashed rounded-2xl p-10 text-center transition-all cursor-pointer ${
-                    isDragging
-                      ? "border-primary bg-primary/10 scale-[1.02] shadow-glow"
-                      : "border-border/50 hover:border-primary/50 hover:bg-primary/5"
-                  }`}
+                  className={`upload-zone-enhanced ${isDragging ? 'dragging' : ''}`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
@@ -690,15 +684,15 @@ export default function UploadPage() {
                     accept="image/*"
                     onChange={handleFileSelect}
                   />
-                  <div className="flex flex-col items-center gap-4">
-                    <div className={`p-5 rounded-2xl transition-all ${isDragging ? "bg-primary/20 scale-110" : "bg-gradient-to-br from-primary/10 to-purple-500/10"}`}>
-                      <UploadIcon className={`h-12 w-12 transition-colors ${isDragging ? "text-primary" : "text-primary/70"}`} />
+                  <div className="flex flex-col items-center gap-4 relative z-10">
+                    <div className="upload-icon-box">
+                      <UploadIcon className={`h-10 w-10 transition-colors ${isDragging ? "text-purple-400" : "text-purple-400/70"}`} />
                     </div>
                     <div>
-                      <p className="font-semibold text-xl">
+                      <p className="font-semibold text-xl text-white/90">
                         {isDragging ? "Drop files here!" : "Drop screenshots or click to upload"}
                       </p>
-                      <p className="text-sm text-muted-foreground mt-2">
+                      <p className="text-sm text-white/40 mt-2">
                         PNG, JPG, WEBP • Multiple files • Paste with Ctrl+V
                       </p>
                     </div>
@@ -895,19 +889,17 @@ export default function UploadPage() {
           </div>
 
           {/* Details Panel */}
-          <div className="lg:col-span-1">
-            <div className="glass-card rounded-2xl sticky top-4 overflow-hidden">
-              <div className="p-5 border-b border-border/30">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20">
-                    <Sparkles className="h-5 w-5 text-cyan-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">Extracted Data</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {selectedFile ? `${selectedFile.extractedData?.presenterName || selectedFile.attitudeData?.gpName || 'Unknown'}` : "Select a file"}
-                    </p>
-                  </div>
+          <div className="lg:col-span-1 animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
+            <div className="unified-card sticky top-4 overflow-hidden">
+              <div className="unified-card-header">
+                <div className="icon-box icon-box-cyan">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div className="section-header">
+                  <h3 className="section-title">Extracted Data</h3>
+                  <p className="section-subtitle">
+                    {selectedFile ? `${selectedFile.extractedData?.presenterName || selectedFile.attitudeData?.gpName || 'Unknown'}` : "Select a file"}
+                  </p>
                 </div>
               </div>
               <div className="p-5">
@@ -1084,14 +1076,15 @@ export default function UploadPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="text-center py-12">
-                    <div className="p-4 rounded-2xl bg-gradient-to-br from-primary/10 to-purple-500/10 inline-block mb-4">
-                      <Sparkles className="h-12 w-12 text-primary/50" />
+                  <div className="empty-state py-12">
+                    <div className="empty-state-icon">
+                      <Sparkles className="h-8 w-8 text-purple-400/50" />
                     </div>
-                    <p className="text-muted-foreground">
+                    <p className="empty-state-title">No data yet</p>
+                    <p className="empty-state-description">
                       Upload and process screenshots to see extracted data
                     </p>
-                    <p className="text-xs mt-2 text-muted-foreground/70">
+                    <p className="text-xs mt-4 text-white/30">
                       Tip: Press Ctrl+V to paste from clipboard
                     </p>
                   </div>

@@ -303,36 +303,52 @@ export default function ReportsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 p-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
-          <p className="text-muted-foreground">Generate and manage Team Monthly Overview reports</p>
+      <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
+        {/* Page Header Skeleton */}
+        <div className="page-header">
+          <div className="skeleton-enhanced h-8 w-32 rounded-lg" />
+          <div className="skeleton-enhanced h-4 w-64 rounded mt-2" />
         </div>
+        
+        {/* Stats Cards Skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-24" />
+            <div key={i} className="stat-card-enhanced stat-card-purple p-5">
+              <div className="flex items-center gap-3">
+                <div className="skeleton-enhanced h-10 w-10 rounded-xl" />
+                <div className="flex-1">
+                  <div className="skeleton-enhanced h-3 w-20 rounded mb-2" />
+                  <div className="skeleton-enhanced h-6 w-16 rounded" />
+                </div>
+              </div>
+            </div>
           ))}
         </div>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-4">
+        
+        {/* Table Skeleton */}
+        <div className="unified-card">
+          <div className="unified-card-header">
+            <div className="skeleton-enhanced h-5 w-32 rounded" />
+          </div>
+          <div className="unified-card-body">
+            <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
+                <div key={i} className="skeleton-enhanced h-14 w-full rounded-lg" />
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0a0f]">
+    <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Reports</h1>
-          <p className="text-white/50 mt-1">Generate and manage Team Monthly Overview reports</p>
+        <div className="page-header">
+          <h1 className="page-title">Reports</h1>
+          <p className="page-subtitle">Generate and manage Team Monthly Overview reports</p>
         </div>
         
         <Dialog open={showNewReport} onOpenChange={setShowNewReport}>
@@ -508,60 +524,60 @@ export default function ReportsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="glass-card rounded-2xl p-5 hover-lift">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20">
-              <FileSpreadsheet className="h-5 w-5 text-blue-400" />
-            </div>
-            <span className="text-sm text-muted-foreground">Total Reports</span>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-stagger">
+        <div className="stat-card-enhanced stat-card-purple">
+          <div className="icon-box">
+            <FileSpreadsheet className="h-5 w-5" />
           </div>
-          <div className="text-3xl font-bold">{stats.total}</div>
+          <div>
+            <p className="text-sm text-muted-foreground">Total Reports</p>
+            <p className="text-2xl font-bold">{stats.total}</p>
+          </div>
         </div>
-        <div className="glass-card rounded-2xl p-5 hover-lift">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20">
-              <Calendar className="h-5 w-5 text-purple-400" />
-            </div>
-            <span className="text-sm text-muted-foreground">This Month</span>
+        <div className="stat-card-enhanced stat-card-fuchsia">
+          <div className="icon-box">
+            <Calendar className="h-5 w-5" />
           </div>
-          <div className="text-3xl font-bold">{stats.thisMonth}</div>
+          <div>
+            <p className="text-sm text-muted-foreground">This Month</p>
+            <p className="text-2xl font-bold">{stats.thisMonth}</p>
+          </div>
         </div>
-        <div className="glass-card rounded-2xl p-5 hover-lift">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500/20 to-green-500/20">
-              <CheckCircle className="h-5 w-5 text-emerald-400" />
-            </div>
-            <span className="text-sm text-muted-foreground">Finalized</span>
+        <div className="stat-card-enhanced stat-card-green">
+          <div className="icon-box">
+            <CheckCircle className="h-5 w-5" />
           </div>
-          <div className="text-3xl font-bold text-emerald-400">{stats.finalized}</div>
+          <div>
+            <p className="text-sm text-muted-foreground">Finalized</p>
+            <p className="text-2xl font-bold text-green-400">{stats.finalized}</p>
+          </div>
         </div>
-        <div className="glass-card rounded-2xl p-5 hover-lift">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20">
-              <Download className="h-5 w-5 text-amber-400" />
-            </div>
-            <span className="text-sm text-muted-foreground">Exported</span>
+        <div className="stat-card-enhanced stat-card-amber">
+          <div className="icon-box">
+            <Download className="h-5 w-5" />
           </div>
-          <div className="text-3xl font-bold">{stats.exported}</div>
+          <div>
+            <p className="text-sm text-muted-foreground">Exported</p>
+            <p className="text-2xl font-bold">{stats.exported}</p>
+          </div>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
+      <div className="unified-card">
+        <div className="unified-card-header">
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>All Reports</CardTitle>
-              <CardDescription>
+            <div className="section-header" style={{ paddingLeft: 0 }}>
+              <h3 className="section-title">All Reports</h3>
+              <p className="section-subtitle">
                 {filteredReports.length} of {reports?.length || 0} reports
                 {hasActiveFilters && " (filtered)"}
-              </CardDescription>
+              </p>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </div>
+        <div className="unified-card-body space-y-4">
           {/* Filters */}
-          <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/50 rounded-lg">
+          <div className="filter-bar">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -605,10 +621,10 @@ export default function ReportsPage() {
           </div>
 
           {filteredReports.length > 0 ? (
-            <div className="overflow-x-auto border rounded-lg">
+            <div className="table-enhanced">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/50">
+                  <TableRow>
                     <TableHead>Team</TableHead>
                     <TableHead>Period</TableHead>
                     <TableHead>Floor Manager</TableHead>
@@ -619,7 +635,7 @@ export default function ReportsPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredReports.map((item) => (
-                    <TableRow key={item.report.id} className="hover:bg-muted/50">
+                    <TableRow key={item.report.id} className="table-row-enhanced">
                       <TableCell className="font-medium">{item.team?.teamName || "Unknown"}</TableCell>
                       <TableCell>
                         <Badge variant="outline">
@@ -745,30 +761,32 @@ export default function ReportsPage() {
               </Table>
             </div>
           ) : (
-            <div className="text-center py-12">
-              <FileSpreadsheet className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="font-semibold mb-1">
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <FileSpreadsheet className="h-8 w-8" />
+              </div>
+              <h3 className="empty-state-title">
                 {hasActiveFilters ? "No matching reports" : "No reports yet"}
               </h3>
-              <p className="text-muted-foreground mb-4">
+              <p className="empty-state-description">
                 {hasActiveFilters 
                   ? "Try adjusting your filters"
                   : "Generate your first Team Monthly Overview report"}
               </p>
               {hasActiveFilters ? (
-                <Button variant="outline" onClick={clearFilters}>
+                <Button variant="outline" onClick={clearFilters} className="mt-4">
                   Clear Filters
                 </Button>
               ) : (
-                <Button onClick={() => setShowNewReport(true)}>
+                <Button onClick={() => setShowNewReport(true)} className="mt-4">
                   <Plus className="mr-2 h-4 w-4" />
                   Create Report
                 </Button>
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* View Report Dialog */}
       <Dialog open={!!viewingReport} onOpenChange={(open) => !open && setViewingReport(null)}>
