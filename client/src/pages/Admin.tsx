@@ -2550,15 +2550,17 @@ function GPStatsTab({
   }, [filteredGPs]);
 
   return (
-    <TabsContent value="stats" className="space-y-6">
-      {/* Header with Filters */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <BarChart3 className="h-6 w-6 text-primary" />
+    <TabsContent value="stats" className="space-y-8">
+      {/* Premium Header with Filters */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div className="dashboard-header">
+          <h2 className="dashboard-title">
+            <div className="stat-icon-container card-purple" style={{ width: '48px', height: '48px', borderRadius: '14px' }}>
+              <BarChart3 className="h-6 w-6 text-white" />
+            </div>
             GP Performance Dashboard
           </h2>
-          <p className="text-muted-foreground">
+          <p className="dashboard-subtitle">
             {MONTHS[selectedMonth - 1]} {selectedYear} • Visual analytics for Game Presenters
           </p>
         </div>
@@ -2568,8 +2570,8 @@ function GPStatsTab({
               value={selectedTeamId ? String(selectedTeamId) : "all"} 
               onValueChange={(v) => setSelectedTeamId(v === "all" ? null : Number(v))}
             >
-              <SelectTrigger className="w-[160px]">
-                <Building2 className="h-4 w-4 mr-2" />
+              <SelectTrigger className="w-[160px] filter-select">
+                <Building2 className="h-4 w-4 mr-2 text-purple-400" />
                 <SelectValue placeholder="All teams" />
               </SelectTrigger>
               <SelectContent>
@@ -2583,8 +2585,8 @@ function GPStatsTab({
             </Select>
           )}
           <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
-            <SelectTrigger className="w-[130px]">
-              <Calendar className="h-4 w-4 mr-2" />
+            <SelectTrigger className="w-[140px] filter-select">
+              <Calendar className="h-4 w-4 mr-2 text-purple-400" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2594,7 +2596,7 @@ function GPStatsTab({
             </SelectContent>
           </Select>
           <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
-            <SelectTrigger className="w-[100px]">
+            <SelectTrigger className="w-[100px] filter-select">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2607,295 +2609,284 @@ function GPStatsTab({
       </div>
 
       {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-5">
           {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} className="h-32" />
+            <div key={i} className="skeleton-stat-card" />
           ))}
         </div>
       ) : statsSummary && (
         <>
-          {/* Stats Summary Cards */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-            <Card className="stat-card stat-card-blue">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Total GPs</p>
-                    <p className="text-3xl font-bold">{statsSummary.total}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {statsSummary.withAttitudeCount} with ratings
-                    </p>
-                  </div>
-                  <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
-                    <Users className="h-6 w-6 text-blue-500" />
-                  </div>
+          {/* Premium Stats Summary Cards */}
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-5">
+            <div className="premium-stat-card card-blue group">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="stat-label">Total GPs</p>
+                  <p className="stat-value">{statsSummary.total}</p>
+                  <p className="stat-sublabel">
+                    {statsSummary.withAttitudeCount} with ratings
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="stat-icon-container">
+                  <Users className="h-7 w-7 text-white" />
+                </div>
+              </div>
+            </div>
             
-            <Card className="stat-card stat-card-green">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Positive (+1)</p>
-                    <p className="text-3xl font-bold text-green-400">{statsSummary.positiveAttitude}</p>
-                    <p className="text-xs text-muted-foreground mt-1">GPs with positive attitude</p>
-                  </div>
-                  <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
-                    <ThumbsUp className="h-6 w-6 text-green-500" />
-                  </div>
+            <div className="premium-stat-card card-green group">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="stat-label">Positive (+1)</p>
+                  <p className="stat-value" style={{ color: '#4ade80' }}>{statsSummary.positiveAttitude}</p>
+                  <p className="stat-sublabel">GPs with positive attitude</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="stat-icon-container">
+                  <ThumbsUp className="h-7 w-7 text-white" />
+                </div>
+              </div>
+            </div>
             
-            <Card className="stat-card">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Neutral (0)</p>
-                    <p className="text-3xl font-bold text-foreground">{statsSummary.neutralAttitude}</p>
-                    <p className="text-xs text-muted-foreground mt-1">GPs with no rating</p>
-                  </div>
-                  <div className="h-12 w-12 rounded-full bg-gray-500/20 flex items-center justify-center">
-                    <Star className="h-6 w-6 text-gray-500" />
-                  </div>
+            <div className="premium-stat-card card-gray group">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="stat-label">Neutral (0)</p>
+                  <p className="stat-value">{statsSummary.neutralAttitude}</p>
+                  <p className="stat-sublabel">GPs with no rating</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="stat-icon-container">
+                  <Star className="h-7 w-7 text-white" />
+                </div>
+              </div>
+            </div>
             
-            <Card className="stat-card stat-card-red">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Negative (-1)</p>
-                    <p className="text-3xl font-bold text-red-400">{statsSummary.negativeAttitude}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {statsSummary.totalMistakes} total mistakes
-                    </p>
-                  </div>
-                  <div className="h-12 w-12 rounded-full bg-red-500/20 flex items-center justify-center">
-                    <ThumbsDown className="h-6 w-6 text-red-500" />
-                  </div>
+            <div className="premium-stat-card card-red group">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="stat-label">Negative (-1)</p>
+                  <p className="stat-value" style={{ color: '#f87171' }}>{statsSummary.negativeAttitude}</p>
+                  <p className="stat-sublabel">
+                    {statsSummary.totalMistakes} total mistakes
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="stat-icon-container">
+                  <ThumbsDown className="h-7 w-7 text-white" />
+                </div>
+              </div>
+            </div>
             
-            <Card className="stat-card stat-card-purple">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Total Games</p>
-                    <p className="text-3xl font-bold">{statsSummary.totalGames.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground mt-1">this month</p>
-                  </div>
-                  <div className="h-12 w-12 rounded-full bg-purple-500/20 flex items-center justify-center">
-                    <Activity className="h-6 w-6 text-purple-500" />
-                  </div>
+            <div className="premium-stat-card card-purple group">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="stat-label">Total Games</p>
+                  <p className="stat-value">{statsSummary.totalGames.toLocaleString()}</p>
+                  <p className="stat-sublabel">this month</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="stat-icon-container">
+                  <Activity className="h-7 w-7 text-white" />
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Charts Row */}
+          {/* Premium Charts Row */}
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Attitude Distribution - Simple -1/0/+1 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Target className="h-5 w-5 text-primary" />
-                  Attitude Distribution
-                </CardTitle>
-                <CardDescription>Attitude breakdown for this month</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
+            {/* Attitude Distribution Chart */}
+            <div className="chart-card">
+              <div className="chart-card-header">
+                <div className="stat-icon-container card-purple" style={{ width: '40px', height: '40px', borderRadius: '12px' }}>
+                  <Target className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="chart-title">Attitude Distribution</h3>
+                  <p className="chart-subtitle">Monthly breakdown by rating category</p>
+                </div>
+              </div>
+              <div className="chart-card-body">
+                <div className="space-y-2">
                   {/* Positive */}
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 w-28">
-                      <ThumbsUp className="h-5 w-5 text-green-500" />
-                      <span className="text-sm font-medium">Positive</span>
+                  <div className="progress-row">
+                    <div className="progress-label">
+                      <ThumbsUp className="h-5 w-5 text-green-400" />
+                      <span>Positive</span>
                     </div>
-                    <div className="flex-1">
-                      <div className="h-10 bg-muted rounded-lg overflow-hidden">
-                        <div 
-                          className="h-full bg-green-500 transition-all duration-500 flex items-center justify-end pr-3"
-                          style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.positiveAttitude / statsSummary.total) * 100, 5) : 5}%` }}
-                        >
-                          <span className="text-sm font-bold text-white">{statsSummary.positiveAttitude}</span>
-                        </div>
+                    <div className="progress-track">
+                      <div 
+                        className="progress-fill positive"
+                        style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.positiveAttitude / statsSummary.total) * 100, 8) : 8}%` }}
+                      >
+                        <span className="progress-value">{statsSummary.positiveAttitude}</span>
                       </div>
                     </div>
                   </div>
                   
                   {/* Neutral */}
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 w-28">
+                  <div className="progress-row">
+                    <div className="progress-label">
                       <Star className="h-5 w-5 text-gray-400" />
-                      <span className="text-sm font-medium">Neutral</span>
+                      <span>Neutral</span>
                     </div>
-                    <div className="flex-1">
-                      <div className="h-10 bg-muted rounded-lg overflow-hidden">
-                        <div 
-                          className="h-full bg-gray-400 transition-all duration-500 flex items-center justify-end pr-3"
-                          style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.neutralAttitude / statsSummary.total) * 100, 5) : 5}%` }}
-                        >
-                          <span className="text-sm font-bold text-white">{statsSummary.neutralAttitude}</span>
-                        </div>
+                    <div className="progress-track">
+                      <div 
+                        className="progress-fill neutral"
+                        style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.neutralAttitude / statsSummary.total) * 100, 8) : 8}%` }}
+                      >
+                        <span className="progress-value">{statsSummary.neutralAttitude}</span>
                       </div>
                     </div>
                   </div>
                   
                   {/* Negative */}
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 w-28">
-                      <ThumbsDown className="h-5 w-5 text-red-500" />
-                      <span className="text-sm font-medium">Negative</span>
+                  <div className="progress-row">
+                    <div className="progress-label">
+                      <ThumbsDown className="h-5 w-5 text-red-400" />
+                      <span>Negative</span>
                     </div>
-                    <div className="flex-1">
-                      <div className="h-10 bg-muted rounded-lg overflow-hidden">
-                        <div 
-                          className="h-full bg-red-500 transition-all duration-500 flex items-center justify-end pr-3"
-                          style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.negativeAttitude / statsSummary.total) * 100, 5) : 5}%` }}
-                        >
-                          <span className="text-sm font-bold text-white">{statsSummary.negativeAttitude}</span>
-                        </div>
+                    <div className="progress-track">
+                      <div 
+                        className="progress-fill negative"
+                        style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.negativeAttitude / statsSummary.total) * 100, 8) : 8}%` }}
+                      >
+                        <span className="progress-value">{statsSummary.negativeAttitude}</span>
                       </div>
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            {/* Positive Attitude & Needs Attention */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Trophy className="h-5 w-5 text-yellow-500" />
-                  Attitude Overview
-                </CardTitle>
-                <CardDescription>Positive performers and those needing attention</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Positive Attitude */}
-                  <div>
-                    <h4 className="text-sm font-semibold text-green-600 mb-3 flex items-center gap-1">
-                      <ThumbsUp className="h-4 w-4" /> Positive Attitude
+            {/* Leaderboards Card */}
+            <div className="chart-card">
+              <div className="chart-card-header">
+                <div className="stat-icon-container" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)' }}>
+                  <Trophy className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="chart-title">Attitude Overview</h3>
+                  <p className="chart-subtitle">Top performers & those needing attention</p>
+                </div>
+              </div>
+              <div className="chart-card-body">
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Positive Leaderboard */}
+                  <div className="leaderboard-section">
+                    <h4 className="leaderboard-title positive">
+                      <ThumbsUp className="h-4 w-4" /> Top Performers
                     </h4>
                     <div className="space-y-2">
                       {statsSummary.topByAttitude.slice(0, 5).map((gp: any, idx: number) => (
-<div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
-                           <span className="text-xs font-bold text-green-400 w-5">#{idx + 1}</span>
-                          <span className="text-sm truncate flex-1">{gp.name}</span>
-                          <Badge className="bg-green-500">+1</Badge>
+                        <div key={gp.id} className="leaderboard-item positive">
+                          <span className="leaderboard-rank positive">#{idx + 1}</span>
+                          <span className="leaderboard-name">{gp.name}</span>
+                          <span className="leaderboard-badge positive">+1</span>
                         </div>
                       ))}
                       {statsSummary.topByAttitude.length === 0 && (
-                        <p className="text-sm text-muted-foreground">No positive ratings</p>
+                        <p className="leaderboard-empty">No positive ratings yet</p>
                       )}
                     </div>
                   </div>
                   
-                  {/* Negative Attitude / Needs Attention */}
-                  <div>
-                    <h4 className="text-sm font-semibold text-red-600 mb-3 flex items-center gap-1">
+                  {/* Negative Leaderboard */}
+                  <div className="leaderboard-section">
+                    <h4 className="leaderboard-title negative">
                       <ThumbsDown className="h-4 w-4" /> Needs Attention
                     </h4>
                     <div className="space-y-2">
                       {statsSummary.needsAttention?.slice(0, 5).map((gp: any, idx: number) => (
-<div key={gp.id} className="flex items-center gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                           <span className="text-xs font-bold text-red-400 w-5">#{idx + 1}</span>
-                          <span className="text-sm truncate flex-1">{gp.name}</span>
-                          <Badge variant="destructive">-1</Badge>
+                        <div key={gp.id} className="leaderboard-item negative">
+                          <span className="leaderboard-rank negative">#{idx + 1}</span>
+                          <span className="leaderboard-name">{gp.name}</span>
+                          <span className="leaderboard-badge negative">-1</span>
                         </div>
                       ))}
                       {(!statsSummary.needsAttention || statsSummary.needsAttention.length === 0) && (
-                        <p className="text-sm text-muted-foreground">No negative ratings</p>
+                        <p className="leaderboard-empty">No negative ratings</p>
                       )}
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
-          {/* Team Breakdown */}
+          {/* Team Comparison Section */}
           {Object.keys(statsSummary.teamStats).length > 1 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-primary" />
-                  Team Comparison
-                </CardTitle>
-                <CardDescription>Performance breakdown by team</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="chart-card">
+              <div className="chart-card-header">
+                <div className="stat-icon-container card-purple" style={{ width: '40px', height: '40px', borderRadius: '12px' }}>
+                  <Building2 className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="chart-title">Team Comparison</h3>
+                  <p className="chart-subtitle">Performance breakdown across all teams</p>
+                </div>
+              </div>
+              <div className="chart-card-body">
+                <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
                   {Object.entries(statsSummary.teamStats).map(([teamName, stats]: [string, any]) => (
-                    <div key={teamName} className="p-4 rounded-lg border bg-card hover:shadow-md transition-shadow">
-                      <h4 className="font-semibold truncate mb-3">{teamName}</h4>
-                      <div className="grid grid-cols-4 gap-2 text-center">
-                        <div>
-                          <p className="text-xl font-bold text-blue-600">{stats.count}</p>
-                          <p className="text-xs text-muted-foreground">GPs</p>
+                    <div key={teamName} className="team-comparison-card">
+                      <h4 className="team-comparison-header">{teamName}</h4>
+                      <div className="team-stats-grid">
+                        <div className="team-stat">
+                          <p className="team-stat-value blue">{stats.count}</p>
+                          <p className="team-stat-label">GPs</p>
                         </div>
-                        <div>
-                          <p className="text-xl font-bold text-green-600">{stats.positiveCount}</p>
-                          <p className="text-xs text-muted-foreground">+1</p>
+                        <div className="team-stat">
+                          <p className="team-stat-value green">{stats.positiveCount}</p>
+                          <p className="team-stat-label">+1</p>
                         </div>
-                        <div>
-                          <p className="text-xl font-bold text-red-600">{stats.negativeCount}</p>
-                          <p className="text-xs text-muted-foreground">-1</p>
+                        <div className="team-stat">
+                          <p className="team-stat-value red">{stats.negativeCount}</p>
+                          <p className="team-stat-label">-1</p>
                         </div>
-                        <div>
-                          <p className="text-xl font-bold text-orange-600">{stats.totalMistakes}</p>
-                          <p className="text-xs text-muted-foreground">Errors</p>
+                        <div className="team-stat">
+                          <p className="team-stat-value orange">{stats.totalMistakes}</p>
+                          <p className="team-stat-label">Errors</p>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
         </>
       )}
 
-      {/* GP Cards Grid */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                All Game Presenters
-              </CardTitle>
-              <CardDescription>
-                Click on attitude buttons to update ratings
-              </CardDescription>
+      {/* GP Cards Grid - Premium Design */}
+      <div className="gp-grid-card">
+        <div className="gp-grid-header">
+          <div className="gp-grid-title">
+            <div className="stat-icon-container card-blue" style={{ width: '44px', height: '44px', borderRadius: '14px' }}>
+              <Users className="h-6 w-6 text-white" />
             </div>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
+            <div>
+              <h3>All Game Presenters</h3>
+              <p>Click on attitude buttons to update ratings</p>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          {/* Bulk Actions */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400" />
+            <input
+              type="text"
+              placeholder="Search by name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="gp-search-input"
+            />
+          </div>
+        </div>
+        <div className="gp-grid-body">
+          {/* Bulk Actions Bar */}
           {selectedGpIds.length > 0 && (
-            <div className="flex items-center gap-4 p-4 mb-4 bg-primary/5 border border-primary/20 rounded-lg">
-              <Badge variant="secondary" className="text-sm">
+            <div className="bulk-actions-bar">
+              <span className="bulk-actions-badge">
                 {selectedGpIds.length} selected
-              </Badge>
+              </span>
               <div className="flex items-center gap-2">
-                <Label className="text-sm">Set Attitude:</Label>
+                <Label className="text-sm text-muted-foreground">Set Attitude:</Label>
                 <Select value={String(bulkAttitude)} onValueChange={(v) => setBulkAttitude(Number(v))}>
-                  <SelectTrigger className="w-[120px]">
+                  <SelectTrigger className="w-[130px] filter-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -2906,6 +2897,7 @@ function GPStatsTab({
                 </Select>
                 <Button 
                   size="sm" 
+                  className="btn-primary"
                   onClick={handleBulkSetAttitude}
                   disabled={bulkSetAttitudeMutation.isPending}
                 >
@@ -2918,6 +2910,7 @@ function GPStatsTab({
               <Button 
                 size="sm" 
                 variant="outline"
+                className="btn-secondary"
                 onClick={handleBulkResetMistakes}
                 disabled={bulkResetMistakesMutation.isPending}
               >
@@ -2931,6 +2924,7 @@ function GPStatsTab({
               <Button 
                 size="sm" 
                 variant="ghost"
+                className="btn-ghost"
                 onClick={() => setSelectedGpIds([])}
               >
                 Clear Selection
@@ -3033,16 +3027,18 @@ const getAttitudeDisplay = () => {
               })}
             </div>
           ) : (
-            <div className="text-center py-12">
-              <Star className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="font-semibold mb-1">No Game Presenters found</h3>
-              <p className="text-muted-foreground">
+            <div className="gp-empty-state">
+              <div className="gp-empty-icon">
+                <Star className="h-10 w-10" />
+              </div>
+              <h3 className="gp-empty-title">No Game Presenters found</h3>
+              <p className="gp-empty-description">
                 {searchQuery ? "Try adjusting your search" : "Select a team or add Game Presenters"}
               </p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* GP Detail Modal */}
       <GPDetailModal
