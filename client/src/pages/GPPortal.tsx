@@ -1,6 +1,7 @@
 import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { GlassCard, GlassCardContent, GlassCardHeader, GlassCardTitle, GlassCardDescription } from "@/components/ui/glass-card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -14,23 +15,23 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { useState, useEffect, useMemo } from "react";
 
-// Animated background component
+// Animated background component with purple glass morphism theme
 function AnimatedBackground() {
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none">
-      {/* Gradient orbs */}
-      <div className="absolute top-0 -left-40 w-80 h-80 bg-purple-500/30 rounded-full blur-[100px] animate-pulse" />
-      <div className="absolute top-1/3 -right-40 w-96 h-96 bg-blue-500/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
-      <div className="absolute bottom-0 left-1/3 w-72 h-72 bg-indigo-500/25 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
-      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-[80px] animate-pulse" style={{ animationDelay: '0.5s' }} />
+      {/* Gradient orbs - purple/violet theme */}
+      <div className="absolute top-0 -left-40 w-80 h-80 bg-purple-500/20 rounded-full blur-[100px] animate-pulse" />
+      <div className="absolute top-1/3 -right-40 w-96 h-96 bg-violet-500/15 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
+      <div className="absolute bottom-0 left-1/3 w-72 h-72 bg-fuchsia-500/15 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
+      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-purple-400/10 rounded-full blur-[80px] animate-pulse" style={{ animationDelay: '0.5s' }} />
       
       {/* Grid pattern overlay */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:50px_50px]" />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]" />
     </div>
   );
 }
 
-// Score card component - modern card-based design
+// Score card component - glass morphism design
 function ScoreCard({ score, maxScore, label, icon: Icon, gradient }: { 
   score: number; 
   maxScore: number; 
@@ -41,26 +42,26 @@ function ScoreCard({ score, maxScore, label, icon: Icon, gradient }: {
   const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
   
   const getStatus = () => {
-    if (percentage >= 90) return { text: 'Excellent', color: 'text-emerald-400' };
-    if (percentage >= 80) return { text: 'Great', color: 'text-green-400' };
-    if (percentage >= 70) return { text: 'Good', color: 'text-yellow-400' };
-    return { text: 'Needs Work', color: 'text-orange-400' };
+    if (percentage >= 90) return { text: 'Excellent', color: 'text-emerald-400', badge: 'bg-emerald-500/20 border-emerald-500/30' };
+    if (percentage >= 80) return { text: 'Great', color: 'text-green-400', badge: 'bg-green-500/20 border-green-500/30' };
+    if (percentage >= 70) return { text: 'Good', color: 'text-amber-400', badge: 'bg-amber-500/20 border-amber-500/30' };
+    return { text: 'Needs Work', color: 'text-orange-400', badge: 'bg-orange-500/20 border-orange-500/30' };
   };
   
   const status = getStatus();
   
   return (
-    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} p-5 sm:p-6`}>
+    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} backdrop-blur-2xl p-5 sm:p-6 border border-white/[0.12] shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.1)] hover:shadow-[0_12px_40px_rgba(139,92,246,0.2),inset_0_1px_0_rgba(255,255,255,0.15)] hover:border-white/20 transition-all duration-400 group hover:-translate-y-1`}>
       {/* Background decoration */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:bg-white/10 transition-all" />
       <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
       
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-4">
-          <div className="p-2.5 bg-white/10 rounded-xl">
+          <div className="p-2.5 bg-white/10 backdrop-blur-sm rounded-xl border border-white/10">
             <Icon className="h-5 w-5 text-white" />
           </div>
-          <span className={`text-sm font-medium ${status.color}`}>{status.text}</span>
+          <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${status.badge} ${status.color}`}>{status.text}</span>
         </div>
         
         <div className="mb-3">
@@ -71,10 +72,10 @@ function ScoreCard({ score, maxScore, label, icon: Icon, gradient }: {
           <p className="text-sm text-white/70 mt-1">{label}</p>
         </div>
         
-        {/* Progress bar */}
+        {/* Progress bar with glow */}
         <div className="h-2 bg-white/10 rounded-full overflow-hidden">
           <div 
-            className="h-full bg-white/80 rounded-full transition-all duration-1000 ease-out"
+            className="h-full bg-gradient-to-r from-white/70 to-white/90 rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(255,255,255,0.3)]"
             style={{ width: `${percentage}%` }}
           />
         </div>
@@ -83,7 +84,7 @@ function ScoreCard({ score, maxScore, label, icon: Icon, gradient }: {
   );
 }
 
-// Achievement badge component
+// Achievement badge component with glass morphism
 function AchievementBadge({ icon: Icon, title, description, unlocked, color }: {
   icon: typeof Star;
   title: string;
@@ -92,30 +93,34 @@ function AchievementBadge({ icon: Icon, title, description, unlocked, color }: {
   color: string;
 }) {
   return (
-    <div className={`relative p-3 rounded-xl border transition-all duration-300 ${
+    <div className={`relative p-4 rounded-xl border backdrop-blur-sm transition-all duration-300 group ${
       unlocked 
-        ? `bg-gradient-to-br ${color} border-white/20 shadow-lg` 
-        : 'bg-white/5 border-white/10 opacity-50'
+        ? `bg-gradient-to-br ${color} border-white/20 shadow-[0_4px_20px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_20px_rgba(139,92,246,0.2)] hover:scale-[1.02]` 
+        : 'bg-[rgba(18,18,30,0.5)] border-white/5 opacity-60 grayscale'
     }`}>
       <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-lg ${unlocked ? 'bg-white/20' : 'bg-white/5'}`}>
-          <Icon className={`h-5 w-5 ${unlocked ? 'text-white' : 'text-white/50'}`} />
+        <div className={`p-2.5 rounded-xl transition-all ${
+          unlocked 
+            ? 'bg-white/15 backdrop-blur-sm border border-white/10 group-hover:bg-white/20' 
+            : 'bg-white/5'
+        }`}>
+          <Icon className={`h-5 w-5 ${unlocked ? 'text-white' : 'text-white/40'}`} />
         </div>
         <div>
-          <p className={`font-semibold text-sm ${unlocked ? 'text-white' : 'text-white/50'}`}>{title}</p>
+          <p className={`font-semibold text-sm ${unlocked ? 'text-white' : 'text-white/40'}`}>{title}</p>
           <p className={`text-xs ${unlocked ? 'text-white/70' : 'text-white/30'}`}>{description}</p>
         </div>
       </div>
       {unlocked && (
-        <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
-          <span className="text-[10px] text-white">✓</span>
+        <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/30">
+          <span className="text-[10px] text-white font-bold">✓</span>
         </div>
       )}
     </div>
   );
 }
 
-// Stat card with animation
+// Stat card with glass morphism animation
 function StatCard({ icon: Icon, value, label, color, trend }: {
   icon: typeof Eye;
   value: string | number;
@@ -124,20 +129,20 @@ function StatCard({ icon: Icon, value, label, color, trend }: {
   trend?: number;
 }) {
   return (
-    <Card className={`bg-gradient-to-br ${color} backdrop-blur-lg border-white/10 overflow-hidden group hover:scale-[1.02] transition-all duration-300`}>
-      <CardContent className="p-4 sm:p-6 relative">
+    <div className={`relative bg-gradient-to-br ${color} backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden group hover:scale-[1.02] hover:shadow-[0_8px_32px_rgba(139,92,246,0.15)] transition-all duration-300`}>
+      <div className="p-4 sm:p-5 relative">
         {/* Glow effect */}
-        <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-all" />
+        <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/15 transition-all" />
         
         <div className="flex items-center gap-3 sm:gap-4 relative">
-          <div className="bg-white/20 p-2.5 sm:p-3 rounded-xl shrink-0 shadow-lg">
+          <div className="bg-white/15 backdrop-blur-sm p-2.5 sm:p-3 rounded-xl shrink-0 shadow-lg border border-white/10">
             <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-2xl sm:text-3xl font-bold text-white">{value}</p>
               {trend !== undefined && trend !== 0 && (
-                <div className={`flex items-center text-xs ${trend > 0 ? 'text-green-300' : 'text-red-300'}`}>
+                <div className={`flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full ${trend > 0 ? 'text-green-300 bg-green-500/20' : 'text-red-300 bg-red-500/20'}`}>
                   {trend > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                   <span>{trend > 0 ? '+' : ''}{trend.toFixed(1)}</span>
                 </div>
@@ -146,8 +151,8 @@ function StatCard({ icon: Icon, value, label, color, trend }: {
             <p className="text-xs sm:text-sm text-white/70 truncate">{label}</p>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -292,7 +297,7 @@ export default function GPPortal() {
   };
 
   return (
-    <div className="min-h-screen relative">
+    <div className="min-h-screen relative bg-gradient-to-br from-[#0f0f1a] via-[#1a1a2e] to-[#16162a]">
       <AnimatedBackground />
       
       {/* Header */}

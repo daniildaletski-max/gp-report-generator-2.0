@@ -14,7 +14,7 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#08080f] flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#0f0f1a] via-[#1a1a2e] to-[#16162a] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="h-10 w-10 rounded-full border-2 border-purple-500/20 border-t-purple-500 animate-spin" />
         </div>
@@ -23,9 +23,9 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#08080f] text-white">
+    <div className="min-h-screen bg-gradient-to-br from-[#0f0f1a] via-[#1a1a2e] to-[#16162a] text-white">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-[#08080f]/80 backdrop-blur-xl border-b border-purple-500/10">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-[#0f0f1a]/90 via-[#15152a]/85 to-[#0f0f1a]/90 backdrop-blur-2xl border-b border-white/[0.08] shadow-lg shadow-black/20">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-purple-500/25 animate-hover">
@@ -144,7 +144,7 @@ export default function Home() {
 
             <div className="grid md:grid-cols-3 gap-6">
               {/* Step 1 */}
-              <div className="card-interactive p-7 group">
+              <div className="premium-card p-7 group">
                 <div className="icon-container icon-container-purple mb-5 group-hover:scale-110 transition-transform duration-300">
                   <Upload className="h-5 w-5" />
                 </div>
@@ -156,7 +156,7 @@ export default function Home() {
               </div>
 
               {/* Step 2 */}
-              <div className="card-interactive p-7 group">
+              <div className="premium-card p-7 group">
                 <div className="icon-container icon-container-fuchsia mb-5 group-hover:scale-110 transition-transform duration-300">
                   <BarChart3 className="h-5 w-5" />
                 </div>
@@ -168,7 +168,7 @@ export default function Home() {
               </div>
 
               {/* Step 3 */}
-              <div className="card-interactive p-7 group">
+              <div className="premium-card p-7 group">
                 <div className="icon-container icon-container-green mb-5 group-hover:scale-110 transition-transform duration-300">
                   <FileText className="h-5 w-5" />
                 </div>
@@ -191,7 +191,7 @@ export default function Home() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
-              <div className="card-interactive p-7 flex gap-5">
+              <div className="floating-card p-7 flex gap-5">
                 <div className="icon-container icon-container-amber shrink-0">
                   <Clock className="h-5 w-5" />
                 </div>
@@ -201,7 +201,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="card-interactive p-7 flex gap-5">
+              <div className="floating-card p-7 flex gap-5">
                 <div className="icon-container icon-container-violet shrink-0">
                   <Shield className="h-5 w-5" />
                 </div>
