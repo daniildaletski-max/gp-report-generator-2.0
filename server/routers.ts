@@ -1173,6 +1173,16 @@ export const appRouter = router({
         const gpsWithPositiveAttitude = gpDetailedData.filter(gp => gp.attitudePositive > 0)
           .sort((a, b) => b.attitudePositive - a.attitudePositive);
 
+        const totalErrors = gpsWithErrors.reduce((sum, gp) => sum + gp.errorCount, 0);
+        const totalPositiveAttitude = attitudeData.reduce((sum, a) => sum + a.positive, 0);
+        const totalNegativeAttitude = attitudeData.reduce((sum, a) => sum + a.negative, 0);
+
+        const formatGpLine = (gp: (typeof gpDetailedData)[number]) => (
+          `${gp.name} | Score ${gp.avgScore}/24 | Appearance ${gp.appearanceScore}/12 | Game ${gp.gamePerformanceScore}/10 | ` +
+          `Evals ${gp.evaluationCount} | Errors ${gp.errorCount} | Attitude +${gp.attitudePositive}/-${gp.attitudeNegative} | ` +
+          `Late ${gp.lateArrivals} | Missed ${gp.missedDays}`
+        );
+
         // Build comprehensive context for LLM
         const dataContext = `
 Team: ${team.teamName}
@@ -1181,7 +1191,7 @@ Period: ${monthName} ${input.reportYear}
 
 === EVALUATION STATISTICS ===
 - Total GPs Evaluated: ${stats.length}
-- Average Total Score: ${avgTotal.toFixed(1)}/24 (${avgTotal >= 20 ? 'Excellent' : avgTotal >= 18 ? 'Good' : avgTotal >= 16 ? 'Needs Improvement' : 'Critical'})
+- Average Total Score: ${avgTotal.toFixed(1)}/24 (${avgTotal >= 20 ? "Excellent" : avgTotal >= 18 ? "Good" : avgTotal >= 16 ? "Needs Improvement" : "Critical"})
 - Average Appearance Score: ${avgAppearance.toFixed(1)}/12
 - Average Game Performance Score: ${avgGamePerf.toFixed(1)}/10
 
@@ -1189,26 +1199,26 @@ Period: ${monthName} ${input.reportYear}
 ${topPerformers.map((gp, i) => {
   const detail = gpDetailedData.find(d => d.name === gp.gpName);
   return `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/24 (${detail?.evaluationCount || 0} evaluations, ${detail?.errorCount || 0} errors, attitude: +${detail?.attitudePositive || 0}/-${detail?.attitudeNegative || 0})`;
-}).join('\n')}
+}).join("\n")}
 
 ${needsImprovement.length > 0 ? `=== GPs NEEDING IMPROVEMENT (score < 18) ===
 ${needsImprovement.map(gp => {
   const detail = gpDetailedData.find(d => d.name === gp.gpName);
   return `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/24 (Appearance: ${detail?.appearanceScore}/12, Game Perf: ${detail?.gamePerformanceScore}/10)`;
-}).join('\n')}` : '=== All GPs are performing well (score >= 18) ==='}
+}).join("\n")}` : "=== All GPs are performing well (score >= 18) ==="}
 
 === ERROR ANALYSIS ===
-- Total Team Errors: ${gpsWithErrors.reduce((sum, gp) => sum + gp.errorCount, 0)}
+- Total Team Errors: ${totalErrors}
 ${gpsWithErrors.length > 0 ? `GPs with errors:
-${gpsWithErrors.slice(0, 5).map(gp => `- ${gp.name}: ${gp.errorCount} errors`).join('\n')}` : 'No errors recorded this month'}
+${gpsWithErrors.slice(0, 5).map(gp => `- ${gp.name}: ${gp.errorCount} errors`).join("\n")}` : "No errors recorded this month"}
 
 === ATTITUDE ANALYSIS ===
-- Total Positive Feedback: ${attitudeData.reduce((sum, a) => sum + a.positive, 0)}
-- Total Negative Feedback: ${attitudeData.reduce((sum, a) => sum + a.negative, 0)}
+- Total Positive Feedback: ${totalPositiveAttitude}
+- Total Negative Feedback: ${totalNegativeAttitude}
 ${gpsWithPositiveAttitude.length > 0 ? `GPs with positive attitude feedback:
-${gpsWithPositiveAttitude.slice(0, 3).map(gp => `- ${gp.name}: +${gp.attitudePositive}`).join('\n')}` : ''}
+${gpsWithPositiveAttitude.slice(0, 3).map(gp => `- ${gp.name}: +${gp.attitudePositive}`).join("\n")}` : "No positive attitude feedback recorded"}
 ${gpsWithNegativeAttitude.length > 0 ? `GPs with negative attitude feedback:
-${gpsWithNegativeAttitude.slice(0, 3).map(gp => `- ${gp.name}: -${gp.attitudeNegative}`).join('\n')}` : ''}
+${gpsWithNegativeAttitude.slice(0, 3).map(gp => `- ${gp.name}: -${gp.attitudeNegative}`).join("\n")}` : "No negative attitude feedback recorded"}
 
 === ATTENDANCE SUMMARY ===
 - Total Mistakes/Errors: ${totalMistakes}
@@ -1218,17 +1228,21 @@ ${gpsWithNegativeAttitude.slice(0, 3).map(gp => `- ${gp.name}: -${gp.attitudeNeg
 - Sick Leaves: ${totalSick}
 
 === INDIVIDUAL GP BREAKDOWN ===
-${gpDetailedData.map(gp => 
-  `${gp.name}: Score ${gp.avgScore}/24, Errors: ${gp.errorCount}, Attitude: +${gp.attitudePositive}/-${gp.attitudeNegative}, Late: ${gp.lateArrivals}`
-).join('\n')}
+${gpDetailedData.map(formatGpLine).join("\n")}
 `;
+
+        const sharedPromptRules = `Rules:
+- Use only facts present in the data context.
+- Do NOT invent names, numbers, or events.
+- If data is missing, state it is not available rather than guessing.
+- Keep the tone professional and concise.`;
 
         // Generate FM Performance text
         const fmPerformanceResponse = await invokeLLM({
           messages: [
             {
               role: "system",
-              content: `You are an experienced Floor Manager writing a self-evaluation for a monthly casino operations report. 
+              content: `You are an experienced Floor Manager writing a self-evaluation for a monthly casino operations report.
 
 Guidelines:
 - Write in first person, professionally and concisely
@@ -1236,7 +1250,9 @@ Guidelines:
 - Reference specific metrics from the data (scores, error reduction, attitude improvements)
 - Keep it to 3-4 sentences
 - Do NOT use bullet points
-- Be specific about what was accomplished this month`
+- Be specific about what was accomplished this month
+
+${sharedPromptRules}`
             },
             {
               role: "user",
@@ -1271,7 +1287,9 @@ Guidelines for writing optimal Team Goals:
 
 4. Format: Write 3-4 concise sentences. Do NOT use bullet points.
 
-IMPORTANT: Be specific with names and numbers from the data. Generic goals are not acceptable.`
+IMPORTANT: Be specific with names and numbers from the data. Generic goals are not acceptable.
+
+${sharedPromptRules}`
             },
             {
               role: "user",
@@ -1309,7 +1327,9 @@ Guidelines for writing an optimal Team Overview:
 
 5. Format: Write 4-5 concise sentences. Do NOT use bullet points.
 
-IMPORTANT: Use specific names and numbers from the data. A good overview is honest, specific, and actionable.`
+IMPORTANT: Use specific names and numbers from the data. A good overview is honest, specific, and actionable.
+
+${sharedPromptRules}`
             },
             {
               role: "user",
