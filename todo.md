@@ -2327,3 +2327,33 @@
 ## Bug Fix (v73)
 
 - [x] Fix "db.select is not a function" error on /upload page - missing `await` on getDb() in getTeamComparisonData()
+
+## Strict Data Isolation & UX Improvements (v74)
+
+### Data Isolation Audit
+- [x] Audit all backend procedures for userId filtering
+- [x] Audit dashboard stats - user sees only their data (getDashboardStatsByUser)
+- [x] Audit evaluations - user sees only their evaluations (getEvaluationsByUser)
+- [x] Audit reports - user sees only their reports (getReportsWithTeamsByUser)
+- [x] Audit GP list - user sees only their GPs (getAllGamePresentersByUser)
+- [x] Audit teams - user sees only their teams (fmTeam.list filters by userId)
+- [x] Audit upload - uploads tagged with userId (findOrCreateGamePresenter now passes userId)
+- [x] Audit admin panel - admin sees all, users see FMRestrictedView
+
+### Backend Fixes
+- [x] Fix team.update/delete - allow users to manage their own teams (not just admin)
+- [x] Fix team.listWithGPs - user-scoped with getTeamsWithGPsByUser
+- [x] Fix team.assignGPs/removeGPs - verify GP ownership before assignment
+- [x] Fix team.getUnassignedGPs - user-scoped with getUnassignedGPsByUser
+- [x] Fix findOrCreateGamePresenter - now uses user-scoped fuzzy matching
+- [x] Fix errorScreenshot upload - GP matching now scoped to user's GPs
+- [x] Fix attitudeScreenshot upload - GP matching now scoped to user's GPs
+- [x] Fix bulk upload procedures - GP matching now scoped to user's GPs
+- [x] Add getTeamsWithGPsByUser and getUnassignedGPsByUser db functions
+- [x] Add proper error handling for unauthorized access (TRPCError FORBIDDEN)
+
+### UX Improvements
+- [x] All pages verified visually with new violet/indigo palette
+- [x] Error messages improved for unauthorized access
+- [x] Navigation smooth between all sections
+- [x] Loading states and empty states working correctly

@@ -459,15 +459,22 @@ export const appRouter = router({
         return team;
       }),
 
-    // Update team (admin only)
-    update: adminProcedure
+    // Update team - users can update their own teams, admin can update any
+    update: protectedProcedure
       .input(z.object({
         teamId: z.number(),
         teamName: z.string().min(1).optional(),
         floorManagerName: z.string().min(1).optional(),
         gpIds: z.array(z.number()).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Verify ownership for non-admin users
+        if (ctx.user.role !== 'admin') {
+          const team = await db.getFmTeamById(input.teamId);
+          if (!team || team.userId !== ctx.user.id) {
+            throw new Error('Access denied: You can only update your own teams');
+          }
+        }
         const { teamId, gpIds, ...data } = input;
         if (gpIds !== undefined) {
           await db.updateTeamWithGPs(teamId, data, gpIds);
@@ -477,47 +484,83 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    // Delete team (admin only)
-    delete: adminProcedure
+    // Delete team - users can delete their own teams, admin can delete any
+    delete: protectedProcedure
       .input(z.object({ teamId: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Verify ownership for non-admin users
+        if (ctx.user.role !== 'admin') {
+          const team = await db.getFmTeamById(input.teamId);
+          if (!team || team.userId !== ctx.user.id) {
+            throw new Error('Access denied: You can only delete your own teams');
+          }
+        }
         await db.deleteFmTeam(input.teamId);
         return { success: true };
       }),
 
-    // Get team with GPs (admin only)
-    getWithGPs: adminProcedure
+    // Get team with GPs - users see their own, admin sees all
+    getWithGPs: protectedProcedure
       .input(z.object({ teamId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          const team = await db.getFmTeamById(input.teamId);
+          if (!team || team.userId !== ctx.user.id) {
+            throw new Error('Access denied: You can only view your own teams');
+          }
+        }
         return await db.getTeamWithGPs(input.teamId);
       }),
 
-    // List all teams with GPs (admin only)
-    listWithGPs: adminProcedure.query(async () => {
+    // List teams with GPs - users see their own, admin sees all
+    listWithGPs: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== 'admin') {
+        return await db.getTeamsWithGPsByUser(ctx.user.id);
+      }
       return await db.getAllTeamsWithGPs();
     }),
 
-    // Assign GPs to team (admin only)
-    assignGPs: adminProcedure
+    // Assign GPs to team - users can assign to their own teams
+    assignGPs: protectedProcedure
       .input(z.object({
         teamId: z.number(),
         gpIds: z.array(z.number()),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          const team = await db.getFmTeamById(input.teamId);
+          if (!team || team.userId !== ctx.user.id) {
+            throw new Error('Access denied: You can only assign GPs to your own teams');
+          }
+          // Verify GP ownership
+          const verification = await db.verifyGpOwnershipByUser(input.gpIds, ctx.user.id);
+          if (!verification.valid) {
+            throw new Error('Access denied: You can only assign your own GPs');
+          }
+        }
         return await db.assignGPsToTeam(input.gpIds, input.teamId);
       }),
 
-    // Remove GPs from team (admin only)
-    removeGPs: adminProcedure
+    // Remove GPs from team - users can remove from their own teams
+    removeGPs: protectedProcedure
       .input(z.object({
         gpIds: z.array(z.number()),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          const verification = await db.verifyGpOwnershipByUser(input.gpIds, ctx.user.id);
+          if (!verification.valid) {
+            throw new Error('Access denied: You can only remove your own GPs from teams');
+          }
+        }
         return await db.removeGPsFromTeam(input.gpIds);
       }),
 
-    // Get unassigned GPs (admin only)
-    getUnassignedGPs: adminProcedure.query(async () => {
+    // Get unassigned GPs - users see their own unassigned GPs
+    getUnassignedGPs: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== 'admin') {
+        return await db.getUnassignedGPsByUser(ctx.user.id);
+      }
       return await db.getUnassignedGPs();
     }),
   }),
@@ -538,7 +581,7 @@ export const appRouter = router({
         const { url: imageUrl } = await storagePut(fileKey, buffer, input.mimeType);
 
         const extractedData = await extractEvaluationFromImage(imageUrl);
-        const gp = await db.findOrCreateGamePresenter(extractedData.presenterName);
+        const gp = await db.findOrCreateGamePresenter(extractedData.presenterName, undefined, ctx.user.id);
         const evalDate = parseEvaluationDate(extractedData.date);
 
         const evaluation = await db.createEvaluation({
@@ -3690,16 +3733,19 @@ Respond in JSON format:
         let gamePresenterId: number | null = input.gpId || null;
         let gpNameToUse: string | null = null;
 
+        // User-scoped GP matching for data isolation
+        const userGps = ctx.user.role !== 'admin' 
+          ? await db.getAllGamePresentersByUser(ctx.user.id) 
+          : await db.getAllGamePresenters();
+
         if (input.gpId) {
           // Get GP name from ID
-          const gps = await db.getAllGamePresenters();
-          const gp = gps.find(g => g.id === input.gpId);
+          const gp = userGps.find(g => g.id === input.gpId);
           gpNameToUse = gp?.name || null;
         } else if (extractedData.gpName) {
           // Fallback to name matching
           gpNameToUse = extractedData.gpName;
-          const gps = await db.getAllGamePresenters();
-          const matchedGp = gps.find(gp => 
+          const matchedGp = userGps.find(gp => 
             gp.name.toLowerCase() === extractedData.gpName.toLowerCase() ||
             gp.name.toLowerCase().includes(extractedData.gpName.toLowerCase()) ||
             extractedData.gpName.toLowerCase().includes(gp.name.toLowerCase())
@@ -3900,17 +3946,20 @@ Respond with a JSON object containing an array of ALL entries found:
         let gamePresenterId: number | null = input.gpId || null;
         let gpNameToUse: string | null = null;
 
+        // User-scoped GP matching for data isolation
+        const userGps = ctx.user.role !== 'admin' 
+          ? await db.getAllGamePresentersByUser(ctx.user.id) 
+          : await db.getAllGamePresenters();
+
         if (input.gpId) {
           // Get GP name from ID
-          const gps = await db.getAllGamePresenters();
-          const gp = gps.find(g => g.id === input.gpId);
+          const gp = userGps.find(g => g.id === input.gpId);
           gpNameToUse = gp?.name || null;
         } else {
           // Fallback to name matching
           gpNameToUse = input.gpName || extractedData.gpName;
           if (gpNameToUse) {
-            const gps = await db.getAllGamePresenters();
-            const matchedGp = gps.find(gp => 
+            const matchedGp = userGps.find(gp => 
               gp.name.toLowerCase() === gpNameToUse!.toLowerCase() ||
               gp.name.toLowerCase().includes(gpNameToUse!.toLowerCase()) ||
               gpNameToUse!.toLowerCase().includes(gp.name.toLowerCase())
@@ -4203,14 +4252,17 @@ Respond in JSON format:
           let gamePresenterId: number | null = input.gpId || null;
           let gpNameToUse: string | null = null;
 
+          // User-scoped GP matching for data isolation
+          const userGps = ctx.user.role !== 'admin' 
+            ? await db.getAllGamePresentersByUser(ctx.user.id) 
+            : await db.getAllGamePresenters();
+
           if (input.gpId) {
-            const gps = await db.getAllGamePresenters();
-            const gp = gps.find(g => g.id === input.gpId);
+            const gp = userGps.find(g => g.id === input.gpId);
             gpNameToUse = gp?.name || null;
           } else if (extractedData.gpName) {
             gpNameToUse = extractedData.gpName;
-            const gps = await db.getAllGamePresenters();
-            const matchedGp = gps.find(gp => 
+            const matchedGp = userGps.find(gp => 
               gp.name.toLowerCase() === extractedData.gpName.toLowerCase() ||
               gp.name.toLowerCase().includes(extractedData.gpName.toLowerCase()) ||
               extractedData.gpName.toLowerCase().includes(gp.name.toLowerCase())
@@ -4352,15 +4404,18 @@ Respond with a JSON object containing an array of ALL entries found:
           let gamePresenterId: number | null = input.gpId || null;
           let gpNameToUse: string | null = null;
 
+          // User-scoped GP matching for data isolation
+          const userGps = ctx.user.role !== 'admin' 
+            ? await db.getAllGamePresentersByUser(ctx.user.id) 
+            : await db.getAllGamePresenters();
+
           if (input.gpId) {
-            const gps = await db.getAllGamePresenters();
-            const gp = gps.find(g => g.id === input.gpId);
+            const gp = userGps.find(g => g.id === input.gpId);
             gpNameToUse = gp?.name || null;
           } else {
             gpNameToUse = input.gpName || extractedData.gpName;
             if (gpNameToUse) {
-              const gps = await db.getAllGamePresenters();
-              const matchedGp = gps.find(gp => 
+              const matchedGp = userGps.find(gp => 
                 gp.name.toLowerCase() === gpNameToUse!.toLowerCase() ||
                 gp.name.toLowerCase().includes(gpNameToUse!.toLowerCase()) ||
                 gpNameToUse!.toLowerCase().includes(gp.name.toLowerCase())

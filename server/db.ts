@@ -313,7 +313,10 @@ export async function findOrCreateGamePresenter(name: string, teamId?: number, u
   }
 
   // Try fuzzy match with high threshold (0.85 = very similar)
-  const fuzzyMatch = await findBestMatchingGP(name, 0.85);
+  // Use user-scoped fuzzy match when userId is provided for data isolation
+  const fuzzyMatch = userId 
+    ? await findBestMatchingGPByUser(name, 0.85, userId)
+    : await findBestMatchingGP(name, 0.85);
   if (fuzzyMatch) {
     console.log(`[Fuzzy Match] "${name}" matched to "${fuzzyMatch.gamePresenter.name}" (similarity: ${(fuzzyMatch.similarity * 100).toFixed(1)}%)`);
     return fuzzyMatch.gamePresenter;
@@ -3315,4 +3318,56 @@ export async function getTeamComparisonData(userId: number, teamIds?: number[]) 
   }
   
   return results.sort((a, b) => b.avgTotalScore - a.avgTotalScore);
+}
+
+
+// ============================================
+// USER-SCOPED TEAM FUNCTIONS
+// ============================================
+
+// Get all teams with their GPs for a specific user
+export async function getTeamsWithGPsByUser(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const teams = await db.select().from(fmTeams)
+    .where(eq(fmTeams.userId, userId))
+    .orderBy(fmTeams.teamName);
+  
+  return await Promise.all(teams.map(async (team) => {
+    const gps = await db.select().from(gamePresenters)
+      .where(and(
+        eq(gamePresenters.teamId, team.id),
+        eq(gamePresenters.userId, userId)
+      ))
+      .orderBy(gamePresenters.name);
+    
+    const reportCount = await db.select({ count: sql<number>`COUNT(*)` })
+      .from(reports)
+      .where(and(
+        eq(reports.teamId, team.id),
+        eq(reports.userId, userId)
+      ));
+    
+    return {
+      ...team,
+      assignedUsers: [],
+      gamePresenters: gps,
+      gpCount: gps.length,
+      reportCount: reportCount[0]?.count || 0,
+    };
+  }));
+}
+
+// Get unassigned GPs for a specific user
+export async function getUnassignedGPsByUser(userId: number): Promise<GamePresenter[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(gamePresenters)
+    .where(and(
+      eq(gamePresenters.userId, userId),
+      isNull(gamePresenters.teamId)
+    ))
+    .orderBy(gamePresenters.name);
 }
