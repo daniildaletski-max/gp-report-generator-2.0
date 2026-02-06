@@ -3371,3 +3371,87 @@ export async function getUnassignedGPsByUser(userId: number): Promise<GamePresen
     ))
     .orderBy(gamePresenters.name);
 }
+
+
+// ============================================
+// GP MONTHLY EVALUATION HISTORY (for GP Portal)
+// ============================================
+
+export async function getGpMonthlyHistory(gpId: number, monthsBack: number = 6) {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Get evaluations grouped by month
+  const now = new Date();
+  const months: Array<{
+    month: number;
+    year: number;
+    label: string;
+    avgTotal: number;
+    avgAppearance: number;
+    avgPerformance: number;
+    evalCount: number;
+    highScore: number;
+    lowScore: number;
+    attitude: number | null;
+    mistakes: number;
+    totalGames: number;
+  }> = [];
+
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const month = d.getMonth() + 1;
+    const year = d.getFullYear();
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const label = `${monthNames[month - 1]} ${year}`;
+
+    // Get evaluations for this month
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+
+    const monthEvals = await db.select({
+      totalScore: evaluations.totalScore,
+      appearanceScore: evaluations.appearanceScore,
+      gamePerformanceTotalScore: evaluations.gamePerformanceTotalScore,
+    })
+    .from(evaluations)
+    .where(and(
+      eq(evaluations.gamePresenterId, gpId),
+      gte(evaluations.evaluationDate, startDate),
+      lte(evaluations.evaluationDate, endDate)
+    ));
+
+    // Get monthly stats (attitude, mistakes, totalGames)
+    const statsResult = await db.select().from(monthlyGpStats)
+      .where(and(
+        eq(monthlyGpStats.gamePresenterId, gpId),
+        eq(monthlyGpStats.month, month),
+        eq(monthlyGpStats.year, year)
+      ))
+      .limit(1);
+
+    const stats = statsResult.length > 0 ? statsResult[0] : null;
+
+    const evalCount = monthEvals.length;
+    const scores = monthEvals.map(e => e.totalScore || 0);
+    const appearanceScores = monthEvals.map(e => e.appearanceScore || 0);
+    const performanceScores = monthEvals.map(e => e.gamePerformanceTotalScore || 0);
+
+    months.push({
+      month,
+      year,
+      label,
+      avgTotal: evalCount > 0 ? scores.reduce((a, b) => a + b, 0) / evalCount : 0,
+      avgAppearance: evalCount > 0 ? appearanceScores.reduce((a, b) => a + b, 0) / evalCount : 0,
+      avgPerformance: evalCount > 0 ? performanceScores.reduce((a, b) => a + b, 0) / evalCount : 0,
+      evalCount,
+      highScore: evalCount > 0 ? Math.max(...scores) : 0,
+      lowScore: evalCount > 0 ? Math.min(...scores) : 0,
+      attitude: stats?.attitude ?? null,
+      mistakes: stats?.mistakes ?? 0,
+      totalGames: stats?.totalGames ?? 0,
+    });
+  }
+
+  return months;
+}

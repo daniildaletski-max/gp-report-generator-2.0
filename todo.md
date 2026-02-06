@@ -2357,3 +2357,11 @@
 - [x] Error messages improved for unauthorized access
 - [x] Navigation smooth between all sections
 - [x] Loading states and empty states working correctly
+
+## GP Monthly Evaluation History (v75)
+
+- [x] Add backend API for GP monthly evaluation history (getGpMonthlyHistory in db.ts)
+- [x] Add monthly score trend chart to GP Portal (AreaChart with 3 metrics)
+- [x] Add monthly stats grid cards showing per-month averages, high/low scores
+- [x] Include monthlyHistory in getEvaluationsByToken API response
+- [x] Ensure mobile-friendly design for GP dashboard (responsive chart + grid)

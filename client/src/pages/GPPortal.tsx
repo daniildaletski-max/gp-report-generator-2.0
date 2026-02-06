@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useState, useEffect, useMemo } from "react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from "recharts";
 
 // Animated background component with ocean glass morphism theme
 function AnimatedBackground() {
@@ -534,6 +535,168 @@ export default function GPPortal() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Monthly Performance Trend Chart */}
+        {data.monthlyHistory && data.monthlyHistory.length > 0 && (
+          <section>
+            <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
+              <TrendingUp className="h-5 w-5 text-violet-400" />
+              Monthly Performance Trend
+              <Badge className="ml-2 bg-violet-500/20 text-violet-300 border-violet-500/30">
+                {data.monthlyHistory.filter((m: any) => m.evalCount > 0).length} months
+              </Badge>
+            </h2>
+            
+            {/* Score Trend Area Chart */}
+            <Card className="bg-white/5 backdrop-blur-xl border-white/10 mb-4">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-white text-base flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-violet-400" />
+                  Score Trends (6-Month Overview)
+                </CardTitle>
+                <CardDescription className="text-blue-200/60 text-sm">
+                  Average scores per month — Total, Appearance, and Game Performance
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[280px] sm:h-[320px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data.monthlyHistory} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.05} />
+                        </linearGradient>
+                        <linearGradient id="gradAppearance" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#ec4899" stopOpacity={0.05} />
+                        </linearGradient>
+                        <linearGradient id="gradPerformance" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                      <XAxis 
+                        dataKey="label" 
+                        tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} 
+                        axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                        tickLine={false}
+                      />
+                      <YAxis 
+                        tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} 
+                        axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                        tickLine={false}
+                        domain={[0, 22]}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'rgba(15, 15, 30, 0.95)', 
+                          border: '1px solid rgba(139, 92, 246, 0.3)', 
+                          borderRadius: '12px',
+                          backdropFilter: 'blur(20px)',
+                          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                          color: '#fff',
+                          padding: '12px 16px'
+                        }}
+                        labelStyle={{ color: 'rgba(255,255,255,0.7)', marginBottom: '8px', fontWeight: 600 }}
+                        formatter={(value: number, name: string) => {
+                          const labels: Record<string, string> = {
+                            avgTotal: 'Total Score',
+                            avgAppearance: 'Appearance',
+                            avgPerformance: 'Game Performance'
+                          };
+                          return [value.toFixed(1), labels[name] || name];
+                        }}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="avgTotal" 
+                        stroke="#8b5cf6" 
+                        strokeWidth={2.5}
+                        fill="url(#gradTotal)" 
+                        name="avgTotal"
+                        dot={{ fill: '#8b5cf6', strokeWidth: 0, r: 4 }}
+                        activeDot={{ r: 6, fill: '#8b5cf6', stroke: '#fff', strokeWidth: 2 }}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="avgAppearance" 
+                        stroke="#ec4899" 
+                        strokeWidth={2}
+                        fill="url(#gradAppearance)" 
+                        name="avgAppearance"
+                        dot={{ fill: '#ec4899', strokeWidth: 0, r: 3 }}
+                        activeDot={{ r: 5, fill: '#ec4899', stroke: '#fff', strokeWidth: 2 }}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="avgPerformance" 
+                        stroke="#6366f1" 
+                        strokeWidth={2}
+                        fill="url(#gradPerformance)" 
+                        name="avgPerformance"
+                        dot={{ fill: '#6366f1', strokeWidth: 0, r: 3 }}
+                        activeDot={{ r: 5, fill: '#6366f1', stroke: '#fff', strokeWidth: 2 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+                {/* Legend */}
+                <div className="flex flex-wrap justify-center gap-4 mt-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-violet-500" />
+                    <span className="text-xs text-white/60">Total Score (max 22)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-pink-500" />
+                    <span className="text-xs text-white/60">Appearance (max 12)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-indigo-500" />
+                    <span className="text-xs text-white/60">Game Performance (max 10)</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Monthly Stats Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {data.monthlyHistory.map((month: any) => (
+                <div 
+                  key={`${month.year}-${month.month}`}
+                  className={`relative p-4 rounded-xl border backdrop-blur-xl transition-all duration-300 hover:scale-[1.03] ${
+                    month.evalCount > 0 
+                      ? 'bg-white/5 border-white/10 hover:border-violet-500/30 hover:shadow-[0_4px_20px_rgba(139,92,246,0.15)]' 
+                      : 'bg-white/[0.02] border-white/5 opacity-50'
+                  }`}
+                >
+                  <p className="text-xs text-white/50 font-medium mb-2">{month.label}</p>
+                  {month.evalCount > 0 ? (
+                    <>
+                      <p className="text-2xl font-bold text-white">{month.avgTotal.toFixed(1)}</p>
+                      <p className="text-xs text-white/40 mt-1">{month.evalCount} eval{month.evalCount !== 1 ? 's' : ''}</p>
+                      <div className="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all duration-500"
+                          style={{ width: `${(month.avgTotal / 22) * 100}%` }}
+                        />
+                      </div>
+                      {month.highScore > 0 && (
+                        <div className="flex justify-between mt-2">
+                          <span className="text-[10px] text-green-400/70">H: {month.highScore}</span>
+                          <span className="text-[10px] text-red-400/70">L: {month.lowScore}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-white/30">No data</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Bonus Status */}
         {data.monthlyStats?.current && (

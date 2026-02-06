@@ -3330,6 +3330,9 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           }
         };
 
+        // Get monthly history for trend charts (last 6 months)
+        const monthlyHistory = await db.getGpMonthlyHistory(accessToken.gamePresenterId, 6);
+
         // Get detailed error screenshots for current month
         const errorScreenshots = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
         const attitudeDetails = await db.getAttitudeScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
@@ -3413,6 +3416,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
             screenshotUrl: a.screenshotUrl,
             createdAt: a.createdAt,
           })),
+          monthlyHistory,
         };
       }),
   }),
