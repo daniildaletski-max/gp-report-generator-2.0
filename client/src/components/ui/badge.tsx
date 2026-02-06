@@ -23,12 +23,12 @@ const badgeVariants = cva(
           "border-amber-500/20 bg-amber-500/15 text-amber-400",
         red:
           "border-red-500/20 bg-red-500/15 text-red-400",
-        cyan:
-          "border-sky-500/20 bg-sky-500/15 text-sky-400",
-        teal:
-          "border-teal-500/20 bg-teal-500/15 text-teal-400",
-        cyan:
-          "border-cyan-500/20 bg-cyan-500/15 text-cyan-400",
+        amber:
+          "border-fuchsia-500/20 bg-fuchsia-500/15 text-fuchsia-400",
+        orange:
+          "border-orange-500/20 bg-orange-500/15 text-orange-400",
+        amber:
+          "border-amber-500/20 bg-amber-500/15 text-amber-400",
         blue:
           "border-blue-500/20 bg-blue-500/15 text-blue-400",
       },

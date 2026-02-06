@@ -2279,3 +2279,29 @@
 - [x] Export button in Reports page UI (cloud icon button per report row)
 - [x] Charts included in exported spreadsheet (Python openpyxl chart generation)
 - [x] Added rclone config check with clear error message when Google Drive not configured
+
+## Team Filtering in Trends (v71)
+
+- [x] Add team selector dropdown to MonthlyTrendSection on Dashboard
+- [x] Update backend monthlyTrend procedure to accept teamId parameter
+- [x] Update getMonthlyTrendData to filter by specific team
+- [x] Show team name in chart titles when filtered
+
+## Complete Design Overhaul v2 (v71)
+
+### New Visual Identity
+- [x] Design new color palette: warm charcoal (#0c0a09) + gold/amber (#f59e0b) + orange (#f97316) accents
+- [x] Typography: Inter font from Google Fonts
+- [x] Updated card styles with warm glassmorphism effects
+- [x] All glass effects updated with warm gold tones
+
+### Page Redesigns
+- [x] Redesign Home landing page (warm charcoal background)
+- [x] Redesign Dashboard layout and cards (gold stat cards, amber charts)
+- [x] Redesign DashboardLayout sidebar (warm tones)
+- [x] Redesign Evaluations page (amber accents, warm table)
+- [x] Redesign Upload page (warm drop zone, amber icons)
+- [x] Redesign Reports page (gold stat cards, warm table)
+- [x] Redesign Admin page (warm overview cards, amber tabs)
+- [x] Redesign GP Portal page (warm charcoal background, gold accents)
+- [x] Update all interactive elements (buttons, badges, inputs) - amber/orange/fuchsia palette

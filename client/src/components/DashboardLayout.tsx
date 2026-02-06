@@ -174,18 +174,18 @@ function DashboardLayoutContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center border-b border-cyan-500/10">
+          <SidebarHeader className="h-16 justify-center border-b border-amber-500/10">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               <button
                 onClick={toggleSidebar}
-                className="h-9 w-9 flex items-center justify-center hover:bg-cyan-500/10 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 shrink-0 group"
+                className="h-9 w-9 flex items-center justify-center hover:bg-amber-500/10 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 shrink-0 group"
                 aria-label="Toggle navigation"
               >
-                <PanelLeft className="h-4 w-4 text-cyan-400/70 group-hover:text-cyan-400 transition-colors" />
+                <PanelLeft className="h-4 w-4 text-amber-400/70 group-hover:text-amber-400 transition-colors" />
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
                     <span className="text-white text-xs font-bold">GP</span>
                   </div>
                   <span className="font-semibold tracking-tight truncate text-white/90">
@@ -208,16 +208,16 @@ function DashboardLayoutContent({
                       tooltip={item.label}
                       className={`h-11 transition-all duration-300 font-normal rounded-xl ${
                         isActive 
-                          ? "bg-cyan-500/12 text-cyan-300 border border-cyan-500/20 shadow-lg shadow-cyan-500/5" 
-                          : "hover:bg-cyan-500/8 text-white/60 hover:text-white/90"
+                          ? "bg-amber-500/12 text-amber-300 border border-amber-500/20 shadow-lg shadow-amber-500/5" 
+                          : "hover:bg-amber-500/8 text-white/60 hover:text-white/90"
                       }`}
                     >
                       {isActive && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] bg-gradient-to-b from-cyan-400 to-cyan-600 rounded-r-full" />
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] bg-gradient-to-b from-amber-400 to-amber-600 rounded-r-full" />
                       )}
                       <item.icon
                         className={`h-4 w-4 transition-transform duration-200 ${
-                          isActive ? "text-cyan-400 scale-110" : "group-hover:scale-110"
+                          isActive ? "text-amber-400 scale-110" : "group-hover:scale-110"
                         }`}
                       />
                       <span className={isActive ? "font-medium" : ""}>{item.label}</span>
@@ -228,12 +228,12 @@ function DashboardLayoutContent({
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="p-3 border-t border-cyan-500/10">
+          <SidebarFooter className="p-3 border-t border-amber-500/10">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-cyan-500/10 transition-all duration-200 w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50">
-                  <Avatar className="h-9 w-9 border border-cyan-500/20 shrink-0 bg-gradient-to-br from-cyan-500/20 to-teal-500/20">
-                    <AvatarFallback className="text-xs font-semibold text-cyan-300 bg-transparent">
+                <button className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-amber-500/10 transition-all duration-200 w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50">
+                  <Avatar className="h-9 w-9 border border-amber-500/20 shrink-0 bg-gradient-to-br from-amber-500/20 to-orange-500/20">
+                    <AvatarFallback className="text-xs font-semibold text-amber-300 bg-transparent">
                       {user?.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
@@ -247,7 +247,7 @@ function DashboardLayoutContent({
                   </div>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 bg-[#0a1420]/95 backdrop-blur-xl border-cyan-500/20 rounded-xl shadow-xl shadow-cyan-500/10">
+              <DropdownMenuContent align="end" className="w-48 bg-[#0a1420]/95 backdrop-blur-xl border-amber-500/20 rounded-xl shadow-xl shadow-amber-500/10">
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-red-400 focus:text-red-400 focus:bg-red-500/10 rounded-lg"

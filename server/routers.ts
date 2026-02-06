@@ -1102,13 +1102,15 @@ export const appRouter = router({
     monthlyTrend: protectedProcedure
       .input(z.object({
         months: z.number().min(2).max(12).optional(),
+        teamId: z.number().positive().optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
         const months = input?.months || 6;
+        const teamId = input?.teamId;
         if (ctx.user.role !== 'admin') {
-          return await db.getMonthlyTrendData(months, undefined, ctx.user.id);
+          return await db.getMonthlyTrendData(months, teamId, ctx.user.id);
         }
-        return await db.getMonthlyTrendData(months);
+        return await db.getMonthlyTrendData(months, teamId);
       }),
 
     // Admin dashboard with system-wide stats

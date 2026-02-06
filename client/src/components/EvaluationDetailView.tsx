@@ -328,13 +328,13 @@ export default function EvaluationDetailView({
                           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{appearanceScore}/12</p>
                         </CardContent>
                       </Card>
-                      <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100/50 dark:from-cyan-950/30 dark:to-cyan-900/20 border-cyan-200 dark:border-cyan-800">
+                      <Card className="bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/30 dark:to-amber-900/20 border-amber-200 dark:border-amber-800">
                         <CardContent className="p-3">
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-muted-foreground">Performance</span>
-                            <Trophy className="h-4 w-4 text-cyan-500" />
+                            <Trophy className="h-4 w-4 text-amber-500" />
                           </div>
-                          <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{performanceScore}/10</p>
+                          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{performanceScore}/10</p>
                         </CardContent>
                       </Card>
                     </div>
@@ -440,8 +440,8 @@ export default function EvaluationDetailView({
                       <p className="text-sm text-muted-foreground mt-1">Appearance</p>
                       <p className="text-xs text-muted-foreground">out of 12</p>
                     </div>
-                    <div className="text-center p-4 rounded-lg bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950/30 dark:to-cyan-900/20">
-                      <p className="text-4xl font-bold text-cyan-600">{performanceScore}</p>
+                    <div className="text-center p-4 rounded-lg bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/30 dark:to-amber-900/20">
+                      <p className="text-4xl font-bold text-amber-600">{performanceScore}</p>
                       <p className="text-sm text-muted-foreground mt-1">Performance</p>
                       <p className="text-xs text-muted-foreground">out of 10</p>
                     </div>
