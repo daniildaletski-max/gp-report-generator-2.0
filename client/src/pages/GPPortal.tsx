@@ -19,14 +19,14 @@ import { useState, useEffect, useMemo } from "react";
 function AnimatedBackground() {
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none">
-      {/* Gradient orbs - warm gold theme */}
-      <div className="absolute top-0 -left-40 w-80 h-80 bg-amber-500/20 rounded-full blur-[100px] animate-pulse" />
+      {/* Gradient orbs - cool violet theme */}
+      <div className="absolute top-0 -left-40 w-80 h-80 bg-violet-500/20 rounded-full blur-[100px] animate-pulse" />
       <div className="absolute top-1/3 -right-40 w-96 h-96 bg-fuchsia-500/15 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
-      <div className="absolute bottom-0 left-1/3 w-72 h-72 bg-orange-500/15 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
-      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-amber-400/10 rounded-full blur-[80px] animate-pulse" style={{ animationDelay: '0.5s' }} />
+      <div className="absolute bottom-0 left-1/3 w-72 h-72 bg-indigo-500/15 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
+      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-violet-400/10 rounded-full blur-[80px] animate-pulse" style={{ animationDelay: '0.5s' }} />
       
       {/* Grid pattern overlay */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(245,158,11,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(245,158,11,0.03)_1px,transparent_1px)] bg-[size:50px_50px]" />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]" />
     </div>
   );
 }
@@ -44,14 +44,14 @@ function ScoreCard({ score, maxScore, label, icon: Icon, gradient }: {
   const getStatus = () => {
     if (percentage >= 90) return { text: 'Excellent', color: 'text-emerald-400', badge: 'bg-emerald-500/20 border-emerald-500/30' };
     if (percentage >= 80) return { text: 'Great', color: 'text-green-400', badge: 'bg-green-500/20 border-green-500/30' };
-    if (percentage >= 70) return { text: 'Good', color: 'text-amber-400', badge: 'bg-amber-500/20 border-amber-500/30' };
-    return { text: 'Needs Work', color: 'text-orange-400', badge: 'bg-orange-500/20 border-orange-500/30' };
+    if (percentage >= 70) return { text: 'Good', color: 'text-violet-400', badge: 'bg-violet-500/20 border-violet-500/30' };
+    return { text: 'Needs Work', color: 'text-indigo-400', badge: 'bg-indigo-500/20 border-indigo-500/30' };
   };
   
   const status = getStatus();
   
   return (
-    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} backdrop-blur-2xl p-5 sm:p-6 border border-white/[0.12] shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.1)] hover:shadow-[0_12px_40px_rgba(245,158,11,0.2),inset_0_1px_0_rgba(255,255,255,0.15)] hover:border-white/20 transition-all duration-400 group hover:-translate-y-1`}>
+    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} backdrop-blur-2xl p-5 sm:p-6 border border-white/[0.12] shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.1)] hover:shadow-[0_12px_40px_rgba(139,92,246,0.2),inset_0_1px_0_rgba(255,255,255,0.15)] hover:border-white/20 transition-all duration-400 group hover:-translate-y-1`}>
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:bg-white/10 transition-all" />
       <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -95,7 +95,7 @@ function AchievementBadge({ icon: Icon, title, description, unlocked, color }: {
   return (
     <div className={`relative p-4 rounded-xl border backdrop-blur-sm transition-all duration-300 group ${
       unlocked 
-        ? `bg-gradient-to-br ${color} border-white/20 shadow-[0_4px_20px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_20px_rgba(245,158,11,0.2)] hover:scale-[1.02]` 
+        ? `bg-gradient-to-br ${color} border-white/20 shadow-[0_4px_20px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_20px_rgba(139,92,246,0.2)] hover:scale-[1.02]` 
         : 'bg-[rgba(18,18,30,0.5)] border-white/5 opacity-60 grayscale'
     }`}>
       <div className="flex items-center gap-3">
@@ -129,7 +129,7 @@ function StatCard({ icon: Icon, value, label, color, trend }: {
   trend?: number;
 }) {
   return (
-    <div className={`relative bg-gradient-to-br ${color} backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden group hover:scale-[1.02] hover:shadow-[0_8px_32px_rgba(245,158,11,0.15)] transition-all duration-300`}>
+    <div className={`relative bg-gradient-to-br ${color} backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden group hover:scale-[1.02] hover:shadow-[0_8px_32px_rgba(139,92,246,0.15)] transition-all duration-300`}>
       <div className="p-4 sm:p-5 relative">
         {/* Glow effect */}
         <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/15 transition-all" />
@@ -204,10 +204,10 @@ export default function GPPortal() {
     const attitude = data.monthlyStats?.current?.attitude ?? 0;
     
     return [
-      { icon: Star, title: 'First Steps', description: 'Complete your first evaluation', unlocked: totalEvals >= 1, color: 'from-blue-500/30 to-amber-500/30' },
-      { icon: Flame, title: 'On Fire', description: 'Complete 5 evaluations', unlocked: totalEvals >= 5, color: 'from-orange-500/30 to-red-500/30' },
-      { icon: Crown, title: 'Excellence', description: 'Average score above 20', unlocked: avgScore >= 20, color: 'from-yellow-500/30 to-amber-500/30' },
-      { icon: Gem, title: 'Perfect Score', description: 'Get a perfect 22/22', unlocked: perfectScores > 0, color: 'from-amber-500/30 to-pink-500/30' },
+      { icon: Star, title: 'First Steps', description: 'Complete your first evaluation', unlocked: totalEvals >= 1, color: 'from-blue-500/30 to-violet-500/30' },
+      { icon: Flame, title: 'On Fire', description: 'Complete 5 evaluations', unlocked: totalEvals >= 5, color: 'from-indigo-500/30 to-red-500/30' },
+      { icon: Crown, title: 'Excellence', description: 'Average score above 20', unlocked: avgScore >= 20, color: 'from-yellow-500/30 to-violet-500/30' },
+      { icon: Gem, title: 'Perfect Score', description: 'Get a perfect 22/22', unlocked: perfectScores > 0, color: 'from-violet-500/30 to-pink-500/30' },
       { icon: Shield, title: 'Flawless', description: 'Zero mistakes this month', unlocked: mistakes === 0, color: 'from-green-500/30 to-emerald-500/30' },
       { icon: Heart, title: 'Team Player', description: 'Positive attitude score', unlocked: attitude > 0, color: 'from-pink-500/30 to-rose-500/30' },
     ];
@@ -231,7 +231,7 @@ export default function GPPortal() {
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0c0a09] via-[#1c1917] to-[#1a1412] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0a14] via-[#141228] to-[#12101e] flex items-center justify-center p-4">
         <AnimatedBackground />
         <Card className="max-w-md w-full bg-white/5 backdrop-blur-xl border-red-500/30 relative z-10">
           <CardHeader className="text-center pb-2">
@@ -297,7 +297,7 @@ export default function GPPortal() {
   };
 
   return (
-    <div className="min-h-screen relative bg-gradient-to-br from-[#0c0a09] via-[#1c1917] to-[#1a1412]">
+    <div className="min-h-screen relative bg-gradient-to-br from-[#0a0a14] via-[#141228] to-[#12101e]">
       <AnimatedBackground />
       
       {/* Header */}
@@ -360,7 +360,7 @@ export default function GPPortal() {
               maxScore={22} 
               label="Overall Score" 
               icon={Trophy}
-              gradient="from-amber-600/80 to-orange-700/80"
+              gradient="from-violet-600/80 to-indigo-700/80"
             />
             <ScoreCard 
               score={avgAppearance} 
@@ -374,7 +374,7 @@ export default function GPPortal() {
               maxScore={10} 
               label="Game Performance" 
               icon={Gamepad2}
-              gradient="from-fuchsia-600/80 to-amber-700/80"
+              gradient="from-fuchsia-600/80 to-violet-700/80"
             />
           </div>
         </section>
@@ -394,7 +394,7 @@ export default function GPPortal() {
               label="Monthly Mistakes" 
               color={(data.monthlyStats?.current?.mistakes ?? 0) === 0 
                 ? "from-green-600/40 to-green-800/40" 
-                : "from-orange-600/40 to-orange-800/40"}
+                : "from-indigo-600/40 to-indigo-800/40"}
             />
             <StatCard 
               icon={(data.monthlyStats?.current?.attitude ?? 0) >= 0 ? ThumbsUp : ThumbsDown} 
@@ -408,7 +408,7 @@ export default function GPPortal() {
               icon={Gamepad2} 
               value={(data.monthlyStats?.current?.totalGames ?? 0).toLocaleString()} 
               label="Total Games" 
-              color="from-amber-600/40 to-amber-800/40"
+              color="from-violet-600/40 to-violet-800/40"
             />
           </div>
         </section>
@@ -416,7 +416,7 @@ export default function GPPortal() {
         {/* Achievements */}
         <section>
           <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-            <Medal className="h-5 w-5 text-amber-400" />
+            <Medal className="h-5 w-5 text-violet-400" />
             Achievements
             <Badge className="ml-2 bg-white/10 text-white/70">
               {achievements.filter(a => a.unlocked).length}/{achievements.length}
@@ -545,7 +545,7 @@ export default function GPPortal() {
             
             <Card className={`overflow-hidden ${
               data.monthlyStats.current.bonus.eligible 
-                ? 'bg-gradient-to-br from-green-500/20 via-emerald-500/10 to-orange-500/20 border-green-500/30' 
+                ? 'bg-gradient-to-br from-green-500/20 via-emerald-500/10 to-indigo-500/20 border-green-500/30' 
                 : 'bg-white/5 border-white/10'
             } backdrop-blur-xl`}>
               <CardContent className="p-6 sm:p-8">
@@ -637,7 +637,7 @@ export default function GPPortal() {
         {/* Evaluation History */}
         <section>
           <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-            <Calendar className="h-5 w-5 text-amber-400" />
+            <Calendar className="h-5 w-5 text-violet-400" />
             Evaluation History
           </h2>
           
@@ -680,7 +680,7 @@ export default function GPPortal() {
                               <Sparkles className="h-3 w-3 mr-1" />
                               {evaluation.appearanceScore}/12
                             </Badge>
-                            <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30">
+                            <Badge className="bg-violet-500/20 text-violet-300 border-violet-500/30">
                               <Gamepad2 className="h-3 w-3 mr-1" />
                               {evaluation.gamePerformanceTotalScore}/10
                             </Badge>
@@ -701,7 +701,7 @@ export default function GPPortal() {
                               <Sparkles className="h-3 w-3 mr-1" />
                               Appearance: {evaluation.appearanceScore}/12
                             </Badge>
-                            <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30">
+                            <Badge className="bg-violet-500/20 text-violet-300 border-violet-500/30">
                               <Gamepad2 className="h-3 w-3 mr-1" />
                               Game: {evaluation.gamePerformanceTotalScore}/10
                             </Badge>
@@ -796,9 +796,9 @@ export default function GPPortal() {
         {data.errorDetails && data.errorDetails.length > 0 && (
           <section>
             <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-              <AlertTriangle className="h-5 w-5 text-orange-400" />
+              <AlertTriangle className="h-5 w-5 text-indigo-400" />
               Error Details This Month
-              <Badge className="ml-2 bg-orange-500/20 text-orange-300 border-orange-500/30">
+              <Badge className="ml-2 bg-indigo-500/20 text-indigo-300 border-indigo-500/30">
                 {data.errorDetails.length}
               </Badge>
             </h2>
@@ -811,12 +811,12 @@ export default function GPPortal() {
                       <div className="flex items-start gap-4">
                         <div className={`shrink-0 p-2.5 rounded-xl ${
                           error.severity === 'critical' ? 'bg-red-500/20' :
-                          error.severity === 'medium' ? 'bg-orange-500/20' :
+                          error.severity === 'medium' ? 'bg-indigo-500/20' :
                           'bg-yellow-500/20'
                         }`}>
                           <AlertTriangle className={`h-5 w-5 ${
                             error.severity === 'critical' ? 'text-red-400' :
-                            error.severity === 'medium' ? 'text-orange-400' :
+                            error.severity === 'medium' ? 'text-indigo-400' :
                             'text-yellow-400'
                           }`} />
                         </div>
@@ -828,12 +828,12 @@ export default function GPPortal() {
                               </Badge>
                             )}
                             {error.gameType && (
-                              <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30">
+                              <Badge className="bg-violet-500/20 text-violet-300 border-violet-500/30">
                                 {error.gameType}
                               </Badge>
                             )}
                             {error.errorCategory && (
-                              <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30">
+                              <Badge className="bg-violet-500/20 text-violet-300 border-violet-500/30">
                                 {error.errorCategory}
                               </Badge>
                             )}

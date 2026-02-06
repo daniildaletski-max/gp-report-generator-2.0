@@ -343,7 +343,7 @@ export default function EvaluationsPage() {
         {/* Stats Cards Skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="stat-card-enhanced stat-card-amber p-5">
+            <div key={i} className="stat-card-enhanced stat-card-violet p-5">
               <div className="flex items-center gap-3">
                 <div className="skeleton-enhanced h-10 w-10 rounded-xl" />
                 <div className="flex-1">
@@ -466,7 +466,7 @@ export default function EvaluationsPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-stagger">
-        <div className="stat-card-enhanced stat-card-amber">
+        <div className="stat-card-enhanced stat-card-violet">
           <div className="icon-box">
             <FileSpreadsheet className="h-5 w-5" />
           </div>
@@ -475,7 +475,7 @@ export default function EvaluationsPage() {
             <p className="text-2xl font-bold">{stats.total}</p>
           </div>
         </div>
-        <div className="stat-card-enhanced stat-card-orange">
+        <div className="stat-card-enhanced stat-card-indigo">
           <div className="icon-box">
             <Calendar className="h-5 w-5" />
           </div>
@@ -484,7 +484,7 @@ export default function EvaluationsPage() {
             <p className="text-2xl font-bold">{stats.thisMonth}</p>
           </div>
         </div>
-        <div className="stat-card-enhanced stat-card-amber">
+        <div className="stat-card-enhanced stat-card-violet">
           <div className="icon-box">
             <TrendingUp className="h-5 w-5" />
           </div>
@@ -507,7 +507,7 @@ export default function EvaluationsPage() {
       {/* Tabs for Evaluations and Attitude */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "evaluations" | "attitude")} className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2 bg-white/5 border border-white/10 rounded-xl p-1">
-          <TabsTrigger value="evaluations" className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500/20 data-[state=active]:to-orange-500/20 data-[state=active]:border-amber-500/30 rounded-lg transition-all">
+          <TabsTrigger value="evaluations" className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500/20 data-[state=active]:to-indigo-500/20 data-[state=active]:border-violet-500/30 rounded-lg transition-all">
             <FileSpreadsheet className="h-4 w-4" />
             Evaluations ({stats.total})
           </TabsTrigger>

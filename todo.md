@@ -2305,3 +2305,21 @@
 - [x] Redesign Admin page (warm overview cards, amber tabs)
 - [x] Redesign GP Portal page (warm charcoal background, gold accents)
 - [x] Update all interactive elements (buttons, badges, inputs) - amber/orange/fuchsia palette
+
+## Color Palette Change (v72)
+
+### Replace Orange/Amber with New Stylish Palette
+- [x] Choose new color palette - elegant violet/indigo (#8b5cf6, #7c3aed) + emerald accents on dark charcoal (#0c0a09)
+- [x] Update CSS variables and theme tokens in index.css (OKLCH values updated)
+- [x] Update all hardcoded amber/orange color references across TSX files (586 replacements)
+- [x] Update all CSS utility classes with new colors
+- [x] Fix accent color for skeleton loading states (was too saturated blue)
+- [x] Verify all pages render correctly with new palette
+
+## GP Comparison Between Teams (v72)
+
+- [x] Add backend API procedure for cross-team GP comparison data (dashboard.teamComparison)
+- [x] Add db helper function to get GP scores grouped by team (getTeamComparisonData in db.ts)
+- [x] Create comparison chart component on Dashboard (TeamComparisonSection with BarChart)
+- [x] Add team multi-selector for choosing teams to compare
+- [x] Show bar chart comparing GP performance across selected teams with avg scores, appearance, performance

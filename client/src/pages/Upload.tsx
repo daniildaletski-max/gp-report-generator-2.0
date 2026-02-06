@@ -562,9 +562,9 @@ export default function UploadPage() {
                 </div>
               </div>
             </div>
-            <div className="stat-card-enhanced amber">
+            <div className="stat-card-enhanced violet">
               <div className="flex items-center gap-3">
-                <div className="icon-box icon-box-amber">
+                <div className="icon-box icon-box-violet">
                   <Clock className="h-5 w-5" />
                 </div>
                 <div>
@@ -575,9 +575,9 @@ export default function UploadPage() {
             </div>
             {activeTab === "evaluations" && "avgScore" in stats && (
               <>
-                <div className="stat-card-enhanced amber">
+                <div className="stat-card-enhanced violet">
                   <div className="flex items-center gap-3">
-                    <div className="icon-box icon-box-amber">
+                    <div className="icon-box icon-box-violet">
                       <Star className="h-5 w-5" />
                     </div>
                     <div>
@@ -586,9 +586,9 @@ export default function UploadPage() {
                     </div>
                   </div>
                 </div>
-                <div className="stat-card-enhanced amber">
+                <div className="stat-card-enhanced violet">
                   <div className="flex items-center gap-3">
-                    <div className="icon-box icon-box-amber">
+                    <div className="icon-box icon-box-violet">
                       <User className="h-5 w-5" />
                     </div>
                     <div>
@@ -634,7 +634,7 @@ export default function UploadPage() {
           <div className="lg:col-span-2 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
             <div className="unified-card overflow-hidden">
               <div className="unified-card-header">
-                <div className="icon-box icon-box-amber">
+                <div className="icon-box icon-box-violet">
                   <CloudUpload className="h-5 w-5" />
                 </div>
                 <div className="section-header">
@@ -660,7 +660,7 @@ export default function UploadPage() {
                       ))}
                     </select>
                     {!selectedGpId && (
-                      <p className="text-xs text-amber-500 mt-2 flex items-center gap-1">
+                      <p className="text-xs text-violet-500 mt-2 flex items-center gap-1">
                         <AlertTriangle className="h-3 w-3" />
                         Please select a GP before uploading attitude screenshots
                       </p>
@@ -686,7 +686,7 @@ export default function UploadPage() {
                   />
                   <div className="flex flex-col items-center gap-4 relative z-10">
                     <div className="upload-icon-box">
-                      <UploadIcon className={`h-10 w-10 transition-colors ${isDragging ? "text-amber-400" : "text-amber-400/70"}`} />
+                      <UploadIcon className={`h-10 w-10 transition-colors ${isDragging ? "text-violet-400" : "text-violet-400/70"}`} />
                     </div>
                     <div>
                       <p className="font-semibold text-xl text-white/90">
@@ -744,7 +744,7 @@ export default function UploadPage() {
                             onClick={processFiles}
                             disabled={isProcessing}
                             size="sm"
-                            className="rounded-lg bg-gradient-to-r from-primary to-amber-600"
+                            className="rounded-lg bg-gradient-to-r from-primary to-violet-600"
                           >
                             {isProcessing ? (
                               <>
@@ -852,7 +852,7 @@ export default function UploadPage() {
                                 </Badge>
                               )}
                               {file.matchInfo?.isNewGP && (
-                                <Badge className="text-xs rounded-lg bg-amber-500/20 text-amber-400">
+                                <Badge className="text-xs rounded-lg bg-violet-500/20 text-violet-400">
                                   New GP
                                 </Badge>
                               )}
@@ -892,7 +892,7 @@ export default function UploadPage() {
           <div className="lg:col-span-1 animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
             <div className="unified-card sticky top-4 overflow-hidden">
               <div className="unified-card-header">
-                <div className="icon-box icon-box-amber">
+                <div className="icon-box icon-box-violet">
                   <Sparkles className="h-5 w-5" />
                 </div>
                 <div className="section-header">
@@ -962,11 +962,11 @@ export default function UploadPage() {
 
                         {/* Total Score */}
                         {selectedFile.extractedData.totalScore !== undefined && (
-                          <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20">
+                          <div className="p-4 rounded-xl bg-gradient-to-br from-violet-500/20 to-indigo-500/20">
                             <div className="flex items-center justify-between">
                               <span className="text-sm font-medium">Total Score</span>
                               <div className="flex items-center gap-2">
-                                <Star className="h-6 w-6 text-amber-400 fill-amber-400" />
+                                <Star className="h-6 w-6 text-violet-400 fill-violet-400" />
                                 <span className="text-3xl font-bold">{selectedFile.extractedData.totalScore}</span>
                               </div>
                             </div>
@@ -992,13 +992,13 @@ export default function UploadPage() {
                                 <div key={key} className="glass-subtle p-3 rounded-xl space-y-2">
                                   <div className="flex items-center justify-between text-sm">
                                     <span className="font-medium">{label}</span>
-                                    <span className={`font-bold ${percentage >= 80 ? "text-green-400" : percentage >= 60 ? "text-amber-400" : "text-red-400"}`}>
+                                    <span className={`font-bold ${percentage >= 80 ? "text-green-400" : percentage >= 60 ? "text-violet-400" : "text-red-400"}`}>
                                       {data.score}/{data.maxScore}
                                     </span>
                                   </div>
                                   <Progress 
                                     value={percentage} 
-                                    className={`h-2 rounded-full ${percentage >= 80 ? "[&>div]:bg-green-500" : percentage >= 60 ? "[&>div]:bg-amber-500" : "[&>div]:bg-red-500"}`}
+                                    className={`h-2 rounded-full ${percentage >= 80 ? "[&>div]:bg-green-500" : percentage >= 60 ? "[&>div]:bg-violet-500" : "[&>div]:bg-red-500"}`}
                                   />
                                   {data.comment && (
                                     <p className="text-xs text-muted-foreground italic">
@@ -1078,7 +1078,7 @@ export default function UploadPage() {
                 ) : (
                   <div className="empty-state py-12">
                     <div className="empty-state-icon">
-                      <Sparkles className="h-8 w-8 text-amber-400/50" />
+                      <Sparkles className="h-8 w-8 text-violet-400/50" />
                     </div>
                     <p className="empty-state-title">No data yet</p>
                     <p className="empty-state-description">

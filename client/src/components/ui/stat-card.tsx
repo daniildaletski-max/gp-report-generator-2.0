@@ -6,7 +6,7 @@ interface StatCardProps {
   icon: LucideIcon;
   value: number | string;
   label: string;
-  color?: "amber" | "green" | "amber" | "orange" | "red" | "amber" | "blue";
+  color?: "violet" | "green" | "indigo" | "red" | "blue";
   suffix?: string;
   className?: string;
 }
@@ -18,9 +18,9 @@ const colorMap: Record<string, {
   valueText: string;
   glow: string;
 }> = {
-  amber: {
+  violet: {
     card: "border-fuchsia-500/15 hover:border-fuchsia-500/25",
-    iconBg: "bg-gradient-to-br from-fuchsia-500/20 to-amber-500/10 border border-fuchsia-500/20",
+    iconBg: "bg-gradient-to-br from-fuchsia-500/20 to-violet-500/10 border border-fuchsia-500/20",
     iconText: "text-fuchsia-400",
     valueText: "text-fuchsia-300",
     glow: "hover:shadow-fuchsia-500/10",
@@ -32,19 +32,19 @@ const colorMap: Record<string, {
     valueText: "text-emerald-300",
     glow: "hover:shadow-emerald-500/10",
   },
-  amber: {
-    card: "border-amber-500/15 hover:border-amber-500/25",
-    iconBg: "bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/20",
-    iconText: "text-amber-400",
-    valueText: "text-amber-300",
-    glow: "hover:shadow-amber-500/10",
+  violet: {
+    card: "border-violet-500/15 hover:border-violet-500/25",
+    iconBg: "bg-gradient-to-br from-violet-500/20 to-indigo-500/10 border border-violet-500/20",
+    iconText: "text-violet-400",
+    valueText: "text-violet-300",
+    glow: "hover:shadow-violet-500/10",
   },
-  orange: {
-    card: "border-orange-500/15 hover:border-orange-500/25",
-    iconBg: "bg-gradient-to-br from-orange-500/20 to-pink-500/10 border border-orange-500/20",
-    iconText: "text-orange-400",
-    valueText: "text-orange-300",
-    glow: "hover:shadow-orange-500/10",
+  indigo: {
+    card: "border-indigo-500/15 hover:border-indigo-500/25",
+    iconBg: "bg-gradient-to-br from-indigo-500/20 to-pink-500/10 border border-indigo-500/20",
+    iconText: "text-indigo-400",
+    valueText: "text-indigo-300",
+    glow: "hover:shadow-indigo-500/10",
   },
   red: {
     card: "border-red-500/15 hover:border-red-500/25",
@@ -53,12 +53,12 @@ const colorMap: Record<string, {
     valueText: "text-red-300",
     glow: "hover:shadow-red-500/10",
   },
-  amber: {
-    card: "border-amber-500/15 hover:border-amber-500/25",
-    iconBg: "bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/20",
-    iconText: "text-amber-400",
-    valueText: "text-amber-300",
-    glow: "hover:shadow-amber-500/10",
+  violet: {
+    card: "border-violet-500/15 hover:border-violet-500/25",
+    iconBg: "bg-gradient-to-br from-violet-500/20 to-indigo-500/10 border border-violet-500/20",
+    iconText: "text-violet-400",
+    valueText: "text-violet-300",
+    glow: "hover:shadow-violet-500/10",
   },
   blue: {
     card: "border-blue-500/15 hover:border-blue-500/25",
@@ -69,8 +69,8 @@ const colorMap: Record<string, {
   },
 };
 
-export function StatCard({ icon: Icon, value, label, color = "amber", suffix, className }: StatCardProps) {
-  const colors = colorMap[color] || colorMap.amber;
+export function StatCard({ icon: Icon, value, label, color = "violet", suffix, className }: StatCardProps) {
+  const colors = colorMap[color] || colorMap.violet;
 
   return (
     <div

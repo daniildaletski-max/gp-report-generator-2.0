@@ -1113,6 +1113,20 @@ export const appRouter = router({
         return await db.getMonthlyTrendData(months, teamId);
       }),
 
+    // Cross-team GP comparison
+    teamComparison: protectedProcedure
+      .input(z.object({
+        teamIds: z.array(z.number().positive()).optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        const teamIds = input?.teamIds;
+        if (ctx.user.role !== 'admin') {
+          return await db.getTeamComparisonData(ctx.user.id, teamIds);
+        }
+        // Admin sees all teams - need a userId, use owner
+        return await db.getTeamComparisonData(ctx.user.id, teamIds);
+      }),
+
     // Admin dashboard with system-wide stats
     adminStats: adminProcedure.query(async () => {
       return await db.getAdminDashboardStats();

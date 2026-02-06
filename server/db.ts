@@ -3208,3 +3208,110 @@ export async function getMonthlyTrendData(months: number = 6, teamId?: number, u
 
   return results;
 }
+
+
+// ========================================
+// Cross-Team GP Comparison
+// ========================================
+
+export async function getTeamComparisonData(userId: number, teamIds?: number[]) {
+  const db = getDb();
+  
+  // Get all teams for this user
+  const teams = await db.select().from(fmTeams).where(eq(fmTeams.userId, userId));
+  
+  if (teams.length === 0) return [];
+  
+  // Filter to selected teams if specified
+  const selectedTeams = teamIds && teamIds.length > 0 
+    ? teams.filter(t => teamIds.includes(t.id))
+    : teams;
+  
+  const results = [];
+  
+  for (const team of selectedTeams) {
+    // Get all GPs in this team
+    const gps = await db.select().from(gamePresenters)
+      .where(and(
+        eq(gamePresenters.teamId, team.id),
+        eq(gamePresenters.userId, userId)
+      ));
+    
+    if (gps.length === 0) {
+      results.push({
+        teamId: team.id,
+        teamName: team.teamName,
+        floorManager: team.floorManagerName,
+        gpCount: 0,
+        avgTotalScore: 0,
+        avgAppearanceScore: 0,
+        avgPerformanceScore: 0,
+        totalEvaluations: 0,
+        topScore: 0,
+        lowScore: 0,
+        gps: [],
+      });
+      continue;
+    }
+    
+    const gpIds = gps.map(g => g.id);
+    
+    // Get aggregated stats for this team
+    const teamStats = await db.select({
+      avgTotal: sql<number>`AVG(${evaluations.totalScore})`,
+      avgAppearance: sql<number>`AVG(${evaluations.appearanceScore})`,
+      avgPerformance: sql<number>`AVG(${evaluations.gamePerformanceTotalScore})`,
+      totalEvals: sql<number>`COUNT(*)`,
+      topScore: sql<number>`MAX(${evaluations.totalScore})`,
+      lowScore: sql<number>`MIN(${evaluations.totalScore})`,
+    }).from(evaluations)
+      .where(and(
+        inArray(evaluations.gamePresenterId, gpIds),
+        eq(evaluations.userId, userId)
+      ));
+    
+    const stats = teamStats[0];
+    
+    // Get per-GP stats for this team
+    const gpStats = await db.select({
+      gpId: evaluations.gamePresenterId,
+      avgTotal: sql<number>`AVG(${evaluations.totalScore})`,
+      avgAppearance: sql<number>`AVG(${evaluations.appearanceScore})`,
+      avgPerformance: sql<number>`AVG(${evaluations.gamePerformanceTotalScore})`,
+      evalCount: sql<number>`COUNT(*)`,
+    }).from(evaluations)
+      .where(and(
+        inArray(evaluations.gamePresenterId, gpIds),
+        eq(evaluations.userId, userId)
+      ))
+      .groupBy(evaluations.gamePresenterId);
+    
+    const gpData = gpStats.map(gs => {
+      const gp = gps.find(g => g.id === gs.gpId);
+      return {
+        id: gs.gpId,
+        name: gp?.name || 'Unknown',
+        avgTotalScore: gs.avgTotal ? Number(Number(gs.avgTotal).toFixed(1)) : 0,
+        avgAppearanceScore: gs.avgAppearance ? Number(Number(gs.avgAppearance).toFixed(1)) : 0,
+        avgPerformanceScore: gs.avgPerformance ? Number(Number(gs.avgPerformance).toFixed(1)) : 0,
+        evaluationCount: Number(gs.evalCount || 0),
+      };
+    }).sort((a, b) => b.avgTotalScore - a.avgTotalScore);
+    
+    results.push({
+      teamId: team.id,
+      teamName: team.teamName,
+      floorManager: team.floorManagerName,
+      gpCount: gps.length,
+      avgTotalScore: stats?.avgTotal ? Number(Number(stats.avgTotal).toFixed(1)) : 0,
+      avgAppearanceScore: stats?.avgAppearance ? Number(Number(stats.avgAppearance).toFixed(1)) : 0,
+      avgPerformanceScore: stats?.avgPerformance ? Number(Number(stats.avgPerformance).toFixed(1)) : 0,
+      totalEvaluations: Number(stats?.totalEvals || 0),
+      topScore: Number(stats?.topScore || 0),
+      lowScore: Number(stats?.lowScore || 0),
+      gps: gpData,
+    });
+  }
+  
+  return results.sort((a, b) => b.avgTotalScore - a.avgTotalScore);
+}

@@ -3,7 +3,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 interface CardProps extends React.ComponentProps<"div"> {
-  variant?: "default" | "glass" | "amber" | "green" | "red";
+  variant?: "default" | "glass" | "violet" | "green" | "red";
 }
 
 function Card({ className, variant = "default", ...props }: CardProps) {
@@ -13,8 +13,8 @@ function Card({ className, variant = "default", ...props }: CardProps) {
       className={cn(
         "text-card-foreground flex flex-col gap-6 rounded-2xl border py-6 shadow-sm backdrop-blur-xl transition-all duration-300",
         variant === "glass"
-          ? "bg-white/[0.03] border-white/[0.08] hover:border-white/[0.12] hover:shadow-lg hover:shadow-amber-500/5"
-          : "bg-card/80 border-amber-500/10 hover:border-amber-500/20 hover:shadow-lg hover:shadow-amber-500/5",
+          ? "bg-white/[0.03] border-white/[0.08] hover:border-white/[0.12] hover:shadow-lg hover:shadow-violet-500/5"
+          : "bg-card/80 border-violet-500/10 hover:border-violet-500/20 hover:shadow-lg hover:shadow-violet-500/5",
         className
       )}
       {...props}
