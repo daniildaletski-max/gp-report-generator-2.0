@@ -64,7 +64,7 @@ function FMRestrictedView() {
             Manage your team: {team?.teamName || "Loading..."}
           </p>
         </div>
-        <Badge className="bg-gradient-to-r from-purple-500/20 to-fuchsia-500/20 border border-purple-500/30 text-sm rounded-xl px-4 py-2">
+        <Badge className="bg-gradient-to-r from-cyan-500/20 to-teal-500/20 border border-cyan-500/30 text-sm rounded-xl px-4 py-2">
           <Users className="h-3 w-3 mr-1" />
           Floor Manager
         </Badge>
@@ -127,7 +127,7 @@ function FullAdminPanel() {
         </div>
         <div className="grid gap-4 md:grid-cols-5">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="stat-card-enhanced stat-card-purple p-5">
+            <div key={i} className="stat-card-enhanced stat-card-cyan p-5">
               <div className="flex items-center gap-3">
                 <div className="skeleton-enhanced h-10 w-10 rounded-xl" />
                 <div className="flex-1">
@@ -154,7 +154,7 @@ function FullAdminPanel() {
             <p className="page-subtitle">System administration and management</p>
           </div>
         </div>
-        <Badge className="bg-gradient-to-r from-purple-500/20 to-fuchsia-500/20 text-purple-300 border border-purple-500/30 rounded-xl px-4 py-2">
+        <Badge className="bg-gradient-to-r from-cyan-500/20 to-teal-500/20 text-cyan-300 border border-cyan-500/30 rounded-xl px-4 py-2">
           Administrator
         </Badge>
       </div>
@@ -258,13 +258,13 @@ function AdminOverviewTab() {
       title: "Total Users", 
       value: adminStats?.totalUsers || 0, 
       icon: Users, 
-      cardClass: "stat-card-purple"
+      cardClass: "stat-card-cyan"
     },
     { 
       title: "Teams", 
       value: adminStats?.totalTeams || 0, 
       icon: Building2, 
-      cardClass: "stat-card-fuchsia"
+      cardClass: "stat-card-teal"
     },
     { 
       title: "Game Presenters", 
@@ -316,11 +316,11 @@ function AdminOverviewTab() {
         </div>
         <div className="unified-card-body">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-purple-500/10 hover:border-purple-500/30 transition-all" onClick={() => toast.info("Navigate to Users tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-cyan-500/10 hover:border-cyan-500/30 transition-all" onClick={() => toast.info("Navigate to Users tab")}>
               <UserCog className="h-6 w-6" />
               <span>Manage Users</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-fuchsia-500/10 hover:border-fuchsia-500/30 transition-all" onClick={() => toast.info("Navigate to Teams tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-teal-500/10 hover:border-teal-500/30 transition-all" onClick={() => toast.info("Navigate to Teams tab")}>
               <Building2 className="h-6 w-6" />
               <span>Manage Teams</span>
             </Button>
@@ -2555,7 +2555,7 @@ function GPStatsTab({
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
         <div className="dashboard-header">
           <h2 className="dashboard-title">
-            <div className="stat-icon-container card-purple" style={{ width: '48px', height: '48px', borderRadius: '14px' }}>
+            <div className="stat-icon-container card-cyan" style={{ width: '48px', height: '48px', borderRadius: '14px' }}>
               <BarChart3 className="h-6 w-6 text-white" />
             </div>
             GP Performance Dashboard
@@ -2571,7 +2571,7 @@ function GPStatsTab({
               onValueChange={(v) => setSelectedTeamId(v === "all" ? null : Number(v))}
             >
               <SelectTrigger className="w-[160px] filter-select">
-                <Building2 className="h-4 w-4 mr-2 text-purple-400" />
+                <Building2 className="h-4 w-4 mr-2 text-cyan-400" />
                 <SelectValue placeholder="All teams" />
               </SelectTrigger>
               <SelectContent>
@@ -2586,7 +2586,7 @@ function GPStatsTab({
           )}
           <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
             <SelectTrigger className="w-[140px] filter-select">
-              <Calendar className="h-4 w-4 mr-2 text-purple-400" />
+              <Calendar className="h-4 w-4 mr-2 text-cyan-400" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2674,7 +2674,7 @@ function GPStatsTab({
               </div>
             </div>
             
-            <div className="premium-stat-card card-purple group">
+            <div className="premium-stat-card card-cyan group">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="stat-label">Total Games</p>
@@ -2693,7 +2693,7 @@ function GPStatsTab({
             {/* Attitude Distribution Chart */}
             <div className="chart-card">
               <div className="chart-card-header">
-                <div className="stat-icon-container card-purple" style={{ width: '40px', height: '40px', borderRadius: '12px' }}>
+                <div className="stat-icon-container card-cyan" style={{ width: '40px', height: '40px', borderRadius: '12px' }}>
                   <Target className="h-5 w-5 text-white" />
                 </div>
                 <div>
@@ -2813,7 +2813,7 @@ function GPStatsTab({
           {Object.keys(statsSummary.teamStats).length > 1 && (
             <div className="chart-card">
               <div className="chart-card-header">
-                <div className="stat-icon-container card-purple" style={{ width: '40px', height: '40px', borderRadius: '12px' }}>
+                <div className="stat-icon-container card-cyan" style={{ width: '40px', height: '40px', borderRadius: '12px' }}>
                   <Building2 className="h-5 w-5 text-white" />
                 </div>
                 <div>
@@ -2866,7 +2866,7 @@ function GPStatsTab({
             </div>
           </div>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-cyan-400" />
             <input
               type="text"
               placeholder="Search by name..."

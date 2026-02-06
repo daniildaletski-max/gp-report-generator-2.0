@@ -586,9 +586,9 @@ export default function UploadPage() {
                     </div>
                   </div>
                 </div>
-                <div className="stat-card-enhanced purple">
+                <div className="stat-card-enhanced cyan">
                   <div className="flex items-center gap-3">
-                    <div className="icon-box icon-box-purple">
+                    <div className="icon-box icon-box-cyan">
                       <User className="h-5 w-5" />
                     </div>
                     <div>
@@ -634,7 +634,7 @@ export default function UploadPage() {
           <div className="lg:col-span-2 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
             <div className="unified-card overflow-hidden">
               <div className="unified-card-header">
-                <div className="icon-box icon-box-purple">
+                <div className="icon-box icon-box-cyan">
                   <CloudUpload className="h-5 w-5" />
                 </div>
                 <div className="section-header">
@@ -686,7 +686,7 @@ export default function UploadPage() {
                   />
                   <div className="flex flex-col items-center gap-4 relative z-10">
                     <div className="upload-icon-box">
-                      <UploadIcon className={`h-10 w-10 transition-colors ${isDragging ? "text-purple-400" : "text-purple-400/70"}`} />
+                      <UploadIcon className={`h-10 w-10 transition-colors ${isDragging ? "text-cyan-400" : "text-cyan-400/70"}`} />
                     </div>
                     <div>
                       <p className="font-semibold text-xl text-white/90">
@@ -744,7 +744,7 @@ export default function UploadPage() {
                             onClick={processFiles}
                             disabled={isProcessing}
                             size="sm"
-                            className="rounded-lg bg-gradient-to-r from-primary to-purple-600"
+                            className="rounded-lg bg-gradient-to-r from-primary to-cyan-600"
                           >
                             {isProcessing ? (
                               <>
@@ -852,7 +852,7 @@ export default function UploadPage() {
                                 </Badge>
                               )}
                               {file.matchInfo?.isNewGP && (
-                                <Badge className="text-xs rounded-lg bg-purple-500/20 text-purple-400">
+                                <Badge className="text-xs rounded-lg bg-cyan-500/20 text-cyan-400">
                                   New GP
                                 </Badge>
                               )}
@@ -1078,7 +1078,7 @@ export default function UploadPage() {
                 ) : (
                   <div className="empty-state py-12">
                     <div className="empty-state-icon">
-                      <Sparkles className="h-8 w-8 text-purple-400/50" />
+                      <Sparkles className="h-8 w-8 text-cyan-400/50" />
                     </div>
                     <p className="empty-state-title">No data yet</p>
                     <p className="empty-state-description">

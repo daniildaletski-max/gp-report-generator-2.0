@@ -313,7 +313,7 @@ export default function ReportsPage() {
         {/* Stats Cards Skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="stat-card-enhanced stat-card-purple p-5">
+            <div key={i} className="stat-card-enhanced stat-card-cyan p-5">
               <div className="flex items-center gap-3">
                 <div className="skeleton-enhanced h-10 w-10 rounded-xl" />
                 <div className="flex-1">
@@ -525,7 +525,7 @@ export default function ReportsPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-stagger">
-        <div className="stat-card-enhanced stat-card-purple">
+        <div className="stat-card-enhanced stat-card-cyan">
           <div className="icon-box">
             <FileSpreadsheet className="h-5 w-5" />
           </div>
@@ -534,7 +534,7 @@ export default function ReportsPage() {
             <p className="text-2xl font-bold">{stats.total}</p>
           </div>
         </div>
-        <div className="stat-card-enhanced stat-card-fuchsia">
+        <div className="stat-card-enhanced stat-card-teal">
           <div className="icon-box">
             <Calendar className="h-5 w-5" />
           </div>

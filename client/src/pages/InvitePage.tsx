@@ -52,7 +52,7 @@ export default function InvitePage() {
   // Loading state
   if (validationLoading || authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
             <div className="space-y-4">
@@ -104,7 +104,7 @@ export default function InvitePage() {
   // Accepting invitation (user is logged in)
   if (user && (isAccepting || acceptMutation.isPending)) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-8 pb-8">
             <div className="text-center space-y-4">
@@ -147,10 +147,10 @@ export default function InvitePage() {
   const invitation = validation.invitation!;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
       <Card className="w-full max-w-md overflow-hidden">
         {/* Header with gradient */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 text-white">
+        <div className="bg-gradient-to-r from-blue-600 to-cyan-600 p-6 text-white">
           <div className="flex items-center gap-3 mb-4">
             <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
               <Sparkles className="h-6 w-6" />
@@ -216,7 +216,7 @@ export default function InvitePage() {
 
           {/* Login Button */}
           <Button 
-            className="w-full h-12 text-base gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+            className="w-full h-12 text-base gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
             onClick={() => {
               // Store invitation token in sessionStorage for after login
               sessionStorage.setItem("pendingInviteToken", token || "");

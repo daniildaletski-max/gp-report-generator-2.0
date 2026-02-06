@@ -3131,3 +3131,80 @@ export async function getFmTeamsByUser(userId: number): Promise<FmTeam[]> {
   if (!db) return [];
   return await db.select().from(fmTeams).where(eq(fmTeams.userId, userId)).orderBy(fmTeams.teamName);
 }
+
+
+// Get monthly trend data for the past N months (comparative analytics)
+export async function getMonthlyTrendData(months: number = 6, teamId?: number, userId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Build an array of the last N months
+  const now = new Date();
+  const monthList: { month: number; year: number }[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthList.push({ month: d.getMonth() + 1, year: d.getFullYear() });
+  }
+
+  // Get team IDs for user-based filtering
+  let teamIds: number[] | undefined;
+  if (userId && !teamId) {
+    const userTeams = await db.select({ id: fmTeams.id }).from(fmTeams).where(eq(fmTeams.userId, userId));
+    teamIds = userTeams.map(t => t.id);
+    if (teamIds.length === 0) return monthList.map(m => ({
+      month: m.month,
+      year: m.year,
+      label: `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m.month - 1]} ${m.year}`,
+      totalEvaluations: 0,
+      uniqueGPs: 0,
+      avgTotalScore: 0,
+      avgAppearanceScore: 0,
+      avgPerformanceScore: 0,
+      topScore: 0,
+      lowScore: 0,
+    }));
+  }
+
+  const results = [];
+  for (const m of monthList) {
+    const conditions: any[] = [
+      sql`MONTH(${evaluations.evaluationDate}) = ${m.month}`,
+      sql`YEAR(${evaluations.evaluationDate}) = ${m.year}`,
+    ];
+    if (teamId) {
+      conditions.push(eq(gamePresenters.teamId, teamId));
+    } else if (teamIds && teamIds.length > 0) {
+      conditions.push(inArray(gamePresenters.teamId, teamIds));
+    }
+
+    const statsRaw = await db.select({
+      totalEvaluations: sql<number>`COUNT(*)`,
+      uniqueGPs: sql<number>`COUNT(DISTINCT ${evaluations.gamePresenterId})`,
+      avgTotalScore: sql<number>`AVG(${evaluations.totalScore})`,
+      avgAppearance: sql<number>`AVG(${evaluations.hairScore} + ${evaluations.makeupScore} + ${evaluations.outfitScore} + ${evaluations.postureScore})`,
+      avgPerformance: sql<number>`AVG(${evaluations.dealingStyleScore} + ${evaluations.gamePerformanceScore})`,
+      topScore: sql<number>`MAX(${evaluations.totalScore})`,
+      lowScore: sql<number>`MIN(${evaluations.totalScore})`,
+    })
+    .from(evaluations)
+    .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+    .where(and(...conditions));
+
+    const row = statsRaw[0];
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    results.push({
+      month: m.month,
+      year: m.year,
+      label: `${monthNames[m.month - 1]} ${m.year}`,
+      totalEvaluations: Number(row?.totalEvaluations || 0),
+      uniqueGPs: Number(row?.uniqueGPs || 0),
+      avgTotalScore: row?.avgTotalScore ? Number(Number(row.avgTotalScore).toFixed(1)) : 0,
+      avgAppearanceScore: row?.avgAppearance ? Number(Number(row.avgAppearance).toFixed(1)) : 0,
+      avgPerformanceScore: row?.avgPerformance ? Number(Number(row.avgPerformance).toFixed(1)) : 0,
+      topScore: Number(row?.topScore || 0),
+      lowScore: Number(row?.lowScore || 0),
+    });
+  }
+
+  return results;
+}

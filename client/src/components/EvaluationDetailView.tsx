@@ -328,13 +328,13 @@ export default function EvaluationDetailView({
                           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{appearanceScore}/12</p>
                         </CardContent>
                       </Card>
-                      <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20 border-purple-200 dark:border-purple-800">
+                      <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100/50 dark:from-cyan-950/30 dark:to-cyan-900/20 border-cyan-200 dark:border-cyan-800">
                         <CardContent className="p-3">
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-muted-foreground">Performance</span>
-                            <Trophy className="h-4 w-4 text-purple-500" />
+                            <Trophy className="h-4 w-4 text-cyan-500" />
                           </div>
-                          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{performanceScore}/10</p>
+                          <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{performanceScore}/10</p>
                         </CardContent>
                       </Card>
                     </div>
@@ -371,7 +371,7 @@ export default function EvaluationDetailView({
                           maxScore={3}
                           comment={evaluation.outfitComment}
                           averageScore={averageScores?.outfit}
-                          color="violet"
+                          color="sky"
                         />
                         <ScoreCategory 
                           icon={PersonStanding} 
@@ -440,8 +440,8 @@ export default function EvaluationDetailView({
                       <p className="text-sm text-muted-foreground mt-1">Appearance</p>
                       <p className="text-xs text-muted-foreground">out of 12</p>
                     </div>
-                    <div className="text-center p-4 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/20">
-                      <p className="text-4xl font-bold text-purple-600">{performanceScore}</p>
+                    <div className="text-center p-4 rounded-lg bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950/30 dark:to-cyan-900/20">
+                      <p className="text-4xl font-bold text-cyan-600">{performanceScore}</p>
                       <p className="text-sm text-muted-foreground mt-1">Performance</p>
                       <p className="text-xs text-muted-foreground">out of 10</p>
                     </div>
@@ -461,7 +461,7 @@ export default function EvaluationDetailView({
                   <CardContent className="space-y-3">
                     <ScoreCategory icon={Scissors} label="Hair" score={evaluation.hairScore} maxScore={3} comment={evaluation.hairComment} color="pink" />
                     <ScoreCategory icon={Palette} label="Makeup" score={evaluation.makeupScore} maxScore={3} comment={evaluation.makeupComment} color="rose" />
-                    <ScoreCategory icon={Shirt} label="Outfit" score={evaluation.outfitScore} maxScore={3} comment={evaluation.outfitComment} color="violet" />
+                    <ScoreCategory icon={Shirt} label="Outfit" score={evaluation.outfitScore} maxScore={3} comment={evaluation.outfitComment} color="sky" />
                     <ScoreCategory icon={PersonStanding} label="Posture" score={evaluation.postureScore} maxScore={3} comment={evaluation.postureComment} color="indigo" />
                   </CardContent>
                 </Card>

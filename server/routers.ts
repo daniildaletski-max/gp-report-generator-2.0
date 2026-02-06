@@ -1098,6 +1098,19 @@ export const appRouter = router({
         return await db.getDashboardStats(input?.month, input?.year, undefined);
       }),
 
+    // Monthly trend data for comparative analytics
+    monthlyTrend: protectedProcedure
+      .input(z.object({
+        months: z.number().min(2).max(12).optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        const months = input?.months || 6;
+        if (ctx.user.role !== 'admin') {
+          return await db.getMonthlyTrendData(months, undefined, ctx.user.id);
+        }
+        return await db.getMonthlyTrendData(months);
+      }),
+
     // Admin dashboard with system-wide stats
     adminStats: adminProcedure.query(async () => {
       return await db.getAdminDashboardStats();
@@ -2583,6 +2596,15 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       }))
       .mutation(async ({ ctx, input }) => {
         console.log(`\n\n========== [exportToGoogleSheets] START ==========`);
+        
+        // Check if Google Drive config exists
+        const fsCheck = await import('fs/promises');
+        try {
+          await fsCheck.access('/home/ubuntu/.gdrive-rclone.ini');
+        } catch {
+          throw new Error("Google Drive is not configured. Please set up rclone with Google Drive credentials first. Contact your administrator.");
+        }
+        
         const reportWithTeam = await db.getReportWithTeam(input.reportId);
         if (!reportWithTeam) throw new Error("Report not found");
         

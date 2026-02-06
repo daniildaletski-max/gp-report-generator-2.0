@@ -9,7 +9,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { GlassCard } from "@/components/ui/glass-card";
 import { useLocation } from "wouter";
 import { useState, useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from "recharts";
 import { useIsMobile } from "@/hooks/useMobile";
 
 const MONTHS = [
@@ -48,7 +48,7 @@ const CHART_TOOLTIP_STYLE = {
 };
 
 // Purple-themed pie chart colors
-const PIE_COLORS = ['#a855f7', '#c084fc', '#e879f9', '#6b7280'];
+const PIE_COLORS = ['#06b6d4', '#22d3ee', '#2dd4bf', '#6b7280'];
 
 export default function Dashboard() {
   const currentDate = new Date();
@@ -141,7 +141,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-2 sm:gap-3">
           <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(Number(v))}>
             <SelectTrigger className="w-[120px] sm:w-40 bg-white/[0.03] border-white/[0.08] hover:border-white/[0.15] rounded-xl">
-              <Calendar className="h-4 w-4 mr-1.5 sm:mr-2 text-purple-400/70" />
+              <Calendar className="h-4 w-4 mr-1.5 sm:mr-2 text-cyan-400/70" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -170,8 +170,8 @@ export default function Dashboard() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-violet-500/10 border border-purple-500/20 flex items-center justify-center">
-                <Target className="h-4.5 w-4.5 text-purple-400" />
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-sky-500/10 border border-cyan-500/20 flex items-center justify-center">
+                <Target className="h-4.5 w-4.5 text-cyan-400" />
               </div>
               <span className="font-medium text-white/70 text-sm sm:text-base">Evaluation Progress</span>
             </div>
@@ -179,7 +179,7 @@ export default function Dashboard() {
               <div className="w-32 sm:w-48">
                 <Progress value={evaluationProgress} className="h-2 bg-white/[0.06]" />
               </div>
-              <span className="font-bold text-purple-300 text-sm sm:text-base">{evaluationProgress}%</span>
+              <span className="font-bold text-cyan-300 text-sm sm:text-base">{evaluationProgress}%</span>
               <span className="text-white/35 text-xs sm:text-sm hidden sm:inline">({evaluatedGPs}/{totalGPs} GPs)</span>
             </div>
             {pendingGPs > 0 && (
@@ -191,7 +191,7 @@ export default function Dashboard() {
               <Upload className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Upload</span>
             </Button>
-            <Button size="sm" onClick={() => setLocation('/reports')} className="bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white rounded-xl shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 transition-all duration-300">
+            <Button size="sm" onClick={() => setLocation('/reports')} className="bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-600 hover:to-violet-700 text-white rounded-xl shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 transition-all duration-300">
               <span className="hidden sm:inline">Generate Report</span>
               <span className="sm:hidden">Report</span>
               <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
@@ -202,8 +202,8 @@ export default function Dashboard() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard icon={Users} value={stats?.totalGPs || 0} label="Game Presenters" color="purple" />
-        <StatCard icon={FileCheck} value={stats?.totalEvaluations || 0} label="Total Evaluations" color="fuchsia" />
+        <StatCard icon={Users} value={stats?.totalGPs || 0} label="Game Presenters" color="cyan" />
+        <StatCard icon={FileCheck} value={stats?.totalEvaluations || 0} label="Total Evaluations" color="teal" />
         <StatCard icon={TrendingUp} value={avgTeamScore > 0 ? avgTeamScore.toFixed(1) : '-'} suffix="/22" label="Team Average" color="amber" />
         <StatCard icon={FileSpreadsheet} value={stats?.totalReports || 0} label="Reports Generated" color="green" />
       </div>
@@ -241,7 +241,7 @@ export default function Dashboard() {
                     <p className="font-medium text-white/85 truncate text-xs sm:text-sm">{gp.fullName}</p>
                     <p className="text-[10px] sm:text-xs text-white/25">{gp.evalCount} eval{gp.evalCount !== 1 ? 's' : ''}</p>
                   </div>
-                  <span className="text-xs font-semibold text-purple-300 bg-purple-500/10 border border-purple-500/15 px-2 py-0.5 rounded-md">
+                  <span className="text-xs font-semibold text-cyan-300 bg-cyan-500/10 border border-cyan-500/15 px-2 py-0.5 rounded-md">
                     {gp.totalScore.toFixed(1)}
                   </span>
                 </div>
@@ -259,8 +259,8 @@ export default function Dashboard() {
         <Card variant="glass" className="lg:col-span-2">
           <CardHeader className="pb-3 sm:pb-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/10 border border-violet-500/20 flex items-center justify-center">
-                <PieChart className="h-4.5 w-4.5 text-violet-400" />
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-sky-500/20 to-cyan-500/10 border border-sky-500/20 flex items-center justify-center">
+                <PieChart className="h-4.5 w-4.5 text-sky-400" />
               </div>
               <div>
                 <CardTitle className="text-sm sm:text-base">Performance Distribution</CardTitle>
@@ -343,8 +343,8 @@ export default function Dashboard() {
       <Card variant="glass">
         <CardHeader className="pb-3 sm:pb-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-violet-500/10 border border-purple-500/20 flex items-center justify-center">
-              <BarChart3 className="h-4.5 w-4.5 text-purple-400" />
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-sky-500/10 border border-cyan-500/20 flex items-center justify-center">
+              <BarChart3 className="h-4.5 w-4.5 text-cyan-400" />
             </div>
             <div>
               <CardTitle className="text-sm sm:text-base">Monthly Performance Overview</CardTitle>
@@ -386,9 +386,9 @@ export default function Dashboard() {
                       verticalAlign="bottom" 
                       wrapperStyle={{ paddingTop: isMobile ? 10 : 20, fontSize: isMobile ? '11px' : '12px' }} 
                     />
-                    <Bar dataKey="totalScore" name="Total Score" fill="#a855f7" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="appearance" name="Appearance" fill="#c084fc" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="performance" name="Performance" fill="#e879f9" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="totalScore" name="Total Score" fill="#06b6d4" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="appearance" name="Appearance" fill="#22d3ee" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="performance" name="Performance" fill="#2dd4bf" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -397,6 +397,216 @@ export default function Dashboard() {
             <div className="flex flex-col items-center justify-center h-48 sm:h-64">
               <BarChart3 className="h-10 w-10 text-white/10 mb-3" />
               <p className="text-white/25 text-sm">No performance data available for this period</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Monthly Comparative Analytics */}
+      <MonthlyTrendSection isMobile={isMobile} />
+    </div>
+  );
+}
+
+// ======================================
+// Monthly Trend Analytics Component
+// ======================================
+function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
+  const { data: trendData, isLoading } = trpc.dashboard.monthlyTrend.useQuery({ months: 6 });
+
+  if (isLoading) {
+    return (
+      <Card variant="glass">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-white/[0.05] animate-pulse" />
+            <div className="space-y-1">
+              <div className="h-4 w-48 rounded bg-white/[0.05] animate-pulse" />
+              <div className="h-3 w-32 rounded bg-white/[0.03] animate-pulse" />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="h-64 rounded-xl bg-white/[0.03] animate-pulse" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!trendData || trendData.length === 0) {
+    return (
+      <Card variant="glass">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/20 to-teal-500/20 border border-cyan-500/20">
+              <TrendingUp className="h-4.5 w-4.5 text-cyan-400" />
+            </div>
+            <div>
+              <CardTitle className="text-sm sm:text-base">Monthly Trends</CardTitle>
+              <CardDescription className="text-xs">Comparative analytics across months</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center h-48">
+            <TrendingUp className="h-10 w-10 text-white/10 mb-3" />
+            <p className="text-white/25 text-sm">Not enough data for trend analysis</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const hasData = trendData.some(d => d.totalEvaluations > 0);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Score Trend Line Chart */}
+      <Card variant="glass">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/20 to-teal-500/20 border border-cyan-500/20">
+              <TrendingUp className="h-4.5 w-4.5 text-cyan-400" />
+            </div>
+            <div>
+              <CardTitle className="text-sm sm:text-base">Score Trends</CardTitle>
+              <CardDescription className="text-xs">Average scores over 6 months</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {hasData ? (
+            <ResponsiveContainer width="100%" height={isMobile ? 240 : 280}>
+              <AreaChart data={trendData} margin={{ top: 10, right: 10, left: isMobile ? -10 : 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradAppearance" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradPerformance" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.04)" />
+                <XAxis 
+                  dataKey="label" 
+                  tick={{ fontSize: isMobile ? 9 : 11, fill: 'rgba(255,255,255,0.35)' }}
+                  tickFormatter={(v) => v.split(' ')[0]}
+                />
+                <YAxis 
+                  domain={[0, 24]} 
+                  ticks={[0, 6, 12, 18, 24]}
+                  tick={{ fontSize: isMobile ? 9 : 11, fill: 'rgba(255,255,255,0.35)' }}
+                  width={isMobile ? 28 : 35}
+                />
+                <Tooltip 
+                  contentStyle={{ ...CHART_TOOLTIP_STYLE, fontSize: isMobile ? '11px' : '13px' }}
+                  formatter={(value: number, name: string) => [value.toFixed(1), name]}
+                />
+                <Area type="monotone" dataKey="avgTotalScore" name="Total" stroke="#06b6d4" fill="url(#gradTotal)" strokeWidth={2.5} dot={{ r: 4, fill: '#06b6d4', strokeWidth: 0 }} />
+                <Area type="monotone" dataKey="avgAppearanceScore" name="Appearance" stroke="#22d3ee" fill="url(#gradAppearance)" strokeWidth={1.5} dot={{ r: 3, fill: '#22d3ee', strokeWidth: 0 }} />
+                <Area type="monotone" dataKey="avgPerformanceScore" name="Performance" stroke="#2dd4bf" fill="url(#gradPerformance)" strokeWidth={1.5} dot={{ r: 3, fill: '#2dd4bf', strokeWidth: 0 }} />
+                <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px', paddingTop: 8 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-48">
+              <TrendingUp className="h-10 w-10 text-white/10 mb-3" />
+              <p className="text-white/25 text-sm">No trend data available</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Evaluation Volume Bar Chart */}
+      <Card variant="glass">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500/20 to-emerald-500/20 border border-teal-500/20">
+              <BarChart3 className="h-4.5 w-4.5 text-teal-400" />
+            </div>
+            <div>
+              <CardTitle className="text-sm sm:text-base">Evaluation Volume</CardTitle>
+              <CardDescription className="text-xs">Evaluations and GPs per month</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {hasData ? (
+            <ResponsiveContainer width="100%" height={isMobile ? 240 : 280}>
+              <BarChart data={trendData} margin={{ top: 10, right: 10, left: isMobile ? -10 : 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.04)" />
+                <XAxis 
+                  dataKey="label" 
+                  tick={{ fontSize: isMobile ? 9 : 11, fill: 'rgba(255,255,255,0.35)' }}
+                  tickFormatter={(v) => v.split(' ')[0]}
+                />
+                <YAxis 
+                  tick={{ fontSize: isMobile ? 9 : 11, fill: 'rgba(255,255,255,0.35)' }}
+                  width={isMobile ? 28 : 35}
+                />
+                <Tooltip 
+                  contentStyle={{ ...CHART_TOOLTIP_STYLE, fontSize: isMobile ? '11px' : '13px' }}
+                />
+                <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px', paddingTop: 8 }} />
+                <Bar dataKey="totalEvaluations" name="Evaluations" fill="#06b6d4" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="uniqueGPs" name="GPs Evaluated" fill="#2dd4bf" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-48">
+              <BarChart3 className="h-10 w-10 text-white/10 mb-3" />
+              <p className="text-white/25 text-sm">No volume data available</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Score Range (High/Low) */}
+      <Card variant="glass" className="lg:col-span-2">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/20">
+              <Target className="h-4.5 w-4.5 text-amber-400" />
+            </div>
+            <div>
+              <CardTitle className="text-sm sm:text-base">Monthly Summary</CardTitle>
+              <CardDescription className="text-xs">Key metrics across the last 6 months</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {hasData ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {trendData.map((m, i) => (
+                <div key={i} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-center space-y-2 transition-all hover:border-white/[0.1] hover:bg-white/[0.04]">
+                  <p className="text-xs text-white/40 font-medium">{m.label}</p>
+                  <p className="text-lg font-bold text-white">{m.avgTotalScore > 0 ? m.avgTotalScore.toFixed(1) : '—'}</p>
+                  <p className="text-[10px] text-white/30">avg score</p>
+                  <div className="flex items-center justify-center gap-2 text-[10px]">
+                    <span className="text-emerald-400">{m.totalEvaluations} evals</span>
+                    <span className="text-white/20">·</span>
+                    <span className="text-cyan-400">{m.uniqueGPs} GPs</span>
+                  </div>
+                  {m.topScore > 0 && (
+                    <div className="flex items-center justify-center gap-1.5 text-[10px]">
+                      <span className="text-emerald-400">↑{m.topScore}</span>
+                      <span className="text-white/20">/</span>
+                      <span className="text-red-400">↓{m.lowScore}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-32">
+              <Target className="h-8 w-8 text-white/10 mb-2" />
+              <p className="text-white/25 text-sm">No summary data available</p>
             </div>
           )}
         </CardContent>

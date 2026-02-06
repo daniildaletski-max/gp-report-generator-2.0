@@ -6,7 +6,7 @@ interface StatCardProps {
   icon: LucideIcon;
   value: number | string;
   label: string;
-  color?: "purple" | "green" | "amber" | "fuchsia" | "red" | "cyan" | "blue";
+  color?: "cyan" | "green" | "amber" | "teal" | "red" | "cyan" | "blue";
   suffix?: string;
   className?: string;
 }
@@ -18,12 +18,12 @@ const colorMap: Record<string, {
   valueText: string;
   glow: string;
 }> = {
-  purple: {
-    card: "border-violet-500/15 hover:border-violet-500/25",
-    iconBg: "bg-gradient-to-br from-violet-500/20 to-purple-500/10 border border-violet-500/20",
-    iconText: "text-violet-400",
-    valueText: "text-violet-300",
-    glow: "hover:shadow-violet-500/10",
+  cyan: {
+    card: "border-sky-500/15 hover:border-sky-500/25",
+    iconBg: "bg-gradient-to-br from-sky-500/20 to-cyan-500/10 border border-sky-500/20",
+    iconText: "text-sky-400",
+    valueText: "text-sky-300",
+    glow: "hover:shadow-sky-500/10",
   },
   green: {
     card: "border-emerald-500/15 hover:border-emerald-500/25",
@@ -39,12 +39,12 @@ const colorMap: Record<string, {
     valueText: "text-amber-300",
     glow: "hover:shadow-amber-500/10",
   },
-  fuchsia: {
-    card: "border-fuchsia-500/15 hover:border-fuchsia-500/25",
-    iconBg: "bg-gradient-to-br from-fuchsia-500/20 to-pink-500/10 border border-fuchsia-500/20",
-    iconText: "text-fuchsia-400",
-    valueText: "text-fuchsia-300",
-    glow: "hover:shadow-fuchsia-500/10",
+  teal: {
+    card: "border-teal-500/15 hover:border-teal-500/25",
+    iconBg: "bg-gradient-to-br from-teal-500/20 to-pink-500/10 border border-teal-500/20",
+    iconText: "text-teal-400",
+    valueText: "text-teal-300",
+    glow: "hover:shadow-teal-500/10",
   },
   red: {
     card: "border-red-500/15 hover:border-red-500/25",
@@ -69,8 +69,8 @@ const colorMap: Record<string, {
   },
 };
 
-export function StatCard({ icon: Icon, value, label, color = "purple", suffix, className }: StatCardProps) {
-  const colors = colorMap[color] || colorMap.purple;
+export function StatCard({ icon: Icon, value, label, color = "cyan", suffix, className }: StatCardProps) {
+  const colors = colorMap[color] || colorMap.cyan;
 
   return (
     <div

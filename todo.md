@@ -2244,3 +2244,38 @@
 - [x] Evaluations - table, filters, CRUD verified
 - [x] Reports - generation, export verified
 - [x] GP Portal - public access, stats display verified
+
+
+## Complete Design Overhaul (v70)
+
+### New Color Palette & Typography
+- [x] Design new color palette - deep ocean blue (#060a12) + electric cyan/teal accents
+- [x] Update CSS variables in index.css with new palette (all purple/fuchsia replaced)
+- [x] Update all hardcoded color references across components (214+ references updated)
+- [x] Choose and apply new typography (Inter from Google Fonts)
+- [x] Update glassmorphism effects with new color scheme
+
+### Component Redesign
+- [x] Redesign Home page with new palette
+- [x] Redesign DashboardLayout sidebar with new colors
+- [x] Redesign Dashboard page cards and charts
+- [x] Redesign Evaluations page
+- [x] Redesign Upload page
+- [x] Redesign Reports page
+- [x] Redesign Admin page
+- [x] Update all buttons, badges, and interactive elements
+
+## Monthly Comparative Analytics (v70)
+
+- [x] Add backend API for multi-month performance data (getMonthlyTrendData in db.ts + dashboard.monthlyTrend procedure)
+- [x] Add trend charts to Dashboard (AreaChart for score trends, BarChart for evaluation volume)
+- [x] Add month-over-month comparison metrics (Monthly Summary card grid with 6-month overview)
+- [x] Show improvement/decline indicators (top/low scores per month)
+
+## Google Sheets Export (v70)
+
+- [x] Backend endpoint already exists (exportToGoogleSheets procedure with rclone + Python chart generation)
+- [x] Google Sheets formatted report with all data (Excel with charts, auto-converted by Google Drive)
+- [x] Export button in Reports page UI (cloud icon button per report row)
+- [x] Charts included in exported spreadsheet (Python openpyxl chart generation)
+- [x] Added rclone config check with clear error message when Google Drive not configured

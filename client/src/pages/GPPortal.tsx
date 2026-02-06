@@ -15,15 +15,15 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { useState, useEffect, useMemo } from "react";
 
-// Animated background component with purple glass morphism theme
+// Animated background component with ocean glass morphism theme
 function AnimatedBackground() {
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none">
-      {/* Gradient orbs - purple/violet theme */}
-      <div className="absolute top-0 -left-40 w-80 h-80 bg-purple-500/20 rounded-full blur-[100px] animate-pulse" />
-      <div className="absolute top-1/3 -right-40 w-96 h-96 bg-violet-500/15 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
-      <div className="absolute bottom-0 left-1/3 w-72 h-72 bg-fuchsia-500/15 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
-      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-purple-400/10 rounded-full blur-[80px] animate-pulse" style={{ animationDelay: '0.5s' }} />
+      {/* Gradient orbs - ocean/cyan theme */}
+      <div className="absolute top-0 -left-40 w-80 h-80 bg-cyan-500/20 rounded-full blur-[100px] animate-pulse" />
+      <div className="absolute top-1/3 -right-40 w-96 h-96 bg-sky-500/15 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
+      <div className="absolute bottom-0 left-1/3 w-72 h-72 bg-teal-500/15 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
+      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-cyan-400/10 rounded-full blur-[80px] animate-pulse" style={{ animationDelay: '0.5s' }} />
       
       {/* Grid pattern overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]" />
@@ -207,7 +207,7 @@ export default function GPPortal() {
       { icon: Star, title: 'First Steps', description: 'Complete your first evaluation', unlocked: totalEvals >= 1, color: 'from-blue-500/30 to-cyan-500/30' },
       { icon: Flame, title: 'On Fire', description: 'Complete 5 evaluations', unlocked: totalEvals >= 5, color: 'from-orange-500/30 to-red-500/30' },
       { icon: Crown, title: 'Excellence', description: 'Average score above 20', unlocked: avgScore >= 20, color: 'from-yellow-500/30 to-amber-500/30' },
-      { icon: Gem, title: 'Perfect Score', description: 'Get a perfect 22/22', unlocked: perfectScores > 0, color: 'from-purple-500/30 to-pink-500/30' },
+      { icon: Gem, title: 'Perfect Score', description: 'Get a perfect 22/22', unlocked: perfectScores > 0, color: 'from-cyan-500/30 to-pink-500/30' },
       { icon: Shield, title: 'Flawless', description: 'Zero mistakes this month', unlocked: mistakes === 0, color: 'from-green-500/30 to-emerald-500/30' },
       { icon: Heart, title: 'Team Player', description: 'Positive attitude score', unlocked: attitude > 0, color: 'from-pink-500/30 to-rose-500/30' },
     ];
@@ -297,7 +297,7 @@ export default function GPPortal() {
   };
 
   return (
-    <div className="min-h-screen relative bg-gradient-to-br from-[#0f0f1a] via-[#1a1a2e] to-[#16162a]">
+    <div className="min-h-screen relative bg-gradient-to-br from-[#060a12] via-[#0c1a2e] to-[#081628]">
       <AnimatedBackground />
       
       {/* Header */}
@@ -374,7 +374,7 @@ export default function GPPortal() {
               maxScore={10} 
               label="Game Performance" 
               icon={Gamepad2}
-              gradient="from-violet-600/80 to-purple-700/80"
+              gradient="from-sky-600/80 to-cyan-700/80"
             />
           </div>
         </section>
@@ -408,7 +408,7 @@ export default function GPPortal() {
               icon={Gamepad2} 
               value={(data.monthlyStats?.current?.totalGames ?? 0).toLocaleString()} 
               label="Total Games" 
-              color="from-purple-600/40 to-purple-800/40"
+              color="from-cyan-600/40 to-cyan-800/40"
             />
           </div>
         </section>
@@ -680,7 +680,7 @@ export default function GPPortal() {
                               <Sparkles className="h-3 w-3 mr-1" />
                               {evaluation.appearanceScore}/12
                             </Badge>
-                            <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
+                            <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
                               <Gamepad2 className="h-3 w-3 mr-1" />
                               {evaluation.gamePerformanceTotalScore}/10
                             </Badge>
@@ -701,7 +701,7 @@ export default function GPPortal() {
                               <Sparkles className="h-3 w-3 mr-1" />
                               Appearance: {evaluation.appearanceScore}/12
                             </Badge>
-                            <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
+                            <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
                               <Gamepad2 className="h-3 w-3 mr-1" />
                               Game: {evaluation.gamePerformanceTotalScore}/10
                             </Badge>
@@ -828,7 +828,7 @@ export default function GPPortal() {
                               </Badge>
                             )}
                             {error.gameType && (
-                              <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
+                              <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30">
                                 {error.gameType}
                               </Badge>
                             )}
