@@ -11,7 +11,10 @@ function Card({ className, variant = "default", ...props }: CardProps) {
     <div
       data-slot="card"
       className={cn(
-        "bg-card/80 text-card-foreground flex flex-col gap-6 rounded-2xl border border-purple-500/10 py-6 shadow-sm backdrop-blur-sm transition-all duration-300 hover:border-purple-500/20 hover:shadow-lg hover:shadow-purple-500/5",
+        "text-card-foreground flex flex-col gap-6 rounded-2xl border py-6 shadow-sm backdrop-blur-xl transition-all duration-300",
+        variant === "glass"
+          ? "bg-white/[0.03] border-white/[0.08] hover:border-white/[0.12] hover:shadow-lg hover:shadow-purple-500/5"
+          : "bg-card/80 border-purple-500/10 hover:border-purple-500/20 hover:shadow-lg hover:shadow-purple-500/5",
         className
       )}
       {...props}
@@ -79,7 +82,7 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-footer"
-      className={cn("flex items-center px-6 [.border-t]:pt-6 border-t border-purple-500/8", className)}
+      className={cn("flex items-center px-6 [.border-t]:pt-6 border-t border-white/[0.06]", className)}
       {...props}
     />
   );

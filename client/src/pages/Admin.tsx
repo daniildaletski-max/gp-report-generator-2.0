@@ -3153,7 +3153,7 @@ function GPDetailModal({
                       <div key={evaluation.id} className="p-4 rounded-lg border bg-card hover:shadow-sm transition-shadow">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm text-muted-foreground">
-                            {format(new Date(evaluation.date), 'MMM dd, yyyy')}
+                            {evaluation.date ? format(new Date(evaluation.date), 'MMM dd, yyyy') : 'N/A'}
                           </span>
                           <Badge variant="secondary">
                             Total: {evaluation.totalScore}/24

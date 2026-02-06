@@ -11,62 +11,61 @@ interface StatCardProps {
   className?: string;
 }
 
-const colorMap: Record<string, { bg: string; border: string; iconBg: string; iconBorder: string; text: string; iconText: string }> = {
+const colorMap: Record<string, { 
+  card: string; 
+  iconBg: string; 
+  iconText: string; 
+  valueText: string;
+  glow: string;
+}> = {
   purple: {
-    bg: "bg-violet-500/[0.08]",
-    border: "border-violet-500/[0.15]",
-    iconBg: "bg-violet-500/15",
-    iconBorder: "border-violet-500/20",
-    text: "text-violet-400",
+    card: "border-violet-500/15 hover:border-violet-500/25",
+    iconBg: "bg-gradient-to-br from-violet-500/20 to-purple-500/10 border border-violet-500/20",
     iconText: "text-violet-400",
+    valueText: "text-violet-300",
+    glow: "hover:shadow-violet-500/10",
   },
   green: {
-    bg: "bg-emerald-500/[0.08]",
-    border: "border-emerald-500/[0.15]",
-    iconBg: "bg-emerald-500/15",
-    iconBorder: "border-emerald-500/20",
-    text: "text-emerald-400",
+    card: "border-emerald-500/15 hover:border-emerald-500/25",
+    iconBg: "bg-gradient-to-br from-emerald-500/20 to-green-500/10 border border-emerald-500/20",
     iconText: "text-emerald-400",
+    valueText: "text-emerald-300",
+    glow: "hover:shadow-emerald-500/10",
   },
   amber: {
-    bg: "bg-amber-500/[0.08]",
-    border: "border-amber-500/[0.15]",
-    iconBg: "bg-amber-500/15",
-    iconBorder: "border-amber-500/20",
-    text: "text-amber-400",
+    card: "border-amber-500/15 hover:border-amber-500/25",
+    iconBg: "bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/20",
     iconText: "text-amber-400",
+    valueText: "text-amber-300",
+    glow: "hover:shadow-amber-500/10",
   },
   fuchsia: {
-    bg: "bg-fuchsia-500/[0.08]",
-    border: "border-fuchsia-500/[0.15]",
-    iconBg: "bg-fuchsia-500/15",
-    iconBorder: "border-fuchsia-500/20",
-    text: "text-fuchsia-400",
+    card: "border-fuchsia-500/15 hover:border-fuchsia-500/25",
+    iconBg: "bg-gradient-to-br from-fuchsia-500/20 to-pink-500/10 border border-fuchsia-500/20",
     iconText: "text-fuchsia-400",
+    valueText: "text-fuchsia-300",
+    glow: "hover:shadow-fuchsia-500/10",
   },
   red: {
-    bg: "bg-red-500/[0.08]",
-    border: "border-red-500/[0.15]",
-    iconBg: "bg-red-500/15",
-    iconBorder: "border-red-500/20",
-    text: "text-red-400",
+    card: "border-red-500/15 hover:border-red-500/25",
+    iconBg: "bg-gradient-to-br from-red-500/20 to-rose-500/10 border border-red-500/20",
     iconText: "text-red-400",
+    valueText: "text-red-300",
+    glow: "hover:shadow-red-500/10",
   },
   cyan: {
-    bg: "bg-cyan-500/[0.08]",
-    border: "border-cyan-500/[0.15]",
-    iconBg: "bg-cyan-500/15",
-    iconBorder: "border-cyan-500/20",
-    text: "text-cyan-400",
+    card: "border-cyan-500/15 hover:border-cyan-500/25",
+    iconBg: "bg-gradient-to-br from-cyan-500/20 to-teal-500/10 border border-cyan-500/20",
     iconText: "text-cyan-400",
+    valueText: "text-cyan-300",
+    glow: "hover:shadow-cyan-500/10",
   },
   blue: {
-    bg: "bg-blue-500/[0.08]",
-    border: "border-blue-500/[0.15]",
-    iconBg: "bg-blue-500/15",
-    iconBorder: "border-blue-500/20",
-    text: "text-blue-400",
+    card: "border-blue-500/15 hover:border-blue-500/25",
+    iconBg: "bg-gradient-to-br from-blue-500/20 to-indigo-500/10 border border-blue-500/20",
     iconText: "text-blue-400",
+    valueText: "text-blue-300",
+    glow: "hover:shadow-blue-500/10",
   },
 };
 
@@ -76,24 +75,27 @@ export function StatCard({ icon: Icon, value, label, color = "purple", suffix, c
   return (
     <div
       className={cn(
-        "rounded-2xl border backdrop-blur-xl p-4 sm:p-5 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg",
-        colors.bg,
-        colors.border,
+        "group relative rounded-2xl border bg-white/[0.03] backdrop-blur-xl p-4 sm:p-5 transition-all duration-300 hover:translate-y-[-2px] hover:shadow-lg overflow-hidden",
+        colors.card,
+        colors.glow,
         className
       )}
     >
-      <div className="flex items-center gap-3 mb-3">
-        <div className={cn("h-10 w-10 rounded-xl border flex items-center justify-center", colors.iconBg, colors.iconBorder)}>
+      {/* Subtle top accent line */}
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-current to-transparent opacity-20" />
+      
+      <div className="flex items-start justify-between mb-3">
+        <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-105", colors.iconBg)}>
           <Icon className={cn("h-5 w-5", colors.iconText)} />
         </div>
       </div>
       <div className="flex items-baseline gap-1">
-        <p className={cn("text-2xl sm:text-3xl font-bold", colors.text)}>
+        <p className={cn("text-2xl sm:text-3xl font-bold tracking-tight", colors.valueText)}>
           {value}
         </p>
-        {suffix && <span className="text-sm text-white/30">{suffix}</span>}
+        {suffix && <span className="text-sm text-white/30 font-medium">{suffix}</span>}
       </div>
-      <p className="text-xs sm:text-sm font-medium text-white/40 mt-1">{label}</p>
+      <p className="text-xs sm:text-sm font-medium text-white/40 mt-1.5">{label}</p>
     </div>
   );
 }

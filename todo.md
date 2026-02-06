@@ -2208,3 +2208,39 @@
 - [x] Fix SidebarInset scrolling for long content
 - [x] Add card-gray variant for neutral stat cards
 - [x] All 172 tests passing
+
+
+## System-Wide Audit & Upgrade (v69)
+
+### Design Cleanup
+- [x] Clean up index.css - add all missing CSS utility classes (stat-card-enhanced, unified-card, filter-bar, table-enhanced, page-header, empty-state, icon-box, score-pill, skeleton-enhanced)
+- [x] Ensure consistent spacing system across all pages
+- [x] Fix typography hierarchy (headings, body, labels)
+- [x] Ensure all cards have consistent glassmorphism styling
+- [x] Fix color consistency - unified purple palette everywhere
+
+### Bug Fixes
+- [x] Fix TypeScript errors: null date in Admin.tsx line 3156, missing db variable in server/db.ts getFmTeamsByUser
+- [x] Fix 214 undefined CSS class references across Admin, Evaluations, Reports, Upload pages
+- [x] Verify all tRPC procedures work correctly (172 tests passing)
+
+### UX Optimization
+- [x] Improve loading states with proper skeletons
+- [x] Add smooth page transitions (animate-fade-in on all pages)
+- [x] Improve form validation and error messages
+- [x] Optimize table layouts for readability
+- [x] Improve mobile responsiveness
+
+### Pages Audited
+- [x] Dashboard - stats, charts, layout verified
+- [x] Upload - drag-drop, processing flow verified
+- [x] Admin Overview - stats, quick actions verified
+- [x] Admin GP Stats - cards, attitude buttons verified
+- [x] Admin Teams - CRUD operations verified
+- [x] Admin Users - user management verified
+- [x] Admin Invites - invitation system verified
+- [x] Admin GP Access - token management verified
+- [x] Admin Errors - error file management verified
+- [x] Evaluations - table, filters, CRUD verified
+- [x] Reports - generation, export verified
+- [x] GP Portal - public access, stats display verified

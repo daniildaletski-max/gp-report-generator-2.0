@@ -3127,5 +3127,7 @@ export async function deleteAttitudeScreenshotByUser(id: number, userId: number)
 
 // Get FM teams by user ID - for user data isolation
 export async function getFmTeamsByUser(userId: number): Promise<FmTeam[]> {
+  const db = await getDb();
+  if (!db) return [];
   return await db.select().from(fmTeams).where(eq(fmTeams.userId, userId)).orderBy(fmTeams.teamName);
 }
