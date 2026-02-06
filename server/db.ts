@@ -3215,7 +3215,8 @@ export async function getMonthlyTrendData(months: number = 6, teamId?: number, u
 // ========================================
 
 export async function getTeamComparisonData(userId: number, teamIds?: number[]) {
-  const db = getDb();
+  const db = await getDb();
+  if (!db) return [];
   
   // Get all teams for this user
   const teams = await db.select().from(fmTeams).where(eq(fmTeams.userId, userId));

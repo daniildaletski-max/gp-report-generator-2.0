@@ -2323,3 +2323,7 @@
 - [x] Create comparison chart component on Dashboard (TeamComparisonSection with BarChart)
 - [x] Add team multi-selector for choosing teams to compare
 - [x] Show bar chart comparing GP performance across selected teams with avg scores, appearance, performance
+
+## Bug Fix (v73)
+
+- [x] Fix "db.select is not a function" error on /upload page - missing `await` on getDb() in getTeamComparisonData()
