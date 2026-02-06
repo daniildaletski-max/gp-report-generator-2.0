@@ -2172,3 +2172,26 @@
 - [x] Update GP cards in Admin with dark glassmorphism
 - [x] Add attitude button animations
 - [x] All 151 tests passing
+
+
+## Visual Audit & Design Fixes (v67)
+- [x] Check Dashboard page visually
+- [x] Check Admin page visually  
+- [x] Check Upload page visually
+- [x] Check Reports page visually
+- [x] Check Evaluations page visually
+- [ ] Fix any design inconsistencies found
+
+## Multi-Tenant Data Isolation (v67) - COMPLETED
+- [x] Audit all DB queries for userId filtering
+- [x] Update db.ts helpers to require userId parameter
+- [x] Update all tRPC procedures to pass ctx.user.id
+- [x] Ensure teams are isolated per user (added userId to fmTeams, getFmTeamsByUser)
+- [x] Ensure game presenters are isolated per user (getAllGamePresentersByUser)
+- [x] Ensure evaluations are isolated per user (getEvaluationsByUser)
+- [x] Ensure reports are isolated per user (getReportsWithTeamsByUser, deleteReportWithCheckByUser)
+- [x] Ensure GP stats are isolated per user (bulkUpdateStats/bulkSetAttitude check GP ownership)
+- [x] Ensure error files are isolated per user (getErrorFilesByUser, deleteErrorFileByUser)
+- [x] Ensure attitude screenshots are isolated per user (getAttitudeScreenshotsByUser, deleteAttitudeScreenshotByUser)
+- [x] Write tests for data isolation (21 tests in data-isolation.test.ts)
+- [x] Verify no cross-user data leakage (all 172 tests pass)

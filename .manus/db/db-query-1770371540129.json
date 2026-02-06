@@ -1,0 +1,24 @@
+{
+  "query": "SHOW CREATE TABLE fm_teams;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SHOW CREATE TABLE fm_teams;",
+  "rows": [
+    {
+      "Table": "fm_teams",
+      "Create Table": "CREATE TABLE `fm_teams` ("
+    }
+  ],
+  "messages": [
+    "  `id` int(11) NOT NULL AUTO_INCREMENT,",
+    "  `teamName` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,",
+    "  `floorManagerName` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,",
+    "  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+    "  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,",
+    "  `userId` int(11) DEFAULT NULL,",
+    "  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */,",
+    "  UNIQUE KEY `fm_teams_teamName_unique` (`teamName`)",
+    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=60001"
+  ],
+  "stdout": "Table\tCreate Table\nfm_teams\tCREATE TABLE `fm_teams` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `teamName` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `floorManagerName` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  `userId` int(11) DEFAULT NULL,\n  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */,\n  UNIQUE KEY `fm_teams_teamName_unique` (`teamName`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci AUTO_INCREMENT=60001\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}

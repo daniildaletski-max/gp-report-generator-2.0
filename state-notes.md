@@ -1,11 +1,16 @@
 # Current State Notes
 
-Project restored to checkpoint 32b123bb (purple theme).
-- No TypeScript errors
-- No LSP errors
-- Dev server running
-- Homepage looks good with purple theme
-- Need to check: Dashboard, Admin GP Stats, Upload, Evaluations, Reports, GP Portal pages
-- Previous issue: stat-card and glass-card components were missing but those were from an uncommitted change
-- The current checkpoint (32b123bb) appears to be working correctly
-- User wants to sync with GitHub - just need to save checkpoint
+## Current checkpoint: 6754fc5d
+- Purple theme with glassmorphism
+- stat-card and glass-card components added
+- Dev server running correctly
+- TSC crashes with memory error (not code issue)
+
+## Data Isolation Task
+- Need to verify routers.ts uses userId filtering for all non-admin procedures
+- db.ts already has userId-filtered variants for most functions
+- Need to check which routers still use non-filtered queries
+
+## Design Status
+- Homepage: Purple gradient, looks good
+- Need to check other pages visually

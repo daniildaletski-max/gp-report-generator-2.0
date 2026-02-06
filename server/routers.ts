@@ -418,17 +418,13 @@ export const appRouter = router({
 
   // FM Teams management
   fmTeam: router({
-    // List teams - for FM shows only their team, for admin shows all
+    // List teams - for non-admin shows only their own teams, for admin shows all
     list: protectedProcedure.query(async ({ ctx }) => {
       if (ctx.user.role === 'admin') {
         return await db.getAllFmTeams();
       }
-      // FM can only see their own team
-      if (ctx.user.teamId) {
-        const team = await db.getFmTeamById(ctx.user.teamId);
-        return team ? [team] : [];
-      }
-      return [];
+      // User sees only teams they created
+      return await db.getFmTeamsByUser(ctx.user.id);
     }),
 
     // List all teams with stats (admin only)
@@ -449,14 +445,17 @@ export const appRouter = router({
       return { success: true };
     }),
 
-    // Create new team (admin only)
-    create: adminProcedure
+    // Create new team - any authenticated user can create their own team
+    create: protectedProcedure
       .input(z.object({
         teamName: z.string().min(1),
         floorManagerName: z.string().min(1),
       }))
-      .mutation(async ({ input }) => {
-        const team = await db.createFmTeam(input);
+      .mutation(async ({ ctx, input }) => {
+        const team = await db.createFmTeam({
+          ...input,
+          userId: ctx.user.id,
+        });
         return team;
       }),
 
@@ -582,13 +581,9 @@ export const appRouter = router({
       }),
 
     list: protectedProcedure.query(async ({ ctx }) => {
-      // Team-based data isolation: FM sees their team's data
+      // User-based data isolation: each user sees only their own data
       if (ctx.user.role !== 'admin') {
-        if (!ctx.user.teamId) {
-          // User not assigned to a team - show evaluations they uploaded
-          return await db.getEvaluationsWithGPByUser(ctx.user.id);
-        }
-        return await db.getEvaluationsByTeam(ctx.user.teamId);
+        return await db.getEvaluationsWithGPByUser(ctx.user.id);
       }
       // Admin sees all
       return await db.getEvaluationsWithGP();
@@ -599,7 +594,11 @@ export const appRouter = router({
         year: z.number(),
         month: z.number().min(1).max(12),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
+        // User-based data isolation
+        if (ctx.user.role !== 'admin') {
+          return await db.getEvaluationsByMonthAndUser(input.year, input.month, ctx.user.id);
+        }
         return await db.getEvaluationsByMonth(input.year, input.month);
       }),
 
@@ -609,11 +608,11 @@ export const appRouter = router({
         const evaluation = await db.getEvaluationWithGP(input.id);
         if (!evaluation) return null;
         
-        // Team-based data isolation: non-admin can only access their team's evaluations
+        // User-based data isolation: non-admin can only access their own evaluations
         if (ctx.user.role !== 'admin') {
-          const gpTeamId = evaluation.gamePresenter?.teamId;
-          if (gpTeamId !== ctx.user.teamId) {
-            throw new Error("Access denied: You can only view your team's evaluations");
+          const evalUserId = evaluation.evaluation?.userId || evaluation.evaluation?.uploadedById;
+          if (evalUserId !== ctx.user.id) {
+            throw new Error("Access denied: You can only view your own evaluations");
           }
         }
         return evaluation;
@@ -640,13 +639,13 @@ export const appRouter = router({
         gamePerformanceComment: z.string().max(1000).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Check ownership before update - team-based data isolation
+        // Check ownership before update - user-based data isolation
         const evaluation = await db.getEvaluationWithGP(input.id);
         if (!evaluation) throw new Error("Evaluation not found");
         if (ctx.user.role !== 'admin') {
-          const gpTeamId = evaluation.gamePresenter?.teamId;
-          if (gpTeamId !== ctx.user.teamId) {
-            throw new Error("Access denied: You can only edit your team's evaluations");
+          const evalUserId = evaluation.evaluation?.userId || evaluation.evaluation?.uploadedById;
+          if (evalUserId !== ctx.user.id) {
+            throw new Error("Access denied: You can only edit your own evaluations");
           }
         }
         
@@ -668,13 +667,13 @@ export const appRouter = router({
     delete: protectedProcedure
       .input(z.object({ id: z.number().positive() }))
       .mutation(async ({ ctx, input }) => {
-        // Check ownership before delete - team-based data isolation
+        // Check ownership before delete - user-based data isolation
         const evaluation = await db.getEvaluationWithGP(input.id);
         if (!evaluation) throw new Error("Evaluation not found");
         if (ctx.user.role !== 'admin') {
-          const gpTeamId = evaluation.gamePresenter?.teamId;
-          if (gpTeamId !== ctx.user.teamId) {
-            throw new Error("Access denied: You can only delete your team's evaluations");
+          const evalUserId = evaluation.evaluation?.userId || evaluation.evaluation?.uploadedById;
+          if (evalUserId !== ctx.user.id) {
+            throw new Error("Access denied: You can only delete your own evaluations");
           }
         }
         
@@ -687,7 +686,12 @@ export const appRouter = router({
         year: z.number(),
         month: z.number().min(1).max(12),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // User-based data isolation
+        if (ctx.user.role !== 'admin') {
+          const count = await db.deleteEvaluationsByMonthAndUser(input.year, input.month, ctx.user.id);
+          return { success: true, deletedCount: count };
+        }
         const count = await db.deleteEvaluationsByMonth(input.year, input.month);
         return { success: true, deletedCount: count };
       }),
@@ -697,7 +701,12 @@ export const appRouter = router({
         startDate: z.date(),
         endDate: z.date(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // User-based data isolation
+        if (ctx.user.role !== 'admin') {
+          const count = await db.deleteEvaluationsByDateRangeAndUser(input.startDate, input.endDate, ctx.user.id);
+          return { success: true, deletedCount: count };
+        }
         const count = await db.deleteEvaluationsByDateRange(input.startDate, input.endDate);
         return { success: true, deletedCount: count };
       }),
@@ -705,20 +714,17 @@ export const appRouter = router({
 
   // Game Presenters management
   gamePresenter: router({
-    // List all GPs (admin) or team's GPs (FM)
+    // List all GPs (admin) or user's GPs (non-admin)
     list: protectedProcedure.query(async ({ ctx }) => {
-      // Team-based data isolation: FM sees their team's GPs
+      // User-based data isolation: each user sees only their own GPs
       if (ctx.user.role !== 'admin') {
-        if (!ctx.user.teamId) {
-          return []; // User not assigned to a team
-        }
-        return await db.getGamePresentersByTeam(ctx.user.teamId);
+        return await db.getAllGamePresentersByUser(ctx.user.id);
       }
       // Admin sees all
       return await db.getAllGamePresenters();
     }),
 
-    // List GPs with monthly stats for a specific team
+    // List GPs with monthly stats
     listWithStats: protectedProcedure
       .input(z.object({
         teamId: z.number().optional(),
@@ -726,11 +732,19 @@ export const appRouter = router({
         year: z.number(),
       }))
       .query(async ({ ctx, input }) => {
-        const teamId = input.teamId || ctx.user.teamId;
+        // User-based data isolation
+        if (ctx.user.role !== 'admin') {
+          const userGPs = await db.getAllGamePresentersByUser(ctx.user.id);
+          const result = await Promise.all(userGPs.map(async (gp) => {
+            const stats = await db.getMonthlyGpStats(gp.id, input.month, input.year);
+            return { ...gp, stats };
+          }));
+          return result;
+        }
+        // Admin: use teamId if provided, otherwise all GPs
+        const teamId = input.teamId;
         if (!teamId) {
-          // Admin without specific team - return all GPs with their stats
           const allGPs = await db.getAllGamePresenters();
-          // Get stats for each GP
           const result = await Promise.all(allGPs.map(async (gp) => {
             const stats = await db.getMonthlyGpStats(gp.id, input.month, input.year);
             return { ...gp, stats };
@@ -745,7 +759,14 @@ export const appRouter = router({
         gpId: z.number(),
         teamId: z.number(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // User-based data isolation: verify GP ownership
+        if (ctx.user.role !== 'admin') {
+          const gp = await db.getGamePresenterById(input.gpId);
+          if (!gp || gp.userId !== ctx.user.id) {
+            throw new Error("Access denied: You can only manage your own Game Presenters");
+          }
+        }
         await db.updateGamePresenterTeam(input.gpId, input.teamId);
         return { success: true };
       }),
@@ -757,9 +778,9 @@ export const appRouter = router({
         if (!gp) {
           throw new Error("Game Presenter not found");
         }
-        // Team-based data isolation: non-admin can only delete their team's GPs
-        if (ctx.user.role !== 'admin' && gp.teamId !== ctx.user.teamId) {
-          throw new Error("Access denied: You can only delete your team's Game Presenters");
+        // User-based data isolation: non-admin can only delete their own GPs
+        if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
+          throw new Error("Access denied: You can only delete your own Game Presenters");
         }
         await db.deleteGamePresenter(input.gpId);
         return { success: true, deletedName: gp.name };
@@ -771,8 +792,11 @@ export const appRouter = router({
         name: z.string(),
         threshold: z.number().min(0).max(1).default(0.5),
       }))
-      .query(async ({ input }) => {
-        const matches = await db.findAllMatchingGPs(input.name, input.threshold);
+      .query(async ({ ctx, input }) => {
+        // User-based data isolation
+        const matches = ctx.user.role !== 'admin'
+          ? await db.findAllMatchingGPsByUser(input.name, input.threshold, ctx.user.id)
+          : await db.findAllMatchingGPs(input.name, input.threshold);
         return matches.map(m => ({
           id: m.gamePresenter.id,
           name: m.gamePresenter.name,
@@ -789,8 +813,11 @@ export const appRouter = router({
         name: z.string(),
         threshold: z.number().min(0).max(1).default(0.7),
       }))
-      .query(async ({ input }) => {
-        const match = await db.findBestMatchingGP(input.name, input.threshold);
+      .query(async ({ ctx, input }) => {
+        // User-based data isolation
+        const match = ctx.user.role !== 'admin'
+          ? await db.findBestMatchingGPByUser(input.name, input.threshold, ctx.user.id)
+          : await db.findBestMatchingGP(input.name, input.threshold);
         if (!match) return null;
         return {
           id: match.gamePresenter.id,
@@ -814,11 +841,11 @@ export const appRouter = router({
         notes: z.string().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Check GP ownership - team-based data isolation
+        // Check GP ownership - user-based data isolation
         const gp = await db.getGamePresenterById(input.gpId);
         if (!gp) throw new Error("Game Presenter not found");
-        if (ctx.user.role !== 'admin' && gp.teamId !== ctx.user.teamId) {
-          throw new Error("Access denied: You can only update your team's GP stats");
+        if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
+          throw new Error("Access denied: You can only update your own GP stats");
         }
         
         const { gpId, month, year, ...data } = input;
@@ -845,11 +872,11 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const gpIds = input.updates.map(u => u.gpId);
         
-        // Team-based data isolation: verify GP ownership by teamId
+        // User-based data isolation: verify GP ownership by userId
         if (ctx.user.role !== 'admin') {
-          const verification = await db.verifyGpOwnershipByTeam(gpIds, ctx.user.teamId);
+          const verification = await db.verifyGpOwnershipByUser(gpIds, ctx.user.id);
           if (!verification.valid) {
-            throw new Error(`Access denied: Some GPs don't belong to your team`);
+            throw new Error(`Access denied: Some GPs don't belong to you`);
           }
         }
         
@@ -872,11 +899,11 @@ export const appRouter = router({
         year: z.number().min(2020).max(2100),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Team-based data isolation: verify GP ownership by teamId
+        // User-based data isolation: verify GP ownership by userId
         if (ctx.user.role !== 'admin') {
-          const verification = await db.verifyGpOwnershipByTeam(input.gpIds, ctx.user.teamId);
+          const verification = await db.verifyGpOwnershipByUser(input.gpIds, ctx.user.id);
           if (!verification.valid) {
-            throw new Error(`Access denied: Some GPs don't belong to your team`);
+            throw new Error(`Access denied: Some GPs don't belong to you`);
           }
         }
         
@@ -899,11 +926,11 @@ export const appRouter = router({
         year: z.number().min(2020).max(2100),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Team-based data isolation: verify GP ownership by teamId
+        // User-based data isolation: verify GP ownership by userId
         if (ctx.user.role !== 'admin') {
-          const verification = await db.verifyGpOwnershipByTeam(input.gpIds, ctx.user.teamId);
+          const verification = await db.verifyGpOwnershipByUser(input.gpIds, ctx.user.id);
           if (!verification.valid) {
-            throw new Error(`Access denied: Some GPs don't belong to your team`);
+            throw new Error(`Access denied: Some GPs don't belong to you`);
           }
         }
         
@@ -929,9 +956,9 @@ export const appRouter = router({
         const gp = await db.getGamePresenterById(input.gpId);
         if (!gp) throw new Error("Game Presenter not found");
         
-        // Team-based data isolation
-        if (ctx.user.role !== 'admin' && gp.teamId !== ctx.user.teamId) {
-          throw new Error("Access denied: You can only view your team's GP details");
+        // User-based data isolation
+        if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
+          throw new Error("Access denied: You can only view your own GP details");
         }
         
         // Get team info
@@ -1063,13 +1090,9 @@ export const appRouter = router({
         year: z.number().optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
-        // Team-based data isolation: FM sees their team's stats
+        // User-based data isolation: each user sees only their own stats
         if (ctx.user.role !== 'admin') {
-          if (!ctx.user.teamId) {
-            // User not assigned to a team - return empty stats
-            return { totalEvaluations: 0, totalGPs: 0, totalReports: 0, averageScore: 0, recentEvaluations: [], topPerformers: [] };
-          }
-          return await db.getDashboardStatsByTeam(input?.month, input?.year, ctx.user.teamId);
+          return await db.getDashboardStatsByUser(input?.month, input?.year, ctx.user.id);
         }
         // Admin sees all
         return await db.getDashboardStats(input?.month, input?.year, undefined);
@@ -1091,9 +1114,12 @@ export const appRouter = router({
         reportYear: z.number().min(2020).max(2100),
       }))
       .mutation(async ({ ctx, input }) => {
-        // FM can only auto-fill for their own team
-        if (ctx.user.teamId && ctx.user.teamId !== input.teamId) {
-          throw new Error("Access denied: You can only generate content for your own team");
+        // User-based data isolation: verify team belongs to user
+        if (ctx.user.role !== 'admin') {
+          const team = await db.getFmTeamById(input.teamId);
+          if (!team || team.userId !== ctx.user.id) {
+            throw new Error("Access denied: You can only generate content for your own teams");
+          }
         }
         
         const team = await db.getFmTeamById(input.teamId);
@@ -1388,9 +1414,12 @@ ${sharedPromptRules}`
         autoFill: z.boolean().optional().default(true), // Auto-fill empty fields by default
       }))
       .mutation(async ({ ctx, input }) => {
-        // FM can only generate reports for their own team
-        if (ctx.user.teamId && ctx.user.teamId !== input.teamId) {
-          throw new Error("Access denied: You can only generate reports for your own team");
+        // User-based data isolation: verify team belongs to user
+        if (ctx.user.role !== 'admin') {
+          const teamCheck = await db.getFmTeamById(input.teamId);
+          if (!teamCheck || teamCheck.userId !== ctx.user.id) {
+            throw new Error("Access denied: You can only generate reports for your own teams");
+          }
         }
         
         const team = await db.getFmTeamById(input.teamId);
@@ -1645,9 +1674,9 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         console.log(`[exportToExcel] getReportWithTeam returned:`, reportWithTeam ? { reportId: reportWithTeam.report.id, teamId: reportWithTeam.report.teamId } : null);
         if (!reportWithTeam) throw new Error("Report not found");
         
-        // FM can only export their own team's reports
-        if (ctx.user.teamId && reportWithTeam.report.teamId !== ctx.user.teamId) {
-          throw new Error("Access denied: You can only export your own team's reports");
+        // User-based data isolation: non-admin can only export their own reports
+        if (ctx.user.role !== 'admin' && reportWithTeam.report.userId !== ctx.user.id) {
+          throw new Error("Access denied: You can only export your own reports");
         }
 
         const { report, team } = reportWithTeam;
@@ -2557,9 +2586,9 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         const reportWithTeam = await db.getReportWithTeam(input.reportId);
         if (!reportWithTeam) throw new Error("Report not found");
         
-        // FM can only export their own team's reports
-        if (ctx.user.teamId && reportWithTeam.report.teamId !== ctx.user.teamId) {
-          throw new Error("Access denied: You can only export your own team's reports");
+        // User-based data isolation: non-admin can only export their own reports
+        if (ctx.user.role !== 'admin' && reportWithTeam.report.userId !== ctx.user.id) {
+          throw new Error("Access denied: You can only export your own reports");
         }
 
         const { report, team } = reportWithTeam;
@@ -2775,12 +2804,9 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       }),
 
     list: protectedProcedure.query(async ({ ctx }) => {
-      // Team-based data isolation: FM sees their team's reports
+      // User-based data isolation: each user sees only their own reports
       if (ctx.user.role !== 'admin') {
-        if (!ctx.user.teamId) {
-          return []; // User not assigned to a team
-        }
-        return await db.getReportsByTeam(ctx.user.teamId);
+        return await db.getReportsWithTeamsByUser(ctx.user.id);
       }
       // Admin sees all
       return await db.getReportsWithTeams();
@@ -2792,9 +2818,9 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         const report = await db.getReportWithTeam(input.id);
         if (!report) return null;
         
-        // Team-based data isolation: non-admin can only access their team's reports
-        if (ctx.user.role !== 'admin' && report.report.teamId !== ctx.user.teamId) {
-          throw new Error("Access denied: You can only view your team's reports");
+        // User-based data isolation: non-admin can only access their own reports
+        if (ctx.user.role !== 'admin' && report.report.userId !== ctx.user.id) {
+          throw new Error("Access denied: You can only view your own reports");
         }
         return report;
       }),
@@ -2804,15 +2830,15 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       return await db.getAllReportsWithTeam();
     }),
 
-    // Delete report with ownership check - team-based data isolation
+    // Delete report with ownership check - user-based data isolation
     delete: protectedProcedure
       .input(z.object({ id: z.number().positive() }))
       .mutation(async ({ ctx, input }) => {
         const isAdmin = ctx.user.role === 'admin';
         
-        const success = await db.deleteReportWithCheckByTeam(
+        const success = await db.deleteReportWithCheckByUser(
           input.id,
-          ctx.user.teamId,
+          ctx.user.id,
           isAdmin
         );
         if (!success) {
@@ -3037,15 +3063,23 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         };
       }),
 
-    list: protectedProcedure.query(async () => {
-      // Error files are shared across all teams
+    list: protectedProcedure.query(async ({ ctx }) => {
+      // User-based data isolation: each user sees only their own error files
+      if (ctx.user.role !== 'admin') {
+        return await db.getErrorFilesByUser(ctx.user.id);
+      }
       return await db.getAllErrorFiles();
     }),
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        await db.deleteErrorFile(input.id);
+      .mutation(async ({ ctx, input }) => {
+        // User-based data isolation
+        if (ctx.user.role !== 'admin') {
+          await db.deleteErrorFileByUser(input.id, ctx.user.id);
+        } else {
+          await db.deleteErrorFile(input.id);
+        }
         return { success: true };
       }),
   }),
@@ -3130,12 +3164,9 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
 
     // Get all GP access tokens (for FM management)
     list: protectedProcedure.query(async ({ ctx }) => {
-      // Team-based data isolation: FM sees their team's GP tokens
+      // User-based data isolation: each user sees only their own GP tokens
       if (ctx.user.role !== 'admin') {
-        if (!ctx.user.teamId) {
-          return []; // User not assigned to a team
-        }
-        return await db.getGpAccessTokensByTeam(ctx.user.teamId);
+        return await db.getGpAccessTokensByUser(ctx.user.id);
       }
       // Admin sees all
       return await db.getAllGpAccessTokens();
@@ -3149,11 +3180,11 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         const token = await db.getGpAccessTokenById(input.id);
         if (!token) throw new Error("Token not found");
         
-        // Team-based data isolation: non-admin can only manage their team's GP tokens
+        // User-based data isolation: non-admin can only manage their own GP tokens
         if (ctx.user.role !== 'admin') {
           const gp = await db.getGamePresenterById(token.gamePresenterId);
-          if (gp && gp.teamId !== ctx.user.teamId) {
-            throw new Error("Access denied: You can only manage your team's GP tokens");
+          if (gp && gp.userId !== ctx.user.id) {
+            throw new Error("Access denied: You can only manage your own GP tokens");
           }
         }
         
@@ -3679,15 +3710,24 @@ Respond in JSON format:
         year: z.number().min(2020).max(2030),
         gamePresenterId: z.number().optional(),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
+        // User-based data isolation
+        if (ctx.user.role !== 'admin') {
+          return await db.getErrorScreenshotsByUser(input.month, input.year, ctx.user.id, input.gamePresenterId);
+        }
         return await db.getErrorScreenshots(input.month, input.year, input.gamePresenterId);
       }),
 
     // Delete error screenshot
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        await db.deleteErrorScreenshot(input.id);
+      .mutation(async ({ ctx, input }) => {
+        // User-based data isolation
+        if (ctx.user.role !== 'admin') {
+          await db.deleteErrorScreenshotByUser(input.id, ctx.user.id);
+        } else {
+          await db.deleteErrorScreenshot(input.id);
+        }
         return { success: true };
       }),
 
@@ -3697,7 +3737,11 @@ Respond in JSON format:
         month: z.number().min(1).max(12),
         year: z.number().min(2020).max(2030),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
+        // User-based data isolation
+        if (ctx.user.role !== 'admin') {
+          return await db.getErrorScreenshotStatsByUser(input.month, input.year, ctx.user.id);
+        }
         return await db.getErrorScreenshotStats(input.month, input.year);
       }),
   }),
@@ -3896,7 +3940,11 @@ Respond with a JSON object containing an array of ALL entries found:
         year: z.number().min(2020).max(2030),
         gamePresenterId: z.number().optional(),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
+        // User-based data isolation
+        if (ctx.user.role !== 'admin') {
+          return await db.getAttitudeScreenshotsByUser(input.month, input.year, ctx.user.id, input.gamePresenterId);
+        }
         return await db.getAttitudeScreenshots(input.month, input.year, input.gamePresenterId);
       }),
 
@@ -3907,16 +3955,22 @@ Respond with a JSON object containing an array of ALL entries found:
         year: z.number().min(2020).max(2030).optional(),
         gamePresenterId: z.number().optional(),
       }).optional())
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const month = input?.month;
         const year = input?.year;
         const gpId = input?.gamePresenterId;
         
-        // Get all attitude entries with GP info
-        const allEntries = await db.getAllAttitudeScreenshots(month, year, gpId);
+        // User-based data isolation
+        let allEntries;
+        let gps;
+        if (ctx.user.role !== 'admin') {
+          allEntries = await db.getAllAttitudeScreenshotsByUser(ctx.user.id, month, year, gpId);
+          gps = await db.getAllGamePresentersByUser(ctx.user.id);
+        } else {
+          allEntries = await db.getAllAttitudeScreenshots(month, year, gpId);
+          gps = await db.getAllGamePresenters();
+        }
         
-        // Get all GPs for name mapping
-        const gps = await db.getAllGamePresenters();
         const gpMap = new Map(gps.map(gp => [gp.id, gp]));
         
         return allEntries.map(entry => ({
@@ -3928,8 +3982,13 @@ Respond with a JSON object containing an array of ALL entries found:
     // Delete attitude screenshot
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        await db.deleteAttitudeScreenshot(input.id);
+      .mutation(async ({ ctx, input }) => {
+        // User-based data isolation
+        if (ctx.user.role !== 'admin') {
+          await db.deleteAttitudeScreenshotByUser(input.id, ctx.user.id);
+        } else {
+          await db.deleteAttitudeScreenshot(input.id);
+        }
         return { success: true };
       }),
   }),

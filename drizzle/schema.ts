@@ -24,8 +24,9 @@ export type InsertUser = typeof users.$inferInsert;
  */
 export const fmTeams = mysqlTable("fm_teams", {
   id: int("id").autoincrement().primaryKey(),
-  teamName: varchar("teamName", { length: 255 }).notNull().unique(),
+  teamName: varchar("teamName", { length: 255 }).notNull(),
   floorManagerName: varchar("floorManagerName", { length: 255 }).notNull(),
+  userId: int("userId"), // Owner of this team - for user data isolation
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

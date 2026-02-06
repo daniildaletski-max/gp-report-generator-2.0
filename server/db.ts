@@ -2880,3 +2880,252 @@ export async function getAllAttitudeScreenshots(month?: number, year?: number, g
     return [];
   }
 }
+
+
+// ============================================
+// USER-BASED DATA ISOLATION FUNCTIONS
+// ============================================
+
+// Error Files filtered by uploadedById
+export async function getErrorFilesByUser(userId: number): Promise<ErrorFile[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(errorFiles)
+    .where(eq(errorFiles.uploadedById, userId))
+    .orderBy(desc(errorFiles.createdAt));
+}
+
+// Error Screenshots filtered by uploadedById
+export async function getErrorScreenshotsByUser(month: number, year: number, userId: number, gamePresenterId?: number): Promise<ErrorScreenshot[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions = [
+    eq(errorScreenshots.month, month),
+    eq(errorScreenshots.year, year),
+    eq(errorScreenshots.uploadedById, userId),
+  ];
+  if (gamePresenterId) {
+    conditions.push(eq(errorScreenshots.gamePresenterId, gamePresenterId));
+  }
+  return await db.select().from(errorScreenshots)
+    .where(and(...conditions))
+    .orderBy(desc(errorScreenshots.createdAt));
+}
+
+// Error Screenshot Stats filtered by uploadedById
+export async function getErrorScreenshotStatsByUser(month: number, year: number, userId: number) {
+  const db = await getDb();
+  if (!db) return { byType: [], bySeverity: [], total: 0 };
+
+  const baseConditions = [
+    eq(errorScreenshots.month, month),
+    eq(errorScreenshots.year, year),
+    eq(errorScreenshots.uploadedById, userId),
+  ];
+
+  const byType = await db.select({
+    errorType: errorScreenshots.errorType,
+    count: sql<number>`COUNT(*)`,
+  }).from(errorScreenshots)
+    .where(and(...baseConditions))
+    .groupBy(errorScreenshots.errorType);
+
+  const bySeverity = await db.select({
+    severity: errorScreenshots.severity,
+    count: sql<number>`COUNT(*)`,
+  }).from(errorScreenshots)
+    .where(and(...baseConditions))
+    .groupBy(errorScreenshots.severity);
+
+  const totalResult = await db.select({
+    count: sql<number>`COUNT(*)`,
+  }).from(errorScreenshots)
+    .where(and(...baseConditions));
+
+  return {
+    byType,
+    bySeverity,
+    total: totalResult[0]?.count || 0,
+  };
+}
+
+// Attitude Screenshots filtered by uploadedById
+export async function getAttitudeScreenshotsByUser(month: number, year: number, userId: number, gamePresenterId?: number): Promise<AttitudeScreenshot[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions: any[] = [
+    eq(attitudeScreenshots.month, month),
+    eq(attitudeScreenshots.year, year),
+    eq(attitudeScreenshots.uploadedById, userId),
+  ];
+  if (gamePresenterId) {
+    conditions.push(eq(attitudeScreenshots.gamePresenterId, gamePresenterId));
+  }
+  return await db.select().from(attitudeScreenshots)
+    .where(and(...conditions))
+    .orderBy(desc(attitudeScreenshots.createdAt));
+}
+
+// All Attitude Screenshots filtered by uploadedById
+export async function getAllAttitudeScreenshotsByUser(userId: number, month?: number, year?: number, gamePresenterId?: number): Promise<AttitudeScreenshot[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  try {
+    const conditions: any[] = [eq(attitudeScreenshots.uploadedById, userId)];
+    if (month) conditions.push(eq(attitudeScreenshots.month, month));
+    if (year) conditions.push(eq(attitudeScreenshots.year, year));
+    if (gamePresenterId) conditions.push(eq(attitudeScreenshots.gamePresenterId, gamePresenterId));
+
+    return await db.select().from(attitudeScreenshots)
+      .where(and(...conditions))
+      .orderBy(desc(attitudeScreenshots.createdAt));
+  } catch (error) {
+    console.error("[Database] Error getting attitude screenshots by user:", error);
+    return [];
+  }
+}
+
+// Evaluations by month filtered by userId
+export async function getEvaluationsByMonthAndUser(year: number, month: number, userId: number): Promise<Evaluation[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
+
+  return await db.select().from(evaluations)
+    .where(
+      and(
+        gte(evaluations.evaluationDate, startDate),
+        lte(evaluations.evaluationDate, endDate),
+        or(
+          eq(evaluations.uploadedById, userId),
+          eq(evaluations.userId, userId)
+        )
+      )
+    )
+    .orderBy(evaluations.evaluationDate);
+}
+
+// Delete evaluations by month filtered by userId
+export async function deleteEvaluationsByMonthAndUser(year: number, month: number, userId: number): Promise<number> {
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
+  return await deleteEvaluationsByDateRangeAndUser(startDate, endDate, userId);
+}
+
+// Delete evaluations by date range filtered by userId
+export async function deleteEvaluationsByDateRangeAndUser(startDate: Date, endDate: Date, userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.delete(evaluations).where(
+    and(
+      gte(evaluations.evaluationDate, startDate),
+      lte(evaluations.evaluationDate, endDate),
+      or(
+        eq(evaluations.uploadedById, userId),
+        eq(evaluations.userId, userId)
+      )
+    )
+  );
+  
+  return (result as any)[0]?.affectedRows || 0;
+}
+
+// Fuzzy search GPs filtered by userId
+export async function findAllMatchingGPsByUser(name: string, threshold: number = 0.5, userId: number): Promise<FuzzyMatchResult[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const allGPs = await db.select().from(gamePresenters).where(eq(gamePresenters.userId, userId));
+  const normalizedInput = normalizeName(name);
+  const matches: FuzzyMatchResult[] = [];
+
+  for (const gp of allGPs) {
+    const normalizedGPName = normalizeName(gp.name);
+    const similarity = calculateSimilarity(normalizedInput, normalizedGPName);
+    const isExactMatch = normalizedInput === normalizedGPName;
+
+    if (similarity >= threshold || isExactMatch) {
+      matches.push({ gamePresenter: gp, similarity, isExactMatch });
+    }
+  }
+
+  return matches.sort((a, b) => b.similarity - a.similarity);
+}
+
+// Find best matching GP filtered by userId
+export async function findBestMatchingGPByUser(name: string, threshold: number = 0.7, userId: number): Promise<FuzzyMatchResult | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const allGPs = await db.select().from(gamePresenters).where(eq(gamePresenters.userId, userId));
+  const normalizedInput = normalizeName(name);
+
+  let bestMatch: FuzzyMatchResult | null = null;
+
+  for (const gp of allGPs) {
+    const normalizedGPName = normalizeName(gp.name);
+    const similarity = calculateSimilarity(normalizedInput, normalizedGPName);
+    const isExactMatch = normalizedInput === normalizedGPName;
+
+    if (isExactMatch) {
+      return { gamePresenter: gp, similarity: 1.0, isExactMatch: true };
+    }
+
+    if (similarity >= threshold && (!bestMatch || similarity > bestMatch.similarity)) {
+      bestMatch = { gamePresenter: gp, similarity, isExactMatch: false };
+    }
+  }
+
+  return bestMatch;
+}
+
+// Delete error file with user ownership check
+export async function deleteErrorFileByUser(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const file = await db.select().from(errorFiles).where(eq(errorFiles.id, id)).limit(1);
+  if (!file.length) throw new Error("Error file not found");
+  if (file[0].uploadedById !== userId) throw new Error("Access denied: You can only delete your own error files");
+
+  await db.delete(errorFiles).where(eq(errorFiles.id, id));
+  return true;
+}
+
+// Delete error screenshot with user ownership check
+export async function deleteErrorScreenshotByUser(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const screenshot = await db.select().from(errorScreenshots).where(eq(errorScreenshots.id, id)).limit(1);
+  if (!screenshot.length) throw new Error("Error screenshot not found");
+  if (screenshot[0].uploadedById !== userId) throw new Error("Access denied: You can only delete your own error screenshots");
+
+  await db.delete(errorScreenshots).where(eq(errorScreenshots.id, id));
+  return true;
+}
+
+// Delete attitude screenshot with user ownership check
+export async function deleteAttitudeScreenshotByUser(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const screenshot = await db.select().from(attitudeScreenshots).where(eq(attitudeScreenshots.id, id)).limit(1);
+  if (!screenshot.length) throw new Error("Attitude screenshot not found");
+  if (screenshot[0].uploadedById !== userId) throw new Error("Access denied: You can only delete your own attitude screenshots");
+
+  await db.delete(attitudeScreenshots).where(eq(attitudeScreenshots.id, id));
+  return true;
+}
+
+
+// Get FM teams by user ID - for user data isolation
+export async function getFmTeamsByUser(userId: number): Promise<FmTeam[]> {
+  return await db.select().from(fmTeams).where(eq(fmTeams.userId, userId)).orderBy(fmTeams.teamName);
+}
