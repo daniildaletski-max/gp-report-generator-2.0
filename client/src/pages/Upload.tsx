@@ -655,7 +655,7 @@ export default function UploadPage() {
                       <option value="">Choose a GP...</option>
                       {gpList?.map((gp) => (
                         <option key={gp.id} value={gp.id}>
-                          {gp.firstName} {gp.lastName}
+                          {gp.name}
                         </option>
                       ))}
                     </select>

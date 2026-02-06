@@ -587,17 +587,17 @@ export default function GPPortal() {
                       <div className="flex justify-between text-sm mb-2">
                         <span className="text-blue-200/70">Good Games (GGs)</span>
                         <span className="text-white font-bold">
-                          {data.monthlyStats.current.bonus.goodGames?.toLocaleString() ?? 0}
+                          {data.monthlyStats.current.bonus.ggs?.toLocaleString() ?? 0}
                         </span>
                       </div>
                       <Progress 
-                        value={Math.min(((data.monthlyStats.current.bonus.goodGames ?? 0) / 2500) * 100, 100)} 
+                        value={Math.min(((data.monthlyStats.current.bonus.ggs ?? 0) / 2500) * 100, 100)} 
                         className="h-3 bg-white/10"
                       />
                       <p className="text-xs text-blue-200/50 mt-2">
-                        {data.monthlyStats.current.bonus.goodGames >= 2500 
+                        {data.monthlyStats.current.bonus.ggs >= 2500 
                           ? 'Level 1 achieved! 🎉' 
-                          : `${(2500 - (data.monthlyStats.current.bonus.goodGames ?? 0)).toLocaleString()} more GGs to Level 1`}
+                          : `${(2500 - (data.monthlyStats.current.bonus.ggs ?? 0)).toLocaleString()} more GGs to Level 1`}
                       </p>
                     </div>
                   </div>
@@ -764,10 +764,10 @@ export default function GPPortal() {
                           </div>
                           
                           {/* Comments */}
-                          {evaluation.comments && (
+                          {(evaluation.hairComment || evaluation.makeupComment || evaluation.outfitComment || evaluation.postureComment || evaluation.dealingStyleComment || evaluation.gamePerformanceComment) && (
                             <div className="p-4 bg-white/5 rounded-lg">
                               <p className="text-sm font-medium text-blue-200/70 mb-2">Comments</p>
-                              <p className="text-white/80 text-sm">{evaluation.comments}</p>
+                              <p className="text-white/80 text-sm">{[evaluation.hairComment, evaluation.makeupComment, evaluation.outfitComment, evaluation.postureComment, evaluation.dealingStyleComment, evaluation.gamePerformanceComment].filter(Boolean).join('; ')}</p>
                             </div>
                           )}
                         </div>
@@ -810,13 +810,13 @@ export default function GPPortal() {
                     <div key={error.id || index} className="p-4 hover:bg-white/5 transition-colors">
                       <div className="flex items-start gap-4">
                         <div className={`shrink-0 p-2.5 rounded-xl ${
-                          error.severity === 'high' || error.severity === 'HIGH' ? 'bg-red-500/20' :
-                          error.severity === 'medium' || error.severity === 'MEDIUM' ? 'bg-orange-500/20' :
+                          error.severity === 'critical' ? 'bg-red-500/20' :
+                          error.severity === 'medium' ? 'bg-orange-500/20' :
                           'bg-yellow-500/20'
                         }`}>
                           <AlertTriangle className={`h-5 w-5 ${
-                            error.severity === 'high' || error.severity === 'HIGH' ? 'text-red-400' :
-                            error.severity === 'medium' || error.severity === 'MEDIUM' ? 'text-orange-400' :
+                            error.severity === 'critical' ? 'text-red-400' :
+                            error.severity === 'medium' ? 'text-orange-400' :
                             'text-yellow-400'
                           }`} />
                         </div>

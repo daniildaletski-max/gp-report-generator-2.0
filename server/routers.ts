@@ -945,6 +945,7 @@ export const appRouter = router({
         const endDate = new Date(input.year, input.month, 0, 23, 59, 59);
         const allEvaluations = await db.getEvaluationsByGP(input.gpId);
         const monthlyEvaluations = allEvaluations.filter(e => {
+          if (!e.evaluationDate) return false;
           const evalDate = new Date(e.evaluationDate);
           return evalDate >= startDate && evalDate <= endDate;
         });
@@ -963,7 +964,7 @@ export const appRouter = router({
             id: gp.id,
             name: gp.name,
             teamId: gp.teamId,
-            teamName: team?.name || 'Unassigned',
+            teamName: team?.teamName || 'Unassigned',
             createdAt: gp.createdAt,
           },
           stats: stats || {
@@ -978,8 +979,8 @@ export const appRouter = router({
             totalScore: e.totalScore,
             appearanceScore: e.appearanceScore,
             gamePerformanceScore: e.gamePerformanceTotalScore, // Use total (Dealing + GamePerf)
-            comments: e.comments,
-            evaluatedBy: e.evaluatedBy,
+            comments: e.hairComment || e.makeupComment || e.outfitComment || e.postureComment || e.dealingStyleComment || e.gamePerformanceComment || null,
+            evaluatedBy: e.evaluatorName,
           })),
           errors: errors.map(e => ({
             id: e.id,
@@ -992,7 +993,7 @@ export const appRouter = router({
           attitudeScreenshots: attitudeScreenshots.map(s => ({
             id: s.id,
             url: s.screenshotUrl,
-            extractedData: s.extractedData,
+            extractedData: s.rawExtractedData,
             createdAt: s.createdAt,
             // Enhanced attitude entry data
             attitudeType: s.attitudeType,
@@ -1003,7 +1004,7 @@ export const appRouter = router({
           errorScreenshots: errorScreenshots.map(s => ({
             id: s.id,
             url: s.screenshotUrl,
-            extractedData: s.extractedData,
+            extractedData: s.rawExtractedData,
             createdAt: s.createdAt,
           })),
         };
@@ -1111,8 +1112,8 @@ export const appRouter = router({
         
         for (const gp of teamGPs) {
           const attitudes = await db.getAttitudeScreenshotsForGP(gp.id, input.reportMonth, input.reportYear);
-          const positive = attitudes.filter(a => a.attitudeType === 'POSITIVE').length;
-          const negative = attitudes.filter(a => a.attitudeType === 'NEGATIVE').length;
+          const positive = attitudes.filter(a => a.attitudeType === 'positive').length;
+          const negative = attitudes.filter(a => a.attitudeType === 'negative').length;
           if (positive > 0 || negative > 0) {
             attitudeData.push({ gpName: gp.name, positive, negative, total: positive - negative });
           }
@@ -1408,8 +1409,8 @@ ${sharedPromptRules}`
         
         for (const gp of teamGPs) {
           const attitudes = await db.getAttitudeScreenshotsForGP(gp.id, input.reportMonth, input.reportYear);
-          const positive = attitudes.filter(a => a.attitudeType === 'POSITIVE').length;
-          const negative = attitudes.filter(a => a.attitudeType === 'NEGATIVE').length;
+          const positive = attitudes.filter(a => a.attitudeType === 'positive').length;
+          const negative = attitudes.filter(a => a.attitudeType === 'negative').length;
           if (positive > 0 || negative > 0) {
             attitudeData.push({ gpName: gp.name, positive, negative, total: positive - negative });
           }

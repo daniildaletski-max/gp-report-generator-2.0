@@ -17,10 +17,30 @@ const badgeVariants = cva(
           "border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
           "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+        green:
+          "border-emerald-500/20 bg-emerald-500/15 text-emerald-400",
+        amber:
+          "border-amber-500/20 bg-amber-500/15 text-amber-400",
+        red:
+          "border-red-500/20 bg-red-500/15 text-red-400",
+        purple:
+          "border-violet-500/20 bg-violet-500/15 text-violet-400",
+        fuchsia:
+          "border-fuchsia-500/20 bg-fuchsia-500/15 text-fuchsia-400",
+        cyan:
+          "border-cyan-500/20 bg-cyan-500/15 text-cyan-400",
+        blue:
+          "border-blue-500/20 bg-blue-500/15 text-blue-400",
+      },
+      size: {
+        default: "px-2 py-0.5 text-xs",
+        sm: "px-1.5 py-0.5 text-[10px]",
+        lg: "px-3 py-1 text-sm",
       },
     },
     defaultVariants: {
       variant: "default",
+      size: "default",
     },
   }
 );
@@ -28,6 +48,7 @@ const badgeVariants = cva(
 function Badge({
   className,
   variant,
+  size,
   asChild = false,
   ...props
 }: React.ComponentProps<"span"> &
@@ -37,7 +58,7 @@ function Badge({
   return (
     <Comp
       data-slot="badge"
-      className={cn(badgeVariants({ variant }), className)}
+      className={cn(badgeVariants({ variant, size }), className)}
       {...props}
     />
   );
