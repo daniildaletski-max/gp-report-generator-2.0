@@ -1625,6 +1625,625 @@
       gap: 1.25rem;
     }
   }
+
+  /* ========================================
+     PREMIUM STAT CARDS
+     ======================================== */
+  
+  .premium-stat-card {
+    position: relative;
+    padding: 1.5rem;
+    border-radius: 20px;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .premium-stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--card-accent, linear-gradient(90deg, #8b5cf6, #a855f7));
+    opacity: 0.8;
+    transition: height 0.3s ease;
+  }
+
+  .premium-stat-card::after {
+    content: '';
+    position: absolute;
+    top: -20px;
+    right: -20px;
+    width: 120px;
+    height: 120px;
+    background: radial-gradient(circle, var(--card-glow, rgba(139, 92, 246, 0.15)) 0%, transparent 70%);
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .premium-stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 16px 50px var(--card-shadow, rgba(139, 92, 246, 0.2));
+  }
+
+  .premium-stat-card:hover::before {
+    height: 4px;
+    opacity: 1;
+  }
+
+  .premium-stat-card.card-purple {
+    background: linear-gradient(145deg, rgba(139, 92, 246, 0.12) 0%, rgba(20, 20, 38, 0.8) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    --card-accent: linear-gradient(90deg, #8b5cf6, #a855f7);
+    --card-glow: rgba(139, 92, 246, 0.2);
+    --card-shadow: rgba(139, 92, 246, 0.2);
+  }
+
+  .premium-stat-card.card-green {
+    background: linear-gradient(145deg, rgba(34, 197, 94, 0.1) 0%, rgba(20, 20, 38, 0.8) 100%);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    --card-accent: linear-gradient(90deg, #22c55e, #4ade80);
+    --card-glow: rgba(34, 197, 94, 0.2);
+    --card-shadow: rgba(34, 197, 94, 0.2);
+  }
+
+  .premium-stat-card.card-amber {
+    background: linear-gradient(145deg, rgba(245, 158, 11, 0.1) 0%, rgba(20, 20, 38, 0.8) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    --card-accent: linear-gradient(90deg, #f59e0b, #fbbf24);
+    --card-glow: rgba(245, 158, 11, 0.2);
+    --card-shadow: rgba(245, 158, 11, 0.2);
+  }
+
+  .premium-stat-card.card-red {
+    background: linear-gradient(145deg, rgba(239, 68, 68, 0.1) 0%, rgba(20, 20, 38, 0.8) 100%);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    --card-accent: linear-gradient(90deg, #ef4444, #f87171);
+    --card-glow: rgba(239, 68, 68, 0.2);
+    --card-shadow: rgba(239, 68, 68, 0.2);
+  }
+
+  .premium-stat-card.card-blue {
+    background: linear-gradient(145deg, rgba(59, 130, 246, 0.1) 0%, rgba(20, 20, 38, 0.8) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    --card-accent: linear-gradient(90deg, #3b82f6, #60a5fa);
+    --card-glow: rgba(59, 130, 246, 0.2);
+    --card-shadow: rgba(59, 130, 246, 0.2);
+  }
+
+  .premium-stat-card.card-cyan {
+    background: linear-gradient(145deg, rgba(6, 182, 212, 0.1) 0%, rgba(20, 20, 38, 0.8) 100%);
+    border: 1px solid rgba(6, 182, 212, 0.2);
+    --card-accent: linear-gradient(90deg, #06b6d4, #22d3ee);
+    --card-glow: rgba(6, 182, 212, 0.2);
+    --card-shadow: rgba(6, 182, 212, 0.2);
+  }
+
+  .premium-stat-card.card-gray {
+    background: linear-gradient(145deg, rgba(107, 114, 128, 0.1) 0%, rgba(20, 20, 38, 0.8) 100%);
+    border: 1px solid rgba(107, 114, 128, 0.2);
+    --card-accent: linear-gradient(90deg, #6b7280, #9ca3af);
+    --card-glow: rgba(107, 114, 128, 0.2);
+    --card-shadow: rgba(107, 114, 128, 0.2);
+  }
+
+  .stat-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: white;
+    line-height: 1.2;
+    font-family: var(--font-display);
+  }
+
+  .stat-sublabel {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.35);
+    margin-top: 0.125rem;
+  }
+
+  .stat-icon-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+  }
+
+  .stat-icon-container.card-purple {
+    background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+  }
+
+  .stat-icon-container.card-green {
+    background: linear-gradient(135deg, #22c55e 0%, #4ade80 100%);
+    box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+  }
+
+  .stat-icon-container.card-amber {
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+  }
+
+  .stat-icon-container.card-red {
+    background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+  }
+
+  .stat-icon-container.card-blue {
+    background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+  }
+
+  .stat-icon-container.card-cyan {
+    background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%);
+    box-shadow: 0 4px 15px rgba(6, 182, 212, 0.4);
+  }
+
+  .stat-icon-container.card-gray {
+    background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%);
+    box-shadow: 0 4px 15px rgba(107, 114, 128, 0.4);
+  }
+
+  .group:hover .stat-icon-container {
+    transform: scale(1.08);
+  }
+
+  /* ========================================
+     CHART CARDS
+     ======================================== */
+
+  .chart-card {
+    background: linear-gradient(145deg, rgba(30, 30, 55, 0.7) 0%, rgba(20, 20, 40, 0.6) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .chart-card:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  }
+
+  .chart-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .chart-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: white;
+  }
+
+  .chart-subtitle {
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 0.125rem;
+  }
+
+  .chart-card-body {
+    padding: 1.5rem;
+  }
+
+  /* ========================================
+     PROGRESS ROWS (Attitude Distribution)
+     ======================================== */
+
+  .progress-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 0;
+  }
+
+  .progress-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100px;
+    flex-shrink: 0;
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 500;
+  }
+
+  .progress-track {
+    flex: 1;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.75rem;
+    min-width: 40px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .progress-fill.positive {
+    background: linear-gradient(90deg, rgba(34, 197, 94, 0.3) 0%, rgba(34, 197, 94, 0.5) 100%);
+    box-shadow: 0 0 15px rgba(34, 197, 94, 0.2);
+  }
+
+  .progress-fill.neutral {
+    background: linear-gradient(90deg, rgba(107, 114, 128, 0.3) 0%, rgba(107, 114, 128, 0.5) 100%);
+    box-shadow: 0 0 15px rgba(107, 114, 128, 0.2);
+  }
+
+  .progress-fill.negative {
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.3) 0%, rgba(239, 68, 68, 0.5) 100%);
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+  }
+
+  .progress-value {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: white;
+  }
+
+  /* ========================================
+     LEADERBOARDS
+     ======================================== */
+
+  .leaderboard-section {
+    padding: 0;
+  }
+
+  .leaderboard-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .leaderboard-title.positive {
+    color: #4ade80;
+  }
+
+  .leaderboard-title.negative {
+    color: #f87171;
+  }
+
+  .leaderboard-item {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 10px;
+    transition: background 0.2s ease;
+  }
+
+  .leaderboard-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .leaderboard-rank {
+    font-size: 0.75rem;
+    font-weight: 700;
+    width: 28px;
+    flex-shrink: 0;
+  }
+
+  .leaderboard-rank.positive {
+    color: #4ade80;
+  }
+
+  .leaderboard-rank.negative {
+    color: #f87171;
+  }
+
+  .leaderboard-name {
+    flex: 1;
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.8);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .leaderboard-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.125rem 0.5rem;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+
+  .leaderboard-badge.positive {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.25);
+  }
+
+  .leaderboard-badge.negative {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+
+  .leaderboard-empty {
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.3);
+    text-align: center;
+    padding: 1rem 0;
+  }
+
+  /* ========================================
+     TEAM COMPARISON CARDS
+     ======================================== */
+
+  .team-comparison-card {
+    background: linear-gradient(145deg, rgba(35, 35, 60, 0.6) 0%, rgba(25, 25, 45, 0.5) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 1.25rem;
+    transition: all 0.3s ease;
+  }
+
+  .team-comparison-card:hover {
+    border-color: rgba(139, 92, 246, 0.25);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  }
+
+  .team-comparison-header {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #c084fc;
+    margin-bottom: 0.875rem;
+    padding-bottom: 0.625rem;
+    border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+  }
+
+  .team-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .team-stat {
+    text-align: center;
+  }
+
+  .team-stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .team-stat-value.blue { color: #60a5fa; }
+  .team-stat-value.green { color: #4ade80; }
+  .team-stat-value.red { color: #f87171; }
+  .team-stat-value.orange { color: #fbbf24; }
+
+  .team-stat-label {
+    font-size: 0.6875rem;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.125rem;
+  }
+
+  /* ========================================
+     GP CARDS GRID CONTAINER
+     ======================================== */
+
+  .gp-grid-card {
+    background: linear-gradient(145deg, rgba(25, 25, 48, 0.6) 0%, rgba(18, 18, 35, 0.5) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    overflow: hidden;
+  }
+
+  .gp-grid-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-wrap: wrap;
+  }
+
+  .gp-grid-title {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+  }
+
+  .gp-grid-title h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: white;
+  }
+
+  .gp-grid-title p {
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 0.125rem;
+  }
+
+  .gp-search-input {
+    background: rgba(15, 15, 30, 0.6);
+    border: 1px solid rgba(139, 92, 246, 0.15);
+    border-radius: 12px;
+    padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+    color: white;
+    font-size: 0.875rem;
+    width: 220px;
+    transition: all 0.3s ease;
+  }
+
+  .gp-search-input:focus {
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    outline: none;
+  }
+
+  .gp-search-input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  .gp-grid-body {
+    padding: 1.5rem;
+  }
+
+  /* ========================================
+     BULK ACTIONS BAR
+     ======================================== */
+
+  .bulk-actions-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.875rem 1.25rem;
+    background: linear-gradient(145deg, rgba(139, 92, 246, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: 14px;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+  }
+
+  .bulk-actions-badge {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #c084fc;
+    background: rgba(139, 92, 246, 0.15);
+    padding: 0.25rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+  }
+
+  .filter-select {
+    background: rgba(15, 15, 30, 0.6) !important;
+    border: 1px solid rgba(139, 92, 246, 0.2) !important;
+    border-radius: 10px !important;
+    color: white !important;
+  }
+
+  /* ========================================
+     GP STAT VALUES IN FOOTER
+     ======================================== */
+
+  .gp-stat-value {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .gp-stat-danger {
+    color: #f87171;
+    font-weight: 600;
+  }
+
+  /* ========================================
+     GP EMPTY STATE
+     ======================================== */
+
+  .gp-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+
+  .gp-empty-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 20px;
+    background: linear-gradient(145deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.08) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    color: rgba(139, 92, 246, 0.6);
+    margin-bottom: 1.25rem;
+  }
+
+  .gp-empty-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 0.375rem;
+  }
+
+  .gp-empty-description {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  /* ========================================
+     GP ATTITUDE BUTTONS (in cards)
+     ======================================== */
+
+  .gp-attitude-button-negative {
+    background: rgba(239, 68, 68, 0.12) !important;
+    color: #f87171 !important;
+    border: 1px solid rgba(239, 68, 68, 0.2) !important;
+    border-radius: 10px !important;
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    transition: all 0.3s ease !important;
+  }
+
+  .gp-attitude-button-negative:hover {
+    background: rgba(239, 68, 68, 0.25) !important;
+    transform: scale(1.1) !important;
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3) !important;
+  }
+
+  .gp-attitude-button-positive {
+    background: rgba(34, 197, 94, 0.12) !important;
+    color: #4ade80 !important;
+    border: 1px solid rgba(34, 197, 94, 0.2) !important;
+    border-radius: 10px !important;
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    transition: all 0.3s ease !important;
+  }
+
+  .gp-attitude-button-positive:hover {
+    background: rgba(34, 197, 94, 0.25) !important;
+    transform: scale(1.1) !important;
+    box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3) !important;
+  }
 }
 
 /* ============================================
