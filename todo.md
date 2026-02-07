@@ -2365,3 +2365,10 @@
 - [x] Add monthly stats grid cards showing per-month averages, high/low scores
 - [x] Include monthlyHistory in getEvaluationsByToken API response
 - [x] Ensure mobile-friendly design for GP dashboard (responsive chart + grid)
+
+## Bug Fix - Login Issue (v76)
+
+- [x] Diagnose login/authentication failure
+- [x] Restore original OAuth callback code (removed debug logging)
+- [x] Fix duplicate key TS errors in badge.tsx and stat-card.tsx
+- [x] Verify all 178 tests pass, no TS errors
