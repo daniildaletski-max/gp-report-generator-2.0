@@ -247,9 +247,13 @@ function DashboardLayoutContent({
                   </div>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 bg-[#0a1420]/95 backdrop-blur-xl border-violet-500/20 rounded-xl shadow-xl shadow-violet-500/10">
+              <DropdownMenuContent align="end" side="top" className="w-48 bg-[#0a1420]/95 backdrop-blur-xl border-violet-500/20 rounded-xl shadow-xl shadow-violet-500/10 z-[100]">
                 <DropdownMenuItem
-                  onClick={logout}
+                  onSelect={async (e) => {
+                    e.preventDefault();
+                    await logout();
+                    window.location.href = "/";
+                  }}
                   className="cursor-pointer text-red-400 focus:text-red-400 focus:bg-red-500/10 rounded-lg"
                 >
                   <LogOut className="mr-2 h-4 w-4" />

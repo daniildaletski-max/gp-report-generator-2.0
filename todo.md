@@ -2372,3 +2372,7 @@
 - [x] Restore original OAuth callback code (removed debug logging)
 - [x] Fix duplicate key TS errors in badge.tsx and stat-card.tsx
 - [x] Verify all 178 tests pass, no TS errors
+
+## Bug Fix - Logout Issue (v77)
+
+- [x] Fix logout functionality - changed onClick to onSelect with e.preventDefault(), added redirect to / after logout, added z-[100] and side="top" to dropdown
