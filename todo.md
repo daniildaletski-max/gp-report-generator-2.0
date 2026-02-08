@@ -2490,3 +2490,16 @@
 - [x] Add email sending for team monthly overview reports (report.generate sends email with stats)
 - [x] Added 5 new report-email tests (183 total tests passing)
 - [x] Increased resend-api-key test timeout to 15s for network reliability
+
+## Excel Attachment & Custom Email Domain (v85)
+
+- [x] Attach Excel file to email when report.generate creates the report
+  - Frontend chains generate → exportToExcel automatically
+  - exportToExcel builds full Excel with charts and sends email with attachment via sendReportEmail
+- [x] Auto-generate Excel during report.generate (chained via frontend, not duplicated)
+  - Button renamed to "Generate, Export & Email" with gold gradient styling
+  - Auto-opens Excel file in new tab after generation
+- [ ] Configure custom email sending domain via Resend — SKIPPED (user cannot register domain)
+  - Keeping reports@resend.dev as sender
+- [x] Removed duplicate simple email from report.generate (exportToExcel handles full email with attachment)
+- [x] All 183 tests passing

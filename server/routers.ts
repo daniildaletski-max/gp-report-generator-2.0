@@ -1755,23 +1755,10 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           content: `A new Team Monthly Overview report has been generated for ${team.teamName} - ${MONTH_NAMES[input.reportMonth - 1]} ${input.reportYear}`,
         });
 
-        // Send email notification to user about the generated report
-        let emailSent = false;
-        if (ctx.user.email) {
-          try {
-            const monthName = MONTH_NAMES[input.reportMonth - 1];
-            emailSent = await sendEmail({
-              to: ctx.user.email,
-              subject: `📊 Team Monthly Overview Generated: ${team.teamName} - ${monthName} ${input.reportYear}`,
-              body: `Hello ${ctx.user.name || 'User'},\n\nYour Team Monthly Overview report has been generated successfully.\n\n📋 Report Details:\n• Team: ${team.teamName}\n• Period: ${monthName} ${input.reportYear}\n• Generated: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}\n\n📊 Key Stats:\n• Total GPs: ${stats.length}\n• Average Score: ${stats.length > 0 ? (stats.reduce((sum, gp) => sum + Number(gp.avgTotalScore || 0), 0) / stats.length).toFixed(1) : 'N/A'}\n• Total Evaluations: ${stats.reduce((sum, gp) => sum + gp.evaluationCount, 0)}\n\nYou can view the full report and export it to Excel or Google Sheets from the GP Report Generator dashboard.\n\n---\nThis is an automated message from GP Report Generator.`,
-            });
-            console.log(`[report.generate] Email sent to ${ctx.user.email}: ${emailSent}`);
-          } catch (emailError) {
-            console.warn(`[report.generate] Failed to send email:`, emailError);
-          }
-        }
+        // Email with Excel attachment is now sent by the chained exportToExcel call from the frontend
+        // This avoids duplicate emails and ensures the Excel file is attached
 
-        return { ...report, emailSent, emailAddress: ctx.user.email || null };
+        return { ...report };
       }),
 
     exportToExcel: protectedProcedure

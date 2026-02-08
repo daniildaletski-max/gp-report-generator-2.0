@@ -210,17 +210,41 @@ export default function ReportsPage() {
         ...formData,
         autoFill: true, // Always auto-fill empty fields with AI-generated content
       });
-      if (result.emailSent && result.emailAddress) {
+      toast.success("Report generated. Building Excel & sending email...");
+
+      // Automatically export to Excel and send email with attachment
+      let emailSent = false;
+      let emailAddress: string | null = null;
+      let excelUrl: string | null = null;
+      try {
+        const exportResult = await exportMutation.mutateAsync({ reportId: result.id });
+        emailSent = exportResult.emailSent;
+        emailAddress = exportResult.emailAddress;
+        excelUrl = exportResult.excelUrl;
+      } catch (exportError: any) {
+        console.warn("Auto-export failed:", exportError);
+        // Report was still created successfully, just export failed
+      }
+
+      if (emailSent && emailAddress) {
         toast.success(
           <div className="flex flex-col gap-1">
-            <span>Report generated successfully</span>
-            <span className="text-xs text-green-200">📧 Notification sent to {result.emailAddress}</span>
+            <span>Report generated & exported successfully</span>
+            <span className="text-xs text-green-200">📧 Excel report sent to {emailAddress}</span>
           </div>,
-          { duration: 5000 }
+          { duration: 6000 }
         );
+      } else if (excelUrl) {
+        toast.success("Report generated & Excel exported successfully");
       } else {
         toast.success("Report generated successfully");
       }
+
+      // Auto-open the Excel file if available
+      if (excelUrl) {
+        window.open(excelUrl, "_blank");
+      }
+
       setShowNewReport(false);
       setFormData({
         teamId: 0,
@@ -517,14 +541,17 @@ export default function ReportsPage() {
                 <Button variant="outline" onClick={() => setShowNewReport(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleGenerate} disabled={isGenerating}>
+                <Button onClick={handleGenerate} disabled={isGenerating} className="bg-gradient-to-r from-[#d4af37] to-[#b8860b] text-black hover:from-[#e6c84b] hover:to-[#d4af37]">
                   {isGenerating ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating...
+                      Generating & Exporting...
                     </>
                   ) : (
-                    <>Generate Report</>
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Generate, Export & Email
+                    </>
                   )}
                 </Button>
               </div>
