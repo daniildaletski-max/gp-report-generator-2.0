@@ -15,8 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { useTheme } from "@/contexts/ThemeContext";
-import { LayoutDashboard, LogOut, PanelLeft, Sun, Moon } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState, createContext, useContext, useCallback } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -69,8 +68,8 @@ export default function DashboardLayout({
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-6">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-violet-500/30">
-              <span className="text-white text-xl font-bold">GP</span>
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#d4af37] to-[#b8860b] flex items-center justify-center shadow-lg shadow-[#d4af37]/20">
+              <span className="text-black text-xl font-bold">GP</span>
             </div>
             <h1 className="text-2xl font-semibold tracking-tight text-center text-foreground">
               Sign in to continue
@@ -84,7 +83,7 @@ export default function DashboardLayout({
               window.location.href = getLoginUrl();
             }}
             size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all bg-gradient-to-r from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white"
+            className="w-full shadow-lg hover:shadow-xl transition-all bg-gradient-to-r from-[#d4af37] to-[#b8860b] hover:from-[#e6c84b] hover:to-[#d4af37] text-black font-semibold"
           >
             Sign in
           </Button>
@@ -129,24 +128,19 @@ function DashboardLayoutContent({
   const menuItems = useContext(MenuItemsContext);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
-  const { theme, toggleTheme, switchable } = useTheme();
 
   const handleLogout = useCallback(async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
     try {
       await logout();
-      // Force clear any remaining cookies on the client side
       document.cookie = "app_session_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;";
       document.cookie = "app_session_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=" + window.location.hostname;
       document.cookie = "app_session_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=." + window.location.hostname;
-      // Clear local storage auth data
       localStorage.removeItem("manus-runtime-user-info");
       toast.success("Signed out successfully");
-      // Force full page reload to clear all state
       window.location.href = "/";
     } catch {
-      // Even on error, force redirect
       document.cookie = "app_session_id=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/;";
       localStorage.removeItem("manus-runtime-user-info");
       window.location.href = "/";
@@ -197,19 +191,19 @@ function DashboardLayoutContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center border-b border-border/30">
+          <SidebarHeader className="h-16 justify-center border-b border-[#d4af37]/10">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               <button
                 onClick={toggleSidebar}
-                className="h-9 w-9 flex items-center justify-center hover:bg-accent rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0 group"
+                className="h-9 w-9 flex items-center justify-center hover:bg-[#d4af37]/8 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0 group"
                 aria-label="Toggle navigation"
               >
-                <PanelLeft className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                <PanelLeft className="h-4 w-4 text-muted-foreground group-hover:text-[#d4af37] transition-colors" />
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
-                    <span className="text-white text-xs font-bold">GP</span>
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#d4af37] to-[#b8860b] flex items-center justify-center shadow-lg shadow-[#d4af37]/15">
+                    <span className="text-black text-xs font-bold">GP</span>
                   </div>
                   <span className="font-semibold tracking-tight truncate text-foreground/90">
                     Reports
@@ -231,16 +225,16 @@ function DashboardLayoutContent({
                       tooltip={item.label}
                       className={`h-11 transition-all duration-300 font-normal rounded-xl ${
                         isActive 
-                          ? "bg-primary/12 text-primary border border-primary/20 shadow-lg shadow-primary/5" 
-                          : "hover:bg-accent text-muted-foreground hover:text-foreground"
+                          ? "bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 shadow-lg shadow-[#d4af37]/5" 
+                          : "hover:bg-[#d4af37]/5 text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       {isActive && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] bg-gradient-to-b from-violet-400 to-violet-600 rounded-r-full" />
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] bg-gradient-to-b from-[#d4af37] to-[#b8860b] rounded-r-full" />
                       )}
                       <item.icon
                         className={`h-4 w-4 transition-transform duration-200 ${
-                          isActive ? "text-primary scale-110" : "group-hover:scale-110"
+                          isActive ? "text-[#d4af37] scale-110" : "group-hover:scale-110"
                         }`}
                       />
                       <span className={isActive ? "font-medium" : ""}>{item.label}</span>
@@ -251,31 +245,11 @@ function DashboardLayoutContent({
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="p-3 border-t border-border/30">
-            {/* Theme toggle */}
-            {switchable && (
-              <button
-                onClick={toggleTheme}
-                className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-accent transition-all duration-200 w-full text-left mb-1 group-data-[collapsible=icon]:justify-center"
-                aria-label="Toggle theme"
-              >
-                {theme === 'dark' ? (
-                  <Sun className="h-4 w-4 text-amber-400 shrink-0" />
-                ) : (
-                  <Moon className="h-4 w-4 text-indigo-400 shrink-0" />
-                )}
-                {!isCollapsed && (
-                  <span className="text-sm text-muted-foreground">
-                    {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-                  </span>
-                )}
-              </button>
-            )}
-
+          <SidebarFooter className="p-3 border-t border-[#d4af37]/10">
             {/* User info */}
             <div className="flex items-center gap-3 rounded-xl px-2 py-2 w-full group-data-[collapsible=icon]:justify-center">
-              <Avatar className="h-9 w-9 border border-primary/20 shrink-0 bg-gradient-to-br from-violet-500/20 to-indigo-500/20">
-                <AvatarFallback className="text-xs font-semibold text-primary bg-transparent">
+              <Avatar className="h-9 w-9 border border-[#d4af37]/20 shrink-0 bg-gradient-to-br from-[#d4af37]/15 to-[#b8860b]/15">
+                <AvatarFallback className="text-xs font-semibold text-[#d4af37] bg-transparent">
                   {user?.name?.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
@@ -291,11 +265,11 @@ function DashboardLayoutContent({
               )}
             </div>
 
-            {/* Sign out button — always visible, not in a dropdown */}
+            {/* Sign out button — always visible */}
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}
-              className="flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-destructive/10 transition-all duration-200 w-full text-left group-data-[collapsible=icon]:justify-center text-red-400 hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-[#8b0000]/15 transition-all duration-200 w-full text-left group-data-[collapsible=icon]:justify-center text-red-400 hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Sign out"
             >
               <LogOut className={`h-4 w-4 shrink-0 ${isLoggingOut ? 'animate-spin' : ''}`} />
@@ -308,7 +282,7 @@ function DashboardLayoutContent({
           </SidebarFooter>
         </Sidebar>
         <div
-          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
+          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-[#d4af37]/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
           onMouseDown={() => {
             if (isCollapsed) return;
             setIsResizing(true);
@@ -319,7 +293,7 @@ function DashboardLayoutContent({
 
       <SidebarInset>
         {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+          <div className="flex border-b border-[#d4af37]/10 h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
               <div className="flex items-center gap-3">
@@ -331,18 +305,10 @@ function DashboardLayoutContent({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {switchable && (
-                <button
-                  onClick={toggleTheme}
-                  className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-accent transition-colors"
-                >
-                  {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-indigo-400" />}
-                </button>
-              )}
               <button
                 onClick={handleLogout}
                 disabled={isLoggingOut}
-                className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-destructive/10 transition-colors text-red-400"
+                className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-[#8b0000]/15 transition-colors text-red-400"
               >
                 <LogOut className="h-4 w-4" />
               </button>

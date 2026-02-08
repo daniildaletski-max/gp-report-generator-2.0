@@ -2412,3 +2412,14 @@
 - [x] Replaced dropdown-based logout with direct "Sign out" button always visible in sidebar
 - [x] Client-side cookie clearing + localStorage cleanup as additional fallback
 - [x] All 178 tests pass
+
+## Update - Remove Theme Toggle & New Color Palette (v80)
+
+- [x] Remove light/dark theme toggle from sidebar (removed Sun/Moon, useTheme imports)
+- [x] Remove all light theme CSS overrides from index.css (removed :root:not(.dark) and html:not(.dark) blocks)
+- [x] Lock app to dark mode only (switchable={false} in ThemeProvider)
+- [x] Change color palette to gold (#d4af37) / black / white / dark red (#8b0000)
+- [x] Update all CSS variables, glass components, stat cards, badges, buttons to gold palette
+- [x] Update Home page - gold gradient text, gold buttons with black text, gold orbs
+- [x] Update DashboardLayout - gold GP logo, gold active states, removed theme toggle
+- [x] All 178 tests pass, dev server compiles correctly
