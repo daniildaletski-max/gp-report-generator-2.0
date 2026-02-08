@@ -1512,9 +1512,18 @@ function ErrorFilesTab({
   const [errorType, setErrorType] = useState<"playgon" | "mg">("playgon");
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
+  // Check if a file already exists for the selected month/year/type
+  const existingFile = errorFiles.find(
+    (f: any) => f.month === selectedMonth && f.year === selectedYear && f.fileType === errorType
+  );
+
   const uploadMutation = trpc.errorFile.upload.useMutation({
-    onSuccess: () => {
-      toast.success("Error file uploaded");
+    onSuccess: (data: any) => {
+      if (data.replacedFileId) {
+        toast.success(`Error file replaced (previous file #${data.replacedFileId} removed)`);
+      } else {
+        toast.success("Error file uploaded");
+      }
       refetchFiles();
     },
     onError: (error) => {
@@ -1629,6 +1638,12 @@ filename: file.name,
                 onChange={handleFileUpload}
                 disabled={isUploading}
               />
+              {existingFile && (
+                <p className="text-xs text-yellow-500/80 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Existing {errorType.toUpperCase()} file for {MONTHS[selectedMonth - 1]} {selectedYear} will be replaced
+                </p>
+              )}
             </div>
           </div>
         </div>

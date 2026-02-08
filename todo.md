@@ -2541,3 +2541,36 @@
   - deleteGpErrorsByMonthYear now filters by userId
   - getErrorCountByGP now filters by userId
   - updateGPMistakesDirectly now scopes GP lookup by userId
+
+## Batch Update v88
+
+- [x] Migrate existing data: fill userId in old errorFiles/gpErrors records based on uploadedById/errorFileId
+  - Ran SQL: UPDATE error_files SET user_id = uploaded_by_id WHERE user_id IS NULL
+  - Ran SQL: UPDATE gp_errors SET user_id = (SELECT uploaded_by_id FROM error_files WHERE id = gp_errors.error_file_id)
+  - Also fixed teams and GPs with null userId
+- [x] Fix Team Monthly Overview generation - "No evaluation data" error when data exists
+  - Root cause: duplicate GPs created without teamId during upload
+  - Evaluations linked to orphan GPs (no team) instead of team-assigned GPs
+  - Fix: reassigned evaluations to correct team GPs, removed orphans
+  - Fix: findOrCreateGamePresenter now searches for existing team-assigned GPs first
+- [x] Optimize error file upload: one file per month, auto-replace previous upload
+  - Added getErrorFileByMonthYearType() to check for existing file
+  - Upload procedure now auto-deletes old file + errors before inserting new one
+  - Admin UI shows "will replace existing" indicator and success toast
+- [x] Add clear filters by teams across pages
+  - Added team filter dropdown to Evaluations page (with "All Teams" option)
+  - Added team filter dropdown to Reports page (with "All Teams" option)
+  - Dashboard already had team filter on MonthlyTrend section
+- [x] Make it easier to track each month performance (month-by-month navigation)
+  - Team filters allow month-by-month comparison across pages
+  - GP Monthly Comparison section shows detailed monthly breakdown cards
+- [x] Dashboard GP: previous months comparisons (trend graphs)
+  - New GPMonthlyComparisonSection with team + GP dropdowns
+  - Line chart showing Total/Appearance/Performance scores over 6 months
+  - Monthly breakdown cards with score diffs, high/low scores, attitude, mistakes
+  - New tRPC endpoints: gamePresenter.monthlyHistory, gamePresenter.teamMonthlyComparison
+- [x] Dashboard auto-update each month
+  - Dashboard stats use current month/year by default
+  - MonthlyTrend shows rolling 6-month window automatically
+  - GP comparison uses rolling 6-month window
+  - All data refreshes on page load via tRPC queries

@@ -405,6 +405,9 @@ export default function Dashboard() {
       {/* Monthly Comparative Analytics */}
       <MonthlyTrendSection isMobile={isMobile} />
 
+      {/* GP Month-over-Month Comparison */}
+      <GPMonthlyComparisonSection isMobile={isMobile} />
+
       {/* Cross-Team GP Comparison */}
       <TeamComparisonSection isMobile={isMobile} />
     </div>
@@ -650,6 +653,192 @@ function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
   );
 }
 
+
+// ======================================
+// GP Month-over-Month Comparison Component
+// ======================================
+function GPMonthlyComparisonSection({ isMobile }: { isMobile: boolean }) {
+  const [selectedTeamId, setSelectedTeamId] = useState<number | undefined>(undefined);
+  const [selectedGpId, setSelectedGpId] = useState<number | undefined>(undefined);
+  const { data: teams } = trpc.fmTeam.list.useQuery();
+  const { data: gpList } = trpc.gamePresenter.list.useQuery();
+  const { data: gpHistory, isLoading: isLoadingHistory } = trpc.gamePresenter.monthlyHistory.useQuery(
+    { gpId: selectedGpId!, monthsBack: 6 },
+    { enabled: !!selectedGpId }
+  );
+
+  const filteredGPs = useMemo(() => {
+    if (!gpList) return [];
+    if (selectedTeamId) return gpList.filter(gp => gp.teamId === selectedTeamId);
+    return gpList;
+  }, [gpList, selectedTeamId]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-[#d4af37]" />
+            GP Monthly Comparison
+          </h2>
+          <p className="text-white/35 text-xs mt-0.5">Track individual GP performance across months</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select
+            value={selectedTeamId?.toString() || "all"}
+            onValueChange={(val) => { setSelectedTeamId(val === "all" ? undefined : Number(val)); setSelectedGpId(undefined); }}
+          >
+            <SelectTrigger className="w-[160px] h-9 text-sm bg-white/[0.04] border-white/[0.08] rounded-xl">
+              <SelectValue placeholder="All Teams" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Teams</SelectItem>
+              {teams?.map(team => (
+                <SelectItem key={team.id} value={team.id.toString()}>{team.teamName}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={selectedGpId?.toString() || "none"}
+            onValueChange={(val) => setSelectedGpId(val === "none" ? undefined : Number(val))}
+          >
+            <SelectTrigger className="w-[200px] h-9 text-sm bg-white/[0.04] border-white/[0.08] rounded-xl">
+              <SelectValue placeholder="Select GP" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Select a GP...</SelectItem>
+              {filteredGPs.map(gp => (
+                <SelectItem key={gp.id} value={gp.id.toString()}>{gp.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {!selectedGpId ? (
+        <Card variant="glass">
+          <CardContent className="flex flex-col items-center justify-center h-48 py-8">
+            <Users className="h-10 w-10 text-white/10 mb-3" />
+            <p className="text-white/30 text-sm">Select a Game Presenter to view their monthly comparison</p>
+            <p className="text-white/15 text-xs mt-1">Choose a team and GP from the dropdowns above</p>
+          </CardContent>
+        </Card>
+      ) : isLoadingHistory ? (
+        <Card variant="glass">
+          <CardContent className="flex items-center justify-center h-48 py-8">
+            <div className="h-8 w-8 border-2 border-[#d4af37]/30 border-t-[#d4af37] rounded-full animate-spin" />
+          </CardContent>
+        </Card>
+      ) : gpHistory && gpHistory.length > 0 ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Score Trend Line Chart */}
+          <Card variant="glass">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-white/70">
+                {filteredGPs.find(g => g.id === selectedGpId)?.name} — Score Trend
+              </CardTitle>
+              <CardDescription className="text-xs text-white/30">Average scores over 6 months</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={isMobile ? 240 : 280}>
+                <LineChart data={gpHistory} margin={{ top: 10, right: 10, left: isMobile ? -10 : 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.04)" />
+                  <XAxis 
+                    dataKey="label" 
+                    tick={{ fontSize: isMobile ? 9 : 11, fill: 'rgba(255,255,255,0.35)' }}
+                    tickFormatter={(v) => v.split(' ')[0]}
+                  />
+                  <YAxis 
+                    domain={[0, 24]} 
+                    ticks={[0, 6, 12, 18, 24]}
+                    tick={{ fontSize: isMobile ? 9 : 11, fill: 'rgba(255,255,255,0.35)' }}
+                    width={isMobile ? 28 : 35}
+                  />
+                  <Tooltip 
+                    contentStyle={{ ...CHART_TOOLTIP_STYLE, fontSize: isMobile ? '11px' : '13px' }}
+                    formatter={(value: number, name: string) => [typeof value === 'number' ? value.toFixed(1) : value, name]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px', paddingTop: 8 }} />
+                  <Line type="monotone" dataKey="avgTotal" name="Total" stroke="#d4af37" strokeWidth={2.5} dot={{ r: 4, fill: '#d4af37', strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="avgAppearance" name="Appearance" stroke="#b8860b" strokeWidth={1.5} dot={{ r: 3, fill: '#b8860b', strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="avgPerformance" name="Performance" stroke="#c9a227" strokeWidth={1.5} dot={{ r: 3, fill: '#c9a227', strokeWidth: 0 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Monthly Detail Cards */}
+          <Card variant="glass">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-white/70">Monthly Breakdown</CardTitle>
+              <CardDescription className="text-xs text-white/30">Detailed stats per month</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                {gpHistory.map((m, i) => {
+                  const prevMonth = i > 0 ? gpHistory[i - 1] : null;
+                  const scoreDiff = prevMonth && prevMonth.avgTotal > 0 && m.avgTotal > 0 
+                    ? m.avgTotal - prevMonth.avgTotal 
+                    : null;
+                  return (
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] hover:border-white/[0.1] transition-all">
+                      <div className="text-center min-w-[50px]">
+                        <p className="text-xs font-medium text-white/50">{m.label}</p>
+                        <p className="text-[10px] text-white/25">{m.evalCount} evals</p>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-lg font-bold ${
+                            m.avgTotal >= 20 ? 'text-emerald-400' :
+                            m.avgTotal >= 16 ? 'text-[#d4af37]' :
+                            m.avgTotal > 0 ? 'text-rose-400' : 'text-white/20'
+                          }`}>
+                            {m.avgTotal > 0 ? m.avgTotal.toFixed(1) : '—'}
+                          </span>
+                          {scoreDiff !== null && (
+                            <span className={`text-xs font-medium ${
+                              scoreDiff > 0 ? 'text-emerald-400' : scoreDiff < 0 ? 'text-rose-400' : 'text-white/30'
+                            }`}>
+                              {scoreDiff > 0 ? '+' : ''}{scoreDiff.toFixed(1)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-[10px] text-white/30">
+                          <span>App: {m.avgAppearance > 0 ? m.avgAppearance.toFixed(1) : '—'}</span>
+                          <span>Perf: {m.avgPerformance > 0 ? m.avgPerformance.toFixed(1) : '—'}</span>
+                          {m.mistakes > 0 && <span className="text-rose-400">{m.mistakes} mistakes</span>}
+                          {m.attitude !== null && m.attitude !== 0 && (
+                            <span className={m.attitude > 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                              Att: {m.attitude > 0 ? '+' : ''}{m.attitude}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {m.highScore > 0 && (
+                        <div className="text-right text-[10px]">
+                          <span className="text-emerald-400">↑{m.highScore.toFixed(1)}</span>
+                          <span className="text-white/20 mx-0.5">/</span>
+                          <span className="text-rose-400">↓{m.lowScore.toFixed(1)}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <Card variant="glass">
+          <CardContent className="flex flex-col items-center justify-center h-48 py-8">
+            <TrendingUp className="h-10 w-10 text-white/10 mb-3" />
+            <p className="text-white/30 text-sm">No history data available for this GP</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
 
 // ======================================
 // Cross-Team GP Comparison Component

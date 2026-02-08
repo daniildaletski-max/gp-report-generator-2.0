@@ -26,6 +26,7 @@ const MONTHS = [
 export default function EvaluationsPage() {
   const utils = trpc.useUtils();
   const { data: evaluations, isLoading } = trpc.evaluation.list.useQuery();
+  const { data: teams } = trpc.fmTeam.list.useQuery();
   
   // Attitude entries query
   const { data: attitudeEntries, isLoading: isLoadingAttitude } = trpc.attitudeScreenshot.listAll.useQuery({});
@@ -59,6 +60,7 @@ export default function EvaluationsPage() {
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterGP, setFilterGP] = useState<string>("all");
+  const [filterTeam, setFilterTeam] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"date" | "score" | "name">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   
@@ -69,17 +71,18 @@ export default function EvaluationsPage() {
   const [attitudeFilterType, setAttitudeFilterType] = useState<string>("all");
   const [attitudeSearchQuery, setAttitudeSearchQuery] = useState("");
 
-  // Get unique GPs for filter
+  // Get unique GPs for filter (filtered by team if selected)
   const uniqueGPs = useMemo(() => {
     if (!evaluations) return [];
     const gps = new Map<number, string>();
     evaluations.forEach(({ gamePresenter }) => {
       if (gamePresenter?.id && gamePresenter?.name) {
+        if (filterTeam !== "all" && gamePresenter.teamId !== Number(filterTeam)) return;
         gps.set(gamePresenter.id, gamePresenter.name);
       }
     });
     return Array.from(gps.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [evaluations]);
+  }, [evaluations, filterTeam]);
 
   // Attitude statistics
   const attitudeStats = useMemo(() => {
@@ -170,6 +173,11 @@ export default function EvaluationsPage() {
         }
       }
       
+      // Team filter
+      if (filterTeam && filterTeam !== "all" && gamePresenter?.teamId !== Number(filterTeam)) {
+        return false;
+      }
+      
       // GP filter
       if (filterGP && filterGP !== "all" && gamePresenter?.id !== Number(filterGP)) {
         return false;
@@ -209,16 +217,17 @@ export default function EvaluationsPage() {
     });
     
     return filtered;
-  }, [evaluations, searchQuery, filterMonth, filterYear, filterGP, sortBy, sortOrder]);
+  }, [evaluations, searchQuery, filterMonth, filterYear, filterGP, filterTeam, sortBy, sortOrder]);
 
   const clearFilters = () => {
     setSearchQuery("");
     setFilterMonth(null);
     setFilterYear(null);
     setFilterGP("all");
+    setFilterTeam("all");
   };
 
-  const hasActiveFilters = searchQuery || filterMonth !== null || filterYear !== null || (filterGP && filterGP !== "all");
+  const hasActiveFilters = searchQuery || filterMonth !== null || filterYear !== null || (filterGP && filterGP !== "all") || (filterTeam && filterTeam !== "all");
   
   // Bulk selection handlers
   const toggleSelectAll = () => {
@@ -542,6 +551,18 @@ export default function EvaluationsPage() {
                 className="pl-9"
               />
             </div>
+            
+            <Select value={filterTeam} onValueChange={(v) => { setFilterTeam(v); setFilterGP("all"); }}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="All Teams" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Teams</SelectItem>
+                {teams?.map((team) => (
+                  <SelectItem key={team.id} value={String(team.id)}>{team.teamName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             
             <Select value={filterGP} onValueChange={setFilterGP}>
               <SelectTrigger className="w-[180px]">

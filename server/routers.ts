@@ -1098,9 +1098,59 @@ export const appRouter = router({
           })),
         };
       }),
-  }),
 
-  // User/FM management
+    // Get GP monthly history for comparison across months
+    monthlyHistory: protectedProcedure
+      .input(z.object({
+        gpId: z.number().positive(),
+        monthsBack: z.number().min(2).max(12).optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        // Verify ownership
+        const gp = await db.getGamePresenterById(input.gpId);
+        if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
+        if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+        }
+        return await db.getGpMonthlyHistory(input.gpId, input.monthsBack || 6);
+      }),
+
+    // Get all GPs monthly comparison for a team
+    teamMonthlyComparison: protectedProcedure
+      .input(z.object({
+        teamId: z.number().positive().optional(),
+        monthsBack: z.number().min(2).max(12).optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const monthsBack = input?.monthsBack || 6;
+        // Get GPs for the team or all user's GPs
+        let gps: { id: number; name: string; teamId: number | null }[];
+        if (input?.teamId) {
+          const allGps = ctx.user.role !== 'admin'
+            ? await db.getAllGamePresentersByUser(ctx.user.id)
+            : await db.getAllGamePresenters();
+          gps = allGps.filter(g => g.teamId === input.teamId);
+        } else {
+          gps = ctx.user.role !== 'admin'
+            ? await db.getAllGamePresentersByUser(ctx.user.id)
+            : await db.getAllGamePresenters();
+        }
+        // Get monthly history for each GP (limit to 20 GPs for performance)
+        const gpHistories = await Promise.all(
+          gps.slice(0, 20).map(async (gp) => {
+            const history = await db.getGpMonthlyHistory(gp.id, monthsBack);
+            return {
+              gpId: gp.id,
+              gpName: gp.name,
+              teamId: gp.teamId,
+              months: history,
+            };
+          })
+        );
+        return gpHistories;
+      }),
+  }),
+  // User/FM managementt
   user: router({
     // Get current user with team info
     me: protectedProcedure.query(async ({ ctx }) => {
@@ -2967,6 +3017,22 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         errorType: z.enum(["playgon", "mg"]),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Check if an error file already exists for this month/year/type
+        const existingFile = await db.getErrorFileByMonthYearType(input.month, input.year, input.errorType, ctx.user.id);
+        let replacedFileId: number | null = null;
+        
+        if (existingFile) {
+          // Delete existing file and its error records before uploading new one
+          await db.deleteGpErrorsByMonthYear(input.month, input.year, ctx.user.id);
+          if (ctx.user.role !== 'admin') {
+            await db.deleteErrorFileByUser(existingFile.id, ctx.user.id);
+          } else {
+            await db.deleteErrorFile(existingFile.id);
+          }
+          replacedFileId = existingFile.id;
+          console.log(`[Error File] Replacing existing file #${existingFile.id} for ${input.errorType} ${input.month}/${input.year}`);
+        }
+
         // Upload file to S3
         const fileBuffer = Buffer.from(input.fileBase64, "base64");
         const fileKey = `error-files/${input.year}/${input.month}/${input.errorType}-${nanoid()}.xlsx`;
@@ -3115,8 +3181,10 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           userId: ctx.user.id, // Data isolation
         });
 
-        // Delete any existing error records for this month/year to prevent duplicates (user-scoped)
-        await db.deleteGpErrorsByMonthYear(input.month, input.year, ctx.user.id);
+        // Delete any remaining error records for this month/year (in case no existing file was found but records exist)
+        if (!replacedFileId) {
+          await db.deleteGpErrorsByMonthYear(input.month, input.year, ctx.user.id);
+        }
         
         // Update GP mistakes directly from parsed error counts
         const notFoundGPs: string[] = [];
@@ -3169,7 +3237,8 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           gpErrorDetails,
           updatedGPs,
           notFoundGPs,
-          createdErrorRecords: createdErrorRecords.length
+          createdErrorRecords: createdErrorRecords.length,
+          replacedFileId,
         };
       }),
 

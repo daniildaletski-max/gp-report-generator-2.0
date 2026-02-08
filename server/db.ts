@@ -1,4 +1,4 @@
-import { eq, and, or, gte, lte, sql, desc, inArray, isNull } from "drizzle-orm";
+import { eq, and, or, gte, lte, sql, desc, inArray, isNull, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, users, User,
@@ -298,7 +298,22 @@ export async function findOrCreateGamePresenter(name: string, teamId?: number, u
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // First try exact match within user's data (if userId provided)
+  // First try exact match by name (prefer GP with team assignment)
+  const existingWithTeam = await db.select().from(gamePresenters)
+    .where(and(eq(gamePresenters.name, name), isNotNull(gamePresenters.teamId)))
+    .limit(1);
+
+  if (existingWithTeam.length > 0) {
+    // Update userId if not set (for data isolation)
+    if (userId && !existingWithTeam[0].userId) {
+      await db.update(gamePresenters)
+        .set({ userId })
+        .where(eq(gamePresenters.id, existingWithTeam[0].id));
+    }
+    return existingWithTeam[0];
+  }
+
+  // Then try exact match within user's data (if userId provided)
   const conditions = [eq(gamePresenters.name, name)];
   if (userId) {
     conditions.push(eq(gamePresenters.userId, userId));
@@ -313,7 +328,19 @@ export async function findOrCreateGamePresenter(name: string, teamId?: number, u
   }
 
   // Try fuzzy match with high threshold (0.85 = very similar)
-  // Use user-scoped fuzzy match when userId is provided for data isolation
+  // Prefer team-assigned GPs first, then user-scoped
+  const fuzzyMatchAll = await findBestMatchingGP(name, 0.85);
+  if (fuzzyMatchAll && fuzzyMatchAll.gamePresenter.teamId) {
+    console.log(`[Fuzzy Match] "${name}" matched to "${fuzzyMatchAll.gamePresenter.name}" (similarity: ${(fuzzyMatchAll.similarity * 100).toFixed(1)}%)`);
+    if (userId && !fuzzyMatchAll.gamePresenter.userId) {
+      await db.update(gamePresenters)
+        .set({ userId })
+        .where(eq(gamePresenters.id, fuzzyMatchAll.gamePresenter.id));
+    }
+    return fuzzyMatchAll.gamePresenter;
+  }
+  
+  // Then try user-scoped fuzzy match
   const fuzzyMatch = userId 
     ? await findBestMatchingGPByUser(name, 0.85, userId)
     : await findBestMatchingGP(name, 0.85);
@@ -639,6 +666,23 @@ export async function createErrorFile(data: InsertErrorFile): Promise<ErrorFile>
     .limit(1);
 
   return newFile[0];
+}
+
+export async function getErrorFileByMonthYearType(month: number, year: number, fileType: "playgon" | "mg", userId: number): Promise<ErrorFile | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(errorFiles)
+    .where(and(
+      eq(errorFiles.month, month),
+      eq(errorFiles.year, year),
+      eq(errorFiles.fileType, fileType as "playgon" | "mg"),
+      eq(errorFiles.uploadedById, userId)
+    ))
+    .orderBy(desc(errorFiles.createdAt))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
 }
 
 export async function getAllErrorFiles(): Promise<ErrorFile[]> {

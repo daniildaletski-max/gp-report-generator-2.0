@@ -44,6 +44,7 @@ export default function ReportsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterTeam, setFilterTeam] = useState<string>("all");
   
   const [formData, setFormData] = useState(() => ({
     teamId: 0,
@@ -100,18 +101,20 @@ export default function ReportsPage() {
         const fmName = item.team?.floorManagerName?.toLowerCase() || "";
         if (!teamName.includes(query) && !fmName.includes(query)) return false;
       }
+      if (filterTeam && filterTeam !== "all" && item.report.teamId !== Number(filterTeam)) return false;
       if (filterYear && item.report.reportYear !== filterYear) return false;
       if (filterStatus && filterStatus !== "all" && item.report.status !== filterStatus) return false;
       return true;
     });
-  }, [reports, searchQuery, filterYear, filterStatus]);
+  }, [reports, searchQuery, filterYear, filterStatus, filterTeam]);
 
-  const hasActiveFilters = searchQuery || filterYear || (filterStatus && filterStatus !== "all");
+  const hasActiveFilters = searchQuery || filterYear || (filterStatus && filterStatus !== "all") || (filterTeam && filterTeam !== "all");
 
   const clearFilters = () => {
     setSearchQuery("");
     setFilterYear(null);
     setFilterStatus("all");
+    setFilterTeam("all");
   };
 
   const handleDeleteReport = async (reportId: number) => {
@@ -624,6 +627,18 @@ export default function ReportsPage() {
                 className="pl-9"
               />
             </div>
+            
+            <Select value={filterTeam} onValueChange={setFilterTeam}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="All Teams" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Teams</SelectItem>
+                {teams?.map((team) => (
+                  <SelectItem key={team.id} value={String(team.id)}>{team.teamName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             
             <Select value={filterYear ? String(filterYear) : "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
               <SelectTrigger className="w-[120px]">
