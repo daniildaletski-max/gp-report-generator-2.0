@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
+import { PageTransition } from "./components/PageTransition";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Upload from "./pages/Upload";
@@ -41,14 +42,16 @@ function DashboardRoutes() {
 
   return (
     <DashboardLayout sidebarItems={sidebarItems}>
-      <Switch>
-        <Route path="/dashboard" component={Dashboard} />
-        <Route path="/upload" component={Upload} />
-        <Route path="/evaluations" component={Evaluations} />
-        <Route path="/reports" component={Reports} />
-        <Route path="/admin" component={Admin} />
-        <Route component={NotFound} />
-      </Switch>
+      <PageTransition>
+        <Switch>
+          <Route path="/dashboard" component={Dashboard} />
+          <Route path="/upload" component={Upload} />
+          <Route path="/evaluations" component={Evaluations} />
+          <Route path="/reports" component={Reports} />
+          <Route path="/admin" component={Admin} />
+          <Route component={NotFound} />
+        </Switch>
+      </PageTransition>
     </DashboardLayout>
   );
 }
@@ -75,7 +78,7 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider defaultTheme="dark" switchable={true}>
         <TooltipProvider>
           <Toaster />
           <Router />

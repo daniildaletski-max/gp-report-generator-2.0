@@ -91,6 +91,39 @@
 }
 
 /* ============================================
+   LIGHT THEME OVERRIDES
+   ============================================ */
+:root:not(.dark) {
+  --color-background: oklch(0.98 0.005 280);
+  --color-foreground: oklch(0.15 0.02 280);
+  --color-card: oklch(0.99 0.003 280);
+  --color-card-foreground: oklch(0.15 0.02 280);
+  --color-popover: oklch(0.99 0.003 280);
+  --color-popover-foreground: oklch(0.15 0.02 280);
+  --color-primary: oklch(0.55 0.22 280);
+  --color-primary-foreground: oklch(0.98 0.01 280);
+  --color-secondary: oklch(0.94 0.01 280);
+  --color-secondary-foreground: oklch(0.25 0.02 280);
+  --color-muted: oklch(0.95 0.005 280);
+  --color-muted-foreground: oklch(0.45 0.02 280);
+  --color-accent: oklch(0.93 0.015 280);
+  --color-accent-foreground: oklch(0.20 0.03 280);
+  --color-destructive: oklch(0.55 0.22 25);
+  --color-destructive-foreground: oklch(0.98 0.01 80);
+  --color-border: oklch(0.90 0.01 280);
+  --color-input: oklch(0.95 0.005 280);
+  --color-ring: oklch(0.55 0.22 280);
+  --color-sidebar: oklch(0.97 0.005 280);
+  --color-sidebar-foreground: oklch(0.25 0.02 280);
+  --color-sidebar-primary: oklch(0.55 0.22 280);
+  --color-sidebar-primary-foreground: oklch(0.98 0.01 280);
+  --color-sidebar-accent: oklch(0.93 0.015 280);
+  --color-sidebar-accent-foreground: oklch(0.20 0.03 280);
+  --color-sidebar-border: oklch(0.90 0.01 280);
+  --color-sidebar-ring: oklch(0.55 0.22 280);
+}
+
+/* ============================================
    BASE STYLES
    ============================================ */
 @layer base {
@@ -103,8 +136,15 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    background: linear-gradient(145deg, #08081a 0%, #0c0c1e 50%, #0a0a18 100%);
     min-height: 100vh;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  .dark body,
+  html.dark body {
+    background: linear-gradient(145deg, #08081a 0%, #0c0c1e 50%, #0a0a18 100%);
+  }
+  html:not(.dark) body {
+    background: linear-gradient(145deg, #f8f7ff 0%, #f0eeff 50%, #f5f3ff 100%);
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
@@ -988,6 +1028,150 @@
     width: 200%; height: 200%;
     background: radial-gradient(ellipse at center, rgba(139, 92, 246, 0.04) 0%, transparent 70%);
     pointer-events: none;
+  }
+
+  /* ========================================
+     LIGHT THEME — Glass component overrides
+     ======================================== */
+
+  html:not(.dark) .glass {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(245, 243, 255, 0.6) 100%);
+    border-color: rgba(139, 92, 246, 0.12);
+    box-shadow: 0 4px 24px rgba(139, 92, 246, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  }
+  html:not(.dark) .glass-card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.8) 0%, rgba(248, 247, 255, 0.7) 100%);
+    border-color: rgba(139, 92, 246, 0.1);
+    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+  html:not(.dark) .glass-card:hover {
+    border-color: rgba(139, 92, 246, 0.25);
+    box-shadow: 0 12px 40px rgba(139, 92, 246, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+  html:not(.dark) .glass-elevated {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 247, 255, 0.88) 100%);
+    border-color: rgba(139, 92, 246, 0.12);
+    box-shadow: 0 32px 100px rgba(139, 92, 246, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+  html:not(.dark) .glass-strong {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.97) 0%, rgba(250, 249, 255, 0.95) 100%);
+    border-color: rgba(139, 92, 246, 0.08);
+  }
+  html:not(.dark) .glass-subtle {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.03) 0%, rgba(99, 102, 241, 0.03) 100%);
+    border-color: rgba(139, 92, 246, 0.08);
+  }
+  html:not(.dark) .glass-interactive {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.7) 0%, rgba(248, 247, 255, 0.6) 100%);
+    border-color: rgba(139, 92, 246, 0.1);
+  }
+  html:not(.dark) .glass-interactive:hover {
+    border-color: rgba(139, 92, 246, 0.3);
+    box-shadow: 0 20px 50px rgba(139, 92, 246, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+  html:not(.dark) .glass-input {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 247, 255, 0.85) 100%);
+    border-color: rgba(139, 92, 246, 0.15);
+    color: #1a1a2e;
+  }
+  html:not(.dark) .glass-input:focus {
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+  }
+  html:not(.dark) .glass-input::placeholder { color: rgba(100, 80, 160, 0.4); }
+  html:not(.dark) .glass-panel {
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.8) 0%, rgba(248, 247, 255, 0.7) 100%);
+    border-color: rgba(139, 92, 246, 0.1);
+  }
+  html:not(.dark) .glass-button {
+    background: linear-gradient(145deg, rgba(139, 92, 246, 0.12) 0%, rgba(99, 102, 241, 0.08) 100%);
+    border-color: rgba(139, 92, 246, 0.2);
+    color: #5b21b6;
+  }
+  html:not(.dark) .glass-button:hover {
+    background: linear-gradient(145deg, rgba(139, 92, 246, 0.2) 0%, rgba(99, 102, 241, 0.15) 100%);
+  }
+
+  /* Light theme stat cards */
+  html:not(.dark) .stat-card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.8) 0%, rgba(248, 247, 255, 0.7) 100%);
+    border-color: rgba(139, 92, 246, 0.1);
+    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+  html:not(.dark) .stat-card:hover {
+    border-color: rgba(139, 92, 246, 0.2);
+    box-shadow: 0 12px 40px rgba(139, 92, 246, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+
+  /* Light theme tables */
+  html:not(.dark) .table-glass {
+    background: rgba(255, 255, 255, 0.7);
+    border-color: rgba(139, 92, 246, 0.1);
+  }
+  html:not(.dark) .table-glass thead { background: rgba(139, 92, 246, 0.04); }
+  html:not(.dark) .table-glass th { color: rgba(30, 20, 60, 0.6); border-bottom-color: rgba(139, 92, 246, 0.1); }
+  html:not(.dark) .table-glass td { border-bottom-color: rgba(139, 92, 246, 0.06); }
+  html:not(.dark) .table-glass tbody tr:hover { background: rgba(139, 92, 246, 0.04); }
+
+  /* Light theme GP cards */
+  html:not(.dark) .gp-card {
+    background: rgba(255, 255, 255, 0.85);
+    border-color: rgba(139, 92, 246, 0.1);
+  }
+  html:not(.dark) .gp-card:hover {
+    border-color: rgba(139, 92, 246, 0.25);
+    box-shadow: 0 16px 48px rgba(139, 92, 246, 0.1);
+  }
+  html:not(.dark) .gp-card-name { color: #7c3aed; }
+  html:not(.dark) .gp-card-team { color: rgba(30, 20, 60, 0.5); }
+  html:not(.dark) .gp-card-footer { background: rgba(139, 92, 246, 0.03); border-top-color: rgba(139, 92, 246, 0.08); }
+
+  /* Light theme premium cards */
+  html:not(.dark) .premium-card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.85) 0%, rgba(248, 247, 255, 0.8) 100%);
+    border-color: rgba(139, 92, 246, 0.1);
+    box-shadow: 0 4px 24px rgba(139, 92, 246, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+  html:not(.dark) .premium-card:hover {
+    border-color: rgba(139, 92, 246, 0.2);
+    box-shadow: 0 20px 60px rgba(139, 92, 246, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+  html:not(.dark) .floating-card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.7) 0%, rgba(248, 247, 255, 0.6) 100%);
+    border-color: rgba(139, 92, 246, 0.08);
+  }
+
+  /* Light theme section headers */
+  html:not(.dark) .section-header-title { color: rgba(30, 20, 60, 0.85); }
+  html:not(.dark) .section-header-subtitle { color: rgba(30, 20, 60, 0.45); }
+  html:not(.dark) .section-header-icon { background: rgba(139, 92, 246, 0.08); border-color: rgba(139, 92, 246, 0.12); }
+
+  /* Light theme empty state */
+  html:not(.dark) .empty-state-icon { background: rgba(139, 92, 246, 0.06); border-color: rgba(139, 92, 246, 0.1); color: rgba(30, 20, 60, 0.2); }
+  html:not(.dark) .empty-state-title { color: rgba(30, 20, 60, 0.6); }
+  html:not(.dark) .empty-state-description { color: rgba(30, 20, 60, 0.35); }
+
+  /* Light theme upload area */
+  html:not(.dark) .upload-area {
+    border-color: rgba(139, 92, 246, 0.2);
+    background: rgba(139, 92, 246, 0.02);
+  }
+  html:not(.dark) .upload-area:hover {
+    border-color: rgba(139, 92, 246, 0.35);
+    background: rgba(139, 92, 246, 0.05);
+  }
+
+  /* Light theme scrollbar */
+  html:not(.dark) ::-webkit-scrollbar-track { background: rgba(139, 92, 246, 0.03); }
+  html:not(.dark) ::-webkit-scrollbar-thumb { background: rgba(139, 92, 246, 0.15); }
+  html:not(.dark) ::-webkit-scrollbar-thumb:hover { background: rgba(139, 92, 246, 0.25); }
+
+  /* Light theme text gradient */
+  html:not(.dark) .text-gradient-violet {
+    background: linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
   /* Glass shine effect */

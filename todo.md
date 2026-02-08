@@ -2402,3 +2402,13 @@
 - [x] Mobile responsiveness preserved across all pages
 - [x] Logout button added to Home page header for authenticated users
 - [x] All 178 tests pass, no TS errors
+
+## Feature Update - Page Transitions, Theme Toggle, Logout Fix (v79)
+
+- [x] Add page transition animations (framer-motion PageTransition component wrapping dashboard routes)
+- [x] Add dark/light theme toggle in sidebar (Sun/Moon icon, switchable=true in ThemeProvider)
+- [x] Add complete light theme CSS variables + glass component overrides for light mode
+- [x] Fix logout - aggressive multi-strategy cookie clearing (4 clearCookie calls + setHeader fallback)
+- [x] Replaced dropdown-based logout with direct "Sign out" button always visible in sidebar
+- [x] Client-side cookie clearing + localStorage cleanup as additional fallback
+- [x] All 178 tests pass
