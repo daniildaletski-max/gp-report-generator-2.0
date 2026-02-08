@@ -2503,3 +2503,10 @@
   - Keeping reports@resend.dev as sender
 - [x] Removed duplicate simple email from report.generate (exportToExcel handles full email with attachment)
 - [x] All 183 tests passing
+
+## Auth Bug Fix (v86)
+
+- [x] Fix [object Object] error on authentication - user logs in but gets redirected back to sign in
+  - Root cause: cookie domain was set to `.full-hostname.manus.space` which browsers reject for multi-level subdomains
+  - Fix: don't set domain explicitly for production hosts - let browser scope cookie to exact origin
+  - Added detailed OAuth logging for future debugging

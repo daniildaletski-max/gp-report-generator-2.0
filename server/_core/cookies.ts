@@ -26,23 +26,33 @@ export function getSessionCookieOptions(
   req: Request
 ): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
   const hostname = req.hostname;
-  const shouldSetDomain =
-    hostname &&
-    !LOCAL_HOSTS.has(hostname) &&
-    !isIpAddress(hostname) &&
-    hostname !== "127.0.0.1" &&
-    hostname !== "::1";
+  const secure = isSecureRequest(req);
 
+  // If COOKIE_DOMAIN is explicitly configured, use it
   const configuredDomain = ENV.cookieDomain.trim();
-  const baseDomain = configuredDomain || (shouldSetDomain ? hostname : "");
-  const domain =
-    baseDomain && !baseDomain.startsWith(".") ? `.${baseDomain}` : baseDomain || undefined;
+  if (configuredDomain) {
+    const domain = configuredDomain.startsWith(".")
+      ? configuredDomain
+      : `.${configuredDomain}`;
+    console.log("[Cookie] Using configured domain:", domain);
+    return { domain, httpOnly: true, path: "/", sameSite: "none", secure };
+  }
 
+  // For localhost / IP addresses: don't set domain at all
+  if (!hostname || LOCAL_HOSTS.has(hostname) || isIpAddress(hostname)) {
+    console.log("[Cookie] Local/IP host, no domain set");
+    return { httpOnly: true, path: "/", sameSite: "none", secure };
+  }
+
+  // For production domains: DON'T set domain explicitly.
+  // When domain is omitted, the browser scopes the cookie to the exact
+  // origin hostname (no subdomain sharing), which is the safest default
+  // and avoids issues with multi-level subdomains like x.y.manus.space.
+  console.log("[Cookie] Production host:", hostname, "- not setting domain (browser will use exact origin)");
   return {
-    domain,
     httpOnly: true,
     path: "/",
     sameSite: "none",
-    secure: isSecureRequest(req),
+    secure,
   };
 }
