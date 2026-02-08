@@ -206,11 +206,21 @@ export default function ReportsPage() {
 
     setIsGenerating(true);
     try {
-      await generateMutation.mutateAsync({
+      const result = await generateMutation.mutateAsync({
         ...formData,
         autoFill: true, // Always auto-fill empty fields with AI-generated content
       });
-      toast.success("Report generated successfully");
+      if (result.emailSent && result.emailAddress) {
+        toast.success(
+          <div className="flex flex-col gap-1">
+            <span>Report generated successfully</span>
+            <span className="text-xs text-green-200">📧 Notification sent to {result.emailAddress}</span>
+          </div>,
+          { duration: 5000 }
+        );
+      } else {
+        toast.success("Report generated successfully");
+      }
       setShowNewReport(false);
       setFormData({
         teamId: 0,

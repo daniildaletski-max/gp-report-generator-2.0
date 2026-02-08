@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Resend } from "resend";
 
 describe("Resend API Key Validation", () => {
-  it("should have valid RESEND_API_KEY configured", async () => {
+  it("should have valid RESEND_API_KEY configured", { timeout: 15000 }, async () => {
     const apiKey = process.env.RESEND_API_KEY;
     
     // Check if API key is set

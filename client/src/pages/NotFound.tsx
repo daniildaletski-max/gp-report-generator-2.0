@@ -17,7 +17,7 @@ export default function NotFound() {
   return (
     <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden">
       {/* Background effects */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#0C0833] via-[#151050] to-[#0C0833]" />
+      <div className="absolute inset-0 bg-gradient-to-br from-[#0a0906] via-[#12100a] to-[#0a0906]" />
       <div className="absolute top-1/4 -left-20 w-80 h-80 bg-[#d4af37]/20 rounded-full blur-[120px] animate-pulse" />
       <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-blue-500/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
       

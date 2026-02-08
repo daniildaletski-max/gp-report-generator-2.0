@@ -47,11 +47,11 @@ const colorMap: Record<string, {
     glow: "hover:shadow-red-500/10",
   },
   blue: {
-    card: "border-blue-500/15 hover:border-blue-500/25",
-    iconBg: "bg-gradient-to-br from-blue-500/20 to-[#b8860b]/10 border border-blue-500/20",
-    iconText: "text-blue-400",
-    valueText: "text-blue-300",
-    glow: "hover:shadow-blue-500/10",
+    card: "border-[#c9a227]/15 hover:border-[#c9a227]/25",
+    iconBg: "bg-gradient-to-br from-[#c9a227]/20 to-[#b8860b]/10 border border-[#c9a227]/20",
+    iconText: "text-[#c9a227]",
+    valueText: "text-[#c9a227]",
+    glow: "hover:shadow-[#c9a227]/10",
   },
 };
 

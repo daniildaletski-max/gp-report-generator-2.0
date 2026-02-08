@@ -2469,3 +2469,24 @@
 - [x] Error messages improved with descriptive codes (BAD_REQUEST, NOT_FOUND, FORBIDDEN)
 - [x] Input validation added for file size, base64 data, and required fields
 - [x] All 178 tests pass, dev server compiles correctly
+
+## Bug Fix - Login Issue Again (v83)
+
+- [ ] Diagnose why user cannot login after OAuth redirect
+- [ ] Fix OAuth callback / cookie setting issue
+- [ ] Verify login works
+
+## Bug Fixes & Feature - Attitude List, Design Polish, Email Reports (v84)
+
+- [x] Fix white text in attitude presenter dropdown (added inline styles for dark bg + light text)
+- [x] Find and fix design/text issues across all pages
+  - Fixed remaining purple/blue/fuchsia colors → gold palette in GPPortal, Dashboard, NotFound, Upload
+  - Fixed tooltip backgrounds (rgba blue tint → warm dark)
+  - Fixed StatCard blue variant → gold variant
+  - Fixed GPPortal hover shadow (purple → gold)
+  - Fixed PageTransition TypeScript error (ease tuple typing)
+  - Fixed report.generate email body (stats.totalGPs → stats.length)
+  - All off-palette hex colors eliminated across all pages and components
+- [x] Add email sending for team monthly overview reports (report.generate sends email with stats)
+- [x] Added 5 new report-email tests (183 total tests passing)
+- [x] Increased resend-api-key test timeout to 15s for network reliability

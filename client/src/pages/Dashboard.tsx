@@ -38,7 +38,7 @@ interface GPStat {
 }
 
 const CHART_TOOLTIP_STYLE = {
-  background: 'rgba(20, 20, 35, 0.95)',
+  background: 'rgba(14, 13, 10, 0.95)',
   border: '1px solid rgba(255, 255, 255, 0.1)',
   borderRadius: '12px',
   color: '#fff',
@@ -48,7 +48,7 @@ const CHART_TOOLTIP_STYLE = {
 };
 
 // Purple-themed pie chart colors
-const PIE_COLORS = ['#d4af37', '#b8860b', '#d946ef', '#6b7280'];
+const PIE_COLORS = ['#d4af37', '#b8860b', '#c9a227', '#6b7280'];
 
 export default function Dashboard() {
   const [currentDate] = useState(() => new Date());
@@ -388,7 +388,7 @@ export default function Dashboard() {
                     />
                     <Bar dataKey="totalScore" name="Total Score" fill="#d4af37" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="appearance" name="Appearance" fill="#b8860b" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="performance" name="Performance" fill="#d946ef" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="performance" name="Performance" fill="#c9a227" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -522,8 +522,8 @@ function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
                     <stop offset="95%" stopColor="#b8860b" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gradPerformance" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#d946ef" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#d946ef" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#c9a227" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#c9a227" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.04)" />
@@ -544,7 +544,7 @@ function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
                 />
                 <Area type="monotone" dataKey="avgTotalScore" name="Total" stroke="#d4af37" fill="url(#gradTotal)" strokeWidth={2.5} dot={{ r: 4, fill: '#d4af37', strokeWidth: 0 }} />
                 <Area type="monotone" dataKey="avgAppearanceScore" name="Appearance" stroke="#b8860b" fill="url(#gradAppearance)" strokeWidth={1.5} dot={{ r: 3, fill: '#b8860b', strokeWidth: 0 }} />
-                <Area type="monotone" dataKey="avgPerformanceScore" name="Performance" stroke="#d946ef" fill="url(#gradPerformance)" strokeWidth={1.5} dot={{ r: 3, fill: '#d946ef', strokeWidth: 0 }} />
+                <Area type="monotone" dataKey="avgPerformanceScore" name="Performance" stroke="#c9a227" fill="url(#gradPerformance)" strokeWidth={1.5} dot={{ r: 3, fill: '#c9a227', strokeWidth: 0 }} />
                 <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px', paddingTop: 8 }} />
               </AreaChart>
             </ResponsiveContainer>
@@ -589,7 +589,7 @@ function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
                 />
                 <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px', paddingTop: 8 }} />
                 <Bar dataKey="totalEvaluations" name="Evaluations" fill="#d4af37" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="uniqueGPs" name="GPs Evaluated" fill="#d946ef" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="uniqueGPs" name="GPs Evaluated" fill="#c9a227" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -708,7 +708,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
   ).sort((a, b) => b.avgTotalScore - a.avgTotalScore);
 
   // Team colors for the chart
-  const TEAM_COLORS = ['#d4af37', '#b8860b', '#10b981', '#f43f5e', '#3b82f6', '#eab308', '#8b0000', '#14b8a6'];
+  const TEAM_COLORS = ['#d4af37', '#b8860b', '#b8860b', '#f43f5e', '#3b82f6', '#eab308', '#8b0000', '#14b8a6'];
 
   return (
     <div className="space-y-4">
@@ -758,7 +758,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                     <YAxis type="category" dataKey="name" width={isMobile ? 60 : 100} tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11 }} axisLine={false} tickLine={false} />
                     <Tooltip
                       contentStyle={{
-                        background: 'rgba(20, 20, 35, 0.95)',
+                        background: 'rgba(14, 13, 10, 0.95)',
                         border: '1px solid rgba(255, 255, 255, 0.1)',
                         borderRadius: '12px',
                         color: '#fff',
@@ -774,7 +774,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                     />
                     <Bar dataKey="avgTotal" name="Total" fill="#d4af37" radius={[0, 6, 6, 0]} barSize={20} />
                     <Bar dataKey="avgAppearance" name="Appearance" fill="#b8860b" radius={[0, 6, 6, 0]} barSize={20} />
-                    <Bar dataKey="avgPerformance" name="Performance" fill="#10b981" radius={[0, 6, 6, 0]} barSize={20} />
+                    <Bar dataKey="avgPerformance" name="Performance" fill="#b8860b" radius={[0, 6, 6, 0]} barSize={20} />
                     <Legend 
                       wrapperStyle={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}
                       iconType="circle"
@@ -860,7 +860,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                     />
                     <Tooltip
                       contentStyle={{
-                        background: 'rgba(20, 20, 35, 0.95)',
+                        background: 'rgba(14, 13, 10, 0.95)',
                         border: '1px solid rgba(255, 255, 255, 0.1)',
                         borderRadius: '12px',
                         color: '#fff',

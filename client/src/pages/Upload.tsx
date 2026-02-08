@@ -485,7 +485,7 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#08080f]">
+    <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0906]">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
         <div className="page-header mb-0">
@@ -651,10 +651,11 @@ export default function UploadPage() {
                       className="w-full glass-input rounded-xl px-4 py-3 border-0 focus:ring-2 focus:ring-primary/50"
                       value={selectedGpId || ""}
                       onChange={(e) => setSelectedGpId(e.target.value ? Number(e.target.value) : null)}
+                      style={{ color: 'rgba(255, 255, 255, 0.9)', backgroundColor: '#0e0d0a' }}
                     >
-                      <option value="">Choose a GP...</option>
+                      <option value="" style={{ backgroundColor: '#1a1a14', color: '#f0e6c8' }}>Choose a GP...</option>
                       {gpList?.map((gp) => (
-                        <option key={gp.id} value={gp.id}>
+                        <option key={gp.id} value={gp.id} style={{ backgroundColor: '#1a1a14', color: '#f0e6c8' }}>
                           {gp.name}
                         </option>
                       ))}

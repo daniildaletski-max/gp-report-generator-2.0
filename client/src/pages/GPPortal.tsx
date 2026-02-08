@@ -130,7 +130,7 @@ function StatCard({ icon: Icon, value, label, color, trend }: {
   trend?: number;
 }) {
   return (
-    <div className={`relative bg-gradient-to-br ${color} backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden group hover:scale-[1.02] hover:shadow-[0_8px_32px_rgba(139,92,246,0.15)] transition-all duration-300`}>
+    <div className={`relative bg-gradient-to-br ${color} backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden group hover:scale-[1.02] hover:shadow-[0_8px_32px_rgba(212,175,55,0.15)] transition-all duration-300`}>
       <div className="p-4 sm:p-5 relative">
         {/* Glow effect */}
         <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/15 transition-all" />
@@ -220,11 +220,11 @@ export default function GPPortal() {
         <AnimatedBackground />
         <div className="text-center relative z-10">
           <div className="relative">
-            <div className="absolute inset-0 bg-[#67B2E7]/30 rounded-full blur-2xl animate-pulse" />
-            <Loader2 className="h-20 w-20 animate-spin text-[#67B2E7] mx-auto mb-6 relative" />
+            <div className="absolute inset-0 bg-[#d4af37]/30 rounded-full blur-2xl animate-pulse" />
+            <Loader2 className="h-20 w-20 animate-spin text-[#d4af37] mx-auto mb-6 relative" />
           </div>
-          <p className="text-[#E4F4FC] text-xl font-medium">Loading your dashboard...</p>
-          <p className="text-[#94A2D6] text-sm mt-2">Please wait a moment</p>
+          <p className="text-[#f0e6c8] text-xl font-medium">Loading your dashboard...</p>
+          <p className="text-[rgba(212, 175, 55, 0.6)] text-sm mt-2">Please wait a moment</p>
         </div>
       </div>
     );
@@ -232,7 +232,7 @@ export default function GPPortal() {
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0a14] via-[#141228] to-[#12101e] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0906] via-[#12100a] to-[#0a0906] flex items-center justify-center p-4">
         <AnimatedBackground />
         <Card className="max-w-md w-full bg-white/5 backdrop-blur-xl border-red-500/30 relative z-10">
           <CardHeader className="text-center pb-2">
@@ -298,7 +298,7 @@ export default function GPPortal() {
   };
 
   return (
-    <div className="min-h-screen relative bg-gradient-to-br from-[#0a0a14] via-[#141228] to-[#12101e]">
+    <div className="min-h-screen relative bg-gradient-to-br from-[#0a0906] via-[#12100a] to-[#0a0906]">
       <AnimatedBackground />
       
       {/* Header */}
@@ -308,13 +308,13 @@ export default function GPPortal() {
             {/* Logo and Greeting */}
             <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-[#67B2E7] to-[#5B62B2] rounded-2xl blur-lg opacity-50" />
-                <div className="relative bg-gradient-to-br from-[#67B2E7] to-[#5B62B2] text-white p-3 sm:p-4 rounded-2xl shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#d4af37] to-[#b8860b] rounded-2xl blur-lg opacity-50" />
+                <div className="relative bg-gradient-to-br from-[#d4af37] to-[#b8860b] text-white p-3 sm:p-4 rounded-2xl shadow-2xl">
                   <Star className="h-6 w-6 sm:h-8 sm:w-8" />
                 </div>
               </div>
               <div>
-                <p className="text-[#94A2D6] text-sm">{getGreeting()},</p>
+                <p className="text-[rgba(212, 175, 55, 0.6)] text-sm">{getGreeting()},</p>
                 <h1 className="text-xl sm:text-2xl font-bold gradient-text">{data.gpName}</h1>
               </div>
             </div>
@@ -387,7 +387,7 @@ export default function GPPortal() {
               icon={Eye} 
               value={totalEvaluations} 
               label="Total Evaluations" 
-              color="from-blue-600/40 to-blue-800/40"
+              color="from-[#d4af37]/30 to-[#b8860b]/30"
             />
             <StatCard 
               icon={AlertTriangle} 
@@ -591,7 +591,7 @@ export default function GPPortal() {
                       />
                       <Tooltip 
                         contentStyle={{ 
-                          backgroundColor: 'rgba(15, 15, 30, 0.95)', 
+                          backgroundColor: 'rgba(14, 13, 10, 0.95)', 
                           border: '1px solid rgba(212, 175, 55, 0.3)', 
                           borderRadius: '12px',
                           backdropFilter: 'blur(20px)',
@@ -986,7 +986,7 @@ export default function GPPortal() {
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2 mb-2">
                             {error.errorType && (
-                              <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/30">
+                              <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
                                 {error.errorType}
                               </Badge>
                             )}
@@ -1030,7 +1030,7 @@ export default function GPPortal() {
                                 href={error.screenshotUrl} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
-                                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                                className="text-xs text-[#d4af37] hover:text-[#e6c84b] flex items-center gap-1"
                               >
                                 <Eye className="h-3 w-3" />
                                 View Screenshot

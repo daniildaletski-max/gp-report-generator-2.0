@@ -231,6 +231,35 @@
   }
   .glass-input::placeholder { color: rgba(255, 255, 255, 0.3); }
 
+  /* Native select option styling for dark theme */
+  select.glass-input,
+  .glass-input select,
+  .glass-subtle select {
+    color: rgba(255, 255, 255, 0.9);
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 8L1 3h10z' fill='%23d4af37'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
+  }
+  select.glass-input option,
+  .glass-input option,
+  .glass-subtle select option {
+    background-color: #1a1a14;
+    color: #f0e6c8;
+    padding: 8px 12px;
+  }
+  select.glass-input option:hover,
+  .glass-input option:hover {
+    background-color: #2a2518;
+  }
+  select.glass-input option:checked,
+  .glass-input option:checked {
+    background-color: rgba(212, 175, 55, 0.2);
+    color: #d4af37;
+  }
+
   .glass-panel {
     background: linear-gradient(160deg, rgba(14, 13, 10, 0.7) 0%, rgba(10, 9, 6, 0.6) 50%, rgba(12, 11, 8, 0.65) 100%);
     backdrop-filter: blur(24px);
@@ -1153,6 +1182,15 @@
     transition: border-color 0.2s;
   }
   .filter-select:focus { border-color: rgba(212, 175, 55, 0.3); }
+  .filter-select option {
+    background-color: #1a1a14;
+    color: #f0e6c8;
+    padding: 8px 12px;
+  }
+  .filter-select option:checked {
+    background-color: rgba(212, 175, 55, 0.2);
+    color: #d4af37;
+  }
 
   /* ========================================
      TABLE ROW ENHANCED

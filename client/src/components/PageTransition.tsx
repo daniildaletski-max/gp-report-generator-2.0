@@ -1,7 +1,9 @@
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import { useLocation } from "wouter";
 
-const pageVariants = {
+const cubicEase: [number, number, number, number] = [0.25, 0.1, 0.25, 1];
+
+const pageVariants: Variants = {
   initial: {
     opacity: 0,
     y: 8,
@@ -11,7 +13,7 @@ const pageVariants = {
     y: 0,
     transition: {
       duration: 0.3,
-      ease: [0.25, 0.1, 0.25, 1],
+      ease: cubicEase,
     },
   },
   exit: {
@@ -19,7 +21,7 @@ const pageVariants = {
     y: -4,
     transition: {
       duration: 0.15,
-      ease: [0.25, 0.1, 0.25, 1],
+      ease: cubicEase,
     },
   },
 };
@@ -60,7 +62,7 @@ export function FadeIn({
       transition={{
         duration: 0.4,
         delay,
-        ease: [0.25, 0.1, 0.25, 1],
+        ease: cubicEase,
       }}
       className={className}
     >
@@ -114,7 +116,7 @@ export function StaggerItem({
           y: 0,
           transition: {
             duration: 0.35,
-            ease: [0.25, 0.1, 0.25, 1],
+            ease: cubicEase,
           },
         },
       }}
