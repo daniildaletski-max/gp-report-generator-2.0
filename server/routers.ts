@@ -1,8 +1,8 @@
 import { COOKIE_NAME } from "@shared/const";
-console.log("[routers.ts] LOADED AT", new Date().toISOString());
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { invokeLLM } from "./_core/llm";
 import { storagePut } from "./storage";
@@ -383,7 +383,7 @@ Be precise and extract exactly what you see. If a field is not visible, use reas
 
   const content = response.choices[0]?.message?.content;
   if (!content || typeof content !== 'string') {
-    throw new Error("Failed to extract data from image");
+    throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to extract data from image' });
   }
 
   return JSON.parse(content) as EvaluationData;
@@ -486,7 +486,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'admin') {
           const team = await db.getFmTeamById(input.teamId);
           if (!team || team.userId !== ctx.user.id) {
-            throw new Error('Access denied: You can only update your own teams');
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only update your own teams' });
           }
         }
         const { teamId, gpIds, ...data } = input;
@@ -506,7 +506,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'admin') {
           const team = await db.getFmTeamById(input.teamId);
           if (!team || team.userId !== ctx.user.id) {
-            throw new Error('Access denied: You can only delete your own teams');
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only delete your own teams' });
           }
         }
         await db.deleteFmTeam(input.teamId);
@@ -520,7 +520,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'admin') {
           const team = await db.getFmTeamById(input.teamId);
           if (!team || team.userId !== ctx.user.id) {
-            throw new Error('Access denied: You can only view your own teams');
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only view your own teams' });
           }
         }
         return await db.getTeamWithGPs(input.teamId);
@@ -544,12 +544,12 @@ export const appRouter = router({
         if (ctx.user.role !== 'admin') {
           const team = await db.getFmTeamById(input.teamId);
           if (!team || team.userId !== ctx.user.id) {
-            throw new Error('Access denied: You can only assign GPs to your own teams');
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only assign GPs to your own teams' });
           }
           // Verify GP ownership
           const verification = await db.verifyGpOwnershipByUser(input.gpIds, ctx.user.id);
           if (!verification.valid) {
-            throw new Error('Access denied: You can only assign your own GPs');
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only assign your own GPs' });
           }
         }
         return await db.assignGPsToTeam(input.gpIds, input.teamId);
@@ -564,7 +564,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'admin') {
           const verification = await db.verifyGpOwnershipByUser(input.gpIds, ctx.user.id);
           if (!verification.valid) {
-            throw new Error('Access denied: You can only remove your own GPs from teams');
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only remove your own GPs from teams' });
           }
         }
         return await db.removeGPsFromTeam(input.gpIds);
@@ -669,7 +669,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'admin') {
           const evalUserId = evaluation.evaluation?.userId || evaluation.evaluation?.uploadedById;
           if (evalUserId !== ctx.user.id) {
-            throw new Error("Access denied: You can only view your own evaluations");
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only view your own evaluations' });
           }
         }
         return evaluation;
@@ -698,11 +698,11 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         // Check ownership before update - user-based data isolation
         const evaluation = await db.getEvaluationWithGP(input.id);
-        if (!evaluation) throw new Error("Evaluation not found");
+        if (!evaluation) throw new TRPCError({ code: 'NOT_FOUND', message: 'Evaluation not found' });
         if (ctx.user.role !== 'admin') {
           const evalUserId = evaluation.evaluation?.userId || evaluation.evaluation?.uploadedById;
           if (evalUserId !== ctx.user.id) {
-            throw new Error("Access denied: You can only edit your own evaluations");
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only edit your own evaluations' });
           }
         }
         
@@ -717,7 +717,19 @@ export const appRouter = router({
         if (data.dealingStyleComment) data.dealingStyleComment = db.sanitizeString(data.dealingStyleComment, 1000);
         if (data.gamePerformanceComment) data.gamePerformanceComment = db.sanitizeString(data.gamePerformanceComment, 1000);
         
-        const updated = await db.updateEvaluation(id, data);
+        // Recalculate derived scores when individual scores change
+        const updateData: any = { ...data };
+        const hairS = data.hairScore ?? evaluation.evaluation?.hairScore ?? 0;
+        const makeupS = data.makeupScore ?? evaluation.evaluation?.makeupScore ?? 0;
+        const outfitS = data.outfitScore ?? evaluation.evaluation?.outfitScore ?? 0;
+        const postureS = data.postureScore ?? evaluation.evaluation?.postureScore ?? 0;
+        const dealingS = data.dealingStyleScore ?? evaluation.evaluation?.dealingStyleScore ?? 0;
+        const gamePerfS = data.gamePerformanceScore ?? evaluation.evaluation?.gamePerformanceScore ?? 0;
+        updateData.appearanceScore = (hairS || 0) + (makeupS || 0) + (outfitS || 0) + (postureS || 0);
+        updateData.gamePerformanceTotalScore = (dealingS || 0) + (gamePerfS || 0);
+        updateData.totalScore = updateData.appearanceScore + updateData.gamePerformanceTotalScore;
+        
+        const updated = await db.updateEvaluation(id, updateData);
         return { success: true, evaluation: updated };
       }),
 
@@ -726,11 +738,11 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         // Check ownership before delete - user-based data isolation
         const evaluation = await db.getEvaluationWithGP(input.id);
-        if (!evaluation) throw new Error("Evaluation not found");
+        if (!evaluation) throw new TRPCError({ code: 'NOT_FOUND', message: 'Evaluation not found' });
         if (ctx.user.role !== 'admin') {
           const evalUserId = evaluation.evaluation?.userId || evaluation.evaluation?.uploadedById;
           if (evalUserId !== ctx.user.id) {
-            throw new Error("Access denied: You can only delete your own evaluations");
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only delete your own evaluations' });
           }
         }
         
@@ -821,7 +833,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'admin') {
           const gp = await db.getGamePresenterById(input.gpId);
           if (!gp || gp.userId !== ctx.user.id) {
-            throw new Error("Access denied: You can only manage your own Game Presenters");
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only manage your own Game Presenters' });
           }
         }
         await db.updateGamePresenterTeam(input.gpId, input.teamId);
@@ -833,11 +845,11 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const gp = await db.getGamePresenterById(input.gpId);
         if (!gp) {
-          throw new Error("Game Presenter not found");
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
         }
         // User-based data isolation: non-admin can only delete their own GPs
         if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
-          throw new Error("Access denied: You can only delete your own Game Presenters");
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only delete your own Game Presenters' });
         }
         await db.deleteGamePresenter(input.gpId);
         return { success: true, deletedName: gp.name };
@@ -900,9 +912,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         // Check GP ownership - user-based data isolation
         const gp = await db.getGamePresenterById(input.gpId);
-        if (!gp) throw new Error("Game Presenter not found");
+        if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
         if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
-          throw new Error("Access denied: You can only update your own GP stats");
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only update your own GP stats' });
         }
         
         const { gpId, month, year, ...data } = input;
@@ -933,7 +945,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'admin') {
           const verification = await db.verifyGpOwnershipByUser(gpIds, ctx.user.id);
           if (!verification.valid) {
-            throw new Error(`Access denied: Some GPs don't belong to you`);
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: Some GPs do not belong to you' });
           }
         }
         
@@ -960,7 +972,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'admin') {
           const verification = await db.verifyGpOwnershipByUser(input.gpIds, ctx.user.id);
           if (!verification.valid) {
-            throw new Error(`Access denied: Some GPs don't belong to you`);
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: Some GPs do not belong to you' });
           }
         }
         
@@ -987,7 +999,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'admin') {
           const verification = await db.verifyGpOwnershipByUser(input.gpIds, ctx.user.id);
           if (!verification.valid) {
-            throw new Error(`Access denied: Some GPs don't belong to you`);
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: Some GPs do not belong to you' });
           }
         }
         
@@ -1011,11 +1023,11 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         // Get GP basic info
         const gp = await db.getGamePresenterById(input.gpId);
-        if (!gp) throw new Error("Game Presenter not found");
+        if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
         
         // User-based data isolation
         if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
-          throw new Error("Access denied: You can only view your own GP details");
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only view your own GP details' });
         }
         
         // Get team info
@@ -1024,15 +1036,8 @@ export const appRouter = router({
         // Get monthly stats
         const stats = await db.getMonthlyGpStats(input.gpId, input.month, input.year);
         
-        // Get evaluations for this month
-        const startDate = new Date(input.year, input.month - 1, 1);
-        const endDate = new Date(input.year, input.month, 0, 23, 59, 59);
-        const allEvaluations = await db.getEvaluationsByGP(input.gpId);
-        const monthlyEvaluations = allEvaluations.filter(e => {
-          if (!e.evaluationDate) return false;
-          const evalDate = new Date(e.evaluationDate);
-          return evalDate >= startDate && evalDate <= endDate;
-        });
+        // Get evaluations for this month - use date-filtered query for performance
+        const monthlyEvaluations = await db.getEvaluationsByGPAndMonth(input.gpId, input.year, input.month);
         
         // Get errors from gpErrors table (parsed from Excel)
         const errors = await db.getGpErrorsForPortal(input.gpId, input.month, input.year);
@@ -1133,7 +1138,11 @@ export const appRouter = router({
     // Delete user (admin only)
     delete: adminProcedure
       .input(z.object({ userId: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Prevent admin from deleting themselves
+        if (input.userId === ctx.user.id) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot delete your own account' });
+        }
         await db.deleteUser(input.userId);
         return { success: true };
       }),
@@ -1204,12 +1213,12 @@ export const appRouter = router({
         if (ctx.user.role !== 'admin') {
           const team = await db.getFmTeamById(input.teamId);
           if (!team || team.userId !== ctx.user.id) {
-            throw new Error("Access denied: You can only generate content for your own teams");
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only generate content for your own teams' });
           }
         }
         
         const team = await db.getFmTeamById(input.teamId);
-        if (!team) throw new Error("Team not found");
+        if (!team) throw new TRPCError({ code: 'NOT_FOUND', message: 'Team not found' });
 
         const monthName = MONTH_NAMES[input.reportMonth - 1];
         const stats = await db.getGPMonthlyStats(input.teamId, input.reportYear, input.reportMonth);
@@ -1232,7 +1241,7 @@ export const appRouter = router({
         }
 
         if (stats.length === 0) {
-          throw new Error("No evaluation data available for this month");
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'No evaluation data available for this month' });
         }
 
         // Prepare data summary for LLM
@@ -1504,12 +1513,12 @@ ${sharedPromptRules}`
         if (ctx.user.role !== 'admin') {
           const teamCheck = await db.getFmTeamById(input.teamId);
           if (!teamCheck || teamCheck.userId !== ctx.user.id) {
-            throw new Error("Access denied: You can only generate reports for your own teams");
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only generate reports for your own teams' });
           }
         }
         
         const team = await db.getFmTeamById(input.teamId);
-        if (!team) throw new Error("Team not found");
+        if (!team) throw new TRPCError({ code: 'NOT_FOUND', message: 'Team not found' });
 
         const stats = await db.getGPMonthlyStats(input.teamId, input.reportYear, input.reportMonth);
         const attendance = await db.getAttendanceByTeamMonth(input.teamId, input.reportMonth, input.reportYear);
@@ -1758,11 +1767,11 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         console.log(`[exportToExcel] Called with input.reportId=${input.reportId}`);
         const reportWithTeam = await db.getReportWithTeam(input.reportId);
         console.log(`[exportToExcel] getReportWithTeam returned:`, reportWithTeam ? { reportId: reportWithTeam.report.id, teamId: reportWithTeam.report.teamId } : null);
-        if (!reportWithTeam) throw new Error("Report not found");
+        if (!reportWithTeam) throw new TRPCError({ code: 'NOT_FOUND', message: 'Report not found' });
         
         // User-based data isolation: non-admin can only export their own reports
         if (ctx.user.role !== 'admin' && reportWithTeam.report.userId !== ctx.user.id) {
-          throw new Error("Access denied: You can only export your own reports");
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only export your own reports' });
         }
 
         const { report, team } = reportWithTeam;
@@ -2679,11 +2688,11 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         }
         
         const reportWithTeam = await db.getReportWithTeam(input.reportId);
-        if (!reportWithTeam) throw new Error("Report not found");
+        if (!reportWithTeam) throw new TRPCError({ code: 'NOT_FOUND', message: 'Report not found' });
         
         // User-based data isolation: non-admin can only export their own reports
         if (ctx.user.role !== 'admin' && reportWithTeam.report.userId !== ctx.user.id) {
-          throw new Error("Access denied: You can only export your own reports");
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only export your own reports' });
         }
 
         const { report, team } = reportWithTeam;
@@ -2915,7 +2924,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         
         // User-based data isolation: non-admin can only access their own reports
         if (ctx.user.role !== 'admin' && report.report.userId !== ctx.user.id) {
-          throw new Error("Access denied: You can only view your own reports");
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only view your own reports' });
         }
         return report;
       }),
@@ -2937,7 +2946,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           isAdmin
         );
         if (!success) {
-          throw new Error("Report not found or access denied");
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Report not found or access denied' });
         }
         
         return { success: true };
@@ -3188,12 +3197,12 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         // Check if GP exists
         const gp = await db.getGamePresenterById(input.gpId);
         if (!gp) {
-          throw new Error("Game Presenter not found");
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
         }
         
-        // User-based data isolation: non-admin can only generate tokens for their own GPs
+        // User-based data isolation
         if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
-          throw new Error("Access denied: You can only generate tokens for your own Game Presenters");
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only generate tokens for your own Game Presenters' });
         }
 
         // Deactivate any existing tokens for this GP
@@ -3273,13 +3282,13 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       .mutation(async ({ ctx, input }) => {
         // Get token to check ownership
         const token = await db.getGpAccessTokenById(input.id);
-        if (!token) throw new Error("Token not found");
+        if (!token) throw new TRPCError({ code: 'NOT_FOUND', message: 'Token not found' });
         
         // User-based data isolation: non-admin can only manage their own GP tokens
         if (ctx.user.role !== 'admin') {
           const gp = await db.getGamePresenterById(token.gamePresenterId);
           if (gp && gp.userId !== ctx.user.id) {
-            throw new Error("Access denied: You can only manage your own GP tokens");
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only manage your own GP tokens' });
           }
         }
         
@@ -3294,7 +3303,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         // Find the token
         const accessToken = await db.getGpAccessTokenByToken(input.token);
         if (!accessToken) {
-          throw new Error("Invalid or expired access link");
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired access link' });
         }
 
         // Update last accessed time
@@ -3303,7 +3312,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         // Get GP info
         const gp = await db.getGamePresenterById(accessToken.gamePresenterId);
         if (!gp) {
-          throw new Error("Game Presenter not found");
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
         }
 
         // Get all evaluations for this GP
@@ -3369,7 +3378,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
             createdAt: e.createdAt,
           })),
           ...gpErrors.map(e => ({
-            id: e.id + 100000, // Offset to avoid ID collision
+            id: `excel-${e.id}`, // Unique string ID to avoid collision with screenshot IDs
             source: 'excel' as const,
             errorType: e.errorCode || 'excel_error',
             errorDescription: e.errorDescription,
@@ -3449,7 +3458,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         // Check if invitation already exists for this email
         const existing = await db.getInvitationByEmail(input.email);
         if (existing) {
-          throw new Error('An active invitation already exists for this email');
+          throw new TRPCError({ code: 'CONFLICT', message: 'An active invitation already exists for this email' });
         }
         
         const token = nanoid(32);
@@ -3509,7 +3518,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         const existing = invitations.find(i => i.id === input.id);
         
         if (!existing) {
-          throw new Error('Invitation not found');
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Invitation not found' });
         }
         
         // Delete old invitation
@@ -3577,16 +3586,16 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         const invitation = await db.getInvitationByToken(input.token);
         
         if (!invitation) {
-          throw new Error('Invitation not found');
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Invitation not found' });
         }
         
         if (invitation.status !== 'pending') {
-          throw new Error('Invitation is no longer valid');
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invitation is no longer valid' });
         }
         
         if (invitation.expiresAt < new Date()) {
           await db.updateInvitationStatus(invitation.id, 'expired');
-          throw new Error('Invitation has expired');
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invitation has expired' });
         }
         
         // Check if email matches (optional - can be removed for flexibility)
@@ -4474,10 +4483,9 @@ Respond with a JSON object containing an array of ALL entries found:
           }
 
           if (gamePresenterId && entries.length > 0) {
-            const positiveCount = entries.filter((e: any) => e.type === 'POSITIVE').length;
-            const negativeCount = entries.filter((e: any) => e.type === 'NEGATIVE').length;
-            const attitudeScore = Math.max(1, Math.min(5, 3 + (positiveCount - negativeCount)));
-            await db.updateGPAttitude(gamePresenterId, month, year, attitudeScore);
+            // Use cumulative +1/-1 system consistent with attitudeScreenshot.upload
+            const totalScore = entries.reduce((sum: number, e: any) => sum + (e.score || (e.type === 'POSITIVE' ? 1 : -1)), 0);
+            await db.updateGPAttitude(gamePresenterId, month, year, totalScore);
           }
 
           return {

@@ -2431,3 +2431,41 @@
 - [x] Fix all violet/purple/indigo/fuchsia references across: Dashboard, Upload, Evaluations, Reports, Admin, GPPortal, InvitePage, NotFound, badge, card, stat-card, EvaluationDetailView
 - [x] Update Recharts bar/area chart fills and strokes to #d4af37 / #b8860b
 - [x] All 178 tests pass, dev server compiles correctly
+
+## Deep System Audit & Optimization (v82)
+
+### Backend Audit
+- [x] Audited all tRPC procedures - replaced throw Error with TRPCError (proper HTTP codes)
+- [x] Added try-catch around LLM calls in smartUpload and evaluation upload
+- [x] Fixed attitude score consistency (smartUpload now uses cumulative system like attitudeScreenshot.upload)
+- [x] Added admin self-deletion guard (cannot delete own admin account)
+- [x] Added base64 file size validation (16MB limit) before processing
+- [x] Fixed totalScore recalculation on evaluation.update
+- [x] Fixed ID collision in getEvaluationsByToken (unique IDs via index)
+- [x] Added getEvaluationsByGPAndMonth helper to db.ts
+
+### Frontend Audit
+- [x] Fixed unstable new Date() references in Dashboard.tsx and Reports.tsx (useState(() => ...))
+- [x] Added 58+ missing CSS classes for Admin, Evaluations, Reports, Upload pages
+- [x] Added page-header, page-title, page-subtitle, section-title, section-subtitle
+- [x] Added chart-card, chart-card-header, chart-card-body, chart-title, chart-subtitle
+- [x] Added filter-bar, filter-select, table-row-enhanced, bulk-actions-bar/badge
+- [x] Added gp-grid-card/header/title/body, gp-search-input, gp-stat-value
+- [x] Added gp-empty-state/icon/title/description
+- [x] Added leaderboard-section/title/item/rank/name/badge/empty
+- [x] Added team-comparison-card/header, team-stats-grid, team-stat/value/label
+- [x] Added progress-row/label/track/fill/value
+- [x] Added upload-icon-box, counter-value, stat-icon-container, stat-value/label/sublabel
+- [x] Added color utility classes: blue, green, red, indigo, positive, negative, neutral
+- [x] Added custom-scrollbar, card-gold, dashboard-header/title/subtitle
+
+### Database Audit
+- [x] Reviewed schema - indexes exist on key columns (gpId, evaluationId, userId, teamId)
+- [x] Verified foreign key constraints and data integrity
+- [x] Identified and documented N+1 query patterns for future optimization
+
+### Optimization
+- [x] All throw Error replaced with TRPCError for proper HTTP status codes
+- [x] Error messages improved with descriptive codes (BAD_REQUEST, NOT_FOUND, FORBIDDEN)
+- [x] Input validation added for file size, base64 data, and required fields
+- [x] All 178 tests pass, dev server compiles correctly

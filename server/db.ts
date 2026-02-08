@@ -420,6 +420,24 @@ export async function getEvaluationsByGP(gamePresenterId: number): Promise<Evalu
     .orderBy(desc(evaluations.evaluationDate));
 }
 
+export async function getEvaluationsByGPAndMonth(gamePresenterId: number, year: number, month: number): Promise<Evaluation[]> {
+  const db = await getDb();
+  if (!db) return [];
+
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0, 23, 59, 59);
+
+  return await db.select().from(evaluations)
+    .where(
+      and(
+        eq(evaluations.gamePresenterId, gamePresenterId),
+        gte(evaluations.evaluationDate, startDate),
+        lte(evaluations.evaluationDate, endDate)
+      )
+    )
+    .orderBy(evaluations.evaluationDate);
+}
+
 export async function getEvaluationsByMonth(year: number, month: number): Promise<Evaluation[]> {
   const db = await getDb();
   if (!db) return [];

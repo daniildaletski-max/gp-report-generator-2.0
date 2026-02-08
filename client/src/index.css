@@ -1085,4 +1085,455 @@
     font-size: 0.8125rem !important;
     padding: 0.5rem 0.75rem !important;
   }
+
+  /* ========================================
+     PAGE LAYOUT
+     ======================================== */
+
+  .page-header { margin-bottom: 1.5rem; }
+  .page-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.95);
+    letter-spacing: -0.02em;
+  }
+  .page-subtitle {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 0.25rem;
+  }
+  .section-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 0.5rem;
+  }
+  .section-subtitle {
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin-bottom: 1rem;
+  }
+  .dashboard-header { margin-bottom: 1.5rem; }
+  .dashboard-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.95);
+    letter-spacing: -0.02em;
+  }
+  .dashboard-subtitle {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 0.25rem;
+  }
+
+  /* ========================================
+     FILTER BAR
+     ======================================== */
+
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: rgba(14, 13, 10, 0.5);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 16px;
+    margin-bottom: 1rem;
+  }
+  .filter-select {
+    background: rgba(212, 175, 55, 0.06);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 8px;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.8);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .filter-select:focus { border-color: rgba(212, 175, 55, 0.3); }
+
+  /* ========================================
+     TABLE ROW ENHANCED
+     ======================================== */
+
+  .table-row-enhanced {
+    transition: all 0.2s ease;
+  }
+  .table-row-enhanced:hover {
+    background: rgba(212, 175, 55, 0.04);
+  }
+
+  /* ========================================
+     CHART CARD
+     ======================================== */
+
+  .chart-card {
+    background: linear-gradient(145deg, rgba(14, 13, 10, 0.7) 0%, rgba(10, 9, 6, 0.6) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 20px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  .chart-card:hover {
+    border-color: rgba(212, 175, 55, 0.15);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  }
+  .chart-card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.06);
+  }
+  .chart-card-body { padding: 1.5rem; }
+  .chart-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  .chart-subtitle {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.35);
+    margin-top: 0.25rem;
+  }
+
+  /* ========================================
+     CARD GOLD
+     ======================================== */
+
+  .card-gold {
+    background: linear-gradient(145deg, rgba(14, 13, 10, 0.7) 0%, rgba(10, 9, 6, 0.6) 100%);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 20px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+  }
+  .card-gold:hover {
+    border-color: rgba(212, 175, 55, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  /* ========================================
+     BULK ACTIONS BAR
+     ======================================== */
+
+  .bulk-actions-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: rgba(212, 175, 55, 0.06);
+    border: 1px solid rgba(212, 175, 55, 0.12);
+    border-radius: 12px;
+    margin-bottom: 1rem;
+  }
+  .bulk-actions-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    background: rgba(212, 175, 55, 0.12);
+    color: #d4af37;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 6px;
+  }
+
+  /* ========================================
+     GP GRID
+     ======================================== */
+
+  .gp-grid-card {
+    background: linear-gradient(145deg, rgba(14, 13, 10, 0.7) 0%, rgba(10, 9, 6, 0.6) 100%);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 20px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  .gp-grid-card:hover {
+    border-color: rgba(212, 175, 55, 0.15);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  }
+  .gp-grid-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .gp-grid-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+  }
+  .gp-grid-body { padding: 1.5rem; }
+  .gp-search-input {
+    background: rgba(212, 175, 55, 0.04);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 10px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.8);
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  .gp-search-input:focus { border-color: rgba(212, 175, 55, 0.3); }
+  .gp-search-input::placeholder { color: rgba(255, 255, 255, 0.25); }
+  .gp-stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #d4af37;
+  }
+
+  /* ========================================
+     GP EMPTY STATE
+     ======================================== */
+
+  .gp-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.5rem;
+    text-align: center;
+  }
+  .gp-empty-icon {
+    width: 3rem;
+    height: 3rem;
+    color: rgba(212, 175, 55, 0.2);
+    margin-bottom: 1rem;
+  }
+  .gp-empty-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 0.375rem;
+  }
+  .gp-empty-description {
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.25);
+    max-width: 20rem;
+  }
+
+  /* ========================================
+     LEADERBOARD
+     ======================================== */
+
+  .leaderboard-section { margin-bottom: 1.5rem; }
+  .leaderboard-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 0.75rem;
+  }
+  .leaderboard-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 0.75rem;
+    border-radius: 10px;
+    transition: background 0.2s;
+  }
+  .leaderboard-item:hover { background: rgba(212, 175, 55, 0.04); }
+  .leaderboard-rank {
+    width: 1.75rem;
+    height: 1.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: rgba(212, 175, 55, 0.1);
+    color: #d4af37;
+    border: 1px solid rgba(212, 175, 55, 0.15);
+  }
+  .leaderboard-name {
+    flex: 1;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .leaderboard-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #d4af37;
+  }
+  .leaderboard-empty {
+    padding: 1.5rem;
+    text-align: center;
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  /* ========================================
+     TEAM COMPARISON
+     ======================================== */
+
+  .team-comparison-card {
+    background: rgba(212, 175, 55, 0.03);
+    border: 1px solid rgba(212, 175, 55, 0.06);
+    border-radius: 14px;
+    padding: 1rem;
+    transition: all 0.2s ease;
+  }
+  .team-comparison-card:hover {
+    border-color: rgba(212, 175, 55, 0.12);
+    background: rgba(212, 175, 55, 0.05);
+  }
+  .team-comparison-header {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.06);
+  }
+  .team-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+  .team-stat {
+    text-align: center;
+    padding: 0.375rem;
+  }
+  .team-stat-value {
+    font-size: 1.125rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .team-stat-value.blue { color: #d4af37; }
+  .team-stat-value.green { color: #4ade80; }
+  .team-stat-value.red { color: #dc2626; }
+  .team-stat-value.indigo { color: #b8860b; }
+  .team-stat-label {
+    font-size: 0.6875rem;
+    color: rgba(255, 255, 255, 0.35);
+    margin-top: 0.125rem;
+  }
+
+  /* ========================================
+     PROGRESS BAR
+     ======================================== */
+
+  .progress-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .progress-label {
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.7);
+    min-width: 6rem;
+  }
+  .progress-track {
+    flex: 1;
+    height: 0.375rem;
+    background: rgba(212, 175, 55, 0.06);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #d4af37, #b8860b);
+    border-radius: 999px;
+    transition: width 0.5s ease;
+  }
+  .progress-value {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #d4af37;
+    min-width: 2.5rem;
+    text-align: right;
+  }
+
+  /* ========================================
+     UPLOAD ICON BOX
+     ======================================== */
+
+  .upload-icon-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 1rem;
+    background: rgba(212, 175, 55, 0.08);
+    border: 1px solid rgba(212, 175, 55, 0.12);
+    color: #d4af37;
+    margin-bottom: 1rem;
+  }
+
+  /* ========================================
+     COUNTER VALUE
+     ======================================== */
+
+  .counter-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #d4af37;
+  }
+  .counter-value.green { color: #4ade80; }
+  .counter-value.red { color: #dc2626; }
+  .counter-value.violet { color: #d4af37; }
+
+  /* ========================================
+     COLOR UTILITY CLASSES
+     ======================================== */
+
+  .blue { color: #d4af37; }
+  .green { color: #4ade80; }
+  .red { color: #dc2626; }
+  .indigo { color: #b8860b; }
+  .positive { color: #4ade80; }
+  .negative { color: #dc2626; }
+  .neutral { color: rgba(255, 255, 255, 0.5); }
+
+  /* ========================================
+     STAT ICON & LABEL
+     ======================================== */
+
+  .stat-icon-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.75rem;
+    background: rgba(212, 175, 55, 0.08);
+    border: 1px solid rgba(212, 175, 55, 0.12);
+    color: #d4af37;
+  }
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.95);
+  }
+  .stat-label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.4);
+  }
+  .stat-sublabel {
+    font-size: 0.6875rem;
+    color: rgba(255, 255, 255, 0.25);
+  }
+
+  /* ========================================
+     CUSTOM SCROLLBAR
+     ======================================== */
+
+  .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(212, 175, 55, 0.15);
+    border-radius: 999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(212, 175, 55, 0.25);
+  }
 }

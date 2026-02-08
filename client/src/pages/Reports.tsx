@@ -45,7 +45,7 @@ export default function ReportsPage() {
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     teamId: 0,
     reportMonth: 0,
     reportYear: new Date().getFullYear(),
@@ -53,7 +53,7 @@ export default function ReportsPage() {
     goalsThisMonth: "",
     teamOverview: "",
     additionalComments: "",
-  });
+  }));
 
   const utils = trpc.useUtils();
   const { data: reports, isLoading, refetch } = trpc.report.list.useQuery();
