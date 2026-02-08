@@ -669,37 +669,47 @@ export async function createGpError(data: InsertGpError): Promise<GpError> {
   return newError[0];
 }
 
-export async function deleteGpErrorsByMonthYear(month: number, year: number): Promise<void> {
+export async function deleteGpErrorsByMonthYear(month: number, year: number, userId?: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59);
 
-  await db.delete(gpErrors).where(
-    and(
-      gte(gpErrors.errorDate, startDate),
-      lte(gpErrors.errorDate, endDate)
-    )
-  );
+  const conditions = [
+    gte(gpErrors.errorDate, startDate),
+    lte(gpErrors.errorDate, endDate),
+  ];
+  // User isolation: only delete errors belonging to this user
+  if (userId) {
+    conditions.push(eq(gpErrors.userId, userId));
+  }
+
+  await db.delete(gpErrors).where(and(...conditions));
 }
 
-export async function getErrorCountByGP(month: number, year: number) {
+export async function getErrorCountByGP(month: number, year: number, userId?: number) {
   const db = await getDb();
   if (!db) return [];
 
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59);
 
+  const conditions = [
+    gte(gpErrors.errorDate, startDate),
+    lte(gpErrors.errorDate, endDate),
+  ];
+  // User isolation: only count errors belonging to this user
+  if (userId) {
+    conditions.push(eq(gpErrors.userId, userId));
+  }
+
   return await db.select({
     gpName: gpErrors.gpName,
     errorCount: sql<number>`COUNT(${gpErrors.id})`,
   })
   .from(gpErrors)
-  .where(and(
-    gte(gpErrors.errorDate, startDate),
-    lte(gpErrors.errorDate, endDate)
-  ))
+  .where(and(...conditions))
   .groupBy(gpErrors.gpName);
 }
 
@@ -731,21 +741,29 @@ export async function updateGPMistakesDirectly(
   gpName: string, 
   mistakesCount: number, 
   month: number, 
-  year: number
+  year: number,
+  userId?: number
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
 
-  // Find GP by name (case-insensitive, trimmed)
+  // Find GP by name - with user isolation if userId provided
+  const conditions: any[] = [eq(gamePresenters.name, gpName.trim())];
+  if (userId) {
+    conditions.push(eq(gamePresenters.userId, userId));
+  }
   const gp = await db.select()
     .from(gamePresenters)
-    .where(eq(gamePresenters.name, gpName.trim()))
+    .where(and(...conditions))
     .limit(1);
   
   if (gp.length === 0) {
     // Try fuzzy match - remove extra spaces, normalize
     const normalizedName = gpName.trim().replace(/\s+/g, ' ');
-    const allGPs = await db.select().from(gamePresenters);
+    // User isolation: only search within user's GPs
+    const allGPs = userId 
+      ? await db.select().from(gamePresenters).where(eq(gamePresenters.userId, userId))
+      : await db.select().from(gamePresenters);
     const matchedGP = allGPs.find(g => 
       g.name.toLowerCase().replace(/\s+/g, ' ') === normalizedName.toLowerCase()
     );

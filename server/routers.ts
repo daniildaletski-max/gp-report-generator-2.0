@@ -1224,8 +1224,8 @@ export const appRouter = router({
         const stats = await db.getGPMonthlyStats(input.teamId, input.reportYear, input.reportMonth);
         const attendance = await db.getAttendanceByTeamMonth(input.teamId, input.reportMonth, input.reportYear);
         
-        // Get error counts for each GP
-        const errorCounts = await db.getErrorCountByGP(input.reportMonth, input.reportYear);
+        // Get error counts for each GP (user-scoped)
+        const errorCounts = await db.getErrorCountByGP(input.reportMonth, input.reportYear, ctx.user.id);
         
         // Get attitude data for each GP in the team
         const teamGPs = await db.getGamePresentersByTeam(input.teamId);
@@ -1524,8 +1524,8 @@ ${sharedPromptRules}`
         const attendance = await db.getAttendanceByTeamMonth(input.teamId, input.reportMonth, input.reportYear);
         const monthName = MONTH_NAMES[input.reportMonth - 1];
         
-        // Get error counts for each GP
-        const errorCounts = await db.getErrorCountByGP(input.reportMonth, input.reportYear);
+        // Get error counts for each GP (user-scoped)
+        const errorCounts = await db.getErrorCountByGP(input.reportMonth, input.reportYear, ctx.user.id);
         
         // Get attitude data for each GP in the team
         const teamGPs = await db.getGamePresentersByTeam(input.teamId);
@@ -3112,10 +3112,11 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           year: input.year,
           fileType: input.errorType,
           uploadedById: ctx.user.id,
+          userId: ctx.user.id, // Data isolation
         });
 
-        // Delete any existing error records for this month/year to prevent duplicates
-        await db.deleteGpErrorsByMonthYear(input.month, input.year);
+        // Delete any existing error records for this month/year to prevent duplicates (user-scoped)
+        await db.deleteGpErrorsByMonthYear(input.month, input.year, ctx.user.id);
         
         // Update GP mistakes directly from parsed error counts
         const notFoundGPs: string[] = [];
@@ -3124,7 +3125,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         
         for (const [gpName, count] of Object.entries(gpErrorCounts)) {
           // Find GP by name and update their mistakes count
-          const updated = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year);
+          const updated = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, ctx.user.id);
           if (updated) {
             updatedGPs.push(gpName);
           } else {
@@ -3144,6 +3145,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
                 errorCode: detail.errorCode,
                 gameType: detail.gameType,
                 tableId: detail.tableId,
+                userId: ctx.user.id, // Data isolation
               });
               createdErrorRecords.push(errorRecord.id);
             }
@@ -3154,6 +3156,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
               errorFileId: errorFile.id,
               errorDate: new Date(input.year, input.month - 1, 15),
               errorDescription: `${count} error(s) recorded`,
+              userId: ctx.user.id, // Data isolation
             });
             createdErrorRecords.push(errorRecord.id);
           }

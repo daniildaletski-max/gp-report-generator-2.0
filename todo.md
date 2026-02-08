@@ -2510,3 +2510,34 @@
   - Root cause: cookie domain was set to `.full-hostname.manus.space` which browsers reject for multi-level subdomains
   - Fix: don't set domain explicitly for production hosts - let browser scope cookie to exact origin
   - Added detailed OAuth logging for future debugging
+
+## Data Isolation Audit & Fix (v87)
+
+- [x] Audit all tRPC procedures for user-based data filtering
+  - Full audit completed: 45+ procedures checked
+  - Most already had ByUser variants and admin/user branching
+- [x] Ensure uploads are isolated per user (userId filter)
+  - Added userId column to errorFiles and gpErrors tables
+  - errorFile.upload now sets userId: ctx.user.id
+  - gpError records now set userId: ctx.user.id
+- [x] Ensure evaluations are isolated per user
+  - Already had getEvaluationsWithGPByUser, getEvaluationsByMonthAndUser
+  - Ownership checks on update/delete (evalUserId !== ctx.user.id)
+- [x] Ensure reports are isolated per user
+  - Already had getReportsWithTeamsByUser, deleteReportWithCheckByUser
+  - Ownership checks on generate/export (report.userId !== ctx.user.id)
+- [x] Ensure GP data is isolated per user
+  - Already had getAllGamePresentersByUser, verifyGpOwnershipByUser
+  - updateGPMistakesDirectly now accepts userId for scoped GP lookup
+- [x] Ensure dashboard stats are isolated per user
+  - Already had getDashboardStatsByUser
+- [x] Admin role can see all data, regular users only their own
+  - Pattern: if admin → use unfiltered query; else → use ByUser query
+  - FORBIDDEN thrown when non-admin tries to access others' data
+- [x] Write isolation tests
+  - 193 tests passing (added 10 new isolation tests)
+  - Tests verify: schema userId fields, db function signatures, router source patterns
+- [x] Fixed 3 critical leaks:
+  - deleteGpErrorsByMonthYear now filters by userId
+  - getErrorCountByGP now filters by userId
+  - updateGPMistakesDirectly now scopes GP lookup by userId

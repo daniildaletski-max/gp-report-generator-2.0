@@ -128,6 +128,7 @@ export const errorFiles = mysqlTable("error_files", {
   fileKey: varchar("fileKey", { length: 512 }),
   processedAt: timestamp("processedAt"),
   uploadedById: int("uploadedById"),
+  userId: int("userId"), // Owner of this error file - for user data isolation
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -148,6 +149,7 @@ export const gpErrors = mysqlTable("gp_errors", {
   gameType: varchar("gameType", { length: 50 }),
   tableId: varchar("tableId", { length: 100 }),
   errorDescription: text("errorDescription"),
+  userId: int("userId"), // Owner of this error record - for user data isolation
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

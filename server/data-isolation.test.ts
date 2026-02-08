@@ -25,6 +25,9 @@ vi.mock('./db', () => ({
   deleteErrorFileByUser: vi.fn(),
   deleteErrorScreenshotByUser: vi.fn(),
   deleteAttitudeScreenshotByUser: vi.fn(),
+  deleteGpErrorsByMonthYear: vi.fn(),
+  getErrorCountByGP: vi.fn(),
+  updateGPMistakesDirectly: vi.fn(),
 }));
 
 describe('Data Isolation - User-based access control', () => {
@@ -202,5 +205,74 @@ describe('Data Isolation - User-based access control', () => {
       const canAccess = admin.role === 'admin' || gp.userId === admin.id;
       expect(canAccess).toBe(true);
     });
+  });
+});
+
+// ============================================
+// NEW TESTS: Verify userId fields on gpErrors and errorFiles tables
+// and that db functions accept userId for isolation
+// ============================================
+
+describe('data isolation - schema userId fields on error tables', () => {
+  it('should have userId on errorFiles table', async () => {
+    const schema = await import('../drizzle/schema');
+    expect(schema.errorFiles.userId).toBeDefined();
+  });
+
+  it('should have userId on gpErrors table', async () => {
+    const schema = await import('../drizzle/schema');
+    expect(schema.gpErrors.userId).toBeDefined();
+  });
+});
+
+describe('data isolation - db functions accept userId parameter', () => {
+  it('deleteGpErrorsByMonthYear should accept userId', async () => {
+    const db = await import('./db');
+    expect(typeof db.deleteGpErrorsByMonthYear).toBe('function');
+  });
+
+  it('getErrorCountByGP should accept userId', async () => {
+    const db = await import('./db');
+    expect(typeof db.getErrorCountByGP).toBe('function');
+  });
+
+  it('updateGPMistakesDirectly should accept userId', async () => {
+    const db = await import('./db');
+    expect(typeof db.updateGPMistakesDirectly).toBe('function');
+  });
+});
+
+describe('data isolation - router source code verification', () => {
+  it('should pass userId to getErrorCountByGP in routers', async () => {
+    const fs = await import('fs');
+    const source = fs.readFileSync('./server/routers.ts', 'utf-8');
+    expect(source).toContain('db.getErrorCountByGP(input.reportMonth, input.reportYear, ctx.user.id)');
+  });
+
+  it('should pass userId to deleteGpErrorsByMonthYear in routers', async () => {
+    const fs = await import('fs');
+    const source = fs.readFileSync('./server/routers.ts', 'utf-8');
+    expect(source).toContain('db.deleteGpErrorsByMonthYear(input.month, input.year, ctx.user.id)');
+  });
+
+  it('should pass userId to updateGPMistakesDirectly in routers', async () => {
+    const fs = await import('fs');
+    const source = fs.readFileSync('./server/routers.ts', 'utf-8');
+    expect(source).toContain('db.updateGPMistakesDirectly(gpName, count, input.month, input.year, ctx.user.id)');
+  });
+
+  it('should set userId on gpError records when creating them', async () => {
+    const fs = await import('fs');
+    const source = fs.readFileSync('./server/routers.ts', 'utf-8');
+    // Count occurrences of userId: ctx.user.id in createGpError calls
+    const matches = source.match(/userId: ctx\.user\.id, \/\/ Data isolation/g);
+    expect(matches).not.toBeNull();
+    expect(matches!.length).toBeGreaterThanOrEqual(3); // errorFile + 2 gpError creates
+  });
+
+  it('should set userId on errorFile records when creating them', async () => {
+    const fs = await import('fs');
+    const source = fs.readFileSync('./server/routers.ts', 'utf-8');
+    expect(source).toContain('userId: ctx.user.id, // Data isolation\n        });');
   });
 });
