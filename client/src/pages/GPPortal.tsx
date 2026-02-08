@@ -20,14 +20,14 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 function AnimatedBackground() {
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none">
-      {/* Gradient orbs - cool violet theme */}
-      <div className="absolute top-0 -left-40 w-80 h-80 bg-violet-500/20 rounded-full blur-[100px] animate-pulse" />
-      <div className="absolute top-1/3 -right-40 w-96 h-96 bg-fuchsia-500/15 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
-      <div className="absolute bottom-0 left-1/3 w-72 h-72 bg-indigo-500/15 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
-      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-violet-400/10 rounded-full blur-[80px] animate-pulse" style={{ animationDelay: '0.5s' }} />
+      {/* Gradient orbs - gold/dark-red theme */}
+      <div className="absolute top-0 -left-40 w-80 h-80 bg-[#d4af37]/15 rounded-full blur-[100px] animate-pulse" />
+      <div className="absolute top-1/3 -right-40 w-96 h-96 bg-[#8b0000]/12 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
+      <div className="absolute bottom-0 left-1/3 w-72 h-72 bg-[#b8860b]/12 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
+      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-[#d4af37]/8 rounded-full blur-[80px] animate-pulse" style={{ animationDelay: '0.5s' }} />
       
       {/* Grid pattern overlay */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(139,92,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.03)_1px,transparent_1px)] bg-[size:50px_50px]" />
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(212,175,55,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(212,175,55,0.02)_1px,transparent_1px)] bg-[size:50px_50px]" />
     </div>
   );
 }
@@ -45,8 +45,8 @@ function ScoreCard({ score, maxScore, label, icon: Icon, gradient }: {
   const getStatus = () => {
     if (percentage >= 90) return { text: 'Excellent', color: 'text-emerald-400', badge: 'bg-emerald-500/20 border-emerald-500/30' };
     if (percentage >= 80) return { text: 'Great', color: 'text-green-400', badge: 'bg-green-500/20 border-green-500/30' };
-    if (percentage >= 70) return { text: 'Good', color: 'text-violet-400', badge: 'bg-violet-500/20 border-violet-500/30' };
-    return { text: 'Needs Work', color: 'text-indigo-400', badge: 'bg-indigo-500/20 border-indigo-500/30' };
+    if (percentage >= 70) return { text: 'Good', color: 'text-[#d4af37]', badge: 'bg-[#d4af37]/20 border-[#d4af37]/30' };
+    return { text: 'Needs Work', color: 'text-[#8b0000]', badge: 'bg-[#8b0000]/20 border-[#8b0000]/30' };
   };
   
   const status = getStatus();
@@ -205,12 +205,12 @@ export default function GPPortal() {
     const attitude = data.monthlyStats?.current?.attitude ?? 0;
     
     return [
-      { icon: Star, title: 'First Steps', description: 'Complete your first evaluation', unlocked: totalEvals >= 1, color: 'from-blue-500/30 to-violet-500/30' },
-      { icon: Flame, title: 'On Fire', description: 'Complete 5 evaluations', unlocked: totalEvals >= 5, color: 'from-indigo-500/30 to-red-500/30' },
-      { icon: Crown, title: 'Excellence', description: 'Average score above 20', unlocked: avgScore >= 20, color: 'from-yellow-500/30 to-violet-500/30' },
-      { icon: Gem, title: 'Perfect Score', description: 'Get a perfect 22/22', unlocked: perfectScores > 0, color: 'from-violet-500/30 to-pink-500/30' },
+      { icon: Star, title: 'First Steps', description: 'Complete your first evaluation', unlocked: totalEvals >= 1, color: 'from-[#d4af37]/30 to-[#b8860b]/30' },
+      { icon: Flame, title: 'On Fire', description: 'Complete 5 evaluations', unlocked: totalEvals >= 5, color: 'from-[#8b0000]/30 to-red-500/30' },
+      { icon: Crown, title: 'Excellence', description: 'Average score above 20', unlocked: avgScore >= 20, color: 'from-yellow-500/30 to-[#d4af37]/30' },
+      { icon: Gem, title: 'Perfect Score', description: 'Get a perfect 22/22', unlocked: perfectScores > 0, color: 'from-[#d4af37]/30 to-[#8b0000]/30' },
       { icon: Shield, title: 'Flawless', description: 'Zero mistakes this month', unlocked: mistakes === 0, color: 'from-green-500/30 to-emerald-500/30' },
-      { icon: Heart, title: 'Team Player', description: 'Positive attitude score', unlocked: attitude > 0, color: 'from-pink-500/30 to-rose-500/30' },
+      { icon: Heart, title: 'Team Player', description: 'Positive attitude score', unlocked: attitude > 0, color: 'from-[#8b0000]/30 to-rose-500/30' },
     ];
   }, [data]);
 
@@ -361,7 +361,7 @@ export default function GPPortal() {
               maxScore={22} 
               label="Overall Score" 
               icon={Trophy}
-              gradient="from-violet-600/80 to-indigo-700/80"
+              gradient="from-[#d4af37]/80 to-[#b8860b]/80"
             />
             <ScoreCard 
               score={avgAppearance} 
@@ -375,7 +375,7 @@ export default function GPPortal() {
               maxScore={10} 
               label="Game Performance" 
               icon={Gamepad2}
-              gradient="from-fuchsia-600/80 to-violet-700/80"
+              gradient="from-[#8b0000]/80 to-[#6b0000]/80"
             />
           </div>
         </section>
@@ -395,7 +395,7 @@ export default function GPPortal() {
               label="Monthly Mistakes" 
               color={(data.monthlyStats?.current?.mistakes ?? 0) === 0 
                 ? "from-green-600/40 to-green-800/40" 
-                : "from-indigo-600/40 to-indigo-800/40"}
+                : "from-[#8b0000]/40 to-[#6b0000]/40"}
             />
             <StatCard 
               icon={(data.monthlyStats?.current?.attitude ?? 0) >= 0 ? ThumbsUp : ThumbsDown} 
@@ -409,7 +409,7 @@ export default function GPPortal() {
               icon={Gamepad2} 
               value={(data.monthlyStats?.current?.totalGames ?? 0).toLocaleString()} 
               label="Total Games" 
-              color="from-violet-600/40 to-violet-800/40"
+              color="from-[#d4af37]/40 to-[#b8860b]/40"
             />
           </div>
         </section>
@@ -417,7 +417,7 @@ export default function GPPortal() {
         {/* Achievements */}
         <section>
           <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-            <Medal className="h-5 w-5 text-violet-400" />
+            <Medal className="h-5 w-5 text-[#d4af37]" />
             Achievements
             <Badge className="ml-2 bg-white/10 text-white/70">
               {achievements.filter(a => a.unlocked).length}/{achievements.length}
@@ -437,10 +437,10 @@ export default function GPPortal() {
           <Card className="bg-white/5 backdrop-blur-xl border-white/10">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-blue-400" />
+                <BarChart3 className="h-5 w-5 text-[#d4af37]" />
                 Performance Trend
               </CardTitle>
-              <CardDescription className="text-blue-200/60">
+              <CardDescription className="text-white/50">
                 Comparing your last 3 evaluations vs previous 3
               </CardDescription>
             </CardHeader>
@@ -448,16 +448,16 @@ export default function GPPortal() {
               {data.evaluations.length >= 2 ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                    <span className="text-blue-200/70">Recent Average</span>
+                    <span className="text-white/60">Recent Average</span>
                     <span className="text-2xl font-bold text-white">{last3Avg.toFixed(1)}</span>
                   </div>
                   <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
-                    <span className="text-blue-200/70">Previous Average</span>
-                    <span className="text-xl text-blue-200/80">{prev3Avg.toFixed(1)}</span>
+                    <span className="text-white/60">Previous Average</span>
+                    <span className="text-xl text-white/70">{prev3Avg.toFixed(1)}</span>
                   </div>
                   <Separator className="bg-white/10" />
                   <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-white/5 to-white/10">
-                    <span className="text-blue-200/70 font-medium">Trend</span>
+                    <span className="text-white/60 font-medium">Trend</span>
                     <div className={`flex items-center gap-2 ${trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {trend >= 0 ? (
                         <TrendingUp className="h-6 w-6" />
@@ -471,7 +471,7 @@ export default function GPPortal() {
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-12 text-blue-200/50">
+                <div className="text-center py-12 text-white/40">
                   <div className="mx-auto mb-4 p-4 bg-white/5 rounded-full w-fit">
                     <BarChart3 className="h-12 w-12 opacity-50" />
                   </div>
@@ -486,10 +486,10 @@ export default function GPPortal() {
           <Card className="bg-white/5 backdrop-blur-xl border-white/10">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
-                <Zap className="h-5 w-5 text-yellow-400" />
+                <Zap className="h-5 w-5 text-[#d4af37]" />
                 Recent Activity
               </CardTitle>
-              <CardDescription className="text-blue-200/60">
+              <CardDescription className="text-white/50">
                 Evaluations in the last 7 days
               </CardDescription>
             </CardHeader>
@@ -510,7 +510,7 @@ export default function GPPortal() {
                               ? format(new Date(eval_.evaluationDate), "MMM d, yyyy")
                               : "Unknown"}
                           </p>
-                          <p className="text-xs text-blue-200/50">{eval_.game || 'Game'}</p>
+                          <p className="text-xs text-white/40">{eval_.game || 'Game'}</p>
                         </div>
                       </div>
                       <Badge className={`text-lg px-3 py-1 ${
@@ -524,7 +524,7 @@ export default function GPPortal() {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-12 text-blue-200/50">
+                <div className="text-center py-12 text-white/40">
                   <div className="mx-auto mb-4 p-4 bg-white/5 rounded-full w-fit">
                     <Clock className="h-12 w-12 opacity-50" />
                   </div>
@@ -540,9 +540,9 @@ export default function GPPortal() {
         {data.monthlyHistory && data.monthlyHistory.length > 0 && (
           <section>
             <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-              <TrendingUp className="h-5 w-5 text-violet-400" />
+              <TrendingUp className="h-5 w-5 text-[#d4af37]" />
               Monthly Performance Trend
-              <Badge className="ml-2 bg-violet-500/20 text-violet-300 border-violet-500/30">
+              <Badge className="ml-2 bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
                 {data.monthlyHistory.filter((m: any) => m.evalCount > 0).length} months
               </Badge>
             </h2>
@@ -551,10 +551,10 @@ export default function GPPortal() {
             <Card className="bg-white/5 backdrop-blur-xl border-white/10 mb-4">
               <CardHeader className="pb-2">
                 <CardTitle className="text-white text-base flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-violet-400" />
+                  <BarChart3 className="h-4 w-4 text-[#d4af37]" />
                   Score Trends (6-Month Overview)
                 </CardTitle>
-                <CardDescription className="text-blue-200/60 text-sm">
+                <CardDescription className="text-white/50 text-sm">
                   Average scores per month — Total, Appearance, and Game Performance
                 </CardDescription>
               </CardHeader>
@@ -564,16 +564,16 @@ export default function GPPortal() {
                     <AreaChart data={data.monthlyHistory} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                       <defs>
                         <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4} />
-                          <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.05} />
+                          <stop offset="5%" stopColor="#d4af37" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#d4af37" stopOpacity={0.05} />
                         </linearGradient>
                         <linearGradient id="gradAppearance" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#ec4899" stopOpacity={0.05} />
+                          <stop offset="5%" stopColor="#8b0000" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#8b0000" stopOpacity={0.05} />
                         </linearGradient>
                         <linearGradient id="gradPerformance" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
+                          <stop offset="5%" stopColor="#b8860b" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#b8860b" stopOpacity={0.05} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -592,7 +592,7 @@ export default function GPPortal() {
                       <Tooltip 
                         contentStyle={{ 
                           backgroundColor: 'rgba(15, 15, 30, 0.95)', 
-                          border: '1px solid rgba(139, 92, 246, 0.3)', 
+                          border: '1px solid rgba(212, 175, 55, 0.3)', 
                           borderRadius: '12px',
                           backdropFilter: 'blur(20px)',
                           boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
@@ -612,32 +612,32 @@ export default function GPPortal() {
                       <Area 
                         type="monotone" 
                         dataKey="avgTotal" 
-                        stroke="#8b5cf6" 
+                        stroke="#d4af37" 
                         strokeWidth={2.5}
                         fill="url(#gradTotal)" 
                         name="avgTotal"
-                        dot={{ fill: '#8b5cf6', strokeWidth: 0, r: 4 }}
-                        activeDot={{ r: 6, fill: '#8b5cf6', stroke: '#fff', strokeWidth: 2 }}
+                        dot={{ fill: '#d4af37', strokeWidth: 0, r: 4 }}
+                        activeDot={{ r: 6, fill: '#d4af37', stroke: '#fff', strokeWidth: 2 }}
                       />
                       <Area 
                         type="monotone" 
                         dataKey="avgAppearance" 
-                        stroke="#ec4899" 
+                        stroke="#8b0000" 
                         strokeWidth={2}
                         fill="url(#gradAppearance)" 
                         name="avgAppearance"
-                        dot={{ fill: '#ec4899', strokeWidth: 0, r: 3 }}
-                        activeDot={{ r: 5, fill: '#ec4899', stroke: '#fff', strokeWidth: 2 }}
+                        dot={{ fill: '#8b0000', strokeWidth: 0, r: 3 }}
+                        activeDot={{ r: 5, fill: '#8b0000', stroke: '#fff', strokeWidth: 2 }}
                       />
                       <Area 
                         type="monotone" 
                         dataKey="avgPerformance" 
-                        stroke="#6366f1" 
+                        stroke="#b8860b" 
                         strokeWidth={2}
                         fill="url(#gradPerformance)" 
                         name="avgPerformance"
-                        dot={{ fill: '#6366f1', strokeWidth: 0, r: 3 }}
-                        activeDot={{ r: 5, fill: '#6366f1', stroke: '#fff', strokeWidth: 2 }}
+                        dot={{ fill: '#b8860b', strokeWidth: 0, r: 3 }}
+                        activeDot={{ r: 5, fill: '#b8860b', stroke: '#fff', strokeWidth: 2 }}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -645,15 +645,15 @@ export default function GPPortal() {
                 {/* Legend */}
                 <div className="flex flex-wrap justify-center gap-4 mt-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-violet-500" />
+                    <div className="w-3 h-3 rounded-full bg-[#d4af37]" />
                     <span className="text-xs text-white/60">Total Score (max 22)</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-pink-500" />
+                    <div className="w-3 h-3 rounded-full bg-[#8b0000]" />
                     <span className="text-xs text-white/60">Appearance (max 12)</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-indigo-500" />
+                    <div className="w-3 h-3 rounded-full bg-[#b8860b]" />
                     <span className="text-xs text-white/60">Game Performance (max 10)</span>
                   </div>
                 </div>
@@ -667,7 +667,7 @@ export default function GPPortal() {
                   key={`${month.year}-${month.month}`}
                   className={`relative p-4 rounded-xl border backdrop-blur-xl transition-all duration-300 hover:scale-[1.03] ${
                     month.evalCount > 0 
-                      ? 'bg-white/5 border-white/10 hover:border-violet-500/30 hover:shadow-[0_4px_20px_rgba(139,92,246,0.15)]' 
+                      ? 'bg-white/5 border-white/10 hover:border-[#d4af37]/30 hover:shadow-[0_4px_20px_rgba(212,175,55,0.15)]' 
                       : 'bg-white/[0.02] border-white/5 opacity-50'
                   }`}
                 >
@@ -678,7 +678,7 @@ export default function GPPortal() {
                       <p className="text-xs text-white/40 mt-1">{month.evalCount} eval{month.evalCount !== 1 ? 's' : ''}</p>
                       <div className="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden">
                         <div 
-                          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all duration-500"
+                          className="h-full rounded-full bg-gradient-to-r from-[#d4af37] to-[#b8860b] transition-all duration-500"
                           style={{ width: `${(month.avgTotal / 22) * 100}%` }}
                         />
                       </div>
@@ -708,7 +708,7 @@ export default function GPPortal() {
             
             <Card className={`overflow-hidden ${
               data.monthlyStats.current.bonus.eligible 
-                ? 'bg-gradient-to-br from-green-500/20 via-emerald-500/10 to-indigo-500/20 border-green-500/30' 
+                ? 'bg-gradient-to-br from-green-500/20 via-emerald-500/10 to-[#d4af37]/20 border-green-500/30' 
                 : 'bg-white/5 border-white/10'
             } backdrop-blur-xl`}>
               <CardContent className="p-6 sm:p-8">
@@ -740,7 +740,7 @@ export default function GPPortal() {
                         ) : (
                           <>
                             <p className="text-xl font-bold text-white">Not Yet Eligible</p>
-                            <p className="text-blue-200/70">Keep working towards your bonus!</p>
+                            <p className="text-white/60">Keep working towards your bonus!</p>
                           </>
                         )}
                       </div>
@@ -748,7 +748,7 @@ export default function GPPortal() {
                     
                     <div className="p-4 bg-white/5 rounded-xl">
                       <div className="flex justify-between text-sm mb-2">
-                        <span className="text-blue-200/70">Good Games (GGs)</span>
+                        <span className="text-white/60">Good Games (GGs)</span>
                         <span className="text-white font-bold">
                           {data.monthlyStats.current.bonus.ggs?.toLocaleString() ?? 0}
                         </span>
@@ -757,7 +757,7 @@ export default function GPPortal() {
                         value={Math.min(((data.monthlyStats.current.bonus.ggs ?? 0) / 2500) * 100, 100)} 
                         className="h-3 bg-white/10"
                       />
-                      <p className="text-xs text-blue-200/50 mt-2">
+                      <p className="text-xs text-white/40 mt-2">
                         {data.monthlyStats.current.bonus.ggs >= 2500 
                           ? 'Level 1 achieved! 🎉' 
                           : `${(2500 - (data.monthlyStats.current.bonus.ggs ?? 0)).toLocaleString()} more GGs to Level 1`}
@@ -767,7 +767,7 @@ export default function GPPortal() {
                   
                   {/* Right: Bonus levels info */}
                   <div className="space-y-3">
-                    <p className="text-sm text-blue-200/70 font-medium">Bonus Levels</p>
+                    <p className="text-sm text-white/60 font-medium">Bonus Levels</p>
                     <div className={`p-3 rounded-lg border ${
                       data.monthlyStats.current.bonus.level === 1 
                         ? 'bg-green-500/20 border-green-500/30' 
@@ -777,7 +777,7 @@ export default function GPPortal() {
                         <span className="text-white">Level 1</span>
                         <span className="text-green-300">€1.50/hr</span>
                       </div>
-                      <p className="text-xs text-blue-200/50 mt-1">Minimum 2,500 GGs</p>
+                      <p className="text-xs text-white/40 mt-1">Minimum 2,500 GGs</p>
                     </div>
                     <div className={`p-3 rounded-lg border ${
                       data.monthlyStats.current.bonus.level === 2 
@@ -788,7 +788,7 @@ export default function GPPortal() {
                         <span className="text-white">Level 2</span>
                         <span className="text-green-300">€2.50/hr</span>
                       </div>
-                      <p className="text-xs text-blue-200/50 mt-1">Minimum 5,000 GGs</p>
+                      <p className="text-xs text-white/40 mt-1">Minimum 5,000 GGs</p>
                     </div>
                   </div>
                 </div>
@@ -800,7 +800,7 @@ export default function GPPortal() {
         {/* Evaluation History */}
         <section>
           <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-            <Calendar className="h-5 w-5 text-violet-400" />
+            <Calendar className="h-5 w-5 text-[#d4af37]" />
             Evaluation History
           </h2>
           
@@ -834,7 +834,7 @@ export default function GPPortal() {
                                 ? format(new Date(evaluation.evaluationDate), "MMMM d, yyyy")
                                 : "Unknown Date"}
                             </p>
-                            <p className="text-sm text-blue-200/60">{evaluation.game || 'Game Session'}</p>
+                            <p className="text-sm text-white/50">{evaluation.game || 'Game Session'}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -843,15 +843,15 @@ export default function GPPortal() {
                               <Sparkles className="h-3 w-3 mr-1" />
                               {evaluation.appearanceScore}/12
                             </Badge>
-                            <Badge className="bg-violet-500/20 text-violet-300 border-violet-500/30">
+                            <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
                               <Gamepad2 className="h-3 w-3 mr-1" />
                               {evaluation.gamePerformanceTotalScore}/10
                             </Badge>
                           </div>
                           {isExpanded ? (
-                            <ChevronUp className="h-5 w-5 text-blue-200/50" />
+                            <ChevronUp className="h-5 w-5 text-white/40" />
                           ) : (
-                            <ChevronDown className="h-5 w-5 text-blue-200/50" />
+                            <ChevronDown className="h-5 w-5 text-white/40" />
                           )}
                         </div>
                       </button>
@@ -864,7 +864,7 @@ export default function GPPortal() {
                               <Sparkles className="h-3 w-3 mr-1" />
                               Appearance: {evaluation.appearanceScore}/12
                             </Badge>
-                            <Badge className="bg-violet-500/20 text-violet-300 border-violet-500/30">
+                            <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
                               <Gamepad2 className="h-3 w-3 mr-1" />
                               Game: {evaluation.gamePerformanceTotalScore}/10
                             </Badge>
@@ -872,7 +872,7 @@ export default function GPPortal() {
                           
                           {/* Appearance Details */}
                           <div>
-                            <p className="text-sm font-medium text-blue-200/70 mb-3 flex items-center gap-2">
+                            <p className="text-sm font-medium text-white/60 mb-3 flex items-center gap-2">
                               <Sparkles className="h-4 w-4" />
                               Appearance Breakdown
                             </p>
@@ -886,11 +886,11 @@ export default function GPPortal() {
                                 <div key={item.label} className="p-3 bg-white/5 rounded-lg">
                                   <div className="flex items-center gap-2 mb-2">
                                     <item.icon className="h-4 w-4 text-green-400" />
-                                    <span className="text-xs text-blue-200/70">{item.label}</span>
+                                    <span className="text-xs text-white/60">{item.label}</span>
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <span className="text-lg font-bold text-white">{item.score ?? 0}</span>
-                                    <span className="text-xs text-blue-200/50">/{item.max}</span>
+                                    <span className="text-xs text-white/40">/{item.max}</span>
                                   </div>
                                   <Progress 
                                     value={((item.score ?? 0) / item.max) * 100} 
@@ -903,7 +903,7 @@ export default function GPPortal() {
                           
                           {/* Game Performance Details */}
                           <div>
-                            <p className="text-sm font-medium text-blue-200/70 mb-3 flex items-center gap-2">
+                            <p className="text-sm font-medium text-white/60 mb-3 flex items-center gap-2">
                               <Gamepad2 className="h-4 w-4" />
                               Game Performance Breakdown
                             </p>
@@ -914,7 +914,7 @@ export default function GPPortal() {
                               ].map((item) => (
                                 <div key={item.label} className="p-3 bg-white/5 rounded-lg">
                                   <div className="flex items-center justify-between mb-2">
-                                    <span className="text-xs text-blue-200/70">{item.label}</span>
+                                    <span className="text-xs text-white/60">{item.label}</span>
                                     <span className="text-lg font-bold text-white">{item.score ?? 0}/{item.max}</span>
                                   </div>
                                   <Progress 
@@ -929,7 +929,7 @@ export default function GPPortal() {
                           {/* Comments */}
                           {(evaluation.hairComment || evaluation.makeupComment || evaluation.outfitComment || evaluation.postureComment || evaluation.dealingStyleComment || evaluation.gamePerformanceComment) && (
                             <div className="p-4 bg-white/5 rounded-lg">
-                              <p className="text-sm font-medium text-blue-200/70 mb-2">Comments</p>
+                              <p className="text-sm font-medium text-white/60 mb-2">Comments</p>
                               <p className="text-white/80 text-sm">{[evaluation.hairComment, evaluation.makeupComment, evaluation.outfitComment, evaluation.postureComment, evaluation.dealingStyleComment, evaluation.gamePerformanceComment].filter(Boolean).join('; ')}</p>
                             </div>
                           )}
@@ -944,10 +944,10 @@ export default function GPPortal() {
             <Card className="bg-white/5 backdrop-blur-xl border-white/10">
               <CardContent className="py-16 text-center">
                 <div className="mx-auto mb-6 p-6 bg-white/5 rounded-full w-fit">
-                  <Calendar className="h-16 w-16 text-blue-200/30" />
+                  <Calendar className="h-16 w-16 text-white/20" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-2">No evaluations yet</h3>
-                <p className="text-blue-200/60 max-w-md mx-auto">
+                <p className="text-white/50 max-w-md mx-auto">
                   Your evaluation history will appear here after your first evaluation. Keep up the great work!
                 </p>
               </CardContent>
@@ -959,9 +959,9 @@ export default function GPPortal() {
         {data.errorDetails && data.errorDetails.length > 0 && (
           <section>
             <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-              <AlertTriangle className="h-5 w-5 text-indigo-400" />
+              <AlertTriangle className="h-5 w-5 text-[#d4af37]" />
               Error Details This Month
-              <Badge className="ml-2 bg-indigo-500/20 text-indigo-300 border-indigo-500/30">
+              <Badge className="ml-2 bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
                 {data.errorDetails.length}
               </Badge>
             </h2>
@@ -974,12 +974,12 @@ export default function GPPortal() {
                       <div className="flex items-start gap-4">
                         <div className={`shrink-0 p-2.5 rounded-xl ${
                           error.severity === 'critical' ? 'bg-red-500/20' :
-                          error.severity === 'medium' ? 'bg-indigo-500/20' :
+                          error.severity === 'medium' ? 'bg-[#d4af37]/20' :
                           'bg-yellow-500/20'
                         }`}>
                           <AlertTriangle className={`h-5 w-5 ${
                             error.severity === 'critical' ? 'text-red-400' :
-                            error.severity === 'medium' ? 'text-indigo-400' :
+                            error.severity === 'medium' ? 'text-[#d4af37]' :
                             'text-yellow-400'
                           }`} />
                         </div>
@@ -991,12 +991,12 @@ export default function GPPortal() {
                               </Badge>
                             )}
                             {error.gameType && (
-                              <Badge className="bg-violet-500/20 text-violet-300 border-violet-500/30">
+                              <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
                                 {error.gameType}
                               </Badge>
                             )}
                             {error.errorCategory && (
-                              <Badge className="bg-violet-500/20 text-violet-300 border-violet-500/30">
+                              <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
                                 {error.errorCategory}
                               </Badge>
                             )}
@@ -1014,11 +1014,11 @@ export default function GPPortal() {
                           </p>
                           
                           {error.tableId && (
-                            <p className="text-sm text-blue-200/60 mt-1">Table: {error.tableId}</p>
+                            <p className="text-sm text-white/50 mt-1">Table: {error.tableId}</p>
                           )}
                           
                           <div className="flex items-center gap-4 mt-2">
-                            <p className="text-xs text-blue-200/40">
+                            <p className="text-xs text-white/30">
                               {error.errorDate 
                                 ? format(new Date(error.errorDate), "MMM d, yyyy")
                                 : error.createdAt
@@ -1051,7 +1051,7 @@ export default function GPPortal() {
       {/* Footer */}
       <footer className="border-t border-white/10 py-6 mt-10 relative z-10">
         <div className="container text-center">
-          <p className="text-blue-200/40 text-sm">
+          <p className="text-white/30 text-sm">
             GP Performance Dashboard • Auto-refreshes every 30 seconds
           </p>
         </div>

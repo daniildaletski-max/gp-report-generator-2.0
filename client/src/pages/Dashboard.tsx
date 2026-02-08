@@ -48,7 +48,7 @@ const CHART_TOOLTIP_STYLE = {
 };
 
 // Purple-themed pie chart colors
-const PIE_COLORS = ['#8b5cf6', '#6366f1', '#d946ef', '#6b7280'];
+const PIE_COLORS = ['#d4af37', '#b8860b', '#d946ef', '#6b7280'];
 
 export default function Dashboard() {
   const currentDate = new Date();
@@ -141,7 +141,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-2 sm:gap-3">
           <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(Number(v))}>
             <SelectTrigger className="w-[120px] sm:w-40 bg-white/[0.03] border-white/[0.08] hover:border-white/[0.15] rounded-xl">
-              <Calendar className="h-4 w-4 mr-1.5 sm:mr-2 text-violet-400/70" />
+              <Calendar className="h-4 w-4 mr-1.5 sm:mr-2 text-[#d4af37]/70" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -170,8 +170,8 @@ export default function Dashboard() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/10 border border-violet-500/20 flex items-center justify-center">
-                <Target className="h-4.5 w-4.5 text-violet-400" />
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#d4af37]/20 to-[#8b0000]/10 border border-[#d4af37]/20 flex items-center justify-center">
+                <Target className="h-4.5 w-4.5 text-[#d4af37]" />
               </div>
               <span className="font-medium text-white/70 text-sm sm:text-base">Evaluation Progress</span>
             </div>
@@ -179,7 +179,7 @@ export default function Dashboard() {
               <div className="w-32 sm:w-48">
                 <Progress value={evaluationProgress} className="h-2 bg-white/[0.06]" />
               </div>
-              <span className="font-bold text-violet-300 text-sm sm:text-base">{evaluationProgress}%</span>
+              <span className="font-bold text-[#d4af37] text-sm sm:text-base">{evaluationProgress}%</span>
               <span className="text-white/35 text-xs sm:text-sm hidden sm:inline">({evaluatedGPs}/{totalGPs} GPs)</span>
             </div>
             {pendingGPs > 0 && (
@@ -191,7 +191,7 @@ export default function Dashboard() {
               <Upload className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Upload</span>
             </Button>
-            <Button size="sm" onClick={() => setLocation('/reports')} className="bg-gradient-to-r from-violet-500 to-fuchsia-600 hover:from-violet-600 hover:to-violet-700 text-white rounded-xl shadow-lg shadow-violet-500/20 hover:shadow-violet-500/30 transition-all duration-300">
+            <Button size="sm" onClick={() => setLocation('/reports')} className="bg-gradient-to-r from-[#d4af37] to-[#b8860b] hover:from-[#b8860b] hover:to-[#8b6914] text-black rounded-xl shadow-lg shadow-[#d4af37]/20 hover:shadow-[#d4af37]/30 transition-all duration-300">
               <span className="hidden sm:inline">Generate Report</span>
               <span className="sm:hidden">Report</span>
               <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
@@ -214,8 +214,8 @@ export default function Dashboard() {
         <Card variant="glass">
           <CardHeader className="pb-3 sm:pb-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-indigo-500/10 border border-violet-500/20 flex items-center justify-center">
-                <Award className="h-4.5 w-4.5 text-violet-400" />
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#d4af37]/20 to-[#b8860b]/10 border border-[#d4af37]/20 flex items-center justify-center">
+                <Award className="h-4.5 w-4.5 text-[#d4af37]" />
               </div>
               <div>
                 <CardTitle className="text-sm sm:text-base">Top Performers</CardTitle>
@@ -231,9 +231,9 @@ export default function Dashboard() {
                   className="flex items-center gap-2.5 sm:gap-3 p-2.5 rounded-xl hover:bg-white/[0.04] transition-all duration-200"
                 >
                   <div className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg font-bold text-xs ${
-                    idx === 0 ? 'bg-violet-500/15 text-violet-400 border border-violet-500/20' : 
+                    idx === 0 ? 'bg-[#d4af37]/15 text-[#d4af37] border border-[#d4af37]/20' : 
                     idx === 1 ? 'bg-white/[0.06] text-white/50 border border-white/[0.08]' : 
-                    'bg-indigo-500/10 text-indigo-400/70 border border-indigo-500/15'
+                    'bg-[#b8860b]/10 text-[#b8860b]/70 border border-[#b8860b]/15'
                   }`}>
                     {idx + 1}
                   </div>
@@ -241,7 +241,7 @@ export default function Dashboard() {
                     <p className="font-medium text-white/85 truncate text-xs sm:text-sm">{gp.fullName}</p>
                     <p className="text-[10px] sm:text-xs text-white/25">{gp.evalCount} eval{gp.evalCount !== 1 ? 's' : ''}</p>
                   </div>
-                  <span className="text-xs font-semibold text-violet-300 bg-violet-500/10 border border-violet-500/15 px-2 py-0.5 rounded-md">
+                  <span className="text-xs font-semibold text-[#d4af37] bg-[#d4af37]/10 border border-[#d4af37]/15 px-2 py-0.5 rounded-md">
                     {gp.totalScore.toFixed(1)}
                   </span>
                 </div>
@@ -259,8 +259,8 @@ export default function Dashboard() {
         <Card variant="glass" className="lg:col-span-2">
           <CardHeader className="pb-3 sm:pb-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-fuchsia-500/20 to-violet-500/10 border border-fuchsia-500/20 flex items-center justify-center">
-                <PieChart className="h-4.5 w-4.5 text-fuchsia-400" />
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#8b0000]/20 to-[#b8860b]/10 border border-[#8b0000]/20 flex items-center justify-center">
+                <PieChart className="h-4.5 w-4.5 text-[#8b0000]" />
               </div>
               <div>
                 <CardTitle className="text-sm sm:text-base">Performance Distribution</CardTitle>
@@ -343,8 +343,8 @@ export default function Dashboard() {
       <Card variant="glass">
         <CardHeader className="pb-3 sm:pb-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/10 border border-violet-500/20 flex items-center justify-center">
-              <BarChart3 className="h-4.5 w-4.5 text-violet-400" />
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#d4af37]/20 to-[#8b0000]/10 border border-[#d4af37]/20 flex items-center justify-center">
+              <BarChart3 className="h-4.5 w-4.5 text-[#d4af37]" />
             </div>
             <div>
               <CardTitle className="text-sm sm:text-base">Monthly Performance Overview</CardTitle>
@@ -386,8 +386,8 @@ export default function Dashboard() {
                       verticalAlign="bottom" 
                       wrapperStyle={{ paddingTop: isMobile ? 10 : 20, fontSize: isMobile ? '11px' : '12px' }} 
                     />
-                    <Bar dataKey="totalScore" name="Total Score" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="appearance" name="Appearance" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="totalScore" name="Total Score" fill="#d4af37" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="appearance" name="Appearance" fill="#b8860b" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="performance" name="Performance" fill="#d946ef" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -444,8 +444,8 @@ function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
       <Card variant="glass">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500/20 to-indigo-500/20 border border-violet-500/20">
-              <TrendingUp className="h-4.5 w-4.5 text-violet-400" />
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-[#d4af37]/20 to-[#b8860b]/20 border border-[#d4af37]/20">
+              <TrendingUp className="h-4.5 w-4.5 text-[#d4af37]" />
             </div>
             <div>
               <CardTitle className="text-sm sm:text-base">Monthly Trends</CardTitle>
@@ -499,8 +499,8 @@ function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
       <Card variant="glass">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500/20 to-indigo-500/20 border border-violet-500/20">
-              <TrendingUp className="h-4.5 w-4.5 text-violet-400" />
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-[#d4af37]/20 to-[#b8860b]/20 border border-[#d4af37]/20">
+              <TrendingUp className="h-4.5 w-4.5 text-[#d4af37]" />
             </div>
             <div>
               <CardTitle className="text-sm sm:text-base">Score Trends{selectedTeamName ? ` — ${selectedTeamName}` : ''}</CardTitle>
@@ -514,12 +514,12 @@ function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
               <AreaChart data={trendData} margin={{ top: 10, right: 10, left: isMobile ? -10 : 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#d4af37" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#d4af37" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gradAppearance" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#b8860b" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#b8860b" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="gradPerformance" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#d946ef" stopOpacity={0.2} />
@@ -542,8 +542,8 @@ function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
                   contentStyle={{ ...CHART_TOOLTIP_STYLE, fontSize: isMobile ? '11px' : '13px' }}
                   formatter={(value: number, name: string) => [value.toFixed(1), name]}
                 />
-                <Area type="monotone" dataKey="avgTotalScore" name="Total" stroke="#8b5cf6" fill="url(#gradTotal)" strokeWidth={2.5} dot={{ r: 4, fill: '#8b5cf6', strokeWidth: 0 }} />
-                <Area type="monotone" dataKey="avgAppearanceScore" name="Appearance" stroke="#6366f1" fill="url(#gradAppearance)" strokeWidth={1.5} dot={{ r: 3, fill: '#6366f1', strokeWidth: 0 }} />
+                <Area type="monotone" dataKey="avgTotalScore" name="Total" stroke="#d4af37" fill="url(#gradTotal)" strokeWidth={2.5} dot={{ r: 4, fill: '#d4af37', strokeWidth: 0 }} />
+                <Area type="monotone" dataKey="avgAppearanceScore" name="Appearance" stroke="#b8860b" fill="url(#gradAppearance)" strokeWidth={1.5} dot={{ r: 3, fill: '#b8860b', strokeWidth: 0 }} />
                 <Area type="monotone" dataKey="avgPerformanceScore" name="Performance" stroke="#d946ef" fill="url(#gradPerformance)" strokeWidth={1.5} dot={{ r: 3, fill: '#d946ef', strokeWidth: 0 }} />
                 <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px', paddingTop: 8 }} />
               </AreaChart>
@@ -561,8 +561,8 @@ function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
       <Card variant="glass">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500/20 to-emerald-500/20 border border-indigo-500/20">
-              <BarChart3 className="h-4.5 w-4.5 text-indigo-400" />
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-[#b8860b]/20 to-emerald-500/20 border border-[#b8860b]/20">
+              <BarChart3 className="h-4.5 w-4.5 text-[#b8860b]" />
             </div>
             <div>
               <CardTitle className="text-sm sm:text-base">Evaluation Volume</CardTitle>
@@ -588,7 +588,7 @@ function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
                   contentStyle={{ ...CHART_TOOLTIP_STYLE, fontSize: isMobile ? '11px' : '13px' }}
                 />
                 <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px', paddingTop: 8 }} />
-                <Bar dataKey="totalEvaluations" name="Evaluations" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="totalEvaluations" name="Evaluations" fill="#d4af37" radius={[6, 6, 0, 0]} />
                 <Bar dataKey="uniqueGPs" name="GPs Evaluated" fill="#d946ef" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -605,8 +605,8 @@ function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
       <Card variant="glass" className="lg:col-span-2">
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500/20 to-indigo-500/20 border border-violet-500/20">
-              <Target className="h-4.5 w-4.5 text-violet-400" />
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-[#d4af37]/20 to-[#b8860b]/20 border border-[#d4af37]/20">
+              <Target className="h-4.5 w-4.5 text-[#d4af37]" />
             </div>
             <div>
               <CardTitle className="text-sm sm:text-base">Monthly Summary</CardTitle>
@@ -625,7 +625,7 @@ function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
                   <div className="flex items-center justify-center gap-2 text-[10px]">
                     <span className="text-emerald-400">{m.totalEvaluations} evals</span>
                     <span className="text-white/20">·</span>
-                    <span className="text-violet-400">{m.uniqueGPs} GPs</span>
+                    <span className="text-[#d4af37]">{m.uniqueGPs} GPs</span>
                   </div>
                   {m.topScore > 0 && (
                     <div className="flex items-center justify-center gap-1.5 text-[10px]">
@@ -672,7 +672,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
       <div className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Users className="h-5 w-5 text-violet-400" />
+            <Users className="h-5 w-5 text-[#d4af37]" />
             Team Comparison
           </h2>
           <p className="text-white/35 text-xs mt-0.5">Compare GP performance across teams</p>
@@ -708,7 +708,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
   ).sort((a, b) => b.avgTotalScore - a.avgTotalScore);
 
   // Team colors for the chart
-  const TEAM_COLORS = ['#8b5cf6', '#6366f1', '#10b981', '#f43f5e', '#3b82f6', '#eab308', '#ec4899', '#14b8a6'];
+  const TEAM_COLORS = ['#d4af37', '#b8860b', '#10b981', '#f43f5e', '#3b82f6', '#eab308', '#8b0000', '#14b8a6'];
 
   return (
     <div className="space-y-4">
@@ -716,7 +716,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Users className="h-5 w-5 text-violet-400" />
+            <Users className="h-5 w-5 text-[#d4af37]" />
             Team Comparison
           </h2>
           <p className="text-white/35 text-xs mt-0.5">Compare GP performance across teams</p>
@@ -772,8 +772,8 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                         return team?.fullName || label;
                       }}
                     />
-                    <Bar dataKey="avgTotal" name="Total" fill="#8b5cf6" radius={[0, 6, 6, 0]} barSize={20} />
-                    <Bar dataKey="avgAppearance" name="Appearance" fill="#6366f1" radius={[0, 6, 6, 0]} barSize={20} />
+                    <Bar dataKey="avgTotal" name="Total" fill="#d4af37" radius={[0, 6, 6, 0]} barSize={20} />
+                    <Bar dataKey="avgAppearance" name="Appearance" fill="#b8860b" radius={[0, 6, 6, 0]} barSize={20} />
                     <Bar dataKey="avgPerformance" name="Performance" fill="#10b981" radius={[0, 6, 6, 0]} barSize={20} />
                     <Legend 
                       wrapperStyle={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}
@@ -802,8 +802,8 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                 {comparisonData.map((team, idx) => (
                   <div key={team.teamId} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] hover:border-white/[0.1] transition-all">
                     <div className={`flex items-center justify-center h-8 w-8 rounded-lg text-xs font-bold ${
-                      idx === 0 ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30' :
-                      idx === 1 ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' :
+                      idx === 0 ? 'bg-[#d4af37]/20 text-[#d4af37] border border-[#d4af37]/30' :
+                      idx === 1 ? 'bg-[#b8860b]/20 text-[#b8860b] border border-[#b8860b]/30' :
                       idx === 2 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
                       'bg-white/[0.05] text-white/40 border border-white/[0.08]'
                     }`}>
@@ -822,7 +822,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                     <div className="text-right">
                       <p className={`text-lg font-bold ${
                         team.avgTotalScore >= 20 ? 'text-emerald-400' :
-                        team.avgTotalScore >= 16 ? 'text-violet-400' :
+                        team.avgTotalScore >= 16 ? 'text-[#d4af37]' :
                         team.avgTotalScore > 0 ? 'text-rose-400' : 'text-white/20'
                       }`}>
                         {team.avgTotalScore > 0 ? team.avgTotalScore.toFixed(1) : '—'}
@@ -920,7 +920,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                           </td>
                           <td className={`py-2 px-2 text-right font-bold ${
                             gp.avgTotalScore >= 20 ? 'text-emerald-400' :
-                            gp.avgTotalScore >= 16 ? 'text-violet-400' :
+                            gp.avgTotalScore >= 16 ? 'text-[#d4af37]' :
                             'text-rose-400'
                           }`}>{gp.avgTotalScore.toFixed(1)}</td>
                           <td className="py-2 px-2 text-right text-white/50">{gp.avgAppearanceScore.toFixed(1)}</td>

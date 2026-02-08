@@ -19,11 +19,11 @@ const colorMap: Record<string, {
   glow: string;
 }> = {
   violet: {
-    card: "border-violet-500/15 hover:border-violet-500/25",
-    iconBg: "bg-gradient-to-br from-violet-500/20 to-indigo-500/10 border border-violet-500/20",
-    iconText: "text-violet-400",
-    valueText: "text-violet-300",
-    glow: "hover:shadow-violet-500/10",
+    card: "border-[#d4af37]/15 hover:border-[#d4af37]/25",
+    iconBg: "bg-gradient-to-br from-[#d4af37]/20 to-[#b8860b]/10 border border-[#d4af37]/20",
+    iconText: "text-[#d4af37]",
+    valueText: "text-[#d4af37]",
+    glow: "hover:shadow-[#d4af37]/10",
   },
   green: {
     card: "border-emerald-500/15 hover:border-emerald-500/25",
@@ -33,11 +33,11 @@ const colorMap: Record<string, {
     glow: "hover:shadow-emerald-500/10",
   },
   indigo: {
-    card: "border-indigo-500/15 hover:border-indigo-500/25",
-    iconBg: "bg-gradient-to-br from-indigo-500/20 to-pink-500/10 border border-indigo-500/20",
-    iconText: "text-indigo-400",
-    valueText: "text-indigo-300",
-    glow: "hover:shadow-indigo-500/10",
+    card: "border-[#b8860b]/15 hover:border-[#b8860b]/25",
+    iconBg: "bg-gradient-to-br from-[#b8860b]/20 to-[#8b0000]/10 border border-[#b8860b]/20",
+    iconText: "text-[#b8860b]",
+    valueText: "text-[#b8860b]",
+    glow: "hover:shadow-[#b8860b]/10",
   },
   red: {
     card: "border-red-500/15 hover:border-red-500/25",
@@ -48,7 +48,7 @@ const colorMap: Record<string, {
   },
   blue: {
     card: "border-blue-500/15 hover:border-blue-500/25",
-    iconBg: "bg-gradient-to-br from-blue-500/20 to-indigo-500/10 border border-blue-500/20",
+    iconBg: "bg-gradient-to-br from-blue-500/20 to-[#b8860b]/10 border border-blue-500/20",
     iconText: "text-blue-400",
     valueText: "text-blue-300",
     glow: "hover:shadow-blue-500/10",

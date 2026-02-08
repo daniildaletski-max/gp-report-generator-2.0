@@ -20,13 +20,13 @@ const badgeVariants = cva(
         green:
           "border-emerald-500/20 bg-emerald-500/15 text-emerald-400",
         violet:
-          "border-violet-500/20 bg-violet-500/15 text-violet-400",
+          "border-[#d4af37]/20 bg-[#d4af37]/15 text-[#d4af37]",
         red:
           "border-red-500/20 bg-red-500/15 text-red-400",
         fuchsia:
-          "border-fuchsia-500/20 bg-fuchsia-500/15 text-fuchsia-400",
+          "border-[#8b0000]/20 bg-[#8b0000]/15 text-[#8b0000]",
         indigo:
-          "border-indigo-500/20 bg-indigo-500/15 text-indigo-400",
+          "border-[#b8860b]/20 bg-[#b8860b]/15 text-[#b8860b]",
         blue:
           "border-blue-500/20 bg-blue-500/15 text-blue-400",
       },

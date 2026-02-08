@@ -2423,3 +2423,11 @@
 - [x] Update Home page - gold gradient text, gold buttons with black text, gold orbs
 - [x] Update DashboardLayout - gold GP logo, gold active states, removed theme toggle
 - [x] All 178 tests pass, dev server compiles correctly
+
+## Update - Gold Charts, Animated Borders & System Improvements (v81)
+
+- [x] Update Recharts chart colors in GP Portal from violet to gold palette
+- [x] Add animated gold-gradient border on card hover (gold-border-glow CSS class with conic-gradient rotation)
+- [x] Fix all violet/purple/indigo/fuchsia references across: Dashboard, Upload, Evaluations, Reports, Admin, GPPortal, InvitePage, NotFound, badge, card, stat-card, EvaluationDetailView
+- [x] Update Recharts bar/area chart fills and strokes to #d4af37 / #b8860b
+- [x] All 178 tests pass, dev server compiles correctly

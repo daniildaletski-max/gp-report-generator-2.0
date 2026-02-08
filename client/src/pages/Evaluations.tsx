@@ -507,7 +507,7 @@ export default function EvaluationsPage() {
       {/* Tabs for Evaluations and Attitude */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "evaluations" | "attitude")} className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2 bg-white/5 border border-white/10 rounded-xl p-1">
-          <TabsTrigger value="evaluations" className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500/20 data-[state=active]:to-indigo-500/20 data-[state=active]:border-violet-500/30 rounded-lg transition-all">
+          <TabsTrigger value="evaluations" className="flex items-center gap-2 data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#d4af37]/20 data-[state=active]:to-[#b8860b]/20 data-[state=active]:border-[#d4af37]/30 rounded-lg transition-all">
             <FileSpreadsheet className="h-4 w-4" />
             Evaluations ({stats.total})
           </TabsTrigger>

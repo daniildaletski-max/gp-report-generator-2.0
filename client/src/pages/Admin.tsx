@@ -64,7 +64,7 @@ function FMRestrictedView() {
             Manage your team: {team?.teamName || "Loading..."}
           </p>
         </div>
-        <Badge className="bg-gradient-to-r from-violet-500/20 to-indigo-500/20 border border-violet-500/30 text-sm rounded-xl px-4 py-2">
+        <Badge className="bg-gradient-to-r from-[#d4af37]/20 to-[#b8860b]/20 border border-[#d4af37]/30 text-sm rounded-xl px-4 py-2">
           <Users className="h-3 w-3 mr-1" />
           Floor Manager
         </Badge>
@@ -127,7 +127,7 @@ function FullAdminPanel() {
         </div>
         <div className="grid gap-4 md:grid-cols-5">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="stat-card-enhanced stat-card-violet p-5">
+            <div key={i} className="stat-card-enhanced stat-card-gold p-5">
               <div className="flex items-center gap-3">
                 <div className="skeleton-enhanced h-10 w-10 rounded-xl" />
                 <div className="flex-1">
@@ -154,7 +154,7 @@ function FullAdminPanel() {
             <p className="page-subtitle">System administration and management</p>
           </div>
         </div>
-        <Badge className="bg-gradient-to-r from-violet-500/20 to-indigo-500/20 text-violet-300 border border-violet-500/30 rounded-xl px-4 py-2">
+        <Badge className="bg-gradient-to-r from-[#d4af37]/20 to-[#b8860b]/20 text-[#d4af37] border border-[#d4af37]/30 rounded-xl px-4 py-2">
           Administrator
         </Badge>
       </div>
@@ -258,7 +258,7 @@ function AdminOverviewTab() {
       title: "Total Users", 
       value: adminStats?.totalUsers || 0, 
       icon: Users, 
-      cardClass: "stat-card-violet"
+      cardClass: "stat-card-gold"
     },
     { 
       title: "Teams", 
@@ -270,7 +270,7 @@ function AdminOverviewTab() {
       title: "Game Presenters", 
       value: adminStats?.totalGPs || 0, 
       icon: Star, 
-      cardClass: "stat-card-violet"
+      cardClass: "stat-card-gold"
     },
     { 
       title: "Evaluations", 
@@ -282,7 +282,7 @@ function AdminOverviewTab() {
       title: "Reports", 
       value: adminStats?.totalReports || 0, 
       icon: FileSpreadsheet, 
-      cardClass: "stat-card-violet"
+      cardClass: "stat-card-gold"
     },
   ];
 
@@ -316,15 +316,15 @@ function AdminOverviewTab() {
         </div>
         <div className="unified-card-body">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-violet-500/10 hover:border-violet-500/30 transition-all" onClick={() => toast.info("Navigate to Users tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-[#d4af37]/10 hover:border-[#d4af37]/30 transition-all" onClick={() => toast.info("Navigate to Users tab")}>
               <UserCog className="h-6 w-6" />
               <span>Manage Users</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all" onClick={() => toast.info("Navigate to Teams tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-[#b8860b]/10 hover:border-[#b8860b]/30 transition-all" onClick={() => toast.info("Navigate to Teams tab")}>
               <Building2 className="h-6 w-6" />
               <span>Manage Teams</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-violet-500/10 hover:border-violet-500/30 transition-all" onClick={() => toast.info("Navigate to GP Stats tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-[#d4af37]/10 hover:border-[#d4af37]/30 transition-all" onClick={() => toast.info("Navigate to GP Stats tab")}>
               <Star className="h-6 w-6" />
               <span>View GP Stats</span>
             </Button>
@@ -1880,7 +1880,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
     <TabsContent value="invitations" className="space-y-4">
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4 animate-stagger">
-        <div className="stat-card-enhanced stat-card-violet">
+        <div className="stat-card-enhanced stat-card-gold">
           <div className="icon-box">
             <Mail className="h-5 w-5" />
           </div>
@@ -1889,7 +1889,7 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
             <p className="text-2xl font-bold">{stats?.total || 0}</p>
           </div>
         </div>
-        <div className="stat-card-enhanced stat-card-violet">
+        <div className="stat-card-enhanced stat-card-gold">
           <div className="icon-box">
             <MailQuestion className="h-5 w-5" />
           </div>
@@ -2555,7 +2555,7 @@ function GPStatsTab({
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
         <div className="dashboard-header">
           <h2 className="dashboard-title">
-            <div className="stat-icon-container card-violet" style={{ width: '48px', height: '48px', borderRadius: '14px' }}>
+            <div className="stat-icon-container card-gold" style={{ width: '48px', height: '48px', borderRadius: '14px' }}>
               <BarChart3 className="h-6 w-6 text-white" />
             </div>
             GP Performance Dashboard
@@ -2571,7 +2571,7 @@ function GPStatsTab({
               onValueChange={(v) => setSelectedTeamId(v === "all" ? null : Number(v))}
             >
               <SelectTrigger className="w-[160px] filter-select">
-                <Building2 className="h-4 w-4 mr-2 text-violet-400" />
+                <Building2 className="h-4 w-4 mr-2 text-[#d4af37]" />
                 <SelectValue placeholder="All teams" />
               </SelectTrigger>
               <SelectContent>
@@ -2586,7 +2586,7 @@ function GPStatsTab({
           )}
           <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
             <SelectTrigger className="w-[140px] filter-select">
-              <Calendar className="h-4 w-4 mr-2 text-violet-400" />
+              <Calendar className="h-4 w-4 mr-2 text-[#d4af37]" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2674,7 +2674,7 @@ function GPStatsTab({
               </div>
             </div>
             
-            <div className="premium-stat-card card-violet group">
+            <div className="premium-stat-card card-gold group">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="stat-label">Total Games</p>
@@ -2693,7 +2693,7 @@ function GPStatsTab({
             {/* Attitude Distribution Chart */}
             <div className="chart-card">
               <div className="chart-card-header">
-                <div className="stat-icon-container card-violet" style={{ width: '40px', height: '40px', borderRadius: '12px' }}>
+                <div className="stat-icon-container card-gold" style={{ width: '40px', height: '40px', borderRadius: '12px' }}>
                   <Target className="h-5 w-5 text-white" />
                 </div>
                 <div>
@@ -2757,7 +2757,7 @@ function GPStatsTab({
             {/* Leaderboards Card */}
             <div className="chart-card">
               <div className="chart-card-header">
-                <div className="stat-icon-container" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%)' }}>
+                <div className="stat-icon-container" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #d4af37 0%, #b8860b 100%)' }}>
                   <Trophy className="h-5 w-5 text-white" />
                 </div>
                 <div>
@@ -2813,7 +2813,7 @@ function GPStatsTab({
           {Object.keys(statsSummary.teamStats).length > 1 && (
             <div className="chart-card">
               <div className="chart-card-header">
-                <div className="stat-icon-container card-violet" style={{ width: '40px', height: '40px', borderRadius: '12px' }}>
+                <div className="stat-icon-container card-gold" style={{ width: '40px', height: '40px', borderRadius: '12px' }}>
                   <Building2 className="h-5 w-5 text-white" />
                 </div>
                 <div>
@@ -2866,7 +2866,7 @@ function GPStatsTab({
             </div>
           </div>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-violet-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#d4af37]" />
             <input
               type="text"
               placeholder="Search by name..."
