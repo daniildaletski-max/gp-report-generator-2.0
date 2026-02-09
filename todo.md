@@ -2596,3 +2596,12 @@
 - [x] Fixed 15 TypeScript errors caused by dead code block in exportToExcel (unreachable code after return)
 - [x] Removed ~916 lines of dead code (duplicate of generateExcelAndEmail logic)
 - [x] All 193 tests passing, zero TypeScript errors
+
+
+## Bug Fix - Upload Page API Error (v91)
+
+- [x] Fix: /upload page tRPC calls return HTML instead of JSON (API returns SPA fallback)
+  - Root cause: Unused `googleapis` import (196MB) likely causing deployment server crash/timeout
+  - Removed `import { google } from 'googleapis'` from routers.ts
+  - Removed `googleapis` from package.json dependencies
+  - All 193 tests passing, zero TypeScript errors

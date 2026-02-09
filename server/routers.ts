@@ -12,7 +12,6 @@ import { nanoid } from "nanoid";
 import * as db from "./db";
 import ExcelJS from "exceljs";
 import XLSXChart from "xlsx-chart";
-import { google } from "googleapis";
 // Chart generation via QuickChart API
 async function generateChartImage(
   labels: string[],
