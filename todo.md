@@ -2588,3 +2588,11 @@
   - Domain verification initiated, DNS records added, status: pending
   - Once verified, emails will send from reports@gpreportgen.info to ALL users
   - Until verified, only owner email (daniil.daletski@studioworks.ee) receives emails
+
+## GitHub Sync (v90)
+
+- [x] Synced 4 commits from GitHub (validate-user-email-before-export, integrate-excel-generation-after-report-creation)
+- [x] Pulled: updateUserEmail db function, generateExcelAndEmail helper, email validation before export
+- [x] Fixed 15 TypeScript errors caused by dead code block in exportToExcel (unreachable code after return)
+- [x] Removed ~916 lines of dead code (duplicate of generateExcelAndEmail logic)
+- [x] All 193 tests passing, zero TypeScript errors
