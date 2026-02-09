@@ -154,3 +154,79 @@ If you have any questions, please contact your administrator.
     attachmentName: `TeamOverview_${teamName.replace(/\s+/g, '_')}_${monthName}${year}.xlsx`,
   });
 }
+
+/**
+ * Sends an immediate Team Monthly Overview notification (no attachment).
+ */
+export async function sendTeamOverviewEmail(params: {
+  userEmail: string;
+  userName: string;
+  teamName: string;
+  monthName: string;
+  year: number;
+  teamOverview?: string | null;
+  goalsThisMonth?: string | null;
+  fmPerformance?: string | null;
+}): Promise<boolean> {
+  const {
+    userEmail,
+    userName,
+    teamName,
+    monthName,
+    year,
+    teamOverview,
+    goalsThisMonth,
+    fmPerformance,
+  } = params;
+
+  const subject = `✅ Team Monthly Overview Created: ${teamName} - ${monthName} ${year}`;
+
+  const overviewText = teamOverview?.trim()
+    ? teamOverview.trim()
+    : "No team overview was provided.";
+  const goalsText = goalsThisMonth?.trim()
+    ? goalsThisMonth.trim()
+    : "No goals were provided.";
+  const performanceText = fmPerformance?.trim()
+    ? fmPerformance.trim()
+    : "No floor manager performance notes were provided.";
+
+  const body = `
+Hello ${userName},
+
+Your Team Monthly Overview has been created successfully.
+
+📋 Report Details:
+• Team: ${teamName}
+• Period: ${monthName} ${year}
+• Generated: ${new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })}
+
+🧭 Team Overview:
+${overviewText}
+
+🎯 Goals This Month:
+${goalsText}
+
+🧑‍💼 Floor Manager Performance:
+${performanceText}
+
+You can review the full report in the GP Report Generator dashboard.
+
+---
+This is an automated message from GP Report Generator.
+If you have any questions, please contact your administrator.
+`.trim();
+
+  return sendEmail({
+    to: userEmail,
+    subject,
+    body,
+  });
+}
