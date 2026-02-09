@@ -2574,3 +2574,17 @@
   - MonthlyTrend shows rolling 6-month window automatically
   - GP comparison uses rolling 6-month window
   - All data refreshes on page load via tRPC queries
+
+## Email on Report Creation (v89)
+
+- [x] Each user must receive email on their personal account after creating Team Monthly Overview
+  - Flow: Generate -> auto-Export to Excel -> sendReportEmail to ctx.user.email
+  - Email includes Excel attachment + download link
+- [x] Email should include the Excel report as attachment
+  - sendReportEmail attaches Excel file via Resend attachments API
+- [x] Use the logged-in user's email (from their account), not a hardcoded address
+  - ctx.user.email is used (populated from OAuth profile)
+- [x] Auto-detect verified Resend domain (gpreportgen.info) with fallback to resend.dev
+  - Domain verification initiated, DNS records added, status: pending
+  - Once verified, emails will send from reports@gpreportgen.info to ALL users
+  - Until verified, only owner email (daniil.daletski@studioworks.ee) receives emails

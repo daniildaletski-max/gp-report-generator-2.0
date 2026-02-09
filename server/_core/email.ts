@@ -9,6 +9,52 @@ export type EmailPayload = {
   attachmentName?: string;
 };
 
+// Cache the verified domain to avoid repeated API calls
+let cachedFromAddress: string | null = null;
+let lastDomainCheck = 0;
+const DOMAIN_CHECK_INTERVAL = 5 * 60 * 1000; // Re-check every 5 minutes
+
+/**
+ * Determines the best "from" address by checking if gpreportgen.info is verified in Resend.
+ * Falls back to reports@resend.dev if not verified.
+ */
+async function getFromAddress(): Promise<string> {
+  const now = Date.now();
+  
+  // Return cached value if still fresh
+  if (cachedFromAddress && (now - lastDomainCheck) < DOMAIN_CHECK_INTERVAL) {
+    return cachedFromAddress;
+  }
+
+  if (!ENV.resendApiKey) {
+    return "GP Report Generator <reports@resend.dev>";
+  }
+
+  try {
+    const resend = new Resend(ENV.resendApiKey);
+    const { data } = await resend.domains.list();
+    
+    // Look for a verified domain
+    const verifiedDomain = data?.data?.find(
+      (d: any) => d.status === "verified" || d.status === "active"
+    );
+    
+    if (verifiedDomain) {
+      cachedFromAddress = `GP Report Generator <reports@${verifiedDomain.name}>`;
+      console.log(`[Email] Using verified domain: ${verifiedDomain.name}`);
+    } else {
+      cachedFromAddress = "GP Report Generator <reports@resend.dev>";
+      console.log("[Email] No verified domain found, using resend.dev fallback");
+    }
+  } catch (err) {
+    console.warn("[Email] Failed to check domains, using resend.dev fallback:", err);
+    cachedFromAddress = "GP Report Generator <reports@resend.dev>";
+  }
+
+  lastDomainCheck = now;
+  return cachedFromAddress;
+}
+
 /**
  * Sends an email through Resend API.
  * Returns `true` if the email was sent successfully, `false` otherwise.
@@ -20,6 +66,7 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
   }
 
   const resend = new Resend(ENV.resendApiKey);
+  const fromAddress = await getFromAddress();
 
   try {
     // Build attachments array if URL provided
@@ -32,7 +79,7 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
     }
 
     const { data, error } = await resend.emails.send({
-      from: "GP Report Generator <reports@resend.dev>",
+      from: fromAddress,
       to: [payload.to],
       subject: payload.subject,
       text: payload.body,
@@ -40,11 +87,16 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
     });
 
     if (error) {
-      console.warn(`[Email] Failed to send email: ${error.message}`);
+      console.warn(`[Email] Failed to send email to ${payload.to}: ${error.message}`);
+      // If it's a domain validation error, reset cache so next attempt re-checks
+      if (error.message?.includes("verify a domain") || error.message?.includes("validation_error")) {
+        cachedFromAddress = null;
+        lastDomainCheck = 0;
+      }
       return false;
     }
 
-    console.log(`[Email] Successfully sent email to ${payload.to}, id: ${data?.id}`);
+    console.log(`[Email] Successfully sent email to ${payload.to} from ${fromAddress}, id: ${data?.id}`);
     return true;
   } catch (error) {
     console.warn("[Email] Error sending email:", error);
