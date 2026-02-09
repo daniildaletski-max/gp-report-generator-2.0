@@ -1795,6 +1795,15 @@ export async function updateUserTeam(userId: number, teamId: number | null): Pro
     .where(eq(users.id, userId));
 }
 
+export async function updateUserEmail(userId: number, email: string | null): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.update(users)
+    .set({ email })
+    .where(eq(users.id, userId));
+}
+
 export async function getUserWithTeam(userId: number) {
   const db = await getDb();
   if (!db) return null;
