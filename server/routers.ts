@@ -2086,6 +2086,13 @@ export const appRouter = router({
       return userWithTeam;
     }),
 
+    updateEmail: protectedProcedure
+      .input(z.object({ email: z.string().trim().email() }))
+      .mutation(async ({ ctx, input }) => {
+        await db.updateUserEmail(ctx.user.id, input.email);
+        return { success: true, email: input.email };
+      }),
+
     // List all users (admin only)
     list: adminProcedure.query(async () => {
       return await db.getAllUsers();
@@ -2753,6 +2760,21 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         // User-based data isolation: non-admin can only export their own reports
         if (ctx.user.role !== 'admin' && reportWithTeam.report.userId !== ctx.user.id) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only export your own reports' });
+        }
+
+        const userEmail = ctx.user.email?.trim();
+        if (!userEmail) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'No email configured on your account. Please add one in profile settings.',
+          });
+        }
+        const emailValidation = z.string().email().safeParse(userEmail);
+        if (!emailValidation.success) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid email configured on your account. Please update it in profile settings.',
+          });
         }
 
         const { report, team } = reportWithTeam;
@@ -3629,27 +3651,23 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           status: "finalized",
         });
 
-        // Send email with report to user if they have an email
+        // Send email with report to user
         let emailSent = false;
-        if (ctx.user.email) {
-          emailSent = await sendReportEmail({
-            userEmail: ctx.user.email,
-            userName: ctx.user.name || 'Floor Manager',
-            teamName,
-            monthName,
-            year: report.reportYear,
-            excelUrl,
-          });
-          console.log(`[exportToExcel] Email sent to ${ctx.user.email}: ${emailSent}`);
-        } else {
-          console.log(`[exportToExcel] User has no email configured, skipping email notification`);
-        }
+        emailSent = await sendReportEmail({
+          userEmail,
+          userName: ctx.user.name || 'Floor Manager',
+          teamName,
+          monthName,
+          year: report.reportYear,
+          excelUrl,
+        });
+        console.log(`[exportToExcel] Email sent to ${userEmail}: ${emailSent}`);
 
         return {
           success: true,
           excelUrl,
           emailSent,
-          emailAddress: ctx.user.email || null,
+          emailAddress: userEmail,
         };
       }),
 
