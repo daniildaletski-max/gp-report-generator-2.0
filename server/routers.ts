@@ -7,7 +7,7 @@ import { z } from "zod";
 import { invokeLLM } from "./_core/llm";
 import { storagePut } from "./storage";
 import { notifyOwner } from "./_core/notification";
-import { sendReportEmail, sendEmail } from "./_core/email";
+import { sendReportEmail, sendEmail, sendTeamOverviewEmail } from "./_core/email";
 import { nanoid } from "nanoid";
 import * as db from "./db";
 import ExcelJS from "exceljs";
@@ -1804,6 +1804,22 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           title: "New Report Generated",
           content: `A new Team Monthly Overview report has been generated for ${team.teamName} - ${MONTH_NAMES[input.reportMonth - 1]} ${input.reportYear}`,
         });
+
+        if (ctx.user.email) {
+          const overviewEmailSent = await sendTeamOverviewEmail({
+            userEmail: ctx.user.email,
+            userName: ctx.user.name ?? "User",
+            teamName: team.teamName,
+            monthName: MONTH_NAMES[input.reportMonth - 1],
+            year: input.reportYear,
+            teamOverview,
+            goalsThisMonth,
+            fmPerformance,
+          });
+          console.log(`[generate] Team overview email sent to ${ctx.user.email}: ${overviewEmailSent}`);
+        } else {
+          console.log("[generate] User has no email configured, skipping team overview email");
+        }
 
         // Email with Excel attachment is now sent by the chained exportToExcel call from the frontend
         // This avoids duplicate emails and ensures the Excel file is attached
