@@ -2613,3 +2613,11 @@
 - [x] Remove Google Sheets export button from frontend
 - [x] Code-split client bundle using React.lazy for heavy pages (Admin, Reports, Evaluations, Upload, Dashboard)
 - [x] Verify bundle size reduction after code-splitting (main bundle: 2,182 kB → 865 kB, 60% reduction)
+
+
+## Performance & Automation (v93)
+
+- [x] Lazy-load AreaChart chunk (409 kB) - already properly code-split via React.lazy (only loads on Dashboard/GPPortal)
+- [x] Set up automated monthly report generation (1st of each month)
+- [x] Add cron job / scheduled task for monthly report auto-generation (node-cron, 06:00 EET on 1st)
+- [x] Notify owner when monthly reports are generated

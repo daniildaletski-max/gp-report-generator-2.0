@@ -10,6 +10,7 @@ import { notifyOwner } from "./_core/notification";
 import { sendReportEmail, sendEmail } from "./_core/email";
 import { nanoid } from "nanoid";
 import * as db from "./db";
+import { runMonthlyReportGeneration } from "./scheduledReports";
 import ExcelJS from "exceljs";
 import XLSXChart from "xlsx-chart";
 // Chart generation via QuickChart API
@@ -2180,6 +2181,17 @@ export const appRouter = router({
     // Admin dashboard with system-wide stats
     adminStats: adminProcedure.query(async () => {
       return await db.getAdminDashboardStats();
+    }),
+  }),
+
+  // Scheduled report generation (admin-only manual trigger)
+  scheduledReports: router({
+    triggerMonthlyGeneration: adminProcedure.mutation(async () => {
+      // Run the monthly report generation in the background
+      runMonthlyReportGeneration().catch(err => {
+        console.error('[Admin] Manual monthly report trigger failed:', err);
+      });
+      return { message: 'Monthly report generation started. You will be notified when complete.' };
     }),
   }),
 
