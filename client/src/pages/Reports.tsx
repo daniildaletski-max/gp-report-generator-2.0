@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2, Trash2, Eye, Calendar, Users, TrendingUp, Search, Filter, X, Copy, CheckCircle, Cloud, ExternalLink } from "lucide-react";
+import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2, Trash2, Eye, Calendar, Users, TrendingUp, Search, Filter, X, Copy, CheckCircle, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -61,8 +61,6 @@ export default function ReportsPage() {
   const { data: teams } = trpc.fmTeam.list.useQuery();
   const generateMutation = trpc.report.generate.useMutation();
   const exportMutation = trpc.report.exportToExcel.useMutation();
-  const exportGoogleSheetsMutation = trpc.report.exportToGoogleSheets.useMutation();
-  const [isExportingGoogleSheets, setIsExportingGoogleSheets] = useState<number | null>(null);
   const autoFillMutation = trpc.report.autoFillFields.useMutation();
   const deleteMutation = trpc.report.delete.useMutation({
     onSuccess: () => {
@@ -295,32 +293,6 @@ export default function ReportsPage() {
     }
   };
 
-  const handleExportGoogleSheets = async (reportId: number) => {
-    setIsExportingGoogleSheets(reportId);
-    try {
-      const result = await exportGoogleSheetsMutation.mutateAsync({ reportId });
-      
-      // Show success message with email status
-      if (result.emailSent && result.emailAddress) {
-        toast.success(
-          <div className="flex flex-col gap-1">
-            <span>Report uploaded to Google Drive!</span>
-            <span className="text-xs text-green-200">📧 Report sent to {result.emailAddress}</span>
-          </div>,
-          { duration: 5000 }
-        );
-      } else {
-        toast.success("Report uploaded to Google Drive!");
-      }
-      
-      window.open(result.googleSheetsUrl, "_blank");
-      refetch();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to export to Google Sheets");
-    } finally {
-      setIsExportingGoogleSheets(null);
-    }
-  };
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -755,22 +727,6 @@ export default function ReportsPage() {
                             </Button>
                           )}
                           
-                          {/* Export to Google Sheets */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-green-600 hover:text-green-700"
-                            onClick={() => handleExportGoogleSheets(item.report.id)}
-                            disabled={isExportingGoogleSheets === item.report.id}
-                            title="Export to Google Sheets"
-                          >
-                            {isExportingGoogleSheets === item.report.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Cloud className="h-4 w-4" />
-                            )}
-                          </Button>
-                          
                           {/* Delete */}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -943,19 +899,7 @@ export default function ReportsPage() {
                     Export to Excel
                   </Button>
                 )}
-                <Button 
-                  variant="outline" 
-                  className="text-green-400 border-green-500/30 hover:bg-green-500/20"
-                  onClick={() => handleExportGoogleSheets(viewingReport.report.id)} 
-                  disabled={isExportingGoogleSheets === viewingReport.report.id}
-                >
-                  {isExportingGoogleSheets === viewingReport.report.id ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Cloud className="h-4 w-4 mr-2" />
-                  )}
-                  Google Sheets
-                </Button>
+
               </div>
             </div>
           )}

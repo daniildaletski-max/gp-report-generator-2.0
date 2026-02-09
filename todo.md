@@ -2605,3 +2605,11 @@
   - Removed `import { google } from 'googleapis'` from routers.ts
   - Removed `googleapis` from package.json dependencies
   - All 193 tests passing, zero TypeScript errors
+
+
+## Cleanup & Performance (v92)
+
+- [x] Remove exportToGoogleSheets procedure (depends on rclone config not available in deployment)
+- [x] Remove Google Sheets export button from frontend
+- [x] Code-split client bundle using React.lazy for heavy pages (Admin, Reports, Evaluations, Upload, Dashboard)
+- [x] Verify bundle size reduction after code-splitting (main bundle: 2,182 kB → 865 kB, 60% reduction)

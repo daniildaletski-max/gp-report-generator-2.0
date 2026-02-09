@@ -7,15 +7,27 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
 import { PageTransition } from "./components/PageTransition";
 import Home from "./pages/Home";
-import Dashboard from "./pages/Dashboard";
-import Upload from "./pages/Upload";
-import Evaluations from "./pages/Evaluations";
-import Reports from "./pages/Reports";
-import Admin from "./pages/Admin";
-import GPPortal from "./pages/GPPortal";
-import InvitePage from "./pages/InvitePage";
 import { useAuth } from "./_core/hooks/useAuth";
 import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield } from "lucide-react";
+import { lazy, Suspense } from "react";
+import { Loader2 } from "lucide-react";
+
+// Lazy-loaded page components for code-splitting
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Upload = lazy(() => import("./pages/Upload"));
+const Evaluations = lazy(() => import("./pages/Evaluations"));
+const Reports = lazy(() => import("./pages/Reports"));
+const Admin = lazy(() => import("./pages/Admin"));
+const GPPortal = lazy(() => import("./pages/GPPortal"));
+const InvitePage = lazy(() => import("./pages/InvitePage"));
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[50vh]">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 // Base sidebar items for all users
 const baseSidebarItems = [
@@ -43,14 +55,16 @@ function DashboardRoutes() {
   return (
     <DashboardLayout sidebarItems={sidebarItems}>
       <PageTransition>
-        <Switch>
-          <Route path="/dashboard" component={Dashboard} />
-          <Route path="/upload" component={Upload} />
-          <Route path="/evaluations" component={Evaluations} />
-          <Route path="/reports" component={Reports} />
-          <Route path="/admin" component={Admin} />
-          <Route component={NotFound} />
-        </Switch>
+        <Suspense fallback={<PageLoader />}>
+          <Switch>
+            <Route path="/dashboard" component={Dashboard} />
+            <Route path="/upload" component={Upload} />
+            <Route path="/evaluations" component={Evaluations} />
+            <Route path="/reports" component={Reports} />
+            <Route path="/admin" component={Admin} />
+            <Route component={NotFound} />
+          </Switch>
+        </Suspense>
       </PageTransition>
     </DashboardLayout>
   );
@@ -60,9 +74,27 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/gp/:token" component={GPPortal} />
-      <Route path="/gp-portal/:token" component={GPPortal} />
-      <Route path="/invite/:token" component={InvitePage} />
+      <Route path="/gp/:token">
+        {(params) => (
+          <Suspense fallback={<PageLoader />}>
+            <GPPortal />
+          </Suspense>
+        )}
+      </Route>
+      <Route path="/gp-portal/:token">
+        {(params) => (
+          <Suspense fallback={<PageLoader />}>
+            <GPPortal />
+          </Suspense>
+        )}
+      </Route>
+      <Route path="/invite/:token">
+        {(params) => (
+          <Suspense fallback={<PageLoader />}>
+            <InvitePage />
+          </Suspense>
+        )}
+      </Route>
       {/* All dashboard pages use DashboardRoutes for consistent sidebar */}
       <Route path="/dashboard" component={DashboardRoutes} />
       <Route path="/upload" component={DashboardRoutes} />
