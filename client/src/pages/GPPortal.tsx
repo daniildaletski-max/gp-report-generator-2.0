@@ -160,6 +160,8 @@ function StatCard({ icon: Icon, value, label, color, trend }: {
 export default function GPPortal() {
   const { token } = useParams<{ token: string }>();
   const [expandedEvaluations, setExpandedEvaluations] = useState<Set<number>>(new Set());
+  const [selectedEvalMonth, setSelectedEvalMonth] = useState<string>('all');
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [lastRefresh, setLastRefresh] = useState(new Date());
   
   const { data, isLoading, error, refetch, isFetching } = trpc.gpAccess.getEvaluationsByToken.useQuery(
@@ -797,148 +799,307 @@ export default function GPPortal() {
           </section>
         )}
 
-        {/* Evaluation History */}
+        {/* Evaluation History - Grouped by Month */}
         <section>
           <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
             <Calendar className="h-5 w-5 text-[#d4af37]" />
             Evaluation History
+            {data.evaluations.length > 0 && (
+              <Badge className="ml-2 bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
+                {data.evaluations.length} total
+              </Badge>
+            )}
           </h2>
-          
+
           {data.evaluations.length > 0 ? (
-            <div className="space-y-3">
-              {data.evaluations.map((evaluation) => {
-                const isExpanded = expandedEvaluations.has(evaluation.id);
-                return (
-                  <Card 
-                    key={evaluation.id} 
-                    className="bg-white/5 backdrop-blur-xl border-white/10 overflow-hidden hover:bg-white/[0.07] transition-all"
-                  >
-                    <CardContent className="p-0">
+            <div className="space-y-6">
+              {/* Month navigation tabs */}
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+                {(() => {
+                  const months = new Map<string, { label: string; count: number; key: string }>();
+                  data.evaluations.forEach((e) => {
+                    const d = e.evaluationDate ? new Date(e.evaluationDate) : null;
+                    if (!d) return;
+                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    const label = format(d, 'MMMM yyyy');
+                    const existing = months.get(key);
+                    if (existing) {
+                      existing.count++;
+                    } else {
+                      months.set(key, { label, count: 1, key });
+                    }
+                  });
+                  const sorted = Array.from(months.values()).sort((a, b) => b.key.localeCompare(a.key));
+                  return (
+                    <>
                       <button
-                        onClick={() => toggleEvaluation(evaluation.id)}
-                        className="w-full p-4 sm:p-5 flex items-center justify-between text-left"
+                        onClick={() => setSelectedEvalMonth('all')}
+                        className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                          selectedEvalMonth === 'all'
+                            ? 'bg-[#d4af37]/30 text-[#f0d060] border border-[#d4af37]/40 shadow-[0_0_12px_rgba(212,175,55,0.2)]'
+                            : 'bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 hover:text-white/80'
+                        }`}
                       >
-                        <div className="flex items-center gap-4">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${
-                            (evaluation.totalScore || 0) >= 20 
-                              ? 'bg-green-500/20 text-green-300' 
-                              : (evaluation.totalScore || 0) >= 18 
-                              ? 'bg-yellow-500/20 text-yellow-300' 
-                              : 'bg-red-500/20 text-red-300'
-                          }`}>
-                            {evaluation.totalScore}
+                        All Months
+                      </button>
+                      {sorted.map((m) => (
+                        <button
+                          key={m.key}
+                          onClick={() => setSelectedEvalMonth(m.key)}
+                          className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                            selectedEvalMonth === m.key
+                              ? 'bg-[#d4af37]/30 text-[#f0d060] border border-[#d4af37]/40 shadow-[0_0_12px_rgba(212,175,55,0.2)]'
+                              : 'bg-white/5 text-white/60 border border-white/10 hover:bg-white/10 hover:text-white/80'
+                          }`}
+                        >
+                          {m.label}
+                          <span className="ml-1.5 text-xs opacity-70">({m.count})</span>
+                        </button>
+                      ))}
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* Filtered evaluations grouped by month */}
+              {(() => {
+                // Group evaluations by month
+                const grouped = new Map<string, { label: string; evaluations: typeof data.evaluations }>(); 
+                data.evaluations.forEach((e) => {
+                  const d = e.evaluationDate ? new Date(e.evaluationDate) : null;
+                  const key = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : 'unknown';
+                  const label = d ? format(d, 'MMMM yyyy') : 'Unknown Date';
+                  if (!grouped.has(key)) {
+                    grouped.set(key, { label, evaluations: [] });
+                  }
+                  grouped.get(key)!.evaluations.push(e);
+                });
+                const sortedGroups = Array.from(grouped.entries()).sort(([a], [b]) => b.localeCompare(a));
+                const filteredGroups = selectedEvalMonth === 'all'
+                  ? sortedGroups
+                  : sortedGroups.filter(([key]) => key === selectedEvalMonth);
+
+                return filteredGroups.map(([monthKey, group]) => {
+                  const monthAvg = group.evaluations.reduce((s, e) => s + (e.totalScore || 0), 0) / group.evaluations.length;
+                  const monthAppAvg = group.evaluations.reduce((s, e) => s + (e.appearanceScore || 0), 0) / group.evaluations.length;
+                  const monthGameAvg = group.evaluations.reduce((s, e) => s + (e.gamePerformanceTotalScore || 0), 0) / group.evaluations.length;
+                  const isMonthExpanded = expandedMonths.has(monthKey);
+
+                  return (
+                    <div key={monthKey} className="space-y-3">
+                      {/* Month header with summary */}
+                      <button
+                        onClick={() => {
+                          setExpandedMonths(prev => {
+                            const next = new Set(prev);
+                            if (next.has(monthKey)) next.delete(monthKey);
+                            else next.add(monthKey);
+                            return next;
+                          });
+                        }}
+                        className="w-full flex items-center justify-between p-4 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/10 hover:bg-white/[0.09] hover:border-white/15 transition-all duration-300 group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 rounded-xl bg-[#d4af37]/20 border border-[#d4af37]/30">
+                            <Calendar className="h-5 w-5 text-[#d4af37]" />
                           </div>
-                          <div>
-                            <p className="font-semibold text-white">
-                              {evaluation.evaluationDate 
-                                ? format(new Date(evaluation.evaluationDate), "MMMM d, yyyy")
-                                : "Unknown Date"}
-                            </p>
-                            <p className="text-sm text-white/50">{evaluation.game || 'Game Session'}</p>
+                          <div className="text-left">
+                            <p className="text-white font-semibold text-base">{group.label}</p>
+                            <p className="text-white/50 text-sm">{group.evaluations.length} evaluation{group.evaluations.length !== 1 ? 's' : ''}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <div className="hidden sm:flex gap-2">
-                            <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
-                              <Sparkles className="h-3 w-3 mr-1" />
-                              {evaluation.appearanceScore}/12
-                            </Badge>
-                            <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
-                              <Gamepad2 className="h-3 w-3 mr-1" />
-                              {evaluation.gamePerformanceTotalScore}/10
-                            </Badge>
+                          <div className="hidden sm:flex items-center gap-3">
+                            <div className="text-right">
+                              <p className={`text-lg font-bold ${
+                                monthAvg >= 20 ? 'text-green-400' : monthAvg >= 18 ? 'text-yellow-400' : 'text-red-400'
+                              }`}>{monthAvg.toFixed(1)}</p>
+                              <p className="text-xs text-white/40">avg score</p>
+                            </div>
+                            <div className="h-8 w-px bg-white/10" />
+                            <div className="flex gap-2">
+                              <Badge className="bg-green-500/15 text-green-300/80 border-green-500/20 text-xs">
+                                <Sparkles className="h-3 w-3 mr-1" />
+                                {monthAppAvg.toFixed(1)}
+                              </Badge>
+                              <Badge className="bg-[#d4af37]/15 text-[#d4af37]/80 border-[#d4af37]/20 text-xs">
+                                <Gamepad2 className="h-3 w-3 mr-1" />
+                                {monthGameAvg.toFixed(1)}
+                              </Badge>
+                            </div>
                           </div>
-                          {isExpanded ? (
-                            <ChevronUp className="h-5 w-5 text-white/40" />
+                          {isMonthExpanded ? (
+                            <ChevronUp className="h-5 w-5 text-white/40 group-hover:text-white/60 transition-colors" />
                           ) : (
-                            <ChevronDown className="h-5 w-5 text-white/40" />
+                            <ChevronDown className="h-5 w-5 text-white/40 group-hover:text-white/60 transition-colors" />
                           )}
                         </div>
                       </button>
-                      
-                      {isExpanded && (
-                        <div className="px-4 sm:px-5 pb-5 pt-2 border-t border-white/10 space-y-4 animate-in slide-in-from-top-2">
-                          {/* Mobile badges */}
-                          <div className="flex gap-2 sm:hidden">
-                            <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
-                              <Sparkles className="h-3 w-3 mr-1" />
-                              Appearance: {evaluation.appearanceScore}/12
-                            </Badge>
-                            <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
-                              <Gamepad2 className="h-3 w-3 mr-1" />
-                              Game: {evaluation.gamePerformanceTotalScore}/10
-                            </Badge>
+
+                      {/* Mobile month summary */}
+                      {isMonthExpanded && (
+                        <div className="flex gap-2 sm:hidden px-1">
+                          <div className={`flex-1 p-2 rounded-lg text-center ${
+                            monthAvg >= 20 ? 'bg-green-500/15' : monthAvg >= 18 ? 'bg-yellow-500/15' : 'bg-red-500/15'
+                          }`}>
+                            <p className={`text-lg font-bold ${
+                              monthAvg >= 20 ? 'text-green-400' : monthAvg >= 18 ? 'text-yellow-400' : 'text-red-400'
+                            }`}>{monthAvg.toFixed(1)}</p>
+                            <p className="text-[10px] text-white/40">avg</p>
                           </div>
-                          
-                          {/* Appearance Details */}
-                          <div>
-                            <p className="text-sm font-medium text-white/60 mb-3 flex items-center gap-2">
-                              <Sparkles className="h-4 w-4" />
-                              Appearance Breakdown
-                            </p>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                              {[
-                                { icon: Scissors, label: 'Hair', score: evaluation.hairScore, max: 3 },
-                                { icon: Palette, label: 'Makeup', score: evaluation.makeupScore, max: 3 },
-                                { icon: Shirt, label: 'Outfit', score: evaluation.outfitScore, max: 3 },
-                                { icon: PersonStanding, label: 'Posture', score: evaluation.postureScore, max: 3 },
-                              ].map((item) => (
-                                <div key={item.label} className="p-3 bg-white/5 rounded-lg">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <item.icon className="h-4 w-4 text-green-400" />
-                                    <span className="text-xs text-white/60">{item.label}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-lg font-bold text-white">{item.score ?? 0}</span>
-                                    <span className="text-xs text-white/40">/{item.max}</span>
-                                  </div>
-                                  <Progress 
-                                    value={((item.score ?? 0) / item.max) * 100} 
-                                    className="h-1.5 mt-2 bg-white/10"
-                                  />
-                                </div>
-                              ))}
-                            </div>
+                          <div className="flex-1 p-2 rounded-lg text-center bg-green-500/10">
+                            <p className="text-lg font-bold text-green-300">{monthAppAvg.toFixed(1)}</p>
+                            <p className="text-[10px] text-white/40">appearance</p>
                           </div>
-                          
-                          {/* Game Performance Details */}
-                          <div>
-                            <p className="text-sm font-medium text-white/60 mb-3 flex items-center gap-2">
-                              <Gamepad2 className="h-4 w-4" />
-                              Game Performance Breakdown
-                            </p>
-                            <div className="grid grid-cols-2 gap-3">
-                              {[
-                                { label: 'Dealing Style', score: evaluation.dealingStyleScore, max: 5 },
-                                { label: 'Game Performance', score: evaluation.gamePerformanceScore, max: 5 },
-                              ].map((item) => (
-                                <div key={item.label} className="p-3 bg-white/5 rounded-lg">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <span className="text-xs text-white/60">{item.label}</span>
-                                    <span className="text-lg font-bold text-white">{item.score ?? 0}/{item.max}</span>
-                                  </div>
-                                  <Progress 
-                                    value={((item.score ?? 0) / item.max) * 100} 
-                                    className="h-1.5 bg-white/10"
-                                  />
-                                </div>
-                              ))}
-                            </div>
+                          <div className="flex-1 p-2 rounded-lg text-center bg-[#d4af37]/10">
+                            <p className="text-lg font-bold text-[#d4af37]">{monthGameAvg.toFixed(1)}</p>
+                            <p className="text-[10px] text-white/40">game</p>
                           </div>
-                          
-                          {/* Comments */}
-                          {(evaluation.hairComment || evaluation.makeupComment || evaluation.outfitComment || evaluation.postureComment || evaluation.dealingStyleComment || evaluation.gamePerformanceComment) && (
-                            <div className="p-4 bg-white/5 rounded-lg">
-                              <p className="text-sm font-medium text-white/60 mb-2">Comments</p>
-                              <p className="text-white/80 text-sm">{[evaluation.hairComment, evaluation.makeupComment, evaluation.outfitComment, evaluation.postureComment, evaluation.dealingStyleComment, evaluation.gamePerformanceComment].filter(Boolean).join('; ')}</p>
-                            </div>
-                          )}
                         </div>
                       )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
+
+                      {/* Individual evaluations */}
+                      {isMonthExpanded && (
+                        <div className="space-y-3 pl-2 sm:pl-4 border-l-2 border-[#d4af37]/20">
+                          {group.evaluations.map((evaluation) => {
+                            const isExpanded = expandedEvaluations.has(evaluation.id);
+                            return (
+                              <Card 
+                                key={evaluation.id} 
+                                className="bg-white/5 backdrop-blur-xl border-white/10 overflow-hidden hover:bg-white/[0.07] transition-all"
+                              >
+                                <CardContent className="p-0">
+                                  <button
+                                    onClick={() => toggleEvaluation(evaluation.id)}
+                                    className="w-full p-4 sm:p-5 flex items-center justify-between text-left"
+                                  >
+                                    <div className="flex items-center gap-4">
+                                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${
+                                        (evaluation.totalScore || 0) >= 20 
+                                          ? 'bg-green-500/20 text-green-300' 
+                                          : (evaluation.totalScore || 0) >= 18 
+                                          ? 'bg-yellow-500/20 text-yellow-300' 
+                                          : 'bg-red-500/20 text-red-300'
+                                      }`}>
+                                        {evaluation.totalScore}
+                                      </div>
+                                      <div>
+                                        <p className="font-semibold text-white">
+                                          {evaluation.evaluationDate 
+                                            ? format(new Date(evaluation.evaluationDate), "MMMM d, yyyy")
+                                            : "Unknown Date"}
+                                        </p>
+                                        <p className="text-sm text-white/50">{evaluation.game || 'Game Session'}</p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <div className="hidden sm:flex gap-2">
+                                        <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
+                                          <Sparkles className="h-3 w-3 mr-1" />
+                                          {evaluation.appearanceScore}/12
+                                        </Badge>
+                                        <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
+                                          <Gamepad2 className="h-3 w-3 mr-1" />
+                                          {evaluation.gamePerformanceTotalScore}/10
+                                        </Badge>
+                                      </div>
+                                      {isExpanded ? (
+                                        <ChevronUp className="h-5 w-5 text-white/40" />
+                                      ) : (
+                                        <ChevronDown className="h-5 w-5 text-white/40" />
+                                      )}
+                                    </div>
+                                  </button>
+                                  
+                                  {isExpanded && (
+                                    <div className="px-4 sm:px-5 pb-5 pt-2 border-t border-white/10 space-y-4 animate-in slide-in-from-top-2">
+                                      {/* Mobile badges */}
+                                      <div className="flex gap-2 sm:hidden">
+                                        <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
+                                          <Sparkles className="h-3 w-3 mr-1" />
+                                          Appearance: {evaluation.appearanceScore}/12
+                                        </Badge>
+                                        <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
+                                          <Gamepad2 className="h-3 w-3 mr-1" />
+                                          Game: {evaluation.gamePerformanceTotalScore}/10
+                                        </Badge>
+                                      </div>
+                                      
+                                      {/* Appearance Details */}
+                                      <div>
+                                        <p className="text-sm font-medium text-white/60 mb-3 flex items-center gap-2">
+                                          <Sparkles className="h-4 w-4" />
+                                          Appearance Breakdown
+                                        </p>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                          {[
+                                            { icon: Scissors, label: 'Hair', score: evaluation.hairScore, max: 3 },
+                                            { icon: Palette, label: 'Makeup', score: evaluation.makeupScore, max: 3 },
+                                            { icon: Shirt, label: 'Outfit', score: evaluation.outfitScore, max: 3 },
+                                            { icon: PersonStanding, label: 'Posture', score: evaluation.postureScore, max: 3 },
+                                          ].map((item) => (
+                                            <div key={item.label} className="p-3 bg-white/5 rounded-lg">
+                                              <div className="flex items-center gap-2 mb-2">
+                                                <item.icon className="h-4 w-4 text-green-400" />
+                                                <span className="text-xs text-white/60">{item.label}</span>
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-lg font-bold text-white">{item.score ?? 0}</span>
+                                                <span className="text-xs text-white/40">/{item.max}</span>
+                                              </div>
+                                              <Progress 
+                                                value={((item.score ?? 0) / item.max) * 100} 
+                                                className="h-1.5 mt-2 bg-white/10"
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Game Performance Details */}
+                                      <div>
+                                        <p className="text-sm font-medium text-white/60 mb-3 flex items-center gap-2">
+                                          <Gamepad2 className="h-4 w-4" />
+                                          Game Performance Breakdown
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-3">
+                                          {[
+                                            { label: 'Dealing Style', score: evaluation.dealingStyleScore, max: 5 },
+                                            { label: 'Game Performance', score: evaluation.gamePerformanceScore, max: 5 },
+                                          ].map((item) => (
+                                            <div key={item.label} className="p-3 bg-white/5 rounded-lg">
+                                              <div className="flex items-center justify-between mb-2">
+                                                <span className="text-xs text-white/60">{item.label}</span>
+                                                <span className="text-lg font-bold text-white">{item.score ?? 0}/{item.max}</span>
+                                              </div>
+                                              <Progress 
+                                                value={((item.score ?? 0) / item.max) * 100} 
+                                                className="h-1.5 bg-white/10"
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Comments */}
+                                      {(evaluation.hairComment || evaluation.makeupComment || evaluation.outfitComment || evaluation.postureComment || evaluation.dealingStyleComment || evaluation.gamePerformanceComment) && (
+                                        <div className="p-4 bg-white/5 rounded-lg">
+                                          <p className="text-sm font-medium text-white/60 mb-2">Comments</p>
+                                          <p className="text-white/80 text-sm">{[evaluation.hairComment, evaluation.makeupComment, evaluation.outfitComment, evaluation.postureComment, evaluation.dealingStyleComment, evaluation.gamePerformanceComment].filter(Boolean).join('; ')}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
             </div>
           ) : (
             <Card className="bg-white/5 backdrop-blur-xl border-white/10">

@@ -2665,3 +2665,15 @@
   - Admin sees all teams, non-admin verified team ownership
 - [x] Default to "All teams" showing combined data
 - [x] Subtitle updates to show selected team name
+
+
+## GP Portal - Month-Based Evaluation View (v99)
+
+- [x] Group GP evaluations by month in the GP Portal dashboard
+- [x] Add month selector/tabs so GPs can navigate between months
+  - Scrollable month tabs with evaluation count per month
+  - "All Months" default view with collapsible month groups
+- [x] Show evaluation details per month instead of all evaluations at once
+  - Per-month summary (avg score, appearance avg, game performance avg)
+  - Collapsible month sections with gold timeline border
+  - Mobile-responsive month summary cards
