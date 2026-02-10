@@ -2655,3 +2655,13 @@
 - [x] Fix stat card layout - increased padding, larger stat values, stronger borders
 - [x] Fix Attitude Distribution section icon - brighter gold gradient with visible border
 - [x] Improve overall visual hierarchy - stronger card backgrounds, better contrast, thicker progress bars
+
+
+## Dashboard Team Filter (v98)
+
+- [x] Add team filter dropdown to Dashboard page header (next to month/year selectors)
+- [x] Filter all dashboard stats, charts, and GP lists by selected team
+  - Added teamId parameter to dashboard.stats backend procedure
+  - Admin sees all teams, non-admin verified team ownership
+- [x] Default to "All teams" showing combined data
+- [x] Subtitle updates to show selected team name

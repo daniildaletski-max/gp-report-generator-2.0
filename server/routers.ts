@@ -2139,14 +2139,26 @@ export const appRouter = router({
       .input(z.object({
         month: z.number().min(1).max(12).optional(),
         year: z.number().optional(),
+        teamId: z.number().positive().optional(),
       }).optional())
       .query(async ({ ctx, input }) => {
+        const teamId = input?.teamId;
         // User-based data isolation: each user sees only their own stats
         if (ctx.user.role !== 'admin') {
+          // For non-admin users, getDashboardStatsByUser already filters by userId
+          // If teamId is provided, we need to also filter by team
+          if (teamId) {
+            // Verify team belongs to user
+            const team = await db.getFmTeamById(teamId);
+            if (!team || team.userId !== ctx.user.id) {
+              throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+            }
+            return await db.getDashboardStats(input?.month, input?.year, teamId);
+          }
           return await db.getDashboardStatsByUser(input?.month, input?.year, ctx.user.id);
         }
-        // Admin sees all
-        return await db.getDashboardStats(input?.month, input?.year, undefined);
+        // Admin sees all, optionally filtered by team
+        return await db.getDashboardStats(input?.month, input?.year, teamId);
       }),
 
     // Monthly trend data for comparative analytics

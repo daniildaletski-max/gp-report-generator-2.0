@@ -54,13 +54,19 @@ export default function Dashboard() {
   const [currentDate] = useState(() => new Date());
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [selectedTeamId, setSelectedTeamId] = useState<number | undefined>(undefined);
   const [, setLocation] = useLocation();
   const isMobile = useIsMobile();
+
+  const { data: teams } = trpc.fmTeam.list.useQuery();
   
   const { data: stats, isLoading } = trpc.dashboard.stats.useQuery({
     month: selectedMonth,
     year: selectedYear,
+    teamId: selectedTeamId,
   });
+
+  const selectedTeamName = selectedTeamId ? teams?.find(t => t.id === selectedTeamId)?.teamName : undefined;
 
   const totalGPs = stats?.totalGPs || 0;
   const evaluatedGPs = (stats as { thisMonthGPs?: number })?.thisMonthGPs || 0;
@@ -136,9 +142,24 @@ export default function Dashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Dashboard</h1>
-          <p className="text-white/35 text-xs sm:text-sm mt-1">Team performance overview</p>
+          <p className="text-white/35 text-xs sm:text-sm mt-1">{selectedTeamName ? `${selectedTeamName} performance` : 'Team performance overview'}</p>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <Select
+            value={selectedTeamId?.toString() || "all"}
+            onValueChange={(val) => setSelectedTeamId(val === "all" ? undefined : Number(val))}
+          >
+            <SelectTrigger className="w-[140px] sm:w-[180px] bg-white/[0.03] border-white/[0.08] hover:border-white/[0.15] rounded-xl">
+              <Users className="h-4 w-4 mr-1.5 sm:mr-2 text-[#d4af37]/70" />
+              <SelectValue placeholder="All Teams" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Teams</SelectItem>
+              {teams?.map(team => (
+                <SelectItem key={team.id} value={team.id.toString()}>{team.teamName}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(Number(v))}>
             <SelectTrigger className="w-[120px] sm:w-40 bg-white/[0.03] border-white/[0.08] hover:border-white/[0.15] rounded-xl">
               <Calendar className="h-4 w-4 mr-1.5 sm:mr-2 text-[#d4af37]/70" />
