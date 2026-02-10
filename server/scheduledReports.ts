@@ -8,6 +8,9 @@
 import cron from "node-cron";
 import * as db from "./db";
 import { invokeLLM } from "./_core/llm";
+import { createLogger } from "./services/logger";
+
+const log = createLogger("ScheduledReports");
 import { notifyOwner } from "./_core/notification";
 import { MONTH_NAMES } from "@shared/const";
 
@@ -26,21 +29,21 @@ async function generateReportForTeam(
   try {
     const team = await db.getFmTeamById(teamId);
     if (!team) {
-      console.log(`[ScheduledReports] Team ${teamId} not found, skipping`);
+      log.info(`[ScheduledReports] Team ${teamId} not found, skipping`);
       return null;
     }
 
     // Check if a report already exists for this team/month/year
     const existing = await db.getReportByTeamMonthYear(teamId, reportMonth, reportYear);
     if (existing) {
-      console.log(`[ScheduledReports] Report already exists for team ${team.teamName} - ${MONTH_NAMES[reportMonth - 1]} ${reportYear}, skipping`);
+      log.info(`[ScheduledReports] Report already exists for team ${team.teamName} - ${MONTH_NAMES[reportMonth - 1]} ${reportYear}, skipping`);
       return null;
     }
 
     // Get evaluation stats for the month
     const stats = await db.getGPMonthlyStats(teamId, reportYear, reportMonth);
     if (stats.length === 0) {
-      console.log(`[ScheduledReports] No evaluation data for team ${team.teamName} - ${MONTH_NAMES[reportMonth - 1]} ${reportYear}, skipping`);
+      log.info(`[ScheduledReports] No evaluation data for team ${team.teamName} - ${MONTH_NAMES[reportMonth - 1]} ${reportYear}, skipping`);
       return null;
     }
 
@@ -187,7 +190,7 @@ IMPORTANT: Use specific names and numbers from the data.`,
       const content = teamOverviewResponse.choices[0]?.message?.content;
       teamOverview = typeof content === "string" ? content : null;
     } catch (e) {
-      console.error("[ScheduledReports] Failed to auto-generate teamOverview:", e);
+      log.error("Failed to auto-generate teamOverview", e instanceof Error ? e : new Error(String(e)));
     }
 
     // Auto-generate Goals
@@ -216,7 +219,7 @@ IMPORTANT: Be specific with names and numbers from the data.`,
       const content = goalsResponse.choices[0]?.message?.content;
       goalsThisMonth = typeof content === "string" ? content : null;
     } catch (e) {
-      console.error("[ScheduledReports] Failed to auto-generate goalsThisMonth:", e);
+      log.error("Failed to auto-generate goalsThisMonth", e instanceof Error ? e : new Error(String(e)));
     }
 
     // Create the report
@@ -239,10 +242,10 @@ IMPORTANT: Be specific with names and numbers from the data.`,
     const { generateExcelAndEmailForScheduled } = await import("./scheduledExcelHelper");
     await generateExcelAndEmailForScheduled(user, report.id);
 
-    console.log(`[ScheduledReports] Successfully generated report for ${team.teamName} - ${monthName} ${reportYear}`);
+    log.info(`[ScheduledReports] Successfully generated report for ${team.teamName} - ${monthName} ${reportYear}`);
     return { reportId: report.id, teamName: team.teamName };
   } catch (error) {
-    console.error(`[ScheduledReports] Error generating report for team ${teamId}:`, error);
+    log.error(`Error generating report for team ${teamId}`, error instanceof Error ? error : new Error(String(error)));
     return null;
   }
 }
@@ -252,7 +255,7 @@ IMPORTANT: Be specific with names and numbers from the data.`,
  */
 async function runMonthlyReportGeneration() {
   if (isMonthlyGenerationRunning) {
-    console.log("[ScheduledReports] Monthly report generation is already running, skipping duplicate trigger");
+    log.info("[ScheduledReports] Monthly report generation is already running, skipping duplicate trigger");
     return;
   }
 
@@ -264,7 +267,7 @@ async function runMonthlyReportGeneration() {
   const reportYear = prevDate.getFullYear();
   const monthName = MONTH_NAMES[reportMonth - 1];
 
-  console.log(`\n========== [ScheduledReports] Starting monthly report generation for ${monthName} ${reportYear} ==========`);
+  log.info(`\n========== [ScheduledReports] Starting monthly report generation for ${monthName} ${reportYear} ==========`);
 
   try {
     // Get all users with teams
@@ -301,7 +304,7 @@ async function runMonthlyReportGeneration() {
       }
     }
 
-    console.log(`[ScheduledReports] Completed: ${totalGenerated} reports generated, ${totalSkipped} skipped`);
+    log.info(`[ScheduledReports] Completed: ${totalGenerated} reports generated, ${totalSkipped} skipped`);
 
     // Notify the project owner about the scheduled run
     if (totalGenerated > 0) {
@@ -320,7 +323,7 @@ async function runMonthlyReportGeneration() {
       });
     }
   } catch (error) {
-    console.error("[ScheduledReports] Fatal error during scheduled generation:", error);
+    log.error("Fatal error during scheduled generation", error instanceof Error ? error : new Error(String(error)));
     await notifyOwner({
       title: "Monthly Report Generation Failed",
       content: `The automated monthly report generation for ${monthName} ${reportYear} encountered an error: ${error instanceof Error ? error.message : "Unknown error"}`,
@@ -338,15 +341,15 @@ export function initScheduledReports() {
   // Cron: minute hour day-of-month month day-of-week
   // "0 6 1 * *" = At 06:00 on the 1st of every month
   const task = cron.schedule("0 6 1 * *", () => {
-    console.log("[ScheduledReports] Cron triggered - starting monthly report generation");
+    log.info("[ScheduledReports] Cron triggered - starting monthly report generation");
     runMonthlyReportGeneration().catch(err => {
-      console.error("[ScheduledReports] Unhandled error in scheduled job:", err);
+      log.error("Unhandled error in scheduled job", err instanceof Error ? err : new Error(String(err)));
     });
   }, {
     timezone: "Europe/Tallinn", // User's timezone
   });
 
-  console.log("[ScheduledReports] Monthly report generation scheduled (1st of each month at 06:00 EET)");
+  log.info("[ScheduledReports] Monthly report generation scheduled (1st of each month at 06:00 EET)");
   return task;
 }
 

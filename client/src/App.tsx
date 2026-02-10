@@ -3,6 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
 import { PageTransition } from "./components/PageTransition";
@@ -59,12 +60,36 @@ function DashboardRoutes() {
       <PageTransition>
         <Suspense fallback={<PageLoader />}>
           <Switch>
-            <Route path="/dashboard" component={Dashboard} />
-            <Route path="/upload" component={Upload} />
-            <Route path="/evaluations" component={Evaluations} />
-            <Route path="/reports" component={Reports} />
-            <Route path="/admin" component={Admin} />
-            <Route path="/attendance" component={Attendance} />
+            <Route path="/dashboard">
+              <RouteErrorBoundary fallbackTitle="Dashboard failed to load">
+                <Dashboard />
+              </RouteErrorBoundary>
+            </Route>
+            <Route path="/upload">
+              <RouteErrorBoundary fallbackTitle="Upload page failed to load">
+                <Upload />
+              </RouteErrorBoundary>
+            </Route>
+            <Route path="/evaluations">
+              <RouteErrorBoundary fallbackTitle="Evaluations failed to load">
+                <Evaluations />
+              </RouteErrorBoundary>
+            </Route>
+            <Route path="/reports">
+              <RouteErrorBoundary fallbackTitle="Reports failed to load">
+                <Reports />
+              </RouteErrorBoundary>
+            </Route>
+            <Route path="/admin">
+              <RouteErrorBoundary fallbackTitle="Admin panel failed to load">
+                <Admin />
+              </RouteErrorBoundary>
+            </Route>
+            <Route path="/attendance">
+              <RouteErrorBoundary fallbackTitle="Attendance failed to load">
+                <Attendance />
+              </RouteErrorBoundary>
+            </Route>
             <Route component={NotFound} />
           </Switch>
         </Suspense>
@@ -78,24 +103,30 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/gp/:token">
-        {(params) => (
-          <Suspense fallback={<PageLoader />}>
-            <GPPortal />
-          </Suspense>
+        {() => (
+          <RouteErrorBoundary fallbackTitle="GP Portal failed to load" showGoBack>
+            <Suspense fallback={<PageLoader />}>
+              <GPPortal />
+            </Suspense>
+          </RouteErrorBoundary>
         )}
       </Route>
       <Route path="/gp-portal/:token">
-        {(params) => (
-          <Suspense fallback={<PageLoader />}>
-            <GPPortal />
-          </Suspense>
+        {() => (
+          <RouteErrorBoundary fallbackTitle="GP Portal failed to load" showGoBack>
+            <Suspense fallback={<PageLoader />}>
+              <GPPortal />
+            </Suspense>
+          </RouteErrorBoundary>
         )}
       </Route>
       <Route path="/invite/:token">
-        {(params) => (
-          <Suspense fallback={<PageLoader />}>
-            <InvitePage />
-          </Suspense>
+        {() => (
+          <RouteErrorBoundary fallbackTitle="Invitation page failed to load" showGoBack>
+            <Suspense fallback={<PageLoader />}>
+              <InvitePage />
+            </Suspense>
+          </RouteErrorBoundary>
         )}
       </Route>
       {/* All dashboard pages use DashboardRoutes for consistent sidebar */}
