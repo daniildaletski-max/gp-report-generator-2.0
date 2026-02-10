@@ -3168,7 +3168,7 @@ function GPDetailModal({
                             {evaluation.date ? format(new Date(evaluation.date), 'MMM dd, yyyy') : 'N/A'}
                           </span>
                           <Badge variant="secondary">
-                            Total: {evaluation.totalScore}/24
+                            Total: {evaluation.totalScore}/22
                           </Badge>
                         </div>
                         <div className="grid grid-cols-2 gap-4 text-sm">

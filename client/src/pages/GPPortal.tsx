@@ -589,7 +589,7 @@ export default function GPPortal() {
                         tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} 
                         axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
                         tickLine={false}
-                        domain={[0, 22]}
+                        domain={[0, 23]}
                       />
                       <Tooltip 
                         contentStyle={{ 
