@@ -13,7 +13,7 @@ function Card({ className, variant = "default", ...props }: CardProps) {
       className={cn(
         "text-card-foreground flex flex-col gap-6 rounded-2xl border py-6 shadow-sm backdrop-blur-xl transition-all duration-300",
         variant === "glass"
-          ? "bg-white/[0.03] border-white/[0.08] hover:border-white/[0.12] hover:shadow-lg hover:shadow-[#d4af37]/5"
+          ? "bg-white/[0.04] border-white/[0.12] hover:border-white/[0.18] hover:shadow-lg hover:shadow-[#d4af37]/5"
           : "bg-card/80 border-[#d4af37]/10 hover:border-[#d4af37]/20 hover:shadow-lg hover:shadow-[#d4af37]/5",
         className
       )}
@@ -49,7 +49,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-description"
-      className={cn("text-white/40 text-sm", className)}
+      className={cn("text-white/50 text-sm", className)}
       {...props}
     />
   );

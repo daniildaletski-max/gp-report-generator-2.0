@@ -2621,3 +2621,22 @@
 - [x] Set up automated monthly report generation (1st of each month)
 - [x] Add cron job / scheduled task for monthly report auto-generation (node-cron, 06:00 EET on 1st)
 - [x] Notify owner when monthly reports are generated
+
+
+## Dashboard Design & Visibility Improvements (v94)
+
+- [x] Improve stat card contrast and visibility (borders, backgrounds, text colors)
+  - Increased border opacity from 0.08 to 0.14-0.18 across all card types
+  - Increased background opacity for better contrast
+  - Added accent top borders and box shadows
+- [x] Improve attitude distribution bar chart visibility and styling
+  - Moved progress values outside fill bars for better readability
+  - Added distinct colors: green for positive, amber for neutral, red for negative
+  - Updated progress track backgrounds for better contrast
+- [x] Improve glass-morphism card visibility (stat-card, chart-card, glass-card, gp-grid-card, gp-card)
+  - Stronger borders, higher opacity backgrounds, visible shadows
+- [x] Improve overall visual hierarchy and spacing
+  - Better table borders and row hover effects
+  - Improved text contrast for subtitles and labels
+  - Upload icon box visibility improved
+- [x] All 199 tests passing, zero TypeScript errors

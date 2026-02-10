@@ -2727,27 +2727,25 @@ function GPStatsTab({
                     <div className="progress-track">
                       <div 
                         className="progress-fill positive"
-                        style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.positiveAttitude / statsSummary.total) * 100, 8) : 8}%` }}
-                      >
-                        <span className="progress-value">{statsSummary.positiveAttitude}</span>
-                      </div>
+                        style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.positiveAttitude / statsSummary.total) * 100, 3) : 3}%` }}
+                      />
                     </div>
+                    <span className="progress-value text-emerald-400">{statsSummary.positiveAttitude}</span>
                   </div>
                   
                   {/* Neutral */}
                   <div className="progress-row">
                     <div className="progress-label">
-                      <Star className="h-5 w-5 text-gray-400" />
+                      <Star className="h-5 w-5 text-amber-400" />
                       <span>Neutral</span>
                     </div>
                     <div className="progress-track">
                       <div 
                         className="progress-fill neutral"
-                        style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.neutralAttitude / statsSummary.total) * 100, 8) : 8}%` }}
-                      >
-                        <span className="progress-value">{statsSummary.neutralAttitude}</span>
-                      </div>
+                        style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.neutralAttitude / statsSummary.total) * 100, 3) : 3}%` }}
+                      />
                     </div>
+                    <span className="progress-value text-amber-400">{statsSummary.neutralAttitude}</span>
                   </div>
                   
                   {/* Negative */}
@@ -2759,11 +2757,10 @@ function GPStatsTab({
                     <div className="progress-track">
                       <div 
                         className="progress-fill negative"
-                        style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.negativeAttitude / statsSummary.total) * 100, 8) : 8}%` }}
-                      >
-                        <span className="progress-value">{statsSummary.negativeAttitude}</span>
-                      </div>
+                        style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.negativeAttitude / statsSummary.total) * 100, 3) : 3}%` }}
+                      />
                     </div>
+                    <span className="progress-value text-red-400">{statsSummary.negativeAttitude}</span>
                   </div>
                 </div>
               </div>
