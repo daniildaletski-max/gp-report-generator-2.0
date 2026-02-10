@@ -2570,8 +2570,8 @@ function GPStatsTab({
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
         <div className="dashboard-header">
           <h2 className="dashboard-title">
-            <div className="stat-icon-container card-gold" style={{ width: '48px', height: '48px', borderRadius: '14px' }}>
-              <BarChart3 className="h-6 w-6 text-white" />
+            <div className="stat-icon-container" style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.4) 0%, rgba(184, 134, 11, 0.25) 100%)', borderColor: 'rgba(212, 175, 55, 0.5)', boxShadow: '0 4px 14px rgba(0, 0, 0, 0.25), 0 0 12px rgba(212, 175, 55, 0.15)' }}>
+              <BarChart3 className="h-6 w-6 text-[#f0d060]" />
             </div>
             GP Performance Dashboard
           </h2>
@@ -2708,8 +2708,8 @@ function GPStatsTab({
             {/* Attitude Distribution Chart */}
             <div className="chart-card">
               <div className="chart-card-header">
-                <div className="stat-icon-container card-gold" style={{ width: '40px', height: '40px', borderRadius: '12px' }}>
-                  <Target className="h-5 w-5 text-white" />
+                <div className="stat-icon-container" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.4) 0%, rgba(184, 134, 11, 0.25) 100%)', borderColor: 'rgba(212, 175, 55, 0.5)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2), 0 0 10px rgba(212, 175, 55, 0.12)' }}>
+                  <Target className="h-5 w-5 text-[#f0d060]" />
                 </div>
                 <div>
                   <h3 className="chart-title">Attitude Distribution</h3>
@@ -2769,8 +2769,8 @@ function GPStatsTab({
             {/* Leaderboards Card */}
             <div className="chart-card">
               <div className="chart-card-header">
-                <div className="stat-icon-container" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #d4af37 0%, #b8860b 100%)' }}>
-                  <Trophy className="h-5 w-5 text-white" />
+                <div className="stat-icon-container" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.4) 0%, rgba(184, 134, 11, 0.25) 100%)', borderColor: 'rgba(212, 175, 55, 0.5)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2), 0 0 10px rgba(212, 175, 55, 0.12)' }}>
+                  <Trophy className="h-5 w-5 text-[#f0d060]" />
                 </div>
                 <div>
                   <h3 className="chart-title">Attitude Overview</h3>
@@ -2825,8 +2825,8 @@ function GPStatsTab({
           {Object.keys(statsSummary.teamStats).length > 1 && (
             <div className="chart-card">
               <div className="chart-card-header">
-                <div className="stat-icon-container card-gold" style={{ width: '40px', height: '40px', borderRadius: '12px' }}>
-                  <Building2 className="h-5 w-5 text-white" />
+                <div className="stat-icon-container" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.4) 0%, rgba(184, 134, 11, 0.25) 100%)', borderColor: 'rgba(212, 175, 55, 0.5)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2), 0 0 10px rgba(212, 175, 55, 0.12)' }}>
+                  <Building2 className="h-5 w-5 text-[#f0d060]" />
                 </div>
                 <div>
                   <h3 className="chart-title">Team Comparison</h3>
@@ -2869,8 +2869,8 @@ function GPStatsTab({
       <div className="gp-grid-card">
         <div className="gp-grid-header">
           <div className="gp-grid-title">
-            <div className="stat-icon-container card-blue" style={{ width: '44px', height: '44px', borderRadius: '14px' }}>
-              <Users className="h-6 w-6 text-white" />
+            <div className="stat-icon-container" style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'linear-gradient(135deg, rgba(96, 165, 250, 0.4) 0%, rgba(59, 130, 246, 0.25) 100%)', borderColor: 'rgba(96, 165, 250, 0.5)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2), 0 0 10px rgba(96, 165, 250, 0.12)' }}>
+              <Users className="h-6 w-6 text-[#93bbfd]" />
             </div>
             <div>
               <h3>All Game Presenters</h3>
