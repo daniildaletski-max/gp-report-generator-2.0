@@ -178,7 +178,7 @@ export default function Dashboard() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {[2024, 2025, 2026].map((year) => (
+              {Array.from({length: 5}, (_, i) => new Date().getFullYear() - 2 + i).map((year) => (
                 <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
               ))}
             </SelectContent>
@@ -225,7 +225,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard icon={Users} value={stats?.totalGPs || 0} label="Game Presenters" color="violet" />
         <StatCard icon={FileCheck} value={stats?.totalEvaluations || 0} label="Total Evaluations" color="indigo" />
-        <StatCard icon={TrendingUp} value={avgTeamScore > 0 ? avgTeamScore.toFixed(1) : '-'} suffix="/22" label="Team Average" color="violet" />
+        <StatCard icon={TrendingUp} value={avgTeamScore > 0 ? avgTeamScore.toFixed(1) : '-'} label="Team Average" color="violet" />
         <StatCard icon={FileSpreadsheet} value={stats?.totalReports || 0} label="Reports Generated" color="green" />
       </div>
 
@@ -352,7 +352,7 @@ export default function Dashboard() {
           <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2">
             {lowPerformers.map((gp, idx) => (
               <Badge key={idx} variant="red" size="sm">
-                {gp.fullName}: {gp.totalScore.toFixed(1)}/22
+                {gp.fullName}: {gp.totalScore.toFixed(1)}/22 
               </Badge>
             ))}
           </div>
@@ -393,8 +393,8 @@ export default function Dashboard() {
                       tick={{ fontSize: isMobile ? 10 : 11, fill: 'rgba(255,255,255,0.35)' }} 
                     />
                     <YAxis 
-                      domain={[0, 24]} 
-                      ticks={[0, 6, 12, 18, 24]} 
+                      domain={[0, 22]} 
+                      ticks={[0, 5, 10, 15, 22]} 
                       tick={{ fontSize: isMobile ? 10 : 12, fill: 'rgba(255,255,255,0.35)' }}
                       width={isMobile ? 30 : 40}
                     />
@@ -964,7 +964,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                 <ResponsiveContainer width="100%" height={Math.max(200, teamOverviewData.length * 60)}>
                   <BarChart data={teamOverviewData} layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
-                    <XAxis type="number" domain={[0, 22]} tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <XAxis type="number" domain={[0, 23]} tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis type="category" dataKey="name" width={isMobile ? 60 : 100} tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11 }} axisLine={false} tickLine={false} />
                     <Tooltip
                       contentStyle={{
@@ -1059,7 +1059,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                 <ResponsiveContainer width="100%" height={Math.min(500, Math.max(250, allGPs.length * 28))}>
                   <BarChart data={allGPs.slice(0, 20)} layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
-                    <XAxis type="number" domain={[0, 22]} tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <XAxis type="number" domain={[0, 23]} tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis 
                       type="category" 
                       dataKey="name" 

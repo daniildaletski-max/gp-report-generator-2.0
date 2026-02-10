@@ -105,3 +105,12 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
+
+# Debug/verification artifacts
+*-audit.md
+*-verification*.md
+*-notes.md
+*_verification*.txt
+*_notes.txt
+todo.md
+.manus/

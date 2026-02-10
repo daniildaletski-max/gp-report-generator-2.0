@@ -1,4 +1,4 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, MONTH_NAMES, MAX_TOTAL_SCORE } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
@@ -28,7 +28,7 @@ async function generateChartImage(
         labels: labels,
         datasets: [
           {
-            label: 'Total Score (max 24)',
+            label: 'Total Score (max 22)',
             data: totalScores,
             backgroundColor: 'rgba(54, 162, 235, 0.9)',
             borderColor: 'rgba(54, 162, 235, 1)',
@@ -86,7 +86,7 @@ async function generateChartImage(
         scales: {
           y: {
             min: 0,
-            max: 25,
+            max: 23,
             grace: '0',
             ticks: {
               stepSize: 5
@@ -181,7 +181,7 @@ async function generateComparisonChart(
         scales: {
           y: {
             beginAtZero: true,
-            max: 24,
+            max: 23,
             title: {
               display: true,
               text: 'Total Score'
@@ -213,9 +213,7 @@ async function generateComparisonChart(
   }
 }
 
-// Month names for report formatting
-const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", 
-                     "July", "August", "September", "October", "November", "December"];
+// Month names imported from @shared/const
 
 async function generateExcelAndEmail(ctx: { user: { id: number; role: string; email?: string | null; name?: string | null } }, reportId: number) {
   console.log(`\n\n========== [exportToExcel] START ==========`);
@@ -2308,7 +2306,7 @@ export const appRouter = router({
         const totalNegativeAttitude = attitudeData.reduce((sum, a) => sum + a.negative, 0);
 
         const formatGpLine = (gp: (typeof gpDetailedData)[number]) => (
-          `${gp.name} | Score ${gp.avgScore}/24 | Appearance ${gp.appearanceScore}/12 | Game ${gp.gamePerformanceScore}/10 | ` +
+          `${gp.name} | Score ${gp.avgScore}/22 | Appearance ${gp.appearanceScore}/12 | Game ${gp.gamePerformanceScore}/10 | ` +
           `Evals ${gp.evaluationCount} | Errors ${gp.errorCount} | Attitude +${gp.attitudePositive}/-${gp.attitudeNegative} | ` +
           `Late ${gp.lateArrivals} | Missed ${gp.missedDays}`
         );
@@ -2321,20 +2319,20 @@ Period: ${monthName} ${input.reportYear}
 
 === EVALUATION STATISTICS ===
 - Total GPs Evaluated: ${stats.length}
-- Average Total Score: ${avgTotal.toFixed(1)}/24 (${avgTotal >= 20 ? "Excellent" : avgTotal >= 18 ? "Good" : avgTotal >= 16 ? "Needs Improvement" : "Critical"})
+- Average Total Score: ${avgTotal.toFixed(1)}/22 (${avgTotal >= 20 ? "Excellent" : avgTotal >= 18 ? "Good" : avgTotal >= 16 ? "Needs Improvement" : "Critical"})
 - Average Appearance Score: ${avgAppearance.toFixed(1)}/12
 - Average Game Performance Score: ${avgGamePerf.toFixed(1)}/10
 
 === TOP PERFORMERS (by evaluation score) ===
 ${topPerformers.map((gp, i) => {
   const detail = gpDetailedData.find(d => d.name === gp.gpName);
-  return `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/24 (${detail?.evaluationCount || 0} evaluations, ${detail?.errorCount || 0} errors, attitude: +${detail?.attitudePositive || 0}/-${detail?.attitudeNegative || 0})`;
+  return `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/22 (${detail?.evaluationCount || 0} evaluations, ${detail?.errorCount || 0} errors, attitude: +${detail?.attitudePositive || 0}/-${detail?.attitudeNegative || 0})`;
 }).join("\n")}
 
 ${needsImprovement.length > 0 ? `=== GPs NEEDING IMPROVEMENT (score < 18) ===
 ${needsImprovement.map(gp => {
   const detail = gpDetailedData.find(d => d.name === gp.gpName);
-  return `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/24 (Appearance: ${detail?.appearanceScore}/12, Game Perf: ${detail?.gamePerformanceScore}/10)`;
+  return `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/22 (Appearance: ${detail?.appearanceScore}/12, Game Perf: ${detail?.gamePerformanceScore}/10)`;
 }).join("\n")}` : "=== All GPs are performing well (score >= 18) ==="}
 
 === ERROR ANALYSIS ===
@@ -2400,7 +2398,7 @@ ${sharedPromptRules}`
 
 Guidelines for writing optimal Team Goals:
 1. Analyze the data to identify the TOP 3 priority areas:
-   - GPs with low evaluation scores (< 18/24) need improvement plans
+   - GPs with low evaluation scores (< 18/22) need improvement plans
    - GPs with high error counts need error reduction targets
    - GPs with negative attitude feedback need behavior coaching
    - Attendance issues (late arrivals, missed days) need addressing
@@ -2613,20 +2611,20 @@ Period: ${monthName} ${input.reportYear}
 
 === EVALUATION STATISTICS ===
 - Total GPs Evaluated: ${stats.length}
-- Average Total Score: ${avgTotal.toFixed(1)}/24 (${avgTotal >= 20 ? 'Excellent' : avgTotal >= 18 ? 'Good' : avgTotal >= 16 ? 'Needs Improvement' : 'Critical'})
+- Average Total Score: ${avgTotal.toFixed(1)}/22 (${avgTotal >= 20 ? 'Excellent' : avgTotal >= 18 ? 'Good' : avgTotal >= 16 ? 'Needs Improvement' : 'Critical'})
 - Average Appearance Score: ${avgAppearance.toFixed(1)}/12
 - Average Game Performance Score: ${avgGamePerf.toFixed(1)}/10
 
 === TOP PERFORMERS (by evaluation score) ===
 ${topPerformers.map((gp, i) => {
   const detail = gpDetailedData.find(d => d.name === gp.gpName);
-  return `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/24 (${detail?.evaluationCount || 0} evaluations, ${detail?.errorCount || 0} errors, attitude: +${detail?.attitudePositive || 0}/-${detail?.attitudeNegative || 0})`;
+  return `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/22 (${detail?.evaluationCount || 0} evaluations, ${detail?.errorCount || 0} errors, attitude: +${detail?.attitudePositive || 0}/-${detail?.attitudeNegative || 0})`;
 }).join('\n')}
 
 ${needsImprovement.length > 0 ? `=== GPs NEEDING IMPROVEMENT (score < 18) ===
 ${needsImprovement.map(gp => {
   const detail = gpDetailedData.find(d => d.name === gp.gpName);
-  return `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/24 (Appearance: ${detail?.appearanceScore}/12, Game Perf: ${detail?.gamePerformanceScore}/10)`;
+  return `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/22 (Appearance: ${detail?.appearanceScore}/12, Game Perf: ${detail?.gamePerformanceScore}/10)`;
 }).join('\n')}` : '=== All GPs are performing well (score >= 18) ==='}
 
 === ERROR ANALYSIS ===
@@ -2651,7 +2649,7 @@ ${gpsWithNegativeAttitude.slice(0, 3).map(gp => `- ${gp.name}: -${gp.attitudeNeg
 
 === INDIVIDUAL GP BREAKDOWN ===
 ${gpDetailedData.map(gp => 
-  `${gp.name}: Score ${gp.avgScore}/24, Errors: ${gp.errorCount}, Attitude: +${gp.attitudePositive}/-${gp.attitudeNegative}, Late: ${gp.lateArrivals}`
+  `${gp.name}: Score ${gp.avgScore}/22, Errors: ${gp.errorCount}, Attitude: +${gp.attitudePositive}/-${gp.attitudeNegative}, Late: ${gp.lateArrivals}`
 ).join('\n')}
 `;
 
@@ -2712,7 +2710,7 @@ IMPORTANT: Use specific names and numbers from the data. A good overview is hone
 
 Guidelines for writing optimal Team Goals:
 1. Analyze the data to identify the TOP 3 priority areas:
-   - GPs with low evaluation scores (< 18/24) need improvement plans
+   - GPs with low evaluation scores (< 18/22) need improvement plans
    - GPs with high error counts need error reduction targets
    - GPs with negative attitude feedback need behavior coaching
    - Attendance issues (late arrivals, missed days) need addressing
@@ -3995,6 +3993,117 @@ Respond with a JSON object containing an array of ALL entries found:
           await db.deleteAttitudeScreenshot(input.id);
         }
         return { success: true };
+      }),
+  }),
+
+  // GP Monthly Attendance management
+  attendance: router({
+    // Get or create attendance record for a GP in a specific month
+    getOrCreate: protectedProcedure
+      .input(z.object({
+        gpId: z.number().positive(),
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2100),
+      }))
+      .query(async ({ ctx, input }) => {
+        // Verify GP ownership
+        const gp = await db.getGamePresenterById(input.gpId);
+        if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
+        if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+        }
+        return await db.getOrCreateAttendance(input.gpId, input.month, input.year);
+      }),
+
+    // Update attendance metrics for a GP
+    update: protectedProcedure
+      .input(z.object({
+        gpId: z.number().positive(),
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2100),
+        extraShifts: z.number().min(0).optional(),
+        lateToWork: z.number().min(0).optional(),
+        missedDays: z.number().min(0).optional(),
+        sickLeaves: z.number().min(0).optional(),
+        remarks: z.string().max(2000).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Verify GP ownership
+        const gp = await db.getGamePresenterById(input.gpId);
+        if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
+        if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+        }
+
+        const attendance = await db.getOrCreateAttendance(input.gpId, input.month, input.year);
+        const { gpId, month, year, ...data } = input;
+        await db.updateAttendance(attendance.id, data);
+        return { success: true };
+      }),
+
+    // Bulk update attendance for multiple GPs in a team
+    bulkUpdate: protectedProcedure
+      .input(z.object({
+        teamId: z.number().positive(),
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2100),
+        updates: z.array(z.object({
+          gpId: z.number().positive(),
+          extraShifts: z.number().min(0).optional(),
+          lateToWork: z.number().min(0).optional(),
+          missedDays: z.number().min(0).optional(),
+          sickLeaves: z.number().min(0).optional(),
+          remarks: z.string().max(2000).optional(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Verify team ownership
+        if (ctx.user.role !== 'admin') {
+          const team = await db.getFmTeamById(input.teamId);
+          if (!team || team.userId !== ctx.user.id) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+          }
+        }
+
+        let updated = 0;
+        for (const update of input.updates) {
+          const attendance = await db.getOrCreateAttendance(update.gpId, input.month, input.year);
+          const { gpId, ...data } = update;
+          await db.updateAttendance(attendance.id, data);
+          updated++;
+        }
+
+        return { success: true, updated };
+      }),
+
+    // Get attendance summary for a team in a specific month
+    teamSummary: protectedProcedure
+      .input(z.object({
+        teamId: z.number().positive(),
+        month: z.number().min(1).max(12),
+        year: z.number().min(2020).max(2100),
+      }))
+      .query(async ({ ctx, input }) => {
+        // Verify team ownership
+        if (ctx.user.role !== 'admin') {
+          const team = await db.getFmTeamById(input.teamId);
+          if (!team || team.userId !== ctx.user.id) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+          }
+        }
+
+        const data = await db.getAttendanceByTeamMonth(input.teamId, input.month, input.year);
+        
+        // Calculate totals
+        const totals = data.reduce((acc, item) => ({
+          mistakes: acc.mistakes + (item.attendance?.mistakes ?? item.monthlyStats?.mistakes ?? 0),
+          extraShifts: acc.extraShifts + (item.attendance?.extraShifts ?? 0),
+          lateToWork: acc.lateToWork + (item.attendance?.lateToWork ?? 0),
+          missedDays: acc.missedDays + (item.attendance?.missedDays ?? 0),
+          sickLeaves: acc.sickLeaves + (item.attendance?.sickLeaves ?? 0),
+        }), { mistakes: 0, extraShifts: 0, lateToWork: 0, missedDays: 0, sickLeaves: 0 });
+
+        return { items: data, totals, gpCount: data.length };
       }),
   }),
 

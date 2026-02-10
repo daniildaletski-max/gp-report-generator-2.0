@@ -181,17 +181,17 @@ export default function ReportsPage() {
     
     let overview = `Team Performance Summary for ${MONTHS[formData.reportMonth - 1]} ${formData.reportYear}:\n\n`;
     overview += `• Total GPs Evaluated: ${stats.length}\n`;
-    overview += `• Average Team Score: ${avgTotal.toFixed(1)}/24\n\n`;
+    overview += `• Average Team Score: ${avgTotal.toFixed(1)}/22\n\n`;
     
     overview += `Top Performers:\n`;
     topPerformers.forEach((gp, i) => {
-      overview += `${i + 1}. ${gp.gpName} - ${gp.avgTotal}/24\n`;
+      overview += `${i + 1}. ${gp.gpName} - ${gp.avgTotal}/22\n`;
     });
     
     if (needsImprovement.length > 0) {
       overview += `\nNeeds Improvement:\n`;
       needsImprovement.forEach(gp => {
-        overview += `• ${gp.gpName} (${gp.avgTotal}/24)\n`;
+        overview += `• ${gp.gpName} (${gp.avgTotal}/22)\n`;
       });
     }
     

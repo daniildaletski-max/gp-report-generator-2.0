@@ -9,11 +9,7 @@ import cron from "node-cron";
 import * as db from "./db";
 import { invokeLLM } from "./_core/llm";
 import { notifyOwner } from "./_core/notification";
-
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
+import { MONTH_NAMES } from "@shared/const";
 
 let isMonthlyGenerationRunning = false;
 

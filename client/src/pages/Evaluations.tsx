@@ -499,7 +499,7 @@ export default function EvaluationsPage() {
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Average Score</p>
-            <p className="text-2xl font-bold">{stats.avgScore}<span className="text-lg text-muted-foreground">/24</span></p>
+            <p className="text-2xl font-bold">{stats.avgScore}<span className="text-lg text-muted-foreground">/22</span></p>
           </div>
         </div>
         <div className="stat-card-enhanced stat-card-green">
