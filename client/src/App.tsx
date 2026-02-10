@@ -8,7 +8,7 @@ import DashboardLayout from "./components/DashboardLayout";
 import { PageTransition } from "./components/PageTransition";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -18,6 +18,7 @@ const Upload = lazy(() => import("./pages/Upload"));
 const Evaluations = lazy(() => import("./pages/Evaluations"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Admin = lazy(() => import("./pages/Admin"));
+const Attendance = lazy(() => import("./pages/Attendance"));
 const GPPortal = lazy(() => import("./pages/GPPortal"));
 const InvitePage = lazy(() => import("./pages/InvitePage"));
 
@@ -35,6 +36,7 @@ const baseSidebarItems = [
   { href: "/upload", label: "Upload", icon: UploadIcon },
   { href: "/evaluations", label: "Evaluations", icon: FileCheck },
   { href: "/reports", label: "Reports", icon: FileSpreadsheet },
+  { href: "/attendance", label: "Attendance", icon: CalendarCheck },
 ];
 
 // Admin-only item
@@ -62,6 +64,7 @@ function DashboardRoutes() {
             <Route path="/evaluations" component={Evaluations} />
             <Route path="/reports" component={Reports} />
             <Route path="/admin" component={Admin} />
+            <Route path="/attendance" component={Attendance} />
             <Route component={NotFound} />
           </Switch>
         </Suspense>
@@ -101,6 +104,7 @@ function Router() {
       <Route path="/evaluations" component={DashboardRoutes} />
       <Route path="/reports" component={DashboardRoutes} />
       <Route path="/admin" component={DashboardRoutes} />
+      <Route path="/attendance" component={DashboardRoutes} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

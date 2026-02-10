@@ -336,42 +336,8 @@ function AdminOverviewTab() {
         </div>
       </div>
 
-      {/* System Health */}
-      <div className="unified-card">
-        <div className="unified-card-header">
-          <div className="section-header" style={{ paddingLeft: 0 }}>
-            <h3 className="section-title flex items-center gap-2">
-              <Activity className="h-5 w-5 text-green-500" />
-              System Health
-            </h3>
-          </div>
-        </div>
-        <div className="unified-card-body">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-4 rounded-xl bg-green-500/5 border border-green-500/20">
-              <div className="flex justify-between text-sm mb-3">
-                <span className="text-muted-foreground">Database</span>
-                <span className="text-green-400 font-medium">Healthy</span>
-              </div>
-              <Progress value={100} className="h-2" />
-            </div>
-            <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
-              <div className="flex justify-between text-sm mb-3">
-                <span className="text-muted-foreground">Storage</span>
-                <span className="text-blue-400 font-medium">Available</span>
-              </div>
-              <Progress value={35} className="h-2" />
-            </div>
-            <div className="p-4 rounded-xl bg-green-500/5 border border-green-500/20">
-              <div className="flex justify-between text-sm mb-3">
-                <span className="text-muted-foreground">API</span>
-                <span className="text-green-400 font-medium">Operational</span>
-              </div>
-              <Progress value={100} className="h-2" />
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Live System Health Monitor */}
+      <SystemHealthMonitor />
     </TabsContent>
   );
 }
@@ -3437,6 +3403,210 @@ function QuickAttitudeButtons({
           <ThumbsUp className="h-4 w-4" />
         )}
       </Button>
+    </div>
+  );
+}
+
+
+// ============================================
+// System Health Monitor Component
+// ============================================
+function SystemHealthMonitor() {
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const { data: health, isLoading, error, refetch, dataUpdatedAt } = trpc.dashboard.serverHealth.useQuery(
+    undefined,
+    {
+      refetchInterval: autoRefresh ? 30000 : false, // Auto-refresh every 30s
+      retry: 2,
+    }
+  );
+
+  const formatUptime = (seconds: number) => {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+    if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
+    return `${minutes}m ${secs}s`;
+  };
+
+  const formatBytes = (mb: number) => {
+    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+    return `${mb} MB`;
+  };
+
+  const lastChecked = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : '—';
+  const isOnline = health?.status === 'ok';
+  const dbConnected = health?.database?.status === 'connected';
+  const memoryPercent = health?.memory ? Math.round((health.memory.heapUsed / health.memory.heapTotal) * 100) : 0;
+
+  return (
+    <div className="unified-card">
+      <div className="unified-card-header">
+        <div className="flex items-center justify-between w-full">
+          <div className="section-header" style={{ paddingLeft: 0 }}>
+            <h3 className="section-title flex items-center gap-2">
+              <Activity className={`h-5 w-5 ${isOnline ? 'text-green-500' : error ? 'text-red-500' : 'text-muted-foreground'}`} />
+              System Health Monitor
+            </h3>
+            <p className="section-subtitle">
+              Last checked: {lastChecked}
+              {autoRefresh && <span className="text-[#d4af37] ml-1">• Auto-refresh ON</span>}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                autoRefresh
+                  ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                  : 'bg-white/5 border-white/10 text-muted-foreground'
+              }`}
+            >
+              {autoRefresh ? 'Auto' : 'Manual'}
+            </button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isLoading}
+              className="h-8 w-8 p-0"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
+        </div>
+      </div>
+      <div className="unified-card-body">
+        {isLoading && !health ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => (
+              <Skeleton key={i} className="h-28 rounded-xl" />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="p-6 rounded-xl bg-red-500/5 border border-red-500/20 text-center">
+            <AlertCircle className="h-10 w-10 text-red-400 mx-auto mb-3" />
+            <p className="text-red-400 font-medium">Server Unreachable</p>
+            <p className="text-sm text-muted-foreground mt-1">Unable to connect to the health endpoint</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-3">
+              <RefreshCw className="h-3 w-3 mr-1" /> Retry
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Status Cards Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Server Status */}
+              <div className={`p-4 rounded-xl border transition-all ${
+                isOnline
+                  ? 'bg-green-500/5 border-green-500/20'
+                  : 'bg-red-500/5 border-red-500/20'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Server</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
+                    <span className={`text-xs font-semibold ${isOnline ? 'text-green-400' : 'text-red-400'}`}>
+                      {isOnline ? 'Online' : 'Error'}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Latency</span>
+                    <span className={`font-medium ${
+                      (health?.latency ?? 0) < 100 ? 'text-green-400' : (health?.latency ?? 0) < 500 ? 'text-amber-400' : 'text-red-400'
+                    }`}>
+                      {health?.latency ?? 0}ms
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Environment</span>
+                    <span className="text-foreground/80 font-medium">{health?.environment}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Uptime */}
+              <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Uptime</span>
+                  <Clock className="h-4 w-4 text-blue-400" />
+                </div>
+                <p className="text-xl font-bold text-blue-400">
+                  {health?.uptime ? formatUptime(health.uptime) : '—'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Node {health?.nodeVersion || '—'}
+                </p>
+              </div>
+
+              {/* Memory Usage */}
+              <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Memory</span>
+                  <span className={`text-xs font-semibold ${
+                    memoryPercent < 70 ? 'text-green-400' : memoryPercent < 90 ? 'text-amber-400' : 'text-red-400'
+                  }`}>
+                    {memoryPercent}%
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        memoryPercent < 70 ? 'bg-green-400' : memoryPercent < 90 ? 'bg-amber-400' : 'bg-red-400'
+                      }`}
+                      style={{ width: `${memoryPercent}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Heap: {formatBytes(health?.memory?.heapUsed ?? 0)}</span>
+                    <span>/ {formatBytes(health?.memory?.heapTotal ?? 0)}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    RSS: {formatBytes(health?.memory?.rss ?? 0)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Database */}
+              <div className={`p-4 rounded-xl border transition-all ${
+                dbConnected
+                  ? 'bg-emerald-500/5 border-emerald-500/20'
+                  : 'bg-red-500/5 border-red-500/20'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Database</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${dbConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+                    <span className={`text-xs font-semibold ${dbConnected ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {dbConnected ? 'Connected' : health?.database?.status || 'Unknown'}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Query Latency</span>
+                    <span className={`font-medium ${
+                      (health?.database?.latency ?? 0) < 200 ? 'text-green-400' : (health?.database?.latency ?? 0) < 1000 ? 'text-amber-400' : 'text-red-400'
+                    }`}>
+                      {health?.database?.latency ?? 0}ms
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Status</span>
+                    <span className="text-foreground/80 font-medium capitalize">{health?.database?.status || '—'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

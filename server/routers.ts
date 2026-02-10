@@ -2192,6 +2192,58 @@ export const appRouter = router({
     adminStats: adminProcedure.query(async () => {
       return await db.getAdminDashboardStats();
     }),
+
+    // Server health check (admin-only, calls /api/health internally)
+    serverHealth: adminProcedure.query(async () => {
+      const startTime = Date.now();
+      try {
+        // Get process-level metrics directly
+        const uptime = process.uptime();
+        const memUsage = process.memoryUsage();
+        const latency = Date.now() - startTime;
+
+        // Test database connectivity
+        let dbStatus = 'unknown';
+        let dbLatency = 0;
+        try {
+          const dbStart = Date.now();
+          await db.getAdminDashboardStats();
+          dbLatency = Date.now() - dbStart;
+          dbStatus = 'connected';
+        } catch {
+          dbStatus = 'error';
+        }
+
+        return {
+          status: 'ok' as const,
+          timestamp: new Date().toISOString(),
+          uptime,
+          nodeVersion: process.version,
+          latency,
+          memory: {
+            heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+            heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+            rss: Math.round(memUsage.rss / 1024 / 1024),
+          },
+          database: {
+            status: dbStatus,
+            latency: dbLatency,
+          },
+          environment: process.env.NODE_ENV || 'development',
+        };
+      } catch (error) {
+        return {
+          status: 'error' as const,
+          timestamp: new Date().toISOString(),
+          uptime: process.uptime(),
+          nodeVersion: process.version,
+          latency: Date.now() - startTime,
+          memory: { heapUsed: 0, heapTotal: 0, rss: 0 },
+          database: { status: 'unknown', latency: 0 },
+          environment: process.env.NODE_ENV || 'development',
+        };
+      }
+    }),
   }),
 
   // Scheduled report generation (admin-only manual trigger)

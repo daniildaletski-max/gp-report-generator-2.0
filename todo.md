@@ -2677,3 +2677,30 @@
   - Per-month summary (avg score, appearance avg, game performance avg)
   - Collapsible month sections with gold timeline border
   - Mobile-responsive month summary cards
+
+
+## Attendance Management UI & Health Dashboard (v-attendance)
+
+### Attendance Management Page
+- [x] Create Attendance page with team selector dropdown
+- [x] Add month/year selector for attendance period
+- [x] Build editable attendance table (Extra Shifts, Late to Work, Missed Days, Sick Leaves, Remarks)
+- [x] Show mistakes count from monthly_gp_stats (read-only, auto-populated from error files)
+- [x] Add inline editing for each GP's attendance fields
+- [x] Implement bulk save with attendance.bulkUpdate endpoint
+- [x] Show team summary totals row at bottom of table
+- [x] Add visual indicators for attendance issues (color-coded cells)
+- [x] Add loading states and success/error toasts
+
+### Health/Monitoring Dashboard
+- [x] Add system health panel to Admin page (or separate route)
+- [x] Poll /api/health endpoint for server status, uptime, and node version
+- [x] Show uptime formatted as days/hours/minutes
+- [x] Add visual status indicator (green/red dot for online/offline)
+- [x] Show last checked timestamp with auto-refresh interval
+- [x] Display server response time (latency)
+
+### Navigation & Routing
+- [x] Add Attendance page to sidebar navigation (with CalendarCheck icon)
+- [x] Register /attendance route in App.tsx
+- [x] Lazy-load Attendance page component
