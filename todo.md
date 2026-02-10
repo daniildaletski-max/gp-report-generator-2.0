@@ -2640,3 +2640,10 @@
   - Improved text contrast for subtitles and labels
   - Upload icon box visibility improved
 - [x] All 199 tests passing, zero TypeScript errors
+
+
+## Bug Fix - Team Average Scores Chart Tooltip (v95)
+
+- [x] Fix: Tooltip shows "Performance" 3 times instead of "Total", "Appearance", "Performance"
+  - Root cause: formatter checked dataKey names (avgTotal) but Bar components pass name prop (Total)
+  - Fixed formatter to match Bar name props

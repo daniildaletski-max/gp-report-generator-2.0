@@ -955,7 +955,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                         boxShadow: '0 10px 40px rgba(0, 0, 0, 0.4)',
                         padding: '10px 14px',
                       }}
-                      formatter={(value: number, name: string) => [value.toFixed(1), name === 'avgTotal' ? 'Total Score' : name === 'avgAppearance' ? 'Appearance' : 'Performance']}
+                      formatter={(value: number, name: string) => [value.toFixed(1), name === 'Total' ? 'Total Score' : name === 'Appearance' ? 'Appearance' : 'Performance']}
                       labelFormatter={(label) => {
                         const team = teamOverviewData.find(t => t.name === label);
                         return team?.fullName || label;
@@ -963,7 +963,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                     />
                     <Bar dataKey="avgTotal" name="Total" fill="#d4af37" radius={[0, 6, 6, 0]} barSize={20} />
                     <Bar dataKey="avgAppearance" name="Appearance" fill="#b8860b" radius={[0, 6, 6, 0]} barSize={20} />
-                    <Bar dataKey="avgPerformance" name="Performance" fill="#b8860b" radius={[0, 6, 6, 0]} barSize={20} />
+                    <Bar dataKey="avgPerformance" name="Performance" fill="#c8963e" radius={[0, 6, 6, 0]} barSize={20} />
                     <Legend 
                       wrapperStyle={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}
                       iconType="circle"
