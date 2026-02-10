@@ -2704,3 +2704,7 @@
 - [x] Add Attendance page to sidebar navigation (with CalendarCheck icon)
 - [x] Register /attendance route in App.tsx
 - [x] Lazy-load Attendance page component
+
+## Bug Fixes (v-attendance-fix)
+
+- [x] Fix "No procedure found on path dashboard.serverHealth" error on Admin page
