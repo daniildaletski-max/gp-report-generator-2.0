@@ -2647,3 +2647,11 @@
 - [x] Fix: Tooltip shows "Performance" 3 times instead of "Total", "Appearance", "Performance"
   - Root cause: formatter checked dataKey names (avgTotal) but Bar components pass name prop (Total)
   - Fixed formatter to match Bar name props
+
+
+## Admin Dashboard Design Fix (v96)
+
+- [x] Fix stat card icon containers - color-specific backgrounds matching card type (blue/green/gray/red/gold)
+- [x] Fix stat card layout - increased padding, larger stat values, stronger borders
+- [x] Fix Attitude Distribution section icon - brighter gold gradient with visible border
+- [x] Improve overall visual hierarchy - stronger card backgrounds, better contrast, thicker progress bars

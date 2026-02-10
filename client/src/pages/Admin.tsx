@@ -2642,7 +2642,7 @@ function GPStatsTab({
                     {statsSummary.withAttitudeCount} with ratings
                   </p>
                 </div>
-                <div className="stat-icon-container">
+                <div className="stat-icon-container" style={{ background: 'linear-gradient(135deg, rgba(96, 165, 250, 0.35) 0%, rgba(59, 130, 246, 0.2) 100%)', borderColor: 'rgba(96, 165, 250, 0.4)', color: '#93bbfd' }}>
                   <Users className="h-7 w-7 text-white" />
                 </div>
               </div>
@@ -2655,7 +2655,7 @@ function GPStatsTab({
                   <p className="stat-value" style={{ color: '#4ade80' }}>{statsSummary.positiveAttitude}</p>
                   <p className="stat-sublabel">GPs with positive attitude</p>
                 </div>
-                <div className="stat-icon-container">
+                <div className="stat-icon-container" style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.35) 0%, rgba(22, 163, 74, 0.2) 100%)', borderColor: 'rgba(34, 197, 94, 0.4)', color: '#86efac' }}>
                   <ThumbsUp className="h-7 w-7 text-white" />
                 </div>
               </div>
@@ -2668,7 +2668,7 @@ function GPStatsTab({
                   <p className="stat-value">{statsSummary.neutralAttitude}</p>
                   <p className="stat-sublabel">GPs with no rating</p>
                 </div>
-                <div className="stat-icon-container">
+                <div className="stat-icon-container" style={{ background: 'linear-gradient(135deg, rgba(156, 163, 175, 0.35) 0%, rgba(107, 114, 128, 0.2) 100%)', borderColor: 'rgba(156, 163, 175, 0.4)', color: '#d1d5db' }}>
                   <Star className="h-7 w-7 text-white" />
                 </div>
               </div>
@@ -2683,7 +2683,7 @@ function GPStatsTab({
                     {statsSummary.totalMistakes} total mistakes
                   </p>
                 </div>
-                <div className="stat-icon-container">
+                <div className="stat-icon-container" style={{ background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.35) 0%, rgba(220, 38, 38, 0.2) 100%)', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#fca5a5' }}>
                   <ThumbsDown className="h-7 w-7 text-white" />
                 </div>
               </div>
