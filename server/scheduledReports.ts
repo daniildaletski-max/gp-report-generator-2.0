@@ -15,6 +15,8 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+let isMonthlyGenerationRunning = false;
+
 /**
  * Core logic: generate a report for a specific team/user/month.
  * Mirrors the report.generate procedure logic but runs without a request context.
@@ -253,6 +255,12 @@ IMPORTANT: Be specific with names and numbers from the data.`,
  * Main scheduled job: generates reports for all teams that have data for the previous month.
  */
 async function runMonthlyReportGeneration() {
+  if (isMonthlyGenerationRunning) {
+    console.log("[ScheduledReports] Monthly report generation is already running, skipping duplicate trigger");
+    return;
+  }
+
+  isMonthlyGenerationRunning = true;
   const now = new Date();
   // Calculate previous month
   const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -321,6 +329,8 @@ async function runMonthlyReportGeneration() {
       title: "Monthly Report Generation Failed",
       content: `The automated monthly report generation for ${monthName} ${reportYear} encountered an error: ${error instanceof Error ? error.message : "Unknown error"}`,
     }).catch(() => {});
+  } finally {
+    isMonthlyGenerationRunning = false;
   }
 }
 

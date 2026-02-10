@@ -120,4 +120,27 @@ describe("Scheduled Reports", () => {
     // createReport should NOT have been called since report already exists
     expect(db.createReport).not.toHaveBeenCalled();
   });
+
+  it("should prevent overlapping monthly generation runs", async () => {
+    const db = await import("./db");
+
+    (db.getAllUsers as any).mockClear();
+
+    let resolveGetAllUsers: ((value: unknown[]) => void) | null = null;
+    const pendingUsers = new Promise<unknown[]>((resolve) => {
+      resolveGetAllUsers = resolve;
+    });
+
+    (db.getAllUsers as any).mockReturnValueOnce(pendingUsers);
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    const firstRun = runMonthlyReportGeneration();
+    const secondRun = runMonthlyReportGeneration();
+
+    await secondRun;
+    expect(db.getAllUsers).toHaveBeenCalledTimes(1);
+
+    resolveGetAllUsers?.([]);
+    await firstRun;
+  });
 });
