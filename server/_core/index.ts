@@ -9,6 +9,11 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { initScheduledReports } from "../scheduledReports";
+import { createLogger } from "../services/logger";
+import { requestTracingMiddleware, requestValidation } from "../services/requestTracing";
+import { cache } from "../services/cache";
+
+const log = createLogger("Server");
 
 // ============================
 // Simple in-memory rate limiter
@@ -52,34 +57,14 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// ============================
-// Request logger
-// ============================
-function requestLogger(req: Request, _res: Response, next: NextFunction) {
-  const start = Date.now();
-  const { method, originalUrl } = req;
-
-  _res.on("finish", () => {
-    const duration = Date.now() - start;
-    const status = _res.statusCode;
-    // Only log slow requests (>2s) or errors
-    if (duration > 2000 || status >= 400) {
-      console.log(
-        `[${new Date().toISOString()}] ${method} ${originalUrl} ${status} ${duration}ms`
-      );
-    }
-  });
-
-  next();
-}
+// Request logger replaced by requestTracingMiddleware (services/requestTracing.ts)
 
 // ============================
 // Global error handler
 // ============================
 function globalErrorHandler(err: Error, _req: Request, res: Response, _next: NextFunction) {
-  console.error(`[GlobalError] ${err.message}`, err.stack?.split("\n").slice(0, 3).join("\n"));
+  log.error(`Unhandled error: ${err.message}`, err);
 
-  // Don't leak internal error details in production
   const isProduction = process.env.NODE_ENV === "production";
   res.status(500).json({
     error: isProduction ? "Internal server error" : err.message,
@@ -124,8 +109,11 @@ async function startServer() {
   // Security headers
   app.use(securityHeaders);
 
-  // Request logger (log slow/error requests)
-  app.use(requestLogger);
+  // Request tracing (unique IDs + timing)
+  app.use(requestTracingMiddleware);
+
+  // Request validation (size limits)
+  app.use(requestValidation);
 
   // Global rate limiter: 200 requests per minute per IP
   app.use(rateLimiter({ windowMs: 60_000, max: 200, keyPrefix: "api" }));
@@ -140,13 +128,14 @@ async function startServer() {
   app.use("/api/trpc/attitudeScreenshot.upload", rateLimiter({ windowMs: 60_000, max: 30, keyPrefix: "upload" }));
   app.use("/api/trpc/errorFile.upload", rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "file-upload" }));
 
-  // Health check endpoint
+  // Health check endpoint with cache stats
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       nodeVersion: process.version,
+      cache: cache.getStats(),
     });
   });
 
@@ -176,26 +165,27 @@ async function startServer() {
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+    log.info(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
   server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
-    console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+    log.info(`Server running on http://localhost:${port}/`);
+    log.info(`Environment: ${process.env.NODE_ENV || "development"}`);
+    log.info(`Modules loaded: DB (13 domain modules), Services (5 modules), Routes (16 routers)`);
     // Initialize scheduled monthly report generation
     initScheduledReports();
   });
 
   // Graceful shutdown
   const shutdown = (signal: string) => {
-    console.log(`\n[${signal}] Shutting down gracefully...`);
+    log.info(`[${signal}] Shutting down gracefully...`);
+    cache.clear();
     server.close(() => {
-      console.log("Server closed.");
+      log.info("Server closed.");
       process.exit(0);
     });
-    // Force exit after 10 seconds
     setTimeout(() => {
-      console.error("Forced shutdown after timeout");
+      log.error("Forced shutdown after timeout");
       process.exit(1);
     }, 10000);
   };
@@ -203,10 +193,9 @@ async function startServer() {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
-  // Catch unhandled rejections
   process.on("unhandledRejection", (reason) => {
-    console.error("[UnhandledRejection]", reason);
+    log.error("Unhandled rejection", reason instanceof Error ? reason : new Error(String(reason)));
   });
 }
 
-startServer().catch(console.error);
+startServer().catch((err) => log.error("Server startup failed", err instanceof Error ? err : undefined));
