@@ -1,9 +1,0 @@
-{
-  "query": "CREATE TABLE IF NOT EXISTS invitations (\n  id int AUTO_INCREMENT NOT NULL,\n  email varchar(320) NOT NULL,\n  token varchar(64) NOT NULL,\n  teamId int,\n  role enum('user', 'admin') NOT NULL DEFAULT 'user',\n  status enum('pending', 'accepted', 'expired', 'revoked') NOT NULL DEFAULT 'pending',\n  expiresAt timestamp NOT NULL,\n  createdById int NOT NULL,\n  usedById int,\n  usedAt timestamp NULL,\n  createdAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY(id),\n  UNIQUE KEY invitations_token_unique (token)\n);",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute CREATE TABLE IF NOT EXISTS invitations (\n  id int AUTO_INCREMENT NOT NULL,\n  email varchar(320) NOT NULL,\n  token varchar(64) NOT NULL,\n  teamId int,\n  role enum('user', 'admin') NOT NULL DEFAULT 'user',\n  status enum('pending', 'accepted', 'expired', 'revoked') NOT NULL DEFAULT 'pending',\n  expiresAt timestamp NOT NULL,\n  createdById int NOT NULL,\n  usedById int,\n  usedAt timestamp NULL,\n  createdAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY(id),\n  UNIQUE KEY invitations_token_unique (token)\n);",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 505
-}

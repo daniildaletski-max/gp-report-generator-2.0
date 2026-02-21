@@ -1,8 +1,0 @@
-{
-  "query": "SELECT id, team_id, report_month, report_year, status FROM monthly_team_reports ORDER BY id DESC LIMIT 10;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT id, team_id, report_month, report_year, status FROM monthly_team_reports ORDER BY id DESC LIMIT 10;",
-  "returncode": 1,
-  "logs": [
-    "ERROR 1146 (42S02) at line 1: Table 'iwk4whpw4uywq7hvmxhubf.monthly_team_reports' doesn't exist"
-  ]
-}

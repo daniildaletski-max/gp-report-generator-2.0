@@ -1,8 +1,0 @@
-{
-  "query": "SELECT token, gp.name FROM gp_access_tokens gat JOIN game_presenters gp ON gat.game_presenter_id = gp.id WHERE gat.is_active = 1 LIMIT 1;",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute SELECT token, gp.name FROM gp_access_tokens gat JOIN game_presenters gp ON gat.game_presenter_id = gp.id WHERE gat.is_active = 1 LIMIT 1;",
-  "returncode": 1,
-  "logs": [
-    "ERROR 1054 (42S22) at line 1: Unknown column 'gat.game_presenter_id' in 'on clause'"
-  ]
-}

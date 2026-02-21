@@ -1,9 +1,0 @@
-{
-  "query": "CREATE TABLE IF NOT EXISTS monthly_gp_stats (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  gamePresenterId INT NOT NULL,\n  month INT NOT NULL,\n  year INT NOT NULL,\n  attitude INT DEFAULT NULL,\n  mistakes INT DEFAULT 0,\n  notes TEXT DEFAULT NULL,\n  updatedById INT DEFAULT NULL,\n  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,\n  UNIQUE KEY unique_gp_month_year (gamePresenterId, month, year)\n);",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3siEZZHP6GxHny4.362c1c443853 --database iWK4WHPw4uyWQ7HVMxhuBF --execute CREATE TABLE IF NOT EXISTS monthly_gp_stats (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  gamePresenterId INT NOT NULL,\n  month INT NOT NULL,\n  year INT NOT NULL,\n  attitude INT DEFAULT NULL,\n  mistakes INT DEFAULT 0,\n  notes TEXT DEFAULT NULL,\n  updatedById INT DEFAULT NULL,\n  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,\n  updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,\n  UNIQUE KEY unique_gp_month_year (gamePresenterId, month, year)\n);",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 585
-}
