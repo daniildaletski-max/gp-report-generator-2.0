@@ -1787,6 +1787,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           reportData: { stats, attendance },
           status: "generated",
           generatedById: ctx.user.id,
+          userId: ctx.user.id,
         });
 
         await notifyOwner({
