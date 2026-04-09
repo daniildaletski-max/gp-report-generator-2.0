@@ -13,9 +13,13 @@ import {
   CalendarCheck, Save, Loader2, Users, AlertTriangle,
   Clock, TrendingUp, TrendingDown, Minus, RotateCcw,
   ChevronDown, ChevronUp, Briefcase, Timer, CalendarX,
-  Stethoscope, MessageSquare, BarChart3, Info
+  Stethoscope, MessageSquare, BarChart3, Info, LineChart as LineChartIcon
 } from "lucide-react";
 import { MONTH_NAMES } from "@shared/const";
+import {
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis,
+  CartesianGrid, Tooltip, Legend, BarChart, Bar,
+} from "recharts";
 
 interface AttendanceRow {
   gpId: number;
@@ -300,6 +304,11 @@ export default function AttendancePage() {
             color="blue"
           />
         </div>
+      )}
+
+      {/* Attendance Trend Charts */}
+      {teamId && (
+        <AttendanceTrendCharts teamId={teamId} />
       )}
 
       {/* Attendance Table */}
@@ -672,6 +681,218 @@ function SummaryCard({
         <div>
           <p className={`text-xl sm:text-2xl font-bold ${c.text}`}>{value}</p>
           <p className="text-[10px] sm:text-xs text-muted-foreground">{label}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ============================================
+// Attendance Trend Charts Component
+// ============================================
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function AttendanceTrendCharts({ teamId }: { teamId: number }) {
+  const [showCharts, setShowCharts] = useState(false);
+  const { data: trends, isLoading } = trpc.attendance.trends.useQuery(
+    { teamId, months: 6 },
+    { enabled: !!teamId && showCharts }
+  );
+
+  const chartData = useMemo(() => {
+    if (!trends) return [];
+    return trends.map(t => ({
+      name: `${SHORT_MONTHS[t.month - 1]} ${t.year}`,
+      "Late Arrivals": t.totalLateToWork,
+      "Missed Days": t.totalMissedDays,
+      "Sick Leaves": t.totalSickLeaves,
+      "Extra Shifts": t.totalExtraShifts,
+      "Mistakes": t.totalMistakes,
+      gpCount: t.gpCount,
+    }));
+  }, [trends]);
+
+  const issuesData = useMemo(() => {
+    if (!trends) return [];
+    return trends.map(t => ({
+      name: `${SHORT_MONTHS[t.month - 1]} ${t.year}`,
+      total: t.totalLateToWork + t.totalMissedDays + t.totalSickLeaves,
+      "Late Arrivals": t.totalLateToWork,
+      "Missed Days": t.totalMissedDays,
+      "Sick Leaves": t.totalSickLeaves,
+    }));
+  }, [trends]);
+
+  if (!showCharts) {
+    return (
+      <div className="glass-card p-4">
+        <Button
+          variant="outline"
+          className="w-full glass-button text-muted-foreground hover:text-foreground gap-2"
+          onClick={() => setShowCharts(true)}
+        >
+          <LineChartIcon className="h-4 w-4 text-[#d4af37]" />
+          Show Attendance Trends (Last 6 Months)
+        </Button>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="glass-card p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <LineChartIcon className="h-4 w-4 text-[#d4af37]" />
+          <h3 className="font-semibold text-foreground/90">Attendance Trends</h3>
+        </div>
+        <div className="space-y-3">
+          <Skeleton className="h-[250px] w-full rounded-lg" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!chartData.length) {
+    return (
+      <div className="glass-card p-6 text-center text-muted-foreground">
+        <LineChartIcon className="h-8 w-8 mx-auto mb-2 opacity-30" />
+        <p className="text-sm">No trend data available yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-card p-4 sm:p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <LineChartIcon className="h-4 w-4 text-[#d4af37]" />
+          <h3 className="font-semibold text-foreground/90">Attendance Trends — Last 6 Months</h3>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={() => setShowCharts(false)}
+        >
+          Hide
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Line Chart: Late Arrivals & Missed Days */}
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium text-muted-foreground">Late Arrivals & Missed Days</h4>
+          <div className="h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(212,175,55,0.1)" />
+                <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#888', fontSize: 11 }} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgba(17,17,17,0.95)',
+                    border: '1px solid rgba(212,175,55,0.2)',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: 12,
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Line
+                  type="monotone"
+                  dataKey="Late Arrivals"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  dot={{ fill: '#f59e0b', r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Missed Days"
+                  stroke="#f43f5e"
+                  strokeWidth={2}
+                  dot={{ fill: '#f43f5e', r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Sick Leaves"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dot={{ fill: '#3b82f6', r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Stacked Bar Chart: All Issues */}
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium text-muted-foreground">Monthly Issues Breakdown</h4>
+          <div className="h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={issuesData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(212,175,55,0.1)" />
+                <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#888', fontSize: 11 }} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'rgba(17,17,17,0.95)',
+                    border: '1px solid rgba(212,175,55,0.2)',
+                    borderRadius: '8px',
+                    color: '#fff',
+                    fontSize: 12,
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="Late Arrivals" stackId="issues" fill="#f59e0b" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Missed Days" stackId="issues" fill="#f43f5e" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Sick Leaves" stackId="issues" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Mistakes & Extra Shifts Line */}
+      <div className="space-y-2">
+        <h4 className="text-sm font-medium text-muted-foreground">Mistakes & Extra Shifts</h4>
+        <div className="h-[200px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(212,175,55,0.1)" />
+              <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 11 }} />
+              <YAxis tick={{ fill: '#888', fontSize: 11 }} allowDecimals={false} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'rgba(17,17,17,0.95)',
+                  border: '1px solid rgba(212,175,55,0.2)',
+                  borderRadius: '8px',
+                  color: '#fff',
+                  fontSize: 12,
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Line
+                type="monotone"
+                dataKey="Mistakes"
+                stroke="#ef4444"
+                strokeWidth={2}
+                dot={{ fill: '#ef4444', r: 4 }}
+                activeDot={{ r: 6 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="Extra Shifts"
+                stroke="#22c55e"
+                strokeWidth={2}
+                dot={{ fill: '#22c55e', r: 4 }}
+                activeDot={{ r: 6 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </div>
     </div>

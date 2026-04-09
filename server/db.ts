@@ -3544,3 +3544,71 @@ export async function getGpMonthlyHistory(gpId: number, monthsBack: number = 6) 
 
   return months;
 }
+
+
+/**
+ * Get attendance trends for a team across multiple months
+ * Returns aggregated monthly totals for the last N months
+ */
+export async function getAttendanceTrends(teamId: number, months: number = 6) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const now = new Date();
+  const results: Array<{
+    month: number;
+    year: number;
+    totalMistakes: number;
+    totalExtraShifts: number;
+    totalLateToWork: number;
+    totalMissedDays: number;
+    totalSickLeaves: number;
+    gpCount: number;
+  }> = [];
+
+  for (let i = months - 1; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const m = date.getMonth() + 1;
+    const y = date.getFullYear();
+
+    const teamGPs = await db.select().from(gamePresenters).where(eq(gamePresenters.teamId, teamId));
+    const attendanceData = await db.select({ attendance: gpMonthlyAttendance })
+      .from(gpMonthlyAttendance)
+      .innerJoin(gamePresenters, eq(gpMonthlyAttendance.gamePresenterId, gamePresenters.id))
+      .where(and(eq(gamePresenters.teamId, teamId), eq(gpMonthlyAttendance.month, m), eq(gpMonthlyAttendance.year, y)));
+    const statsData = await db.select({ stats: monthlyGpStats })
+      .from(monthlyGpStats)
+      .innerJoin(gamePresenters, eq(monthlyGpStats.gamePresenterId, gamePresenters.id))
+      .where(and(eq(gamePresenters.teamId, teamId), eq(monthlyGpStats.month, m), eq(monthlyGpStats.year, y)));
+
+    const totals = {
+      month: m,
+      year: y,
+      totalMistakes: 0,
+      totalExtraShifts: 0,
+      totalLateToWork: 0,
+      totalMissedDays: 0,
+      totalSickLeaves: 0,
+      gpCount: teamGPs.length,
+    };
+
+    for (const att of attendanceData) {
+      totals.totalMistakes += att.attendance?.mistakes ?? 0;
+      totals.totalExtraShifts += att.attendance?.extraShifts ?? 0;
+      totals.totalLateToWork += att.attendance?.lateToWork ?? 0;
+      totals.totalMissedDays += att.attendance?.missedDays ?? 0;
+      totals.totalSickLeaves += att.attendance?.sickLeaves ?? 0;
+    }
+
+    for (const stat of statsData) {
+      const hasAttendance = attendanceData.some(a => a.attendance?.gamePresenterId === stat.stats?.gamePresenterId);
+      if (!hasAttendance && stat.stats?.mistakes) {
+        totals.totalMistakes += stat.stats.mistakes;
+      }
+    }
+
+    results.push(totals);
+  }
+
+  return results;
+}

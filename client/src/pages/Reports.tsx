@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2, Trash2, Eye, Calendar, Users, TrendingUp, Search, Filter, X, Copy, CheckCircle, ExternalLink } from "lucide-react";
+import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2, Trash2, Eye, Calendar, Users, TrendingUp, Search, Filter, X, Copy, CheckCircle, ExternalLink, Sheet } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -62,6 +62,9 @@ export default function ReportsPage() {
   const { data: teams } = trpc.fmTeam.list.useQuery();
   const generateMutation = trpc.report.generate.useMutation();
   const exportMutation = trpc.report.exportToExcel.useMutation();
+  const googleSheetsExportMutation = trpc.report.exportToGoogleSheets.useMutation();
+  const { data: googleSheetsStatus } = trpc.report.googleSheetsAvailable.useQuery();
+  const [isExportingSheets, setIsExportingSheets] = useState<number | null>(null);
   const autoFillMutation = trpc.report.autoFillFields.useMutation();
   const deleteMutation = trpc.report.delete.useMutation({
     onSuccess: () => {
@@ -299,6 +302,26 @@ export default function ReportsPage() {
     }
   };
 
+
+  const handleGoogleSheetsExport = async (reportId: number) => {
+    setIsExportingSheets(reportId);
+    try {
+      const result = await googleSheetsExportMutation.mutateAsync({ reportId });
+      toast.success(
+        <div className="flex flex-col gap-1">
+          <span>Google Sheet created successfully</span>
+          <a href={result.spreadsheetUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-300 underline">Open in Google Sheets</a>
+        </div>,
+        { duration: 8000 }
+      );
+      window.open(result.spreadsheetUrl, "_blank");
+      refetch();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to export to Google Sheets");
+    } finally {
+      setIsExportingSheets(null);
+    }
+  };
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -769,6 +792,37 @@ export default function ReportsPage() {
                             </Button>
                           )}
                           
+                          {/* Google Sheets Export */}
+                          {googleSheetsStatus?.available && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-green-400 hover:text-green-300"
+                              onClick={() => handleGoogleSheetsExport(item.report.id)}
+                              disabled={isExportingSheets === item.report.id}
+                              title={item.report.googleSheetsUrl ? "Regenerate Google Sheet" : "Export to Google Sheets"}
+                            >
+                              {isExportingSheets === item.report.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Sheet className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
+                          
+                          {/* Open existing Google Sheet */}
+                          {item.report.googleSheetsUrl && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-green-400 hover:text-green-300"
+                              onClick={() => window.open(item.report.googleSheetsUrl!, "_blank")}
+                              title="Open Google Sheet"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                          )}
+
                           {/* Delete */}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -942,6 +996,29 @@ export default function ReportsPage() {
                   </Button>
                 )}
 
+                {/* Google Sheets */}
+                {googleSheetsStatus?.available && (
+                  viewingReport.report.googleSheetsUrl ? (
+                    <Button variant="outline" className="border-green-500/30 text-green-400 hover:bg-green-500/10" onClick={() => window.open(viewingReport.report.googleSheetsUrl!, "_blank")}>
+                      <Sheet className="h-4 w-4 mr-2" />
+                      Open Google Sheet
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="border-green-500/30 text-green-400 hover:bg-green-500/10"
+                      onClick={() => handleGoogleSheetsExport(viewingReport.report.id)}
+                      disabled={isExportingSheets === viewingReport.report.id}
+                    >
+                      {isExportingSheets === viewingReport.report.id ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Sheet className="h-4 w-4 mr-2" />
+                      )}
+                      Export to Google Sheets
+                    </Button>
+                  )
+                )}
               </div>
             </div>
           )}

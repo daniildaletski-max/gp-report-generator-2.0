@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Moon, Sun } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState, createContext, useContext, useCallback } from "react";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
@@ -119,6 +120,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -264,6 +266,20 @@ function DashboardLayoutContent({
                 </div>
               )}
             </div>
+
+            {/* Theme toggle */}
+            <button
+              onClick={() => toggleTheme?.()}
+              className="flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-[#d4af37]/10 transition-all duration-200 w-full text-left group-data-[collapsible=icon]:justify-center text-muted-foreground hover:text-foreground"
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
+              {!isCollapsed && (
+                <span className="text-sm font-medium">
+                  {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                </span>
+              )}
+            </button>
 
             {/* Sign out button — always visible */}
             <button

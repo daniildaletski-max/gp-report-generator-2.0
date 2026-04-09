@@ -99,6 +99,13 @@
       "when": 1770589131800,
       "tag": "0013_long_chimera",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1775723916992,
+      "tag": "0014_ordinary_tigra",
+      "breakpoints": true
     }
   ]
 }

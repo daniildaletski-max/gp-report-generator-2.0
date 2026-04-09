@@ -81,6 +81,22 @@ vi.mock(import("./db"), async (importOriginal) => {
         monthlyStats: { mistakes: 1, attitude: 5, totalGames: 600 },
       },
     ]),
+    getAttendanceTrends: vi.fn().mockResolvedValue([
+      { month: 10, year: 2025, totalMistakes: 5, totalExtraShifts: 2, totalLateToWork: 3, totalMissedDays: 1, totalSickLeaves: 0, gpCount: 8 },
+      { month: 11, year: 2025, totalMistakes: 3, totalExtraShifts: 4, totalLateToWork: 1, totalMissedDays: 2, totalSickLeaves: 1, gpCount: 8 },
+      { month: 12, year: 2025, totalMistakes: 7, totalExtraShifts: 1, totalLateToWork: 4, totalMissedDays: 0, totalSickLeaves: 2, gpCount: 8 },
+      { month: 1, year: 2026, totalMistakes: 2, totalExtraShifts: 3, totalLateToWork: 2, totalMissedDays: 1, totalSickLeaves: 0, gpCount: 8 },
+    ]),
+    getReportById: vi.fn().mockResolvedValue({
+      id: 1,
+      teamId: 1,
+      month: 1,
+      year: 2026,
+      status: "completed",
+      excelUrl: "https://test.com/report.xlsx",
+      googleSheetsUrl: null,
+    }),
+    updateReport: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -100,6 +116,9 @@ vi.mock("./_core/email", () => ({
 }));
 vi.mock("./scheduledReports", () => ({
   runMonthlyReportGeneration: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("./services/googleSheetsService", () => ({
+  uploadToGoogleSheets: vi.fn().mockResolvedValue("https://docs.google.com/spreadsheets/d/test-id/edit"),
 }));
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
@@ -338,5 +357,84 @@ describe("Attendance Update", () => {
     expect(result).toBeDefined();
     // The update procedure returns { success: true }
     expect(result.success).toBe(true);
+  });
+});
+
+
+describe("Attendance Trends", () => {
+  it("returns trend data for admin", async () => {
+    const ctx = createAdminContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.attendance.trends({
+      teamId: 1,
+      months: 6,
+    });
+
+    expect(result).toBeDefined();
+    expect(Array.isArray(result)).toBe(true);
+    expect(result.length).toBe(4);
+    expect(result[0].month).toBe(10);
+    expect(result[0].year).toBe(2025);
+    expect(result[0].totalMistakes).toBe(5);
+    expect(result[0].totalExtraShifts).toBe(2);
+    expect(result[0].totalLateToWork).toBe(3);
+    expect(result[0].totalMissedDays).toBe(1);
+    expect(result[0].totalSickLeaves).toBe(0);
+    expect(result[0].gpCount).toBe(8);
+  });
+
+  it("returns trend data with correct chronological order", async () => {
+    const ctx = createAdminContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.attendance.trends({
+      teamId: 1,
+      months: 6,
+    });
+
+    // Verify chronological order (Oct 2025 -> Jan 2026)
+    expect(result[0].month).toBe(10);
+    expect(result[0].year).toBe(2025);
+    expect(result[3].month).toBe(1);
+    expect(result[3].year).toBe(2026);
+  });
+
+  it("rejects trends for unauthenticated users", async () => {
+    const ctx = createUnauthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    await expect(
+      caller.attendance.trends({ teamId: 1, months: 6 })
+    ).rejects.toThrow();
+  });
+
+  it("rejects trends for FM user accessing another team", async () => {
+    const ctx = createFMContext();
+    const caller = appRouter.createCaller(ctx);
+
+    await expect(
+      caller.attendance.trends({ teamId: 1, months: 6 })
+    ).rejects.toThrow();
+  });
+});
+
+describe("Google Sheets Export", () => {
+  it("rejects export for unauthenticated users", async () => {
+    const ctx = createUnauthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    await expect(
+      caller.report.exportToGoogleSheets({ reportId: 1 })
+    ).rejects.toThrow();
+  });
+
+  it("rejects export for non-admin users", async () => {
+    const ctx = createFMContext();
+    const caller = appRouter.createCaller(ctx);
+
+    await expect(
+      caller.report.exportToGoogleSheets({ reportId: 1 })
+    ).rejects.toThrow();
   });
 });

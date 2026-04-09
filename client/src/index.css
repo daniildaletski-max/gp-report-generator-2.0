@@ -1607,3 +1607,112 @@
     background: rgba(212, 175, 55, 0.25);
   }
 }
+
+
+/* ============================================
+   LIGHT THEME OVERRIDES
+   Premium Gold & White palette for light mode
+   ============================================ */
+
+html:not(.dark) {
+  /* Override body background */
+  body {
+    background: linear-gradient(145deg, #faf9f6 0%, #f5f3ee 50%, #faf9f6 100%) !important;
+  }
+
+  /* Glass morphism — light variant */
+  .glass,
+  .glass-card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.85) 0%, rgba(250, 248, 243, 0.75) 100%) !important;
+    border-color: rgba(212, 175, 55, 0.15) !important;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+  }
+
+  .glass-card-hover:hover {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+  }
+
+  .glass-input {
+    background: rgba(255, 255, 255, 0.9) !important;
+    border-color: rgba(212, 175, 55, 0.2) !important;
+    color: #1a1a1a !important;
+  }
+
+  .glass-input:focus {
+    border-color: rgba(212, 175, 55, 0.5) !important;
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1) !important;
+  }
+
+  .glass-button {
+    background: rgba(255, 255, 255, 0.8) !important;
+    border-color: rgba(212, 175, 55, 0.2) !important;
+    color: #333 !important;
+  }
+
+  .glass-button:hover {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border-color: rgba(212, 175, 55, 0.4) !important;
+  }
+
+  /* Stat cards — light variant */
+  .stat-card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(250, 248, 243, 0.8) 100%) !important;
+    border-color: rgba(0, 0, 0, 0.06) !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04) !important;
+  }
+
+  .stat-card-enhanced {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.95) 0%, rgba(250, 248, 243, 0.85) 100%) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06) !important;
+  }
+
+  /* Icon containers — light variant */
+  .icon-container {
+    background: rgba(245, 243, 238, 0.8) !important;
+  }
+
+  /* Table styles — light variant */
+  .glass-card table thead {
+    background: rgba(250, 248, 243, 0.9) !important;
+  }
+
+  .glass-card table tbody tr {
+    border-color: rgba(0, 0, 0, 0.04) !important;
+  }
+
+  .glass-card table tbody tr:hover {
+    background: rgba(212, 175, 55, 0.04) !important;
+  }
+
+  /* Scrollbar — light variant */
+  ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.02) !important; }
+  ::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.2) !important; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(212, 175, 55, 0.35) !important; }
+
+  /* Sidebar — light variant */
+  [data-sidebar] {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(250, 248, 243, 0.9) 100%) !important;
+    border-color: rgba(212, 175, 55, 0.12) !important;
+  }
+
+  /* Page title and subtitle */
+  .page-title {
+    color: #1a1a1a !important;
+  }
+
+  .page-subtitle {
+    color: #666 !important;
+  }
+
+  /* Stat sublabel */
+  .stat-sublabel {
+    color: rgba(0, 0, 0, 0.5) !important;
+  }
+
+  /* Tooltip overrides for recharts */
+  .recharts-default-tooltip {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border-color: rgba(212, 175, 55, 0.2) !important;
+    color: #1a1a1a !important;
+  }
+}

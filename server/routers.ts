@@ -15,6 +15,7 @@ import ExcelJS from "exceljs";
 import XLSXChart from "xlsx-chart";
 import { generateReportWorkbook } from "./services/excelService";
 import { createLogger } from "./services/logger";
+import { exportToGoogleSheets, isGoogleSheetsAvailable } from "./services/googleSheetsService";
 
 const log = createLogger("Router");
 
@@ -1807,6 +1808,87 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         return generateExcelAndEmail(ctx, input.reportId);
       }),
 
+    exportToGoogleSheets: protectedProcedure
+      .input(z.object({
+        reportId: z.number().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        log.info("exportToGoogleSheets START", { reportId: input.reportId });
+
+        if (!isGoogleSheetsAvailable()) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Google Sheets export is not configured. Please add Google service account credentials.' });
+        }
+
+        const reportWithTeam = await db.getReportWithTeam(input.reportId);
+        if (!reportWithTeam) throw new TRPCError({ code: 'NOT_FOUND', message: 'Report not found' });
+
+        if (ctx.user.role !== 'admin' && reportWithTeam.report.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+        }
+
+        const { report, team } = reportWithTeam;
+        const teamName = team?.teamName || "Unknown Team";
+        const fmName = team?.floorManagerName || "Unknown FM";
+
+        const freshAttendance = await db.getAttendanceByTeamMonth(report.teamId, report.reportMonth, report.reportYear);
+
+        const attitudeByGp: Record<number, { positive: number; negative: number; entries: Array<{ date: string; type: string; comment: string; score: number }> }> = {};
+        for (const item of freshAttendance) {
+          if (item.gamePresenter?.id) {
+            const gpAttitudeEntries = await db.getAttitudeScreenshotsForGP(item.gamePresenter.id, report.reportMonth, report.reportYear);
+            const positive = gpAttitudeEntries.filter(e => (e.attitudeScore || 0) > 0).length;
+            const negative = gpAttitudeEntries.filter(e => (e.attitudeScore || 0) < 0).length;
+            const entries = gpAttitudeEntries.map(e => ({
+              date: e.evaluationDate ? new Date(e.evaluationDate).toLocaleDateString() : new Date(e.createdAt).toLocaleDateString(),
+              type: (e.attitudeScore || 0) > 0 ? 'POSITIVE' : 'NEGATIVE',
+              comment: e.comment || '',
+              score: e.attitudeScore || 0,
+            }));
+            attitudeByGp[item.gamePresenter.id] = { positive, negative, entries };
+          }
+        }
+
+        const gpEvaluationsData = await db.getGPEvaluationsForDataSheet(report.teamId, report.reportYear, report.reportMonth);
+        const prevMonth = report.reportMonth === 1 ? 12 : report.reportMonth - 1;
+        const prevYear = report.reportMonth === 1 ? report.reportYear - 1 : report.reportYear;
+        const prevMonthEvaluations = await db.getGPEvaluationsForDataSheet(report.teamId, prevYear, prevMonth);
+
+        const result = await exportToGoogleSheets({
+          report: {
+            id: report.id,
+            teamId: report.teamId,
+            reportMonth: report.reportMonth,
+            reportYear: report.reportYear,
+            fmPerformance: report.fmPerformance,
+            goalsThisMonth: report.goalsThisMonth,
+            teamOverview: report.teamOverview,
+            additionalComments: report.additionalComments,
+          },
+          teamName,
+          fmName,
+          attendanceData: freshAttendance,
+          attitudeByGp,
+          gpEvaluationsData,
+          prevMonthEvaluations,
+        }, ctx.user.email);
+
+        // Update report with Google Sheets URL
+        await db.updateReport(report.id, {
+          googleSheetsUrl: result.spreadsheetUrl,
+        });
+
+        log.info("exportToGoogleSheets DONE", { spreadsheetUrl: result.spreadsheetUrl });
+        return {
+          success: true,
+          spreadsheetUrl: result.spreadsheetUrl,
+          spreadsheetId: result.spreadsheetId,
+        };
+      }),
+
+    googleSheetsAvailable: protectedProcedure.query(() => {
+      return { available: isGoogleSheetsAvailable() };
+    }),
+
     list: protectedProcedure.query(async ({ ctx }) => {
       // User-based data isolation: each user sees only their own reports
       if (ctx.user.role !== 'admin') {
@@ -3137,6 +3219,22 @@ Respond with a JSON object containing an array of ALL entries found:
         }), { mistakes: 0, extraShifts: 0, lateToWork: 0, missedDays: 0, sickLeaves: 0 });
 
         return { items: data, totals, gpCount: data.length };
+      }),
+
+    // Get attendance trends for a team across multiple months
+    trends: protectedProcedure
+      .input(z.object({
+        teamId: z.number().positive(),
+        months: z.number().min(2).max(12).optional().default(6),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin') {
+          const team = await db.getFmTeamById(input.teamId);
+          if (!team || team.userId !== ctx.user.id) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+          }
+        }
+        return await db.getAttendanceTrends(input.teamId, input.months);
       }),
   }),
 

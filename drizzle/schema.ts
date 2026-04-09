@@ -172,6 +172,7 @@ export const reports = mysqlTable("reports", {
   reportData: json("reportData"),
   excelFileUrl: text("excelFileUrl"),
   excelFileKey: varchar("excelFileKey", { length: 512 }),
+  googleSheetsUrl: text("googleSheetsUrl"),
   status: mysqlEnum("status", ["draft", "generated", "finalized"]).default("draft").notNull(),
   generatedById: int("generatedById"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
