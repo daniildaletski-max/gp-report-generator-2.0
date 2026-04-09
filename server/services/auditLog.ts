@@ -1,5 +1,4 @@
-import { db } from "../db";
-import { eq, and } from "drizzle-orm";
+// Audit log service - in-memory for now
 
 export type AuditAction =
   | "CREATE"

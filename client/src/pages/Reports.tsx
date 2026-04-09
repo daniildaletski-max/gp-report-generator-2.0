@@ -36,6 +36,7 @@ interface GPStat {
 
 export default function ReportsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStep, setGenerationStep] = useState(0); // 0=idle, 1=generating, 2=building excel, 3=sending email, 4=done
   const [isExporting, setIsExporting] = useState<number | null>(null);
   const [showNewReport, setShowNewReport] = useState(false);
   const [viewingReport, setViewingReport] = useState<any>(null);
@@ -206,26 +207,30 @@ export default function ReportsPage() {
     }
 
     setIsGenerating(true);
+    setGenerationStep(1);
     try {
       const result = await generateMutation.mutateAsync({
         ...formData,
         autoFill: true, // Always auto-fill empty fields with AI-generated content
       });
-      toast.success("Report generated. Building Excel & sending email...");
+      setGenerationStep(2);
 
       // Automatically export to Excel and send email with attachment
       let emailSent = false;
       let emailAddress: string | null = null;
       let excelUrl: string | null = null;
       try {
+        setGenerationStep(2);
         const exportResult = await exportMutation.mutateAsync({ reportId: result.id });
         emailSent = exportResult.emailSent;
         emailAddress = exportResult.emailAddress;
         excelUrl = exportResult.excelUrl;
+        setGenerationStep(3);
       } catch (exportError: any) {
         console.warn("Auto-export failed:", exportError);
         // Report was still created successfully, just export failed
       }
+      setGenerationStep(4);
 
       if (emailSent && emailAddress) {
         toast.success(
@@ -261,6 +266,7 @@ export default function ReportsPage() {
       toast.error(error.message || "Failed to generate report");
     } finally {
       setIsGenerating(false);
+      setTimeout(() => setGenerationStep(0), 1500);
     }
   };
 
@@ -425,7 +431,7 @@ export default function ReportsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {[2024, 2025, 2026].map((year) => (
+                      {Array.from({length: 5}, (_, i) => new Date().getFullYear() - 2 + i).map((year) => (
                         <SelectItem key={year} value={String(year)}>
                           {year}
                         </SelectItem>
@@ -512,15 +518,51 @@ export default function ReportsPage() {
                 />
               </div>
 
+              {/* Generation Progress Indicator */}
+              {isGenerating && generationStep > 0 && (
+                <div className="rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-[#d4af37]">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Processing Report...
+                  </div>
+                  <div className="space-y-2">
+                    {[
+                      { step: 1, label: 'Generating report with AI analysis' },
+                      { step: 2, label: 'Building Excel workbook with charts' },
+                      { step: 3, label: 'Sending email to floor manager' },
+                    ].map(({ step, label }) => (
+                      <div key={step} className="flex items-center gap-2.5 text-sm">
+                        {generationStep > step ? (
+                          <CheckCircle className="h-4 w-4 text-green-400 shrink-0" />
+                        ) : generationStep === step ? (
+                          <Loader2 className="h-4 w-4 text-[#d4af37] animate-spin shrink-0" />
+                        ) : (
+                          <div className="h-4 w-4 rounded-full border border-white/20 shrink-0" />
+                        )}
+                        <span className={generationStep >= step ? 'text-foreground/80' : 'text-muted-foreground/50'}>
+                          {label}
+                        </span>
+                      </div>
+                    ))}
+                    {generationStep >= 4 && (
+                      <div className="flex items-center gap-2.5 text-sm">
+                        <CheckCircle className="h-4 w-4 text-green-400 shrink-0" />
+                        <span className="text-green-400 font-medium">Complete!</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowNewReport(false)}>
+                <Button variant="outline" onClick={() => setShowNewReport(false)} disabled={isGenerating}>
                   Cancel
                 </Button>
-                <Button onClick={handleGenerate} disabled={isGenerating} className="bg-gradient-to-r from-[#d4af37] to-[#b8860b] text-black hover:from-[#e6c84b] hover:to-[#d4af37]">
+                <Button onClick={handleGenerate} disabled={isGenerating || !formData.teamId || !formData.reportMonth} className="bg-gradient-to-r from-[#d4af37] to-[#b8860b] text-black hover:from-[#e6c84b] hover:to-[#d4af37]">
                   {isGenerating ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating & Exporting...
+                      {generationStep === 1 ? 'Generating...' : generationStep === 2 ? 'Building Excel...' : generationStep === 3 ? 'Sending Email...' : 'Finishing...'}
                     </>
                   ) : (
                     <>
@@ -612,13 +654,13 @@ export default function ReportsPage() {
               </SelectContent>
             </Select>
             
-            <Select value={filterYear ? String(filterYear) : "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
+              <Select value={filterYear ? String(filterYear) : "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
               <SelectTrigger className="w-[120px]">
                 <SelectValue placeholder="All years" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All years</SelectItem>
-                {[2024, 2025, 2026].map((year) => (
+                {Array.from({length: 5}, (_, i) => new Date().getFullYear() - 2 + i).map((year) => (
                   <SelectItem key={year} value={String(year)}>{year}</SelectItem>
                 ))}
               </SelectContent>

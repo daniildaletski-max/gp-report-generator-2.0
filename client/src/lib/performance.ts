@@ -70,7 +70,7 @@ export function compressImage(file: File, quality: number = 0.8): Promise<Blob> 
           return;
         }
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob(resolve, "image/jpeg", quality);
+        canvas.toBlob((blob) => { if (blob) resolve(blob); else reject(new Error('Failed to create blob')); }, "image/jpeg", quality);
       };
       img.onerror = () => reject(new Error("Failed to load image"));
       img.src = event.target?.result as string;

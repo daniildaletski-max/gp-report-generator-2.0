@@ -75,7 +75,7 @@ export default function Dashboard() {
 
   const gpStats = (stats as { gpStats?: GPStat[] })?.gpStats || [];
   const chartData = useMemo(() => gpStats.map((gp: GPStat) => ({
-    name: gp.gpName?.split(' ')[0] || "Unknown",
+    name: gp.gpName ? (gp.gpName.split(' ').length > 1 ? `${gp.gpName.split(' ')[0]} ${gp.gpName.split(' ').slice(-1)[0][0]}.` : gp.gpName) : "Unknown",
     fullName: gp.gpName,
     totalScore: Number(gp.avgTotal),
     appearance: Number(gp.avgAppearance),
@@ -103,7 +103,7 @@ export default function Dashboard() {
   );
 
   const lowPerformers = useMemo(() => 
-    chartData.filter(gp => gp.totalScore > 0 && gp.totalScore < 15),
+    chartData.filter(gp => gp.totalScore > 0 && gp.totalScore < 16),
     [chartData]
   );
 
@@ -356,7 +356,7 @@ export default function Dashboard() {
               </Badge>
             ))}
           </div>
-          <p className="text-xs sm:text-sm text-red-400/50">These GPs scored below 15 this month and may need additional support.</p>
+          <p className="text-xs sm:text-sm text-red-400/50">These GPs scored below 16 this month and may need additional support.</p>
         </div>
       )}
 
@@ -770,8 +770,8 @@ function GPMonthlyComparisonSection({ isMobile }: { isMobile: boolean }) {
                     tickFormatter={(v) => v.split(' ')[0]}
                   />
                   <YAxis 
-                    domain={[0, 24]} 
-                    ticks={[0, 6, 12, 18, 24]}
+                    domain={[0, 22]} 
+                    ticks={[0, 5, 10, 15, 22]}
                     tick={{ fontSize: isMobile ? 9 : 11, fill: 'rgba(255,255,255,0.35)' }}
                     width={isMobile ? 28 : 35}
                   />

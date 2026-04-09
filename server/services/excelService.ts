@@ -1,6 +1,6 @@
 /**
- * Excel Report Generation Service
- * Extracted from routers.ts to keep route handlers lean
+ * Excel Report Generation Service v2.0
+ * Major quality upgrade: dynamic rows, executive summary, improved formatting
  */
 import ExcelJS from "exceljs";
 import { MONTH_NAMES, MAX_TOTAL_SCORE } from "@shared/const";
@@ -68,6 +68,117 @@ interface ReportData {
 }
 
 // ============================
+// Color Constants
+// ============================
+
+const COLORS = {
+  // Primary palette
+  gold: "FFFFC000",
+  goldLight: "FFFFF2CC",
+  goldDark: "FFD4A017",
+  
+  // Neutrals
+  white: "FFFFFFFF",
+  lightGray: "FFF2F2F2",
+  mediumGray: "FFE7E6E6",
+  darkGray: "FF404040",
+  black: "FF1A1A1A",
+  
+  // Blues
+  blue: "FF4472C4",
+  blueLight: "FFD6E4F0",
+  blueDark: "FF2F5496",
+  navyBlue: "FF1F3864",
+  
+  // Greens
+  green: "FF70AD47",
+  greenLight: "FFE2EFDA",
+  greenDark: "FF548235",
+  
+  // Reds
+  red: "FFFF4444",
+  redLight: "FFFCE4EC",
+  redDark: "FFC00000",
+  
+  // Yellows / Warnings
+  yellow: "FFFFC000",
+  yellowLight: "FFFFF9E6",
+  
+  // Accent
+  teal: "FF00B0A0",
+  purple: "FF7B68EE",
+  
+  // Attitude
+  positiveBackground: "FFD4EDDA",
+  positiveText: "FF155724",
+  negativeBackground: "FFF8D7DA",
+  negativeText: "FF721C24",
+};
+
+// ============================
+// Shared Helpers
+// ============================
+
+function getScoreColor(total: number): string {
+  if (total >= 20) return COLORS.greenDark;
+  if (total >= 18) return COLORS.green;
+  if (total >= 16) return COLORS.yellow;
+  if (total >= 14) return COLORS.gold;
+  return COLORS.red;
+}
+
+function getScoreBgColor(total: number): string {
+  if (total >= 20) return COLORS.greenLight;
+  if (total >= 18) return "FFE8F5E9";
+  if (total >= 16) return COLORS.yellowLight;
+  if (total >= 14) return COLORS.goldLight;
+  return COLORS.redLight;
+}
+
+function thinBorder(): Partial<ExcelJS.Borders> {
+  return {
+    top: { style: "thin" },
+    left: { style: "thin" },
+    bottom: { style: "thin" },
+    right: { style: "thin" },
+  };
+}
+
+function thickBottomBorder(): Partial<ExcelJS.Borders> {
+  return {
+    top: { style: "thin" },
+    left: { style: "thin" },
+    bottom: { style: "medium" },
+    right: { style: "thin" },
+  };
+}
+
+function headerFill(color: string = COLORS.gold): ExcelJS.Fill {
+  return { type: "pattern", pattern: "solid", fgColor: { argb: color } };
+}
+
+function setHeaderCell(cell: ExcelJS.Cell, value: string, bgColor: string = COLORS.gold) {
+  cell.value = value;
+  cell.font = { bold: true, size: 11 };
+  cell.fill = headerFill(bgColor);
+  cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  cell.border = thinBorder();
+}
+
+/** Compute GP averages from evaluations */
+function computeGpAverages(gpEvaluationsData: ChartDataPoint[]) {
+  return gpEvaluationsData
+    .filter(gp => gp.evaluations.length > 0)
+    .map(gp => {
+      const avgApp = gp.evaluations.reduce((s, e) => s + (e.appearanceScore || 0), 0) / gp.evaluations.length;
+      const avgGP = gp.evaluations.reduce((s, e) => s + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
+      const total = avgApp + avgGP;
+      return { name: gp.gpName, appearance: Number(avgApp.toFixed(1)), gamePerf: Number(avgGP.toFixed(1)), total: Number(total.toFixed(1)), evalCount: gp.evaluations.length };
+    })
+    .sort((a, b) => b.total - a.total);
+}
+
+// ============================
 // Chart Generation (QuickChart API)
 // ============================
 
@@ -87,61 +198,60 @@ export async function generateChartImage(
           {
             label: `Total Score (max ${MAX_TOTAL_SCORE})`,
             data: totalScores,
-            backgroundColor: 'rgba(54, 162, 235, 0.9)',
-            borderColor: 'rgba(54, 162, 235, 1)',
+            backgroundColor: 'rgba(68, 114, 196, 0.85)',
+            borderColor: 'rgba(68, 114, 196, 1)',
             borderWidth: 1,
-            borderRadius: 6,
-            barPercentage: 0.8,
-            categoryPercentage: 0.9,
+            borderRadius: 4,
+            barPercentage: 0.75,
+            categoryPercentage: 0.85,
           },
           {
             label: 'Appearance (max 12)',
             data: appearanceScores,
-            backgroundColor: 'rgba(75, 192, 192, 0.9)',
-            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: 'rgba(112, 173, 71, 0.85)',
+            borderColor: 'rgba(112, 173, 71, 1)',
             borderWidth: 1,
-            borderRadius: 6,
-            barPercentage: 0.8,
-            categoryPercentage: 0.9,
+            borderRadius: 4,
+            barPercentage: 0.75,
+            categoryPercentage: 0.85,
           },
           {
             label: 'Game Performance (max 10)',
             data: gamePerformanceScores,
-            backgroundColor: 'rgba(255, 159, 64, 0.9)',
-            borderColor: 'rgba(255, 159, 64, 1)',
+            backgroundColor: 'rgba(255, 192, 0, 0.85)',
+            borderColor: 'rgba(255, 192, 0, 1)',
             borderWidth: 1,
-            borderRadius: 6,
-            barPercentage: 0.8,
-            categoryPercentage: 0.9,
+            borderRadius: 4,
+            barPercentage: 0.75,
+            categoryPercentage: 0.85,
           },
         ],
       },
       options: {
         responsive: true,
         plugins: {
-          title: { display: true, text: title, font: { size: 18, weight: 'bold' }, padding: { bottom: 20 } },
-          legend: { position: 'bottom', labels: { padding: 20, font: { size: 12 } } },
-          datalabels: { display: true, anchor: 'end', align: 'top', font: { size: 10, weight: 'bold' }, formatter: (value: number) => value.toFixed(1) },
+          title: { display: true, text: title, font: { size: 16, weight: 'bold' }, padding: { bottom: 16 }, color: '#1a1a1a' },
+          legend: { position: 'bottom', labels: { padding: 16, font: { size: 11 }, usePointStyle: true, pointStyle: 'rectRounded' } },
+          datalabels: { display: true, anchor: 'end', align: 'top', font: { size: 9, weight: 'bold' }, color: '#333', formatter: (value: number) => value.toFixed(1) },
         },
         scales: {
           y: {
             min: 0,
-            max: MAX_TOTAL_SCORE + 1,
-            grace: '0',
-            ticks: { stepSize: 5 },
-            title: { display: true, text: 'Score', font: { size: 14, weight: 'bold' } },
-            grid: { color: 'rgba(0, 0, 0, 0.1)' },
+            max: MAX_TOTAL_SCORE + 2,
+            ticks: { stepSize: 2, font: { size: 10 } },
+            title: { display: true, text: 'Score', font: { size: 12, weight: 'bold' } },
+            grid: { color: 'rgba(0, 0, 0, 0.06)' },
           },
           x: {
-            title: { display: true, text: 'Game Presenters', font: { size: 14, weight: 'bold' } },
-            ticks: { maxRotation: 45, minRotation: 45, font: { size: 11 } },
+            title: { display: true, text: 'Game Presenters', font: { size: 12, weight: 'bold' } },
+            ticks: { maxRotation: 45, minRotation: 0, font: { size: 10 } },
             grid: { display: false },
           },
         },
       },
     };
 
-    const chartUrl = `https://quickchart.io/chart?v=3&c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=900&h=450&bkg=white`;
+    const chartUrl = `https://quickchart.io/chart?v=3&c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=900&h=420&bkg=white&f=png`;
     const response = await fetch(chartUrl);
     if (!response.ok) {
       log.error('QuickChart API error', undefined, { status: response.status });
@@ -169,21 +279,25 @@ export async function generateComparisonChart(
       data: {
         labels,
         datasets: [
-          { label: currentMonthName, data: currentScores, backgroundColor: 'rgba(54, 162, 235, 0.8)', borderColor: 'rgba(54, 162, 235, 1)', borderWidth: 1 },
-          { label: previousMonthName, data: previousScores, backgroundColor: 'rgba(255, 159, 64, 0.6)', borderColor: 'rgba(255, 159, 64, 1)', borderWidth: 1 },
+          { label: currentMonthName, data: currentScores, backgroundColor: 'rgba(68, 114, 196, 0.8)', borderColor: 'rgba(68, 114, 196, 1)', borderWidth: 1, borderRadius: 4 },
+          { label: previousMonthName, data: previousScores, backgroundColor: 'rgba(255, 192, 0, 0.7)', borderColor: 'rgba(255, 192, 0, 1)', borderWidth: 1, borderRadius: 4 },
         ],
       },
       options: {
         responsive: true,
-        plugins: { title: { display: true, text: title, font: { size: 16 } }, legend: { position: 'bottom' } },
+        plugins: {
+          title: { display: true, text: title, font: { size: 14, weight: 'bold' }, color: '#1a1a1a' },
+          legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'rectRounded' } },
+          datalabels: { display: true, anchor: 'end', align: 'top', font: { size: 9 }, formatter: (value: number) => value.toFixed(1) },
+        },
         scales: {
-          y: { beginAtZero: true, max: MAX_TOTAL_SCORE + 1, title: { display: true, text: 'Total Score' } },
+          y: { beginAtZero: true, max: MAX_TOTAL_SCORE + 2, title: { display: true, text: 'Total Score' } },
           x: { title: { display: true, text: 'Game Presenters' } },
         },
       },
     };
 
-    const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=700&h=350&bkg=white`;
+    const chartUrl = `https://quickchart.io/chart?v=3&c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=800&h=380&bkg=white&f=png`;
     const response = await fetch(chartUrl);
     if (!response.ok) {
       log.error('QuickChart comparison API error', undefined, { status: response.status });
@@ -198,96 +312,148 @@ export async function generateComparisonChart(
 }
 
 // ============================
-// Excel Color Constants
-// ============================
-
-const COLORS = {
-  gold: "FFFFC000",
-  lightGray: "FFE7E6E6",
-  blue: "FF4472C4",
-  white: "FFFFFFFF",
-  green: "FF92D050",
-  lightGreen: "FF70AD47",
-  yellow: "FFFFC000",
-  red: "FFFF6B6B",
-  lightBlue: "FF5B9BD5",
-  positiveBackground: "FFD4EDDA",
-  positiveText: "FF155724",
-  negativeBackground: "FFF8D7DA",
-  negativeText: "FF721C24",
-  muted: "FF808080",
-  mutedLight: "FF666666",
-};
-
-// ============================
-// Helper: Score Color
-// ============================
-
-function getScoreColor(total: number): string {
-  if (total >= 18) return COLORS.green;
-  if (total >= 15) return COLORS.yellow;
-  return COLORS.red;
-}
-
-// ============================
-// Sheet Builders
+// Sheet 1: Data Sheet (Individual GP Scores)
 // ============================
 
 function buildDataSheet(workbook: ExcelJS.Workbook, gpEvaluationsData: ChartDataPoint[]) {
   const dataSheet = workbook.addWorksheet("Data");
+  
+  // Column widths
   dataSheet.columns = [
-    { width: 4 }, { width: 25 }, { width: 12 }, { width: 12 },
-    { width: 4 }, { width: 25 }, { width: 12 }, { width: 12 },
-    { width: 4 }, { width: 25 },
+    { width: 4 }, { width: 25 }, { width: 14 }, { width: 14 },
+    { width: 4 }, { width: 25 }, { width: 14 }, { width: 14 },
   ];
 
-  let dataRow = 9;
+  // Title
+  dataSheet.mergeCells("A1:H1");
+  const titleCell = dataSheet.getCell("A1");
+  titleCell.value = "Individual GP Evaluation Scores";
+  titleCell.font = { bold: true, size: 14, color: { argb: COLORS.white } };
+  titleCell.fill = headerFill(COLORS.navyBlue);
+  titleCell.alignment = { horizontal: "center", vertical: "middle" };
+  dataSheet.getRow(1).height = 30;
+
+  // Instructions
+  dataSheet.mergeCells("A2:H2");
+  dataSheet.getCell("A2").value = "Raw evaluation data per GP — Game Performance (max 5+5=10) and Appearance (max 3+3+3+3=12)";
+  dataSheet.getCell("A2").font = { italic: true, size: 10, color: { argb: "FF666666" } };
+  dataSheet.getCell("A2").alignment = { horizontal: "center" };
+
+  // Column headers for each GP block
+  const headerRow = 4;
+  
+  // Left block headers
+  dataSheet.getCell(`B${headerRow}`).value = "GP Name";
+  dataSheet.getCell(`C${headerRow}`).value = "Game Perf.";
+  dataSheet.getCell(`D${headerRow}`).value = "Appearance";
+  // Right block headers
+  dataSheet.getCell(`F${headerRow}`).value = "GP Name";
+  dataSheet.getCell(`G${headerRow}`).value = "Game Perf.";
+  dataSheet.getCell(`H${headerRow}`).value = "Appearance";
+  
+  for (const col of ["B", "C", "D", "F", "G", "H"]) {
+    const cell = dataSheet.getCell(`${col}${headerRow}`);
+    cell.font = { bold: true, size: 10, color: { argb: COLORS.white } };
+    cell.fill = headerFill(COLORS.blue);
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.border = thinBorder();
+  }
+
+  // Data rows — two GPs side by side
+  let dataRow = headerRow + 1;
   for (let i = 0; i < gpEvaluationsData.length; i += 2) {
     const gp1 = gpEvaluationsData[i];
     const gp2 = gpEvaluationsData[i + 1];
 
+    const maxEvals = Math.max(
+      gp1?.evaluations.length || 0,
+      gp2?.evaluations.length || 0,
+      1
+    );
+
+    // GP1 (left side)
     if (gp1 && gp1.evaluations.length > 0) {
-      dataSheet.mergeCells(`B${dataRow}:B${dataRow + 3}`);
+      // Merge name cells
+      if (maxEvals > 1) {
+        dataSheet.mergeCells(`B${dataRow}:B${dataRow + maxEvals - 1}`);
+      }
       dataSheet.getCell(`B${dataRow}`).value = gp1.gpName;
       dataSheet.getCell(`B${dataRow}`).alignment = { vertical: "middle" };
-      dataSheet.getCell(`C${dataRow}`).value = "GAME PERF.";
-      dataSheet.getCell(`D${dataRow}`).value = "APPEARANCE";
-      dataSheet.getCell(`C${dataRow}`).font = { bold: true };
-      dataSheet.getCell(`D${dataRow}`).font = { bold: true };
+      dataSheet.getCell(`B${dataRow}`).font = { bold: true };
+      dataSheet.getCell(`B${dataRow}`).border = thinBorder();
 
-      for (let j = 0; j < Math.min(4, gp1.evaluations.length); j++) {
-        dataSheet.getCell(`C${dataRow + 1 + j}`).value = gp1.evaluations[j].gamePerformanceScore || "";
-        dataSheet.getCell(`D${dataRow + 1 + j}`).value = gp1.evaluations[j].appearanceScore || "";
+      for (let j = 0; j < gp1.evaluations.length; j++) {
+        const gpCell = dataSheet.getCell(`C${dataRow + j}`);
+        gpCell.value = gp1.evaluations[j].gamePerformanceScore ?? "";
+        gpCell.alignment = { horizontal: "center" };
+        gpCell.border = thinBorder();
+        
+        const appCell = dataSheet.getCell(`D${dataRow + j}`);
+        appCell.value = gp1.evaluations[j].appearanceScore ?? "";
+        appCell.alignment = { horizontal: "center" };
+        appCell.border = thinBorder();
       }
 
-      dataSheet.getCell(`B${dataRow + 5}`).value = "Total average:";
-      dataSheet.getCell(`C${dataRow + 5}`).value = { formula: `AVERAGE(C${dataRow + 1}:C${dataRow + 4})` };
-      dataSheet.getCell(`D${dataRow + 5}`).value = { formula: `AVERAGE(D${dataRow + 1}:D${dataRow + 4})` };
+      // Average row
+      const avgRow = dataRow + maxEvals;
+      dataSheet.getCell(`B${avgRow}`).value = "Average:";
+      dataSheet.getCell(`B${avgRow}`).font = { bold: true, italic: true, size: 10 };
+      dataSheet.getCell(`B${avgRow}`).border = thickBottomBorder();
+      dataSheet.getCell(`C${avgRow}`).value = { formula: `AVERAGE(C${dataRow}:C${dataRow + gp1.evaluations.length - 1})` };
+      dataSheet.getCell(`C${avgRow}`).font = { bold: true };
+      dataSheet.getCell(`C${avgRow}`).numFmt = '0.0';
+      dataSheet.getCell(`C${avgRow}`).border = thickBottomBorder();
+      dataSheet.getCell(`D${avgRow}`).value = { formula: `AVERAGE(D${dataRow}:D${dataRow + gp1.evaluations.length - 1})` };
+      dataSheet.getCell(`D${avgRow}`).font = { bold: true };
+      dataSheet.getCell(`D${avgRow}`).numFmt = '0.0';
+      dataSheet.getCell(`D${avgRow}`).border = thickBottomBorder();
     }
 
+    // GP2 (right side)
     if (gp2 && gp2.evaluations.length > 0) {
-      dataSheet.mergeCells(`F${dataRow}:F${dataRow + 3}`);
+      if (maxEvals > 1) {
+        dataSheet.mergeCells(`F${dataRow}:F${dataRow + maxEvals - 1}`);
+      }
       dataSheet.getCell(`F${dataRow}`).value = gp2.gpName;
       dataSheet.getCell(`F${dataRow}`).alignment = { vertical: "middle" };
-      dataSheet.getCell(`G${dataRow}`).value = "GAME PERF.";
-      dataSheet.getCell(`H${dataRow}`).value = "APPEARANCE";
-      dataSheet.getCell(`G${dataRow}`).font = { bold: true };
-      dataSheet.getCell(`H${dataRow}`).font = { bold: true };
+      dataSheet.getCell(`F${dataRow}`).font = { bold: true };
+      dataSheet.getCell(`F${dataRow}`).border = thinBorder();
 
-      for (let j = 0; j < Math.min(4, gp2.evaluations.length); j++) {
-        dataSheet.getCell(`G${dataRow + 1 + j}`).value = gp2.evaluations[j].gamePerformanceScore || "";
-        dataSheet.getCell(`H${dataRow + 1 + j}`).value = gp2.evaluations[j].appearanceScore || "";
+      for (let j = 0; j < gp2.evaluations.length; j++) {
+        const gpCell = dataSheet.getCell(`G${dataRow + j}`);
+        gpCell.value = gp2.evaluations[j].gamePerformanceScore ?? "";
+        gpCell.alignment = { horizontal: "center" };
+        gpCell.border = thinBorder();
+        
+        const appCell = dataSheet.getCell(`H${dataRow + j}`);
+        appCell.value = gp2.evaluations[j].appearanceScore ?? "";
+        appCell.alignment = { horizontal: "center" };
+        appCell.border = thinBorder();
       }
 
-      dataSheet.getCell(`F${dataRow + 5}`).value = "Total average:";
-      dataSheet.getCell(`G${dataRow + 5}`).value = { formula: `AVERAGE(G${dataRow + 1}:G${dataRow + 4})` };
-      dataSheet.getCell(`H${dataRow + 5}`).value = { formula: `AVERAGE(H${dataRow + 1}:H${dataRow + 4})` };
+      const avgRow = dataRow + maxEvals;
+      dataSheet.getCell(`F${avgRow}`).value = "Average:";
+      dataSheet.getCell(`F${avgRow}`).font = { bold: true, italic: true, size: 10 };
+      dataSheet.getCell(`F${avgRow}`).border = thickBottomBorder();
+      dataSheet.getCell(`G${avgRow}`).value = { formula: `AVERAGE(G${dataRow}:G${dataRow + gp2.evaluations.length - 1})` };
+      dataSheet.getCell(`G${avgRow}`).font = { bold: true };
+      dataSheet.getCell(`G${avgRow}`).numFmt = '0.0';
+      dataSheet.getCell(`G${avgRow}`).border = thickBottomBorder();
+      dataSheet.getCell(`H${avgRow}`).value = { formula: `AVERAGE(H${dataRow}:H${dataRow + gp2.evaluations.length - 1})` };
+      dataSheet.getCell(`H${avgRow}`).font = { bold: true };
+      dataSheet.getCell(`H${avgRow}`).numFmt = '0.0';
+      dataSheet.getCell(`H${avgRow}`).border = thickBottomBorder();
     }
 
-    dataRow += 7;
+    dataRow += maxEvals + 2; // +1 for average row, +1 for spacing
   }
+
   return dataSheet;
 }
+
+// ============================
+// Sheet 2: Chart Data Sheet (Summary Table)
+// ============================
 
 function buildChartSheet(
   workbook: ExcelJS.Workbook,
@@ -297,64 +463,608 @@ function buildChartSheet(
   reportYear: number
 ) {
   const chartSheet = workbook.addWorksheet("Chart");
-  chartSheet.columns = [{ width: 25 }, { width: 15 }, { width: 18 }, { width: 12 }];
+  chartSheet.columns = [{ width: 28 }, { width: 16 }, { width: 18 }, { width: 14 }, { width: 14 }, { width: 18 }];
 
-  chartSheet.mergeCells("A1:D1");
-  chartSheet.getCell("A1").value = `${teamName} Performance - ${monthName} ${reportYear}`;
-  chartSheet.getCell("A1").font = { bold: true, size: 16 };
-  chartSheet.getCell("A1").alignment = { horizontal: "center" };
+  // Title
+  chartSheet.mergeCells("A1:F1");
+  const titleCell = chartSheet.getCell("A1");
+  titleCell.value = `${teamName} Performance Summary — ${monthName} ${reportYear}`;
+  titleCell.font = { bold: true, size: 14, color: { argb: COLORS.white } };
+  titleCell.fill = headerFill(COLORS.navyBlue);
+  titleCell.alignment = { horizontal: "center", vertical: "middle" };
+  chartSheet.getRow(1).height = 30;
 
-  const headers = ["Game Presenter", "Appearance", "Game Performance", "Total Score"];
+  // Headers
+  const headers = ["Game Presenter", "Appearance", "Game Performance", "Total Score", "Evaluations", "Performance Level"];
   headers.forEach((h, i) => {
     const cell = chartSheet.getCell(3, i + 1);
     cell.value = h;
-    cell.font = { bold: true, color: { argb: COLORS.white } };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.blue } };
-    cell.alignment = { horizontal: "center" };
+    cell.font = { bold: true, size: 10, color: { argb: COLORS.white } };
+    cell.fill = headerFill(COLORS.blue);
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.border = thinBorder();
   });
 
+  const gpAverages = computeGpAverages(gpEvaluationsData);
   let chartDataRow = 4;
-  for (const gp of gpEvaluationsData) {
-    if (gp.evaluations.length > 0) {
-      const avgApp = gp.evaluations.reduce((s, e) => s + (e.appearanceScore || 0), 0) / gp.evaluations.length;
-      const avgGP = gp.evaluations.reduce((s, e) => s + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
-      const total = avgApp + avgGP;
 
-      chartSheet.getCell(`A${chartDataRow}`).value = gp.gpName;
-      chartSheet.getCell(`B${chartDataRow}`).value = Number(avgApp.toFixed(1));
-      chartSheet.getCell(`C${chartDataRow}`).value = Number(avgGP.toFixed(1));
-      chartSheet.getCell(`D${chartDataRow}`).value = Number(total.toFixed(1));
-      chartSheet.getCell(`D${chartDataRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: getScoreColor(total) } };
-      chartSheet.getCell(`D${chartDataRow}`).font = { bold: true };
-      chartDataRow++;
-    }
+  for (const gp of gpAverages) {
+    chartSheet.getCell(`A${chartDataRow}`).value = gp.name;
+    chartSheet.getCell(`A${chartDataRow}`).font = { bold: true };
+    chartSheet.getCell(`A${chartDataRow}`).border = thinBorder();
+    
+    chartSheet.getCell(`B${chartDataRow}`).value = gp.appearance;
+    chartSheet.getCell(`B${chartDataRow}`).alignment = { horizontal: "center" };
+    chartSheet.getCell(`B${chartDataRow}`).border = thinBorder();
+    
+    chartSheet.getCell(`C${chartDataRow}`).value = gp.gamePerf;
+    chartSheet.getCell(`C${chartDataRow}`).alignment = { horizontal: "center" };
+    chartSheet.getCell(`C${chartDataRow}`).border = thinBorder();
+    
+    chartSheet.getCell(`D${chartDataRow}`).value = gp.total;
+    chartSheet.getCell(`D${chartDataRow}`).font = { bold: true };
+    chartSheet.getCell(`D${chartDataRow}`).alignment = { horizontal: "center" };
+    chartSheet.getCell(`D${chartDataRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: getScoreBgColor(gp.total) } };
+    chartSheet.getCell(`D${chartDataRow}`).border = thinBorder();
+    
+    chartSheet.getCell(`E${chartDataRow}`).value = gp.evalCount;
+    chartSheet.getCell(`E${chartDataRow}`).alignment = { horizontal: "center" };
+    chartSheet.getCell(`E${chartDataRow}`).border = thinBorder();
+    
+    // Performance level label
+    let level = "Needs Improvement";
+    if (gp.total >= 20) level = "Excellent";
+    else if (gp.total >= 18) level = "Very Good";
+    else if (gp.total >= 16) level = "Good";
+    else if (gp.total >= 14) level = "Fair";
+    
+    chartSheet.getCell(`F${chartDataRow}`).value = level;
+    chartSheet.getCell(`F${chartDataRow}`).alignment = { horizontal: "center" };
+    chartSheet.getCell(`F${chartDataRow}`).font = { italic: true, color: { argb: gp.total >= 18 ? COLORS.greenDark : gp.total >= 16 ? COLORS.goldDark : COLORS.redDark } };
+    chartSheet.getCell(`F${chartDataRow}`).border = thinBorder();
+    
+    chartDataRow++;
   }
 
-  // Instructions and summary
-  const instructionRow = chartDataRow + 2;
-  chartSheet.mergeCells(`A${instructionRow}:D${instructionRow}`);
-  chartSheet.getCell(`A${instructionRow}`).value = `To create a chart: Select data A3:D${chartDataRow - 1} > Insert > Chart > Bar Chart`;
-  chartSheet.getCell(`A${instructionRow}`).font = { italic: true, color: { argb: COLORS.mutedLight } };
+  // Team average row
+  const lastDataRow = chartDataRow - 1;
+  chartSheet.getCell(`A${chartDataRow}`).value = "TEAM AVERAGE";
+  chartSheet.getCell(`A${chartDataRow}`).font = { bold: true, size: 11 };
+  chartSheet.getCell(`A${chartDataRow}`).fill = headerFill(COLORS.goldLight);
+  chartSheet.getCell(`A${chartDataRow}`).border = thickBottomBorder();
+  
+  for (const [col, label] of [["B", "B"], ["C", "C"], ["D", "D"], ["E", "E"]] as const) {
+    const cell = chartSheet.getCell(`${col}${chartDataRow}`);
+    cell.value = { formula: `AVERAGE(${col}4:${col}${lastDataRow})` };
+    cell.font = { bold: true };
+    cell.numFmt = '0.0';
+    cell.alignment = { horizontal: "center" };
+    cell.fill = headerFill(COLORS.goldLight);
+    cell.border = thickBottomBorder();
+  }
+  chartSheet.getCell(`F${chartDataRow}`).fill = headerFill(COLORS.goldLight);
+  chartSheet.getCell(`F${chartDataRow}`).border = thickBottomBorder();
 
-  const summaryRow = instructionRow + 2;
-  chartSheet.getCell(`A${summaryRow}`).value = "Summary Statistics";
-  chartSheet.getCell(`A${summaryRow}`).font = { bold: true };
-
-  const formulaRows = [
-    ["Average Appearance:", `AVERAGE(B4:B${chartDataRow - 1})`],
-    ["Average Game Perf:", `AVERAGE(C4:C${chartDataRow - 1})`],
-    ["Average Total:", `AVERAGE(D4:D${chartDataRow - 1})`],
-    ["Top Score:", `MAX(D4:D${chartDataRow - 1})`],
-    ["Lowest Score:", `MIN(D4:D${chartDataRow - 1})`],
-  ];
-  formulaRows.forEach(([label, formula], i) => {
-    chartSheet.getCell(`A${summaryRow + 1 + i}`).value = label;
-    chartSheet.getCell(`B${summaryRow + 1 + i}`).value = { formula };
-    if (label === "Average Total:") chartSheet.getCell(`B${summaryRow + 1 + i}`).font = { bold: true };
-  });
+  // Instructions
+  const instrRow = chartDataRow + 2;
+  chartSheet.mergeCells(`A${instrRow}:F${instrRow}`);
+  chartSheet.getCell(`A${instrRow}`).value = `To create a chart in Google Sheets: Select A3:D${lastDataRow} → Insert → Chart → Bar Chart`;
+  chartSheet.getCell(`A${instrRow}`).font = { italic: true, size: 10, color: { argb: "FF888888" } };
 
   return chartSheet;
 }
+
+// ============================
+// Sheet 3: Monthly Report (Main Sheet)
+// ============================
+
+function buildMonthlySheet(
+  mainSheet: ExcelJS.Worksheet,
+  data: ReportData,
+  monthName: string,
+  fmName: string,
+  teamName: string,
+  gpEvaluationsData: ChartDataPoint[],
+  attendanceData: AttendanceItem[],
+  attitudeByGp: AttitudeByGp
+): number {
+  const { report } = data;
+  const gpCount = attendanceData.length;
+
+  // Column widths — 31 columns (A-AE)
+  mainSheet.columns = [
+    { width: 9 }, { width: 13 }, { width: 13 }, { width: 13 },
+    { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 },
+    { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 },
+    { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 },
+    { width: 13 }, { width: 13 }, { width: 13 }, { width: 12.25 },
+    { width: 9 }, { width: 13 }, { width: 13 }, { width: 13 },
+    { width: 13 }, { width: 13 }, { width: 9 }, { width: 13 },
+    { width: 13 }, { width: 25.5 }, { width: 29.5 },
+  ];
+
+  // ---- LEFT SIDE: FM Report ----
+  
+  // Title row
+  mainSheet.mergeCells("A2:H3");
+  const titleCell = mainSheet.getCell("A2");
+  titleCell.value = `${fmName} — ${teamName}`;
+  titleCell.font = { bold: true, size: 14 };
+  titleCell.alignment = { horizontal: "center", vertical: "middle" };
+  titleCell.fill = headerFill(COLORS.mediumGray);
+  titleCell.border = thinBorder();
+
+  // ---- RIGHT SIDE: Team Overview Title ----
+  mainSheet.mergeCells("N2:AE3");
+  const overviewTitle = mainSheet.getCell("N2");
+  overviewTitle.value = `${teamName} Overview — ${monthName} ${report.reportYear}`;
+  overviewTitle.font = { bold: true, size: 14 };
+  overviewTitle.alignment = { horizontal: "center", vertical: "middle" };
+  overviewTitle.fill = headerFill(COLORS.mediumGray);
+  overviewTitle.border = thinBorder();
+
+  // ---- FM Performance Section ----
+  mainSheet.mergeCells("A4:H5");
+  setHeaderCell(mainSheet.getCell("A4"), "FM Performance (self evaluation)");
+
+  mainSheet.mergeCells("I4:L9");
+  mainSheet.getCell("I4").value = "Please evaluate your performance as a Floor Manager — your studio operations, teamwork with colleagues, and if there are any issues etc.";
+  mainSheet.getCell("I4").alignment = { wrapText: true, vertical: "top" };
+  mainSheet.getCell("I4").font = { italic: true, size: 9, color: { argb: "FF888888" } };
+
+  // FM Performance text — dynamic height based on content
+  const fmPerfText = report.fmPerformance || "";
+  const fmPerfRowSpan = Math.max(8, Math.ceil(fmPerfText.length / 60) + 2);
+  const fmPerfEndRow = 5 + fmPerfRowSpan;
+  mainSheet.mergeCells(`A6:H${fmPerfEndRow}`);
+  mainSheet.getCell("A6").value = fmPerfText;
+  mainSheet.getCell("A6").alignment = { wrapText: true, vertical: "top" };
+  mainSheet.getCell("A6").border = thinBorder();
+
+  // ---- Attendance Table (Right Side) ----
+  const attendanceHeaders: Array<{ range: string; cell: string; label: string }> = [
+    { range: "N4:P5", cell: "N4", label: "Name" },
+    { range: "Q4:R5", cell: "Q4", label: "Mistakes" },
+    { range: "S4:T5", cell: "S4", label: "Extra shifts /\nStaying longer" },
+    { range: "U4:V5", cell: "U4", label: "Late to work" },
+    { range: "W4:X5", cell: "W4", label: "Missed days" },
+    { range: "Y4:Z5", cell: "Y4", label: "Sick leaves" },
+    { range: "AA4:AE5", cell: "AA4", label: "Attitude / Concerns / Remarks" },
+  ];
+  for (const h of attendanceHeaders) {
+    mainSheet.mergeCells(h.range);
+    setHeaderCell(mainSheet.getCell(h.cell), h.label);
+  }
+
+  // Attendance data rows — dynamic based on GP count
+  let gpRow = 6;
+  const attendanceStartRow = gpRow;
+  for (const item of attendanceData) {
+    fillAttendanceRow(mainSheet, gpRow, item, attitudeByGp);
+    gpRow += 2;
+  }
+  const attendanceEndRow = gpRow - 1;
+
+  // TOTAL row — dynamic position based on actual data
+  const totalRowStart = gpRow;
+  const totalRowEnd = gpRow + 1;
+  
+  mainSheet.mergeCells(`N${totalRowStart}:P${totalRowEnd}`);
+  const totalCell = mainSheet.getCell(`N${totalRowStart}`);
+  totalCell.value = "TOTAL";
+  totalCell.font = { bold: true, size: 11 };
+  totalCell.fill = headerFill(COLORS.gold);
+  totalCell.alignment = { horizontal: "center", vertical: "middle" };
+  totalCell.border = thinBorder();
+
+  // Dynamic SUM formulas based on actual data range
+  const sumColumns = [
+    { range: `Q${totalRowStart}:R${totalRowEnd}`, formula: `SUM(Q${attendanceStartRow}:R${attendanceEndRow})` },
+    { range: `S${totalRowStart}:T${totalRowEnd}`, formula: `SUM(S${attendanceStartRow}:T${attendanceEndRow})` },
+    { range: `U${totalRowStart}:V${totalRowEnd}`, formula: `SUM(U${attendanceStartRow}:V${attendanceEndRow})` },
+    { range: `W${totalRowStart}:X${totalRowEnd}`, formula: `SUM(W${attendanceStartRow}:W${attendanceEndRow})` },
+    { range: `Y${totalRowStart}:Z${totalRowEnd}`, formula: `SUM(Y${attendanceStartRow}:Y${attendanceEndRow})` },
+  ];
+  for (const { range, formula } of sumColumns) {
+    mainSheet.mergeCells(range);
+    const c = mainSheet.getCell(range.split(":")[0]);
+    c.value = { formula };
+    c.alignment = { horizontal: "center", vertical: "middle" };
+    c.font = { bold: true };
+    c.border = thinBorder();
+    c.fill = headerFill(COLORS.goldLight);
+  }
+
+  // Remarks total
+  mainSheet.mergeCells(`AA${totalRowStart}:AE${totalRowEnd}`);
+  mainSheet.getCell(`AA${totalRowStart}`).border = thinBorder();
+  mainSheet.getCell(`AA${totalRowStart}`).fill = headerFill(COLORS.goldLight);
+
+  // Borders for attendance section
+  for (let row = 4; row <= totalRowEnd; row++) {
+    if (!mainSheet.getCell(`N${row}`).border) mainSheet.getCell(`N${row}`).border = { left: { style: "thin" } };
+    if (!mainSheet.getCell(`AE${row}`).border) mainSheet.getCell(`AE${row}`).border = { right: { style: "thin" } };
+  }
+
+  // ---- Team Management Section (Left Side) ----
+  const teamMgmtStartRow = Math.max(fmPerfEndRow + 2, totalRowEnd + 2);
+  
+  mainSheet.mergeCells(`A${teamMgmtStartRow}:H${teamMgmtStartRow + 1}`);
+  setHeaderCell(mainSheet.getCell(`A${teamMgmtStartRow}`), "Team Management");
+
+  mainSheet.mergeCells(`I${teamMgmtStartRow}:L${teamMgmtStartRow + 4}`);
+  mainSheet.getCell(`I${teamMgmtStartRow}`).value = "Please write about your team — what were your goals for this month, did you achieve your set goals, did you have enough time to finish everything, etc.";
+  mainSheet.getCell(`I${teamMgmtStartRow}`).alignment = { wrapText: true, vertical: "top" };
+  mainSheet.getCell(`I${teamMgmtStartRow}`).font = { italic: true, size: 9, color: { argb: "FF888888" } };
+
+  const goalsRow = teamMgmtStartRow + 2;
+  mainSheet.mergeCells(`A${goalsRow}:D${goalsRow}`);
+  mainSheet.getCell(`A${goalsRow}`).value = "Goals this month:";
+  mainSheet.getCell(`A${goalsRow}`).font = { bold: true };
+  mainSheet.getCell(`A${goalsRow}`).border = thinBorder();
+
+  mainSheet.mergeCells(`E${goalsRow}:H${goalsRow}`);
+  mainSheet.getCell(`E${goalsRow}`).value = "Team Overview:";
+  mainSheet.getCell(`E${goalsRow}`).font = { bold: true };
+  mainSheet.getCell(`E${goalsRow}`).border = thinBorder();
+
+  // Goals text — dynamic height
+  const goalsText = report.goalsThisMonth || "";
+  const overviewText = report.teamOverview || "";
+  const textRowSpan = Math.max(8, Math.ceil(Math.max(goalsText.length, overviewText.length) / 50) + 2);
+  const textEndRow = goalsRow + textRowSpan;
+
+  mainSheet.mergeCells(`A${goalsRow + 1}:D${textEndRow}`);
+  mainSheet.getCell(`A${goalsRow + 1}`).value = goalsText;
+  mainSheet.getCell(`A${goalsRow + 1}`).alignment = { wrapText: true, vertical: "top" };
+  mainSheet.getCell(`A${goalsRow + 1}`).border = thinBorder();
+
+  mainSheet.mergeCells(`E${goalsRow + 1}:H${textEndRow}`);
+  mainSheet.getCell(`E${goalsRow + 1}`).value = overviewText;
+  mainSheet.getCell(`E${goalsRow + 1}`).alignment = { wrapText: true, vertical: "top" };
+  mainSheet.getCell(`E${goalsRow + 1}`).border = thinBorder();
+
+  // ---- Additional Notes Section ----
+  const notesStartRow = textEndRow + 2;
+  
+  mainSheet.mergeCells(`A${notesStartRow}:H${notesStartRow + 1}`);
+  setHeaderCell(mainSheet.getCell(`A${notesStartRow}`), "Additional Notes");
+
+  mainSheet.mergeCells(`I${notesStartRow}:K${notesStartRow + 2}`);
+  mainSheet.getCell(`I${notesStartRow}`).value = "Are there any additional comments from the previous month you would like to add?";
+  mainSheet.getCell(`I${notesStartRow}`).alignment = { wrapText: true, vertical: "top" };
+  mainSheet.getCell(`I${notesStartRow}`).font = { italic: true, size: 9, color: { argb: "FF888888" } };
+
+  const notesText = report.additionalComments || "";
+  const notesRowSpan = Math.max(6, Math.ceil(notesText.length / 60) + 2);
+  const notesEndRow = notesStartRow + 1 + notesRowSpan;
+
+  mainSheet.mergeCells(`A${notesStartRow + 2}:H${notesEndRow}`);
+  mainSheet.getCell(`A${notesStartRow + 2}`).value = notesText;
+  mainSheet.getCell(`A${notesStartRow + 2}`).alignment = { wrapText: true, vertical: "top" };
+  mainSheet.getCell(`A${notesStartRow + 2}`).border = thinBorder();
+
+  // ---- Executive Summary Section (Right Side, below attendance) ----
+  const execSummaryRow = totalRowEnd + 3;
+  buildExecutiveSummary(mainSheet, execSummaryRow, gpEvaluationsData, attendanceData, attitudeByGp, monthName, report.reportYear);
+
+  // ---- Performance Analysis Section (Left Side, below notes) ----
+  const analysisStartRow = notesEndRow + 2;
+  addPerformanceAnalysis(mainSheet, analysisStartRow, gpEvaluationsData);
+
+  // Return the row where charts should be placed
+  return Math.max(analysisStartRow + 20, execSummaryRow + 25);
+}
+
+// ============================
+// Executive Summary (new section)
+// ============================
+
+function buildExecutiveSummary(
+  sheet: ExcelJS.Worksheet,
+  startRow: number,
+  gpEvaluationsData: ChartDataPoint[],
+  attendanceData: AttendanceItem[],
+  attitudeByGp: AttitudeByGp,
+  monthName: string,
+  reportYear: number
+) {
+  const gpAverages = computeGpAverages(gpEvaluationsData);
+  if (gpAverages.length === 0) return;
+
+  const teamAvgTotal = gpAverages.reduce((s, g) => s + g.total, 0) / gpAverages.length;
+  const teamAvgApp = gpAverages.reduce((s, g) => s + g.appearance, 0) / gpAverages.length;
+  const teamAvgGP = gpAverages.reduce((s, g) => s + g.gamePerf, 0) / gpAverages.length;
+  const topPerformer = gpAverages[0];
+  const lowestPerformer = gpAverages[gpAverages.length - 1];
+  const excellentCount = gpAverages.filter(g => g.total >= 20).length;
+  const needsImprovementCount = gpAverages.filter(g => g.total < 16).length;
+
+  // Total attendance issues
+  let totalMistakes = 0, totalLate = 0, totalMissed = 0, totalSick = 0;
+  for (const item of attendanceData) {
+    totalMistakes += item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0;
+    totalLate += item.attendance?.lateToWork ?? 0;
+    totalMissed += item.attendance?.missedDays ?? 0;
+    totalSick += item.attendance?.sickLeaves ?? 0;
+  }
+
+  // Total attitude
+  const totalPositive = Object.values(attitudeByGp).reduce((s, a) => s + a.positive, 0);
+  const totalNegative = Object.values(attitudeByGp).reduce((s, a) => s + a.negative, 0);
+
+  // Header
+  sheet.mergeCells(`N${startRow}:AE${startRow + 1}`);
+  const headerCell = sheet.getCell(`N${startRow}`);
+  headerCell.value = `Executive Summary — ${monthName} ${reportYear}`;
+  headerCell.font = { bold: true, size: 12, color: { argb: COLORS.white } };
+  headerCell.fill = headerFill(COLORS.navyBlue);
+  headerCell.alignment = { horizontal: "center", vertical: "middle" };
+  headerCell.border = thinBorder();
+
+  let row = startRow + 2;
+
+  // Key Metrics
+  sheet.mergeCells(`N${row}:Q${row}`);
+  sheet.getCell(`N${row}`).value = "Key Metrics";
+  sheet.getCell(`N${row}`).font = { bold: true, size: 11 };
+  sheet.getCell(`N${row}`).fill = headerFill(COLORS.blueLight);
+  sheet.getCell(`N${row}`).border = thinBorder();
+  
+  sheet.mergeCells(`R${row}:U${row}`);
+  sheet.getCell(`R${row}`).value = "Attendance Summary";
+  sheet.getCell(`R${row}`).font = { bold: true, size: 11 };
+  sheet.getCell(`R${row}`).fill = headerFill(COLORS.blueLight);
+  sheet.getCell(`R${row}`).border = thinBorder();
+
+  sheet.mergeCells(`V${row}:AE${row}`);
+  sheet.getCell(`V${row}`).value = "Highlights";
+  sheet.getCell(`V${row}`).font = { bold: true, size: 11 };
+  sheet.getCell(`V${row}`).fill = headerFill(COLORS.blueLight);
+  sheet.getCell(`V${row}`).border = thinBorder();
+
+  row++;
+
+  // Key Metrics data
+  const metrics = [
+    ["Team Avg Score:", `${teamAvgTotal.toFixed(1)} / ${MAX_TOTAL_SCORE}`],
+    ["Avg Appearance:", `${teamAvgApp.toFixed(1)} / 12`],
+    ["Avg Game Perf:", `${teamAvgGP.toFixed(1)} / 10`],
+    ["GPs Evaluated:", `${gpAverages.length}`],
+    ["Excellent (≥20):", `${excellentCount}`],
+    ["Needs Improvement (<16):", `${needsImprovementCount}`],
+  ];
+
+  const attendanceMetrics = [
+    ["Total Mistakes:", `${totalMistakes}`],
+    ["Late to Work:", `${totalLate}`],
+    ["Missed Days:", `${totalMissed}`],
+    ["Sick Leaves:", `${totalSick}`],
+    ["Attitude +/-:", `+${totalPositive} / -${totalNegative}`],
+    ["", ""],
+  ];
+
+  const highlights = [
+    [`Top Performer: ${topPerformer.name}`, `${topPerformer.total}/${MAX_TOTAL_SCORE}`],
+    [`Lowest Score: ${lowestPerformer.name}`, `${lowestPerformer.total}/${MAX_TOTAL_SCORE}`],
+    ...(gpAverages.length >= 3 ? [[`2nd Best: ${gpAverages[1].name}`, `${gpAverages[1].total}/${MAX_TOTAL_SCORE}`]] : []),
+    ...(gpAverages.length >= 3 ? [[`3rd Best: ${gpAverages[2].name}`, `${gpAverages[2].total}/${MAX_TOTAL_SCORE}`]] : []),
+  ];
+
+  for (let i = 0; i < Math.max(metrics.length, attendanceMetrics.length, highlights.length); i++) {
+    const currentRow = row + i;
+    
+    // Key metrics column
+    if (i < metrics.length) {
+      sheet.mergeCells(`N${currentRow}:O${currentRow}`);
+      sheet.getCell(`N${currentRow}`).value = metrics[i][0];
+      sheet.getCell(`N${currentRow}`).font = { size: 10 };
+      sheet.getCell(`N${currentRow}`).border = thinBorder();
+      
+      sheet.mergeCells(`P${currentRow}:Q${currentRow}`);
+      sheet.getCell(`P${currentRow}`).value = metrics[i][1];
+      sheet.getCell(`P${currentRow}`).font = { bold: true, size: 10 };
+      sheet.getCell(`P${currentRow}`).alignment = { horizontal: "center" };
+      sheet.getCell(`P${currentRow}`).border = thinBorder();
+    }
+
+    // Attendance column
+    if (i < attendanceMetrics.length && attendanceMetrics[i][0]) {
+      sheet.mergeCells(`R${currentRow}:S${currentRow}`);
+      sheet.getCell(`R${currentRow}`).value = attendanceMetrics[i][0];
+      sheet.getCell(`R${currentRow}`).font = { size: 10 };
+      sheet.getCell(`R${currentRow}`).border = thinBorder();
+      
+      sheet.mergeCells(`T${currentRow}:U${currentRow}`);
+      sheet.getCell(`T${currentRow}`).value = attendanceMetrics[i][1];
+      sheet.getCell(`T${currentRow}`).font = { bold: true, size: 10 };
+      sheet.getCell(`T${currentRow}`).alignment = { horizontal: "center" };
+      sheet.getCell(`T${currentRow}`).border = thinBorder();
+    }
+
+    // Highlights column
+    if (i < highlights.length) {
+      sheet.mergeCells(`V${currentRow}:AC${currentRow}`);
+      sheet.getCell(`V${currentRow}`).value = highlights[i][0];
+      sheet.getCell(`V${currentRow}`).font = { size: 10 };
+      sheet.getCell(`V${currentRow}`).border = thinBorder();
+      
+      sheet.mergeCells(`AD${currentRow}:AE${currentRow}`);
+      sheet.getCell(`AD${currentRow}`).value = highlights[i][1];
+      sheet.getCell(`AD${currentRow}`).font = { bold: true, size: 10, color: { argb: i === 0 ? COLORS.greenDark : i === 1 ? COLORS.redDark : COLORS.blue } };
+      sheet.getCell(`AD${currentRow}`).alignment = { horizontal: "center" };
+      sheet.getCell(`AD${currentRow}`).border = thinBorder();
+    }
+  }
+}
+
+// ============================
+// Attendance Row Helper
+// ============================
+
+function fillAttendanceRow(
+  sheet: ExcelJS.Worksheet,
+  gpRow: number,
+  item: AttendanceItem,
+  attitudeByGp: AttitudeByGp
+) {
+  const mergeAndCenter = (range: string, value: any, isNumeric: boolean = false) => {
+    sheet.mergeCells(range);
+    const cell = sheet.getCell(range.split(":")[0]);
+    cell.value = value;
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.border = thinBorder();
+    
+    // Color-code numeric values
+    if (isNumeric && typeof value === 'number' && value > 0) {
+      cell.font = { bold: true, color: { argb: value >= 3 ? COLORS.redDark : COLORS.goldDark } };
+    }
+  };
+
+  // GP Name
+  sheet.mergeCells(`N${gpRow}:P${gpRow + 1}`);
+  sheet.getCell(`N${gpRow}`).value = item.gamePresenter?.name || "";
+  sheet.getCell(`N${gpRow}`).alignment = { vertical: "middle" };
+  sheet.getCell(`N${gpRow}`).font = { bold: true };
+  sheet.getCell(`N${gpRow}`).border = thinBorder();
+
+  // Attendance data with color coding
+  const mistakes = item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0;
+  mergeAndCenter(`Q${gpRow}:R${gpRow + 1}`, mistakes, true);
+  mergeAndCenter(`S${gpRow}:T${gpRow + 1}`, item.attendance?.extraShifts || 0, false);
+  mergeAndCenter(`U${gpRow}:V${gpRow + 1}`, item.attendance?.lateToWork || 0, true);
+  mergeAndCenter(`W${gpRow}:X${gpRow + 1}`, item.attendance?.missedDays || 0, true);
+  mergeAndCenter(`Y${gpRow}:Z${gpRow + 1}`, item.attendance?.sickLeaves || 0, true);
+
+  // Extra shifts get green color if positive
+  const extraShifts = item.attendance?.extraShifts || 0;
+  if (extraShifts > 0) {
+    sheet.getCell(`S${gpRow}`).font = { bold: true, color: { argb: COLORS.greenDark } };
+  }
+
+  // Attitude / Remarks
+  sheet.mergeCells(`AA${gpRow}:AE${gpRow + 1}`);
+  const gpId = item.gamePresenter?.id;
+  const gpAttitude = gpId ? attitudeByGp[gpId] : null;
+
+  const parts: string[] = [];
+  
+  if (gpAttitude && gpAttitude.entries.length > 0) {
+    parts.push(`Attitude: +${gpAttitude.positive} / -${gpAttitude.negative}`);
+    // Show up to 3 most recent entries
+    const recentEntries = gpAttitude.entries.slice(0, 3);
+    for (const entry of recentEntries) {
+      const prefix = entry.type === 'POSITIVE' ? '+' : '-';
+      const truncatedComment = entry.comment.length > 60 ? entry.comment.substring(0, 57) + '...' : entry.comment;
+      parts.push(`  ${prefix} ${truncatedComment}`);
+    }
+    if (gpAttitude.entries.length > 3) {
+      parts.push(`  ... and ${gpAttitude.entries.length - 3} more`);
+    }
+  } else if (item.monthlyStats?.attitude) {
+    parts.push(`Attitude: ${item.monthlyStats.attitude}/5`);
+  }
+
+  const remarksText = item.attendance?.remarks || item.monthlyStats?.notes || "";
+  if (remarksText) {
+    parts.push(remarksText);
+  }
+
+  const remarksCell = sheet.getCell(`AA${gpRow}`);
+  remarksCell.value = parts.join("\n");
+  remarksCell.alignment = { wrapText: true, vertical: "top" };
+  remarksCell.font = { size: 9 };
+  remarksCell.border = thinBorder();
+}
+
+// ============================
+// Performance Analysis Section
+// ============================
+
+function addPerformanceAnalysis(sheet: ExcelJS.Worksheet, startRow: number, gpEvaluationsData: ChartDataPoint[]) {
+  const gpAverages = computeGpAverages(gpEvaluationsData);
+  if (gpAverages.length === 0) return;
+
+  const teamAvgApp = gpAverages.reduce((s, g) => s + g.appearance, 0) / gpAverages.length;
+  const teamAvgGP = gpAverages.reduce((s, g) => s + g.gamePerf, 0) / gpAverages.length;
+  const totalEvals = gpAverages.reduce((s, g) => s + g.evalCount, 0);
+
+  // Header
+  sheet.mergeCells(`A${startRow}:H${startRow + 1}`);
+  sheet.getCell(`A${startRow}`).value = "Performance Analysis (Auto-generated)";
+  sheet.getCell(`A${startRow}`).font = { bold: true, color: { argb: COLORS.white }, size: 12 };
+  sheet.getCell(`A${startRow}`).fill = headerFill(COLORS.navyBlue);
+  sheet.getCell(`A${startRow}`).alignment = { horizontal: "center", vertical: "middle" };
+  sheet.getCell(`A${startRow}`).border = thinBorder();
+
+  let row = startRow + 2;
+
+  // Team Statistics
+  sheet.mergeCells(`A${row}:D${row}`);
+  sheet.getCell(`A${row}`).value = "Team Statistics";
+  sheet.getCell(`A${row}`).font = { bold: true, size: 11 };
+  sheet.getCell(`A${row}`).fill = headerFill(COLORS.blueLight);
+  sheet.getCell(`A${row}`).border = thinBorder();
+
+  sheet.mergeCells(`E${row}:H${row}`);
+  sheet.getCell(`E${row}`).value = "Top Performers";
+  sheet.getCell(`E${row}`).font = { bold: true, size: 11 };
+  sheet.getCell(`E${row}`).fill = headerFill(COLORS.greenLight);
+  sheet.getCell(`E${row}`).border = thinBorder();
+
+  row++;
+
+  const statsData = [
+    ["Total Evaluations:", totalEvals],
+    ["Avg Appearance:", teamAvgApp.toFixed(1)],
+    ["Avg Game Perf:", teamAvgGP.toFixed(1)],
+    ["Avg Total:", (teamAvgApp + teamAvgGP).toFixed(1)],
+  ];
+
+  for (let i = 0; i < statsData.length; i++) {
+    sheet.getCell(`A${row + i}`).value = statsData[i][0] as string;
+    sheet.getCell(`A${row + i}`).font = { size: 10 };
+    sheet.getCell(`A${row + i}`).border = thinBorder();
+    sheet.getCell(`B${row + i}`).value = statsData[i][1];
+    sheet.getCell(`B${row + i}`).font = { bold: true };
+    sheet.getCell(`B${row + i}`).border = thinBorder();
+  }
+
+  // Top performers
+  const top3 = gpAverages.slice(0, 3);
+  for (let i = 0; i < top3.length; i++) {
+    const medal = i === 0 ? "1st" : i === 1 ? "2nd" : "3rd";
+    sheet.getCell(`E${row + i}`).value = `${medal}. ${top3[i].name}`;
+    sheet.getCell(`E${row + i}`).font = { size: 10 };
+    sheet.getCell(`E${row + i}`).border = thinBorder();
+    sheet.getCell(`H${row + i}`).value = top3[i].total;
+    sheet.getCell(`H${row + i}`).font = { bold: true, color: { argb: COLORS.greenDark } };
+    sheet.getCell(`H${row + i}`).border = thinBorder();
+  }
+
+  // Needs improvement
+  row += Math.max(statsData.length, top3.length) + 1;
+  sheet.mergeCells(`A${row}:D${row}`);
+  sheet.getCell(`A${row}`).value = "Needs Improvement";
+  sheet.getCell(`A${row}`).font = { bold: true, size: 11 };
+  sheet.getCell(`A${row}`).fill = headerFill(COLORS.redLight);
+  sheet.getCell(`A${row}`).border = thinBorder();
+
+  row++;
+  const bottom3 = gpAverages.slice(-3).reverse();
+  for (let i = 0; i < bottom3.length; i++) {
+    sheet.getCell(`A${row + i}`).value = `${i + 1}. ${bottom3[i].name}`;
+    sheet.getCell(`A${row + i}`).font = { size: 10 };
+    sheet.getCell(`A${row + i}`).border = thinBorder();
+    sheet.getCell(`D${row + i}`).value = bottom3[i].total;
+    sheet.getCell(`D${row + i}`).font = { bold: true, color: { argb: COLORS.redDark } };
+    sheet.getCell(`D${row + i}`).border = thinBorder();
+  }
+}
+
+// ============================
+// Attitude Entries Sheet
+// ============================
 
 function buildAttitudeSheet(
   workbook: ExcelJS.Workbook,
@@ -367,12 +1077,26 @@ function buildAttitudeSheet(
   const sheet = workbook.addWorksheet("Attitude Entries");
   sheet.columns = [{ width: 25 }, { width: 18 }, { width: 12 }, { width: 60 }, { width: 8 }];
 
-  sheet.getRow(1).values = ["GP Name", "Date", "Type", "Comment", "Score"];
-  sheet.getRow(1).font = { bold: true };
-  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.gold } };
-  sheet.getRow(1).alignment = { horizontal: "center", vertical: "middle" };
+  // Title
+  sheet.mergeCells("A1:E1");
+  sheet.getCell("A1").value = "Attitude & Behavior Entries";
+  sheet.getCell("A1").font = { bold: true, size: 14, color: { argb: COLORS.white } };
+  sheet.getCell("A1").fill = headerFill(COLORS.navyBlue);
+  sheet.getCell("A1").alignment = { horizontal: "center", vertical: "middle" };
+  sheet.getRow(1).height = 30;
 
-  let row = 2;
+  // Headers
+  const headerValues = ["GP Name", "Date", "Type", "Comment", "Score"];
+  headerValues.forEach((val, i) => {
+    const cell = sheet.getCell(3, i + 1);
+    cell.value = val;
+    cell.font = { bold: true, size: 10, color: { argb: COLORS.white } };
+    cell.fill = headerFill(COLORS.blue);
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.border = thinBorder();
+  });
+
+  let row = 4;
   for (const item of attendanceData) {
     const gpId = item.gamePresenter?.id;
     const gpName = item.gamePresenter?.name || "Unknown";
@@ -380,469 +1104,69 @@ function buildAttitudeSheet(
 
     if (gpAttitude && gpAttitude.entries.length > 0) {
       for (const entry of gpAttitude.entries) {
-        sheet.getRow(row).values = [gpName, entry.date, entry.type, entry.comment, entry.score];
+        sheet.getCell(`A${row}`).value = gpName;
+        sheet.getCell(`A${row}`).font = { bold: true };
+        sheet.getCell(`A${row}`).border = thinBorder();
+        
+        sheet.getCell(`B${row}`).value = entry.date;
+        sheet.getCell(`B${row}`).alignment = { horizontal: "center" };
+        sheet.getCell(`B${row}`).border = thinBorder();
+        
         const typeCell = sheet.getCell(`C${row}`);
+        typeCell.value = entry.type;
+        typeCell.alignment = { horizontal: "center" };
+        typeCell.border = thinBorder();
         if (entry.type === 'POSITIVE') {
-          typeCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.positiveBackground } };
-          typeCell.font = { color: { argb: COLORS.positiveText } };
+          typeCell.fill = headerFill(COLORS.positiveBackground);
+          typeCell.font = { bold: true, color: { argb: COLORS.positiveText } };
         } else {
-          typeCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.negativeBackground } };
-          typeCell.font = { color: { argb: COLORS.negativeText } };
+          typeCell.fill = headerFill(COLORS.negativeBackground);
+          typeCell.font = { bold: true, color: { argb: COLORS.negativeText } };
         }
+        
+        sheet.getCell(`D${row}`).value = entry.comment;
+        sheet.getCell(`D${row}`).alignment = { wrapText: true };
+        sheet.getCell(`D${row}`).border = thinBorder();
+        
         const scoreCell = sheet.getCell(`E${row}`);
-        scoreCell.font = { color: { argb: entry.score > 0 ? COLORS.positiveText : COLORS.negativeText }, bold: true };
+        scoreCell.value = entry.score;
+        scoreCell.alignment = { horizontal: "center" };
+        scoreCell.border = thinBorder();
+        scoreCell.font = { bold: true, color: { argb: entry.score > 0 ? COLORS.positiveText : COLORS.negativeText } };
+        
         row++;
       }
     }
   }
 
+  // Summary row
   row++;
   const totalPositive = Object.values(attitudeByGp).reduce((s, a) => s + a.positive, 0);
   const totalNegative = Object.values(attitudeByGp).reduce((s, a) => s + a.negative, 0);
-  sheet.getRow(row).values = ["TOTAL", "", `+${totalPositive} / -${totalNegative}`, "", ""];
-  sheet.getRow(row).font = { bold: true };
-  sheet.getRow(row).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.gold } };
+  
+  sheet.getCell(`A${row}`).value = "TOTAL";
+  sheet.getCell(`A${row}`).font = { bold: true, size: 11 };
+  sheet.getCell(`A${row}`).fill = headerFill(COLORS.goldLight);
+  sheet.getCell(`A${row}`).border = thickBottomBorder();
+  
+  sheet.getCell(`C${row}`).value = `+${totalPositive} / -${totalNegative}`;
+  sheet.getCell(`C${row}`).font = { bold: true };
+  sheet.getCell(`C${row}`).alignment = { horizontal: "center" };
+  sheet.getCell(`C${row}`).fill = headerFill(COLORS.goldLight);
+  sheet.getCell(`C${row}`).border = thickBottomBorder();
+  
+  sheet.getCell(`E${row}`).value = { formula: `SUM(E4:E${row - 2})` };
+  sheet.getCell(`E${row}`).font = { bold: true };
+  sheet.getCell(`E${row}`).alignment = { horizontal: "center" };
+  sheet.getCell(`E${row}`).fill = headerFill(COLORS.goldLight);
+  sheet.getCell(`E${row}`).border = thickBottomBorder();
 
   return true;
 }
 
 // ============================
-// Main Excel Generation
+// Chart Image Embedding
 // ============================
-
-export async function generateReportWorkbook(data: ReportData): Promise<Buffer> {
-  const { report, teamName, fmName, attendanceData, attitudeByGp, gpEvaluationsData, prevMonthEvaluations } = data;
-  const monthName = MONTH_NAMES[report.reportMonth - 1];
-
-  log.info("Generating Excel workbook", { reportId: report.id, teamName, month: monthName });
-
-  const workbook = new ExcelJS.Workbook();
-
-  // Sheet 1: Data
-  buildDataSheet(workbook, gpEvaluationsData);
-
-  // Sheet 2: Chart
-  buildChartSheet(workbook, gpEvaluationsData, teamName, monthName, report.reportYear);
-
-  // Sheet 3: Monthly Report (the main sheet — complex layout kept in place)
-  const mainSheet = workbook.addWorksheet(`${monthName} ${report.reportYear}`);
-  buildMonthlySheet(mainSheet, data, monthName, fmName, teamName, gpEvaluationsData, attendanceData, attitudeByGp);
-
-  // Embed chart images into the monthly sheet
-  await embedChartImages(workbook, mainSheet, gpEvaluationsData, prevMonthEvaluations, teamName, monthName, report);
-
-  // Sheet 4: Attitude Entries (optional)
-  buildAttitudeSheet(workbook, attendanceData, attitudeByGp);
-
-  const buffer = await workbook.xlsx.writeBuffer();
-  log.info("Workbook generated successfully", { reportId: report.id, sheets: workbook.worksheets.length });
-  return Buffer.from(buffer);
-}
-
-// ============================
-// Monthly Sheet Builder (complex layout)
-// ============================
-
-function buildMonthlySheet(
-  mainSheet: ExcelJS.Worksheet,
-  data: ReportData,
-  monthName: string,
-  fmName: string,
-  teamName: string,
-  gpEvaluationsData: ChartDataPoint[],
-  attendanceData: AttendanceItem[],
-  attitudeByGp: AttitudeByGp
-) {
-  const { report } = data;
-
-  // Column widths
-  mainSheet.columns = [
-    { width: 9 }, { width: 13 }, { width: 13 }, { width: 13 },
-    { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 },
-    { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 },
-    { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 },
-    { width: 13 }, { width: 13 }, { width: 13 }, { width: 12.25 },
-    { width: 9 }, { width: 13 }, { width: 13 }, { width: 13 },
-    { width: 13 }, { width: 13 }, { width: 9 }, { width: 13 },
-    { width: 13 }, { width: 25.5 }, { width: 29.5 },
-  ];
-
-  // Title
-  mainSheet.mergeCells("A2:H3");
-  const titleCell = mainSheet.getCell("A2");
-  titleCell.value = `${fmName} - ${teamName}`;
-  titleCell.font = { bold: true, size: 14 };
-  titleCell.alignment = { horizontal: "center", vertical: "middle" };
-  titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.lightGray } };
-
-  mainSheet.mergeCells("N2:AE3");
-  const overviewTitle = mainSheet.getCell("N2");
-  overviewTitle.value = `${teamName} Overview ${monthName} ${report.reportYear}`;
-  overviewTitle.font = { bold: true, size: 14 };
-  overviewTitle.alignment = { horizontal: "center", vertical: "middle" };
-  overviewTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.lightGray } };
-
-  // FM Performance section
-  mainSheet.mergeCells("A4:H5");
-  setHeaderCell(mainSheet.getCell("A4"), "FM Performance (self evaluation)");
-
-  mainSheet.mergeCells("I4:L9");
-  mainSheet.getCell("I4").value = "Please evaluate your performance as a Floor Manager - your studio operations, teamwork with colleagues, and if there are any issues etc)";
-  mainSheet.getCell("I4").alignment = { wrapText: true, vertical: "top" };
-
-  // Attendance table headers
-  const attendanceHeaders: Array<{ range: string; cell: string; label: string }> = [
-    { range: "N4:P5", cell: "N4", label: "Name " },
-    { range: "Q4:R5", cell: "Q4", label: "Mistakes" },
-    { range: "S4:T5", cell: "S4", label: "Extra shifts/\nStaying longer" },
-    { range: "U4:V5", cell: "U4", label: "Late to work" },
-    { range: "W4:X5", cell: "W4", label: "Missed days" },
-    { range: "Y4:Z5", cell: "Y4", label: "Sick leaves " },
-    { range: "AA4:AE5", cell: "AA4", label: "Attitude/ Concerns/ Remarks" },
-  ];
-  for (const h of attendanceHeaders) {
-    mainSheet.mergeCells(h.range);
-    setHeaderCell(mainSheet.getCell(h.cell), h.label);
-    mainSheet.getCell(h.cell).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-  }
-
-  // FM Performance text
-  mainSheet.mergeCells("A6:H19");
-  mainSheet.getCell("A6").value = report.fmPerformance || "";
-  mainSheet.getCell("A6").alignment = { wrapText: true, vertical: "top" };
-  mainSheet.getCell("A6").border = thinBorder();
-
-  // Attendance data rows
-  let gpRow = 6;
-  for (const item of attendanceData) {
-    if (gpRow > 34) break;
-    fillAttendanceRow(mainSheet, gpRow, item, attitudeByGp);
-    gpRow += 2;
-  }
-
-  // Team Management section
-  mainSheet.mergeCells("A21:H22");
-  setHeaderCell(mainSheet.getCell("A21"), "Team Management");
-
-  mainSheet.mergeCells("I21:L25");
-  mainSheet.getCell("I21").value = "Please write about your team - what were your goals for this month, did you achieve your set goals, did you have enough time to finish everything, etc.)";
-  mainSheet.getCell("I21").alignment = { wrapText: true, vertical: "top" };
-
-  mainSheet.mergeCells("A23:D23");
-  mainSheet.getCell("A23").value = "Goals this month:";
-  mainSheet.getCell("A23").font = { bold: true };
-
-  mainSheet.mergeCells("E23:H23");
-  mainSheet.getCell("E23").value = "Team Overview:";
-  mainSheet.getCell("E23").font = { bold: true };
-
-  mainSheet.mergeCells("A24:D36");
-  mainSheet.getCell("A24").value = report.goalsThisMonth || "";
-  mainSheet.getCell("A24").alignment = { wrapText: true, vertical: "top" };
-  mainSheet.getCell("A24").border = thinBorder();
-
-  mainSheet.mergeCells("E24:H36");
-  mainSheet.getCell("E24").value = report.teamOverview || "";
-  mainSheet.getCell("E24").alignment = { wrapText: true, vertical: "top" };
-  mainSheet.getCell("E24").border = thinBorder();
-
-  // TOTAL row
-  mainSheet.mergeCells("N36:P37");
-  const totalCell = mainSheet.getCell("N36");
-  totalCell.value = "TOTAL";
-  totalCell.font = { bold: true };
-  totalCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.gold } };
-  totalCell.alignment = { horizontal: "center", vertical: "middle" };
-
-  const sumCols = ["Q36:R37", "S36:T37", "U36:V37", "W36:X37", "Y36:Z37"];
-  const sumFormulas = ["SUM(Q4:R35)", "SUM(S4:T35)", "SUM(U4:V35)", "SUM(W4:X35)", "SUM(Y4:Z35)"];
-  sumCols.forEach((range, i) => {
-    mainSheet.mergeCells(range);
-    const c = mainSheet.getCell(range.split(":")[0]);
-    c.value = { formula: sumFormulas[i] };
-    c.alignment = { horizontal: "center", vertical: "middle" };
-    c.border = thinBorder();
-  });
-
-  // Borders for attendance
-  for (let row = 4; row <= 37; row++) {
-    mainSheet.getCell(`N${row}`).border = { left: { style: "thin" } };
-    mainSheet.getCell(`AE${row}`).border = { right: { style: "thin" } };
-  }
-
-  // Additional Notes
-  mainSheet.mergeCells("A38:H39");
-  setHeaderCell(mainSheet.getCell("A38"), "Additional Notes");
-
-  mainSheet.mergeCells("I38:K40");
-  mainSheet.getCell("I38").value = "Are there any additional comments from the previous month you would like to add?";
-  mainSheet.getCell("I38").alignment = { wrapText: true, vertical: "top" };
-
-  mainSheet.mergeCells("N39:P39");
-  mainSheet.getCell("N39").value = "Paste the table here (delete old): (from Data)";
-  mainSheet.getCell("N39").font = { italic: true, color: { argb: COLORS.muted } };
-
-  mainSheet.mergeCells("A40:H53");
-  mainSheet.getCell("A40").value = report.additionalComments || "";
-  mainSheet.getCell("A40").alignment = { wrapText: true, vertical: "top" };
-  mainSheet.getCell("A40").border = thinBorder();
-
-  // Performance Analysis section
-  addPerformanceAnalysis(mainSheet, gpEvaluationsData);
-}
-
-// ============================
-// Helpers
-// ============================
-
-function setHeaderCell(cell: ExcelJS.Cell, value: string) {
-  cell.value = value;
-  cell.font = { bold: true };
-  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.gold } };
-}
-
-function thinBorder(): Partial<ExcelJS.Borders> {
-  return {
-    top: { style: "thin" },
-    left: { style: "thin" },
-    bottom: { style: "thin" },
-    right: { style: "thin" },
-  };
-}
-
-function fillAttendanceRow(
-  sheet: ExcelJS.Worksheet,
-  gpRow: number,
-  item: AttendanceItem,
-  attitudeByGp: AttitudeByGp
-) {
-  const mergeAndCenter = (range: string, value: any) => {
-    sheet.mergeCells(range);
-    const cell = sheet.getCell(range.split(":")[0]);
-    cell.value = value;
-    cell.alignment = { horizontal: "center", vertical: "middle" };
-  };
-
-  sheet.mergeCells(`N${gpRow}:P${gpRow + 1}`);
-  sheet.getCell(`N${gpRow}`).value = item.gamePresenter?.name || "";
-  sheet.getCell(`N${gpRow}`).alignment = { vertical: "middle" };
-
-  mergeAndCenter(`Q${gpRow}:R${gpRow + 1}`, item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0);
-  mergeAndCenter(`S${gpRow}:T${gpRow + 1}`, item.attendance?.extraShifts || 0);
-  mergeAndCenter(`U${gpRow}:V${gpRow + 1}`, item.attendance?.lateToWork || 0);
-  mergeAndCenter(`W${gpRow}:X${gpRow + 1}`, item.attendance?.missedDays || 0);
-  mergeAndCenter(`Y${gpRow}:Z${gpRow + 1}`, item.attendance?.sickLeaves || 0);
-
-  // Attitude remarks
-  sheet.mergeCells(`AA${gpRow}:AE${gpRow + 1}`);
-  const gpId = item.gamePresenter?.id;
-  const gpAttitude = gpId ? attitudeByGp[gpId] : null;
-
-  let attitudeText = "";
-  if (gpAttitude && gpAttitude.entries.length > 0) {
-    attitudeText = `Attitude: +${gpAttitude.positive}/-${gpAttitude.negative}`;
-    const comments = gpAttitude.entries.slice(0, 2).map(e =>
-      `${e.type === 'POSITIVE' ? '+' : '-'} ${e.comment.substring(0, 50)}${e.comment.length > 50 ? '...' : ''}`
-    );
-    if (comments.length > 0) attitudeText += " | " + comments.join("; ");
-  } else if (item.monthlyStats?.attitude) {
-    attitudeText = `Attitude: ${item.monthlyStats.attitude}/5`;
-  }
-
-  const remarksText = item.attendance?.remarks || item.monthlyStats?.notes || "";
-  sheet.getCell(`AA${gpRow}`).value = [attitudeText, remarksText].filter(Boolean).join(" | ");
-  sheet.getCell(`AA${gpRow}`).alignment = { wrapText: true, vertical: "middle" };
-}
-
-function addPerformanceAnalysis(sheet: ExcelJS.Worksheet, gpEvaluationsData: ChartDataPoint[]) {
-  let totalEvaluations = 0;
-  let totalAppearance = 0;
-  let totalGamePerf = 0;
-  const performers: { name: string; score: number }[] = [];
-
-  for (const gp of gpEvaluationsData) {
-    if (gp.evaluations.length > 0) {
-      const avgApp = gp.evaluations.reduce((s, e) => s + (e.appearanceScore || 0), 0) / gp.evaluations.length;
-      const avgGP = gp.evaluations.reduce((s, e) => s + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
-      totalEvaluations += gp.evaluations.length;
-      totalAppearance += avgApp * gp.evaluations.length;
-      totalGamePerf += avgGP * gp.evaluations.length;
-      performers.push({ name: gp.gpName, score: avgApp + avgGP });
-    }
-  }
-
-  performers.sort((a, b) => b.score - a.score);
-  const top3 = performers.slice(0, 3);
-  const bottom3 = performers.slice(-3).reverse();
-  const teamAvgApp = totalEvaluations > 0 ? (totalAppearance / totalEvaluations).toFixed(1) : 'N/A';
-  const teamAvgGP = totalEvaluations > 0 ? (totalGamePerf / totalEvaluations).toFixed(1) : 'N/A';
-
-  // Performance Analysis header
-  sheet.mergeCells("A55:H56");
-  sheet.getCell("A55").value = "Performance Analysis (Auto-generated)";
-  sheet.getCell("A55").font = { bold: true, color: { argb: COLORS.white }, size: 12 };
-  sheet.getCell("A55").fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.blue } };
-  sheet.getCell("A55").alignment = { horizontal: "center", vertical: "middle" };
-
-  sheet.mergeCells("A57:D57");
-  sheet.getCell("A57").value = "Team Statistics";
-  sheet.getCell("A57").font = { bold: true };
-  sheet.getCell("A58").value = "Total Evaluations:";
-  sheet.getCell("B58").value = totalEvaluations;
-  sheet.getCell("A59").value = "Avg Appearance:";
-  sheet.getCell("B59").value = teamAvgApp;
-  sheet.getCell("A60").value = "Avg Game Performance:";
-  sheet.getCell("B60").value = teamAvgGP;
-
-  sheet.mergeCells("E57:H57");
-  sheet.getCell("E57").value = "Top Performers";
-  sheet.getCell("E57").font = { bold: true };
-  sheet.getCell("E57").fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.green } };
-
-  for (let i = 0; i < Math.min(3, top3.length); i++) {
-    sheet.getCell(`E${58 + i}`).value = `${i + 1}. ${top3[i].name}`;
-    sheet.getCell(`H${58 + i}`).value = top3[i].score.toFixed(1);
-  }
-
-  sheet.mergeCells("A62:D62");
-  sheet.getCell("A62").value = "Needs Improvement";
-  sheet.getCell("A62").font = { bold: true };
-  sheet.getCell("A62").fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.red } };
-
-  for (let i = 0; i < Math.min(3, bottom3.length); i++) {
-    sheet.getCell(`A${63 + i}`).value = `${i + 1}. ${bottom3[i].name}`;
-    sheet.getCell(`D${63 + i}`).value = bottom3[i].score.toFixed(1);
-  }
-
-  // Chart data table
-  addChartDataTable(sheet, gpEvaluationsData, teamAvgApp, teamAvgGP);
-}
-
-function addChartDataTable(
-  sheet: ExcelJS.Worksheet,
-  gpEvaluationsData: ChartDataPoint[],
-  teamAvgApp: string,
-  teamAvgGP: string
-) {
-  sheet.mergeCells("A67:H68");
-  sheet.getCell("A67").value = "Monthly Performance Data (for Chart)";
-  sheet.getCell("A67").font = { bold: true, color: { argb: COLORS.white }, size: 12 };
-  sheet.getCell("A67").fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.blue } };
-
-  const headers = [["A69", "GP Name"], ["B69", "Appearance"], ["C69", "Game Perf"], ["D69", "Total"]];
-  headers.forEach(([cell, val]) => {
-    sheet.getCell(cell).value = val;
-    sheet.getCell(cell).font = { bold: true };
-  });
-
-  let chartRow = 70;
-  for (const gp of gpEvaluationsData) {
-    if (gp.evaluations.length > 0 && chartRow <= 85) {
-      const avgApp = gp.evaluations.reduce((s, e) => s + (e.appearanceScore || 0), 0) / gp.evaluations.length;
-      const avgGP = gp.evaluations.reduce((s, e) => s + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
-      const total = avgApp + avgGP;
-
-      sheet.getCell(`A${chartRow}`).value = gp.gpName;
-      sheet.getCell(`B${chartRow}`).value = Number(avgApp.toFixed(1));
-      sheet.getCell(`C${chartRow}`).value = Number(avgGP.toFixed(1));
-      sheet.getCell(`D${chartRow}`).value = Number(total.toFixed(1));
-      sheet.getCell(`D${chartRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: getScoreColor(total) } };
-      chartRow++;
-    }
-  }
-
-  // Team average
-  sheet.getCell(`A${chartRow}`).value = "TEAM AVERAGE";
-  sheet.getCell(`A${chartRow}`).font = { bold: true };
-  sheet.getCell(`B${chartRow}`).value = teamAvgApp;
-  sheet.getCell(`B${chartRow}`).font = { bold: true };
-  sheet.getCell(`C${chartRow}`).value = teamAvgGP;
-  sheet.getCell(`C${chartRow}`).font = { bold: true };
-  if (teamAvgApp === 'N/A' || teamAvgGP === 'N/A') {
-    sheet.getCell(`D${chartRow}`).value = 'N/A';
-  } else {
-    sheet.getCell(`D${chartRow}`).value = (parseFloat(teamAvgApp) + parseFloat(teamAvgGP)).toFixed(1);
-  }
-  sheet.getCell(`D${chartRow}`).font = { bold: true };
-
-  // Visual bars section
-  addVisualBars(sheet, gpEvaluationsData, chartRow);
-}
-
-function addVisualBars(sheet: ExcelJS.Worksheet, gpEvaluationsData: ChartDataPoint[], chartRow: number) {
-  const chartStartRow = chartRow + 3;
-  sheet.mergeCells(`A${chartStartRow}:H${chartStartRow + 1}`);
-  sheet.getCell(`A${chartStartRow}`).value = "GP Performance Chart (Visual Representation)";
-  sheet.getCell(`A${chartStartRow}`).font = { bold: true, color: { argb: COLORS.white }, size: 12 };
-  sheet.getCell(`A${chartStartRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.blue } };
-  sheet.getCell(`A${chartStartRow}`).alignment = { horizontal: "center", vertical: "middle" };
-
-  let visualRow = chartStartRow + 3;
-  sheet.getCell(`A${visualRow}`).value = "GP Name";
-  sheet.getCell(`A${visualRow}`).font = { bold: true };
-  sheet.getCell(`B${visualRow}`).value = "Appearance (max 12)";
-  sheet.getCell(`B${visualRow}`).font = { bold: true };
-  sheet.getCell(`E${visualRow}`).value = "Game Perf (max 10)";
-  sheet.getCell(`E${visualRow}`).font = { bold: true };
-  sheet.getCell(`H${visualRow}`).value = "Total";
-  sheet.getCell(`H${visualRow}`).font = { bold: true };
-  visualRow++;
-
-  for (const gp of gpEvaluationsData) {
-    if (gp.evaluations.length > 0 && visualRow <= chartStartRow + 20) {
-      const avgApp = gp.evaluations.reduce((s, e) => s + (e.appearanceScore || 0), 0) / gp.evaluations.length;
-      const avgGP = gp.evaluations.reduce((s, e) => s + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
-      const total = avgApp + avgGP;
-
-      sheet.getCell(`A${visualRow}`).value = gp.gpName;
-
-      const appBarWidth = Math.round((avgApp / 12) * 3);
-      for (let i = 0; i < 3; i++) {
-        const col = String.fromCharCode(66 + i);
-        if (i < appBarWidth) {
-          sheet.getCell(`${col}${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.lightBlue } };
-        }
-        sheet.getCell(`${col}${visualRow}`).border = thinBorder();
-      }
-      sheet.getCell(`D${visualRow}`).value = avgApp.toFixed(1);
-
-      const gpBarWidth = Math.round((avgGP / 10) * 3);
-      for (let i = 0; i < 3; i++) {
-        const col = String.fromCharCode(69 + i);
-        if (i < gpBarWidth) {
-          sheet.getCell(`${col}${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.lightGreen } };
-        }
-        sheet.getCell(`${col}${visualRow}`).border = thinBorder();
-      }
-      sheet.getCell(`G${visualRow}`).value = avgGP.toFixed(1);
-
-      sheet.getCell(`H${visualRow}`).value = total.toFixed(1);
-      sheet.getCell(`H${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: getScoreColor(total) } };
-      sheet.getCell(`H${visualRow}`).font = { bold: true };
-
-      visualRow++;
-    }
-  }
-
-  // Legend
-  visualRow += 2;
-  sheet.getCell(`A${visualRow}`).value = "Legend:";
-  sheet.getCell(`A${visualRow}`).font = { bold: true };
-  sheet.getCell(`B${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.lightBlue } };
-  sheet.getCell(`C${visualRow}`).value = "Appearance";
-  sheet.getCell(`D${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.lightGreen } };
-  sheet.getCell(`E${visualRow}`).value = "Game Performance";
-
-  visualRow++;
-  sheet.getCell(`A${visualRow}`).value = "Score colors:";
-  sheet.getCell(`A${visualRow}`).font = { bold: true };
-  sheet.getCell(`B${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.green } };
-  sheet.getCell(`C${visualRow}`).value = ">=18 (Excellent)";
-  sheet.getCell(`D${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.yellow } };
-  sheet.getCell(`E${visualRow}`).value = ">=15 (Good)";
-  sheet.getCell(`F${visualRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.red } };
-  sheet.getCell(`G${visualRow}`).value = "<15 (Needs Improvement)";
-}
 
 async function embedChartImages(
   workbook: ExcelJS.Workbook,
@@ -851,38 +1175,37 @@ async function embedChartImages(
   prevMonthEvaluations: ChartDataPoint[],
   teamName: string,
   monthName: string,
-  report: ReportData["report"]
+  report: ReportData["report"],
+  chartStartRow: number
 ) {
-  const chartLabels: string[] = [];
-  const appearanceScores: number[] = [];
-  const gamePerformanceScores: number[] = [];
-  const totalScores: number[] = [];
+  const gpAverages = computeGpAverages(gpEvaluationsData);
+  if (gpAverages.length === 0) return;
 
-  for (const gp of gpEvaluationsData) {
-    if (gp.evaluations.length > 0) {
-      const avgApp = gp.evaluations.reduce((s, e) => s + (e.appearanceScore || 0), 0) / gp.evaluations.length;
-      const avgGP = gp.evaluations.reduce((s, e) => s + (e.gamePerformanceScore || 0), 0) / gp.evaluations.length;
-      chartLabels.push(gp.gpName);
-      appearanceScores.push(Number(avgApp.toFixed(1)));
-      gamePerformanceScores.push(Number(avgGP.toFixed(1)));
-      totalScores.push(Number((avgApp + avgGP).toFixed(1)));
-    }
-  }
+  const chartLabels = gpAverages.map(g => g.name);
+  const appearanceScores = gpAverages.map(g => g.appearance);
+  const gamePerformanceScores = gpAverages.map(g => g.gamePerf);
+  const totalScores = gpAverages.map(g => g.total);
 
-  if (chartLabels.length === 0) return;
-
-  const chartTitle = `${teamName} Performance - ${monthName} ${report.reportYear}`;
+  const chartTitle = `${teamName} Performance — ${monthName} ${report.reportYear}`;
   const chartImageBuffer = await generateChartImage(chartLabels, appearanceScores, gamePerformanceScores, totalScores, chartTitle);
+
+  // Chart placement label
+  mainSheet.mergeCells(`N${chartStartRow}:AE${chartStartRow}`);
+  mainSheet.getCell(`N${chartStartRow}`).value = "Performance Charts";
+  mainSheet.getCell(`N${chartStartRow}`).font = { bold: true, size: 12, color: { argb: COLORS.white } };
+  mainSheet.getCell(`N${chartStartRow}`).fill = headerFill(COLORS.navyBlue);
+  mainSheet.getCell(`N${chartStartRow}`).alignment = { horizontal: "center", vertical: "middle" };
+  mainSheet.getCell(`N${chartStartRow}`).border = thinBorder();
 
   if (chartImageBuffer) {
     const imageId = workbook.addImage({ buffer: chartImageBuffer as any, extension: 'png' });
-    mainSheet.addImage(imageId, { tl: { col: 13, row: 40 }, ext: { width: 700, height: 350 } });
+    mainSheet.addImage(imageId, { tl: { col: 13, row: chartStartRow + 1 }, ext: { width: 700, height: 350 } });
     log.debug("Chart image added to month sheet");
   } else {
-    mainSheet.mergeCells("N42:AA45");
-    mainSheet.getCell("N42").value = "Chart could not be generated. Please check the Data sheet for performance data.";
-    mainSheet.getCell("N42").alignment = { wrapText: true, vertical: "top" };
-    mainSheet.getCell("N42").font = { italic: true, color: { argb: COLORS.mutedLight } };
+    mainSheet.mergeCells(`N${chartStartRow + 2}:AE${chartStartRow + 5}`);
+    mainSheet.getCell(`N${chartStartRow + 2}`).value = "Chart could not be generated. Please check the Chart sheet for performance data.";
+    mainSheet.getCell(`N${chartStartRow + 2}`).alignment = { wrapText: true, vertical: "top" };
+    mainSheet.getCell(`N${chartStartRow + 2}`).font = { italic: true, color: { argb: "FF888888" } };
   }
 
   // Comparison chart
@@ -911,6 +1234,15 @@ async function embedChartImages(
     }
 
     if (comparisonLabels.length > 0) {
+      const comparisonRow = chartStartRow + 22;
+      
+      mainSheet.mergeCells(`N${comparisonRow}:AE${comparisonRow}`);
+      mainSheet.getCell(`N${comparisonRow}`).value = "Month-over-Month Comparison";
+      mainSheet.getCell(`N${comparisonRow}`).font = { bold: true, size: 11, color: { argb: COLORS.white } };
+      mainSheet.getCell(`N${comparisonRow}`).fill = headerFill(COLORS.blue);
+      mainSheet.getCell(`N${comparisonRow}`).alignment = { horizontal: "center", vertical: "middle" };
+      mainSheet.getCell(`N${comparisonRow}`).border = thinBorder();
+
       const prevMonthName = MONTH_NAMES[prevMonth - 1];
       const comparisonChartBuffer = await generateComparisonChart(
         comparisonLabels, currentMonthScores, previousMonthScores,
@@ -920,9 +1252,44 @@ async function embedChartImages(
 
       if (comparisonChartBuffer) {
         const comparisonImageId = workbook.addImage({ buffer: comparisonChartBuffer as any, extension: 'png' });
-        mainSheet.addImage(comparisonImageId, { tl: { col: 13, row: 62 }, ext: { width: 700, height: 350 } });
+        mainSheet.addImage(comparisonImageId, { tl: { col: 13, row: comparisonRow + 1 }, ext: { width: 700, height: 350 } });
         log.debug("Comparison chart added to month sheet");
       }
     }
   }
+}
+
+// ============================
+// Main Excel Generation
+// ============================
+
+export async function generateReportWorkbook(data: ReportData): Promise<Buffer> {
+  const { report, teamName, fmName, attendanceData, attitudeByGp, gpEvaluationsData, prevMonthEvaluations } = data;
+  const monthName = MONTH_NAMES[report.reportMonth - 1];
+
+  log.info("Generating Excel workbook v2.0", { reportId: report.id, teamName, month: monthName, gpCount: attendanceData.length });
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "GP Report Generator";
+  workbook.created = new Date();
+
+  // Sheet 1: Data (Individual GP Scores)
+  buildDataSheet(workbook, gpEvaluationsData);
+
+  // Sheet 2: Chart (Summary Table)
+  buildChartSheet(workbook, gpEvaluationsData, teamName, monthName, report.reportYear);
+
+  // Sheet 3: Monthly Report (Main Sheet — complex layout)
+  const mainSheet = workbook.addWorksheet(`${monthName} ${report.reportYear}`);
+  const chartPlacementRow = buildMonthlySheet(mainSheet, data, monthName, fmName, teamName, gpEvaluationsData, attendanceData, attitudeByGp);
+
+  // Embed chart images into the monthly sheet
+  await embedChartImages(workbook, mainSheet, gpEvaluationsData, prevMonthEvaluations, teamName, monthName, report, chartPlacementRow);
+
+  // Sheet 4: Attitude Entries (optional)
+  buildAttitudeSheet(workbook, attendanceData, attitudeByGp);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  log.info("Workbook v2.0 generated successfully", { reportId: report.id, sheets: workbook.worksheets.length });
+  return Buffer.from(buffer);
 }

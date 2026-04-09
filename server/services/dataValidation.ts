@@ -227,13 +227,13 @@ export function validateDataConsistency(
   const gpNamesFromErrors = new Set(errorReports.map((e) => normalizeGPName(e.gpName)));
   const gpNamesFromAttendance = new Set(attendance.map((a) => normalizeGPName(a.gpName)));
 
-  for (const gpName of gpNamesFromErrors) {
+  for (const gpName of Array.from(gpNamesFromErrors)) {
     if (!gpNamesFromEvals.has(gpName)) {
       warnings.push(`GP "${gpName}" has errors but no evaluations`);
     }
   }
 
-  for (const gpName of gpNamesFromAttendance) {
+  for (const gpName of Array.from(gpNamesFromAttendance)) {
     if (!gpNamesFromEvals.has(gpName)) {
       warnings.push(`GP "${gpName}" has attendance records but no evaluations`);
     }
@@ -248,7 +248,7 @@ export function validateDataConsistency(
     dateDuplicates.get(key)!.push(eval_);
   }
 
-  for (const [key, evals] of dateDuplicates.entries()) {
+  for (const [key, evals] of Array.from(dateDuplicates.entries())) {
     if (evals.length > 1) {
       issues.push(`Duplicate evaluations for "${key}"`);
     }
