@@ -560,7 +560,7 @@ export default function ReportsPage() {
                         ) : generationStep === step ? (
                           <Loader2 className="h-4 w-4 text-[#d4af37] animate-spin shrink-0" />
                         ) : (
-                          <div className="h-4 w-4 rounded-full border border-white/20 shrink-0" />
+                          <div className="h-4 w-4 rounded-full border border-border shrink-0" />
                         )}
                         <span className={generationStep >= step ? 'text-foreground/80' : 'text-muted-foreground/50'}>
                           {label}

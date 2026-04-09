@@ -485,7 +485,7 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6 min-h-screen bg-[#0a0906]">
+    <div className="space-y-6 p-4 md:p-6 min-h-screen">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
         <div className="page-header mb-0">
@@ -493,7 +493,7 @@ export default function UploadPage() {
           <p className="page-subtitle">{getTabDescription()}</p>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl">
+          <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 rounded-xl">
             <Switch
               id="auto-process"
               checked={autoProcess}
@@ -537,12 +537,12 @@ export default function UploadPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as UploadType)}>
-        <TabsList className="bg-white/5 border border-white/10 rounded-xl p-1 w-full sm:w-auto">
-          <TabsTrigger value="evaluations" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white/20 data-[state=active]:shadow-lg">
+        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 w-full sm:w-auto">
+          <TabsTrigger value="evaluations" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-lg">
             <FileCheck className="h-4 w-4" />
             <span>Evaluations</span>
           </TabsTrigger>
-          <TabsTrigger value="attitude" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white/20 data-[state=active]:shadow-lg">
+          <TabsTrigger value="attitude" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-lg">
             <Heart className="h-4 w-4" />
             <span>Attitude</span>
           </TabsTrigger>
@@ -651,11 +651,11 @@ export default function UploadPage() {
                       className="w-full glass-input rounded-xl px-4 py-3 border-0 focus:ring-2 focus:ring-primary/50"
                       value={selectedGpId || ""}
                       onChange={(e) => setSelectedGpId(e.target.value ? Number(e.target.value) : null)}
-                      style={{ color: 'rgba(255, 255, 255, 0.9)', backgroundColor: '#0e0d0a' }}
+                      
                     >
-                      <option value="" style={{ backgroundColor: '#1a1a14', color: '#f0e6c8' }}>Choose a GP...</option>
+                      <option value="">Choose a GP...</option>
                       {gpList?.map((gp) => (
-                        <option key={gp.id} value={gp.id} style={{ backgroundColor: '#1a1a14', color: '#f0e6c8' }}>
+                        <option key={gp.id} value={gp.id}>
                           {gp.name}
                         </option>
                       ))}

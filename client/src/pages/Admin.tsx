@@ -71,7 +71,7 @@ function FMRestrictedView() {
       </div>
 
       <Tabs defaultValue="stats" className="space-y-4">
-        <TabsList className="bg-white/5 border border-white/10 rounded-xl p-1 grid w-full grid-cols-2 h-auto">
+        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-2 h-auto">
           <TabsTrigger value="stats" className="flex items-center justify-center gap-2 py-2">
             <Star className="h-4 w-4 shrink-0" />
             <span>GP Stats</span>
@@ -160,7 +160,7 @@ function FullAdminPanel() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="bg-white/5 border border-white/10 rounded-xl p-1 grid w-full grid-cols-7 h-auto">
+        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-7 h-auto">
           <TabsTrigger value="overview" className="flex items-center justify-center gap-2 py-2">
             <BarChart3 className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Overview</span>
@@ -3378,7 +3378,7 @@ function QuickAttitudeButtons({
       <Button
         size="sm"
         variant="ghost"
-        className={`px-3 h-8 min-w-[50px] font-bold ${attitudeColor} hover:bg-white/10`}
+        className={`px-3 h-8 min-w-[50px] font-bold ${attitudeColor} hover:bg-muted`}
         onClick={handleReset}
         disabled={isUpdating !== null}
         title="Click to reset to 0"
@@ -3464,7 +3464,7 @@ function SystemHealthMonitor() {
               className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
                 autoRefresh
                   ? 'bg-green-500/10 border-green-500/20 text-green-400'
-                  : 'bg-white/5 border-white/10 text-muted-foreground'
+                  : 'bg-muted/50 border-border text-muted-foreground'
               }`}
             >
               {autoRefresh ? 'Auto' : 'Manual'}
@@ -3557,7 +3557,7 @@ function SystemHealthMonitor() {
                   </span>
                 </div>
                 <div className="space-y-1.5">
-                  <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden">
+                  <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
                         memoryPercent < 70 ? 'bg-green-400' : memoryPercent < 90 ? 'bg-amber-400' : 'bg-red-400'
