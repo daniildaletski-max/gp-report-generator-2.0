@@ -205,7 +205,7 @@ function DashboardLayoutContent({
                   <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/15">
                     <span className="text-white text-xs font-bold">GP</span>
                   </div>
-                  <span className="font-semibold tracking-tight truncate text-foreground/90">
+                  <span className="font-semibold tracking-tight truncate text-foreground">
                     Reports
                   </span>
                 </div>
@@ -255,7 +255,7 @@ function DashboardLayoutContent({
               </Avatar>
               {!isCollapsed && (
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate leading-none text-foreground/90">
+                  <p className="text-sm font-medium truncate leading-none text-foreground">
                     {user?.name || "-"}
                   </p>
                   <p className="text-xs text-muted-foreground truncate mt-1.5">

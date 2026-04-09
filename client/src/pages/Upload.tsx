@@ -1085,7 +1085,7 @@ export default function UploadPage() {
                     <p className="empty-state-description">
                       Upload and process screenshots to see extracted data
                     </p>
-                    <p className="text-xs mt-4 text-muted-foreground/50">
+                    <p className="text-xs mt-4 text-muted-foreground">
                       Tip: Press Ctrl+V to paste from clipboard
                     </p>
                   </div>

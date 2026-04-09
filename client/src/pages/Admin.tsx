@@ -3527,7 +3527,7 @@ function SystemHealthMonitor() {
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Environment</span>
-                    <span className="text-foreground/80 font-medium">{health?.environment}</span>
+                    <span className="text-foreground font-medium">{health?.environment}</span>
                   </div>
                 </div>
               </div>
@@ -3601,7 +3601,7 @@ function SystemHealthMonitor() {
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Status</span>
-                    <span className="text-foreground/80 font-medium capitalize">{health?.database?.status || '—'}</span>
+                    <span className="text-foreground font-medium capitalize">{health?.database?.status || '—'}</span>
                   </div>
                 </div>
               </div>

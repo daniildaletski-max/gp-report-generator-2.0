@@ -11,7 +11,7 @@ function Card({ className, variant = "default", ...props }: CardProps) {
     <div
       data-slot="card"
       className={cn(
-        "text-card-foreground flex flex-col gap-6 rounded-2xl border py-6 shadow-sm backdrop-blur-xl transition-all duration-300",
+        "text-card-foreground flex flex-col gap-6 rounded-2xl border py-6 shadow-sm transition-all duration-300",
         variant === "glass"
           ? "bg-card/60 border-border/50 hover:border-border hover:shadow-lg"
           : "bg-card border-border hover:border-border/80 hover:shadow-lg",
@@ -39,7 +39,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      className={cn("leading-none font-semibold text-white/90", className)}
+      className={cn("leading-none font-semibold text-foreground", className)}
       {...props}
     />
   );
@@ -49,7 +49,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-description"
-      className={cn("text-white/50 text-sm", className)}
+      className={cn("text-muted-foreground text-sm", className)}
       {...props}
     />
   );
@@ -82,7 +82,7 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-footer"
-      className={cn("flex items-center px-6 [.border-t]:pt-6 border-t border-white/[0.06]", className)}
+      className={cn("flex items-center px-6 [.border-t]:pt-6 border-t border-border", className)}
       {...props}
     />
   );

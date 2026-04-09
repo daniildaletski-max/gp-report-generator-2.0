@@ -316,7 +316,7 @@ export default function AttendancePage() {
         <div className="p-4 border-b border-primary/10 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-primary" />
-            <h3 className="font-semibold text-foreground/90">
+            <h3 className="font-semibold text-foreground">
               {selectedTeam?.teamName || "Team"} — {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
             </h3>
             {rows.length > 0 && (
@@ -501,7 +501,7 @@ function AttendanceTableRow({
                 {row.gpName.charAt(0)}
               </span>
             </div>
-            <span className="font-medium text-sm text-foreground/90 truncate max-w-[120px]">
+            <span className="font-medium text-sm text-foreground truncate max-w-[120px]">
               {row.gpName}
             </span>
             {row.isDirty && (
@@ -625,7 +625,7 @@ function NumberInput({
         className={`w-6 h-7 rounded-l-md flex items-center justify-center ${c.bg} ${c.border} border ${c.hover} transition-colors`}
         disabled={value === 0}
       >
-        <Minus className={`h-3 w-3 ${value === 0 ? 'text-muted-foreground/30' : c.text}`} />
+        <Minus className={`h-3 w-3 ${value === 0 ? 'text-muted-foreground' : c.text}`} />
       </button>
       <input
         type="number"
@@ -744,7 +744,7 @@ function AttendanceTrendCharts({ teamId }: { teamId: number }) {
       <div className="glass-card p-6">
         <div className="flex items-center gap-2 mb-4">
           <LineChartIcon className="h-4 w-4 text-primary" />
-          <h3 className="font-semibold text-foreground/90">Attendance Trends</h3>
+          <h3 className="font-semibold text-foreground">Attendance Trends</h3>
         </div>
         <div className="space-y-3">
           <Skeleton className="h-[250px] w-full rounded-lg" />
@@ -767,7 +767,7 @@ function AttendanceTrendCharts({ teamId }: { teamId: number }) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <LineChartIcon className="h-4 w-4 text-primary" />
-          <h3 className="font-semibold text-foreground/90">Attendance Trends — Last 6 Months</h3>
+          <h3 className="font-semibold text-foreground">Attendance Trends — Last 6 Months</h3>
         </div>
         <Button
           variant="ghost"

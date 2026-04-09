@@ -42,14 +42,14 @@ export default function Home() {
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/15 transition-transform duration-300 hover:scale-110">
               <Zap className="h-4 w-4 text-white" />
             </div>
-            <span className="font-semibold text-foreground/90 tracking-tight">GP Report</span>
+            <span className="font-semibold text-foreground tracking-tight">GP Report</span>
           </div>
           
           <nav className="flex items-center gap-2">
             {isAuthenticated ? (
               <>
                 <Link href="/dashboard">
-                  <Button variant="ghost" size="sm" className="text-foreground/50 hover:text-primary hover:bg-primary/8 rounded-xl transition-all duration-300">
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary hover:bg-primary/8 rounded-xl transition-all duration-300">
                     Dashboard
                   </Button>
                 </Link>
@@ -62,7 +62,7 @@ export default function Home() {
                   variant="ghost"
                   size="icon-sm"
                   onClick={async () => { await logout(); window.location.href = "/"; }}
-                  className="text-foreground/30 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all duration-300 ml-1"
+                  className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all duration-300 ml-1"
                   title="Sign out"
                 >
                   <LogOut className="h-4 w-4" />
@@ -144,7 +144,7 @@ export default function Home() {
                     <stat.icon className="w-4 h-4 text-primary/50 group-hover:text-primary transition-colors" />
                   </div>
                   <div className="text-3xl sm:text-4xl font-bold text-gradient-violet mb-2">{stat.value}</div>
-                  <div className="text-sm text-muted-foreground group-hover:text-foreground/70 transition-colors">{stat.label}</div>
+                  <div className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">{stat.label}</div>
                 </div>
               ))}
             </div>
@@ -246,7 +246,7 @@ export default function Home() {
               </div>
               <span className="text-sm text-muted-foreground">GP Report Generator</span>
             </div>
-            <div className="text-xs text-muted-foreground/70">
+            <div className="text-xs text-muted-foreground">
               &copy; 2026 All rights reserved
             </div>
           </div>

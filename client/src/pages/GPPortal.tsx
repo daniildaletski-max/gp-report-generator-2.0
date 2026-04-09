@@ -16,72 +16,58 @@ import { useState, useEffect, useMemo } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { MAX_TOTAL_SCORE, MAX_APPEARANCE_SCORE, MAX_GAME_PERFORMANCE_SCORE, SCORE_CONFIG, MONTH_NAMES } from "../../../shared/const";
 
-// Animated background component with ocean glass morphism theme
-function AnimatedBackground() {
-  return (
-    <div className="fixed inset-0 overflow-hidden pointer-events-none">
-      <div className="absolute top-0 -left-40 w-80 h-80 bg-[#d4af37]/15 rounded-full blur-[100px] animate-pulse" />
-      <div className="absolute top-1/3 -right-40 w-96 h-96 bg-[#8b0000]/12 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
-      <div className="absolute bottom-0 left-1/3 w-72 h-72 bg-[#b8860b]/12 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
-      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-[#d4af37]/8 rounded-full blur-[80px] animate-pulse" style={{ animationDelay: '0.5s' }} />
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(212,175,55,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(212,175,55,0.02)_1px,transparent_1px)] bg-[size:50px_50px]" />
-    </div>
-  );
-}
-
 // Score card component
-function ScoreCard({ score, maxScore, label, icon: Icon, gradient, tooltip }: { 
-  score: number; maxScore: number; label: string; icon: typeof Star; gradient: string; tooltip?: string;
+function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgColor, tooltip }: { 
+  score: number; maxScore: number; label: string; icon: typeof Star; accentColor: string; bgColor: string; tooltip?: string;
 }) {
   const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
   const [showTooltip, setShowTooltip] = useState(false);
   
   const getStatus = () => {
-    if (percentage >= 90) return { text: 'Excellent', color: 'text-emerald-400', badge: 'bg-emerald-500/20 border-emerald-500/30' };
-    if (percentage >= 80) return { text: 'Great', color: 'text-green-400', badge: 'bg-green-500/20 border-green-500/30' };
-    if (percentage >= 70) return { text: 'Good', color: 'text-[#d4af37]', badge: 'bg-[#d4af37]/20 border-[#d4af37]/30' };
-    return { text: 'Needs Work', color: 'text-[#8b0000]', badge: 'bg-[#8b0000]/20 border-[#8b0000]/30' };
+    if (percentage >= 90) return { text: 'Excellent', color: 'text-emerald-600', badge: 'bg-emerald-50 border-emerald-200 text-emerald-700' };
+    if (percentage >= 80) return { text: 'Great', color: 'text-green-600', badge: 'bg-green-50 border-green-200 text-green-700' };
+    if (percentage >= 70) return { text: 'Good', color: 'text-amber-600', badge: 'bg-amber-50 border-amber-200 text-amber-700' };
+    return { text: 'Needs Work', color: 'text-red-600', badge: 'bg-red-50 border-red-200 text-red-700' };
   };
   const status = getStatus();
   
   return (
-    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${gradient} backdrop-blur-2xl p-5 sm:p-6 border border-white/[0.12] shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.1)] hover:shadow-[0_12px_40px_rgba(139,92,246,0.2),inset_0_1px_0_rgba(255,255,255,0.15)] hover:border-white/20 transition-all duration-400 group hover:-translate-y-1`}>
-      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:bg-white/10 transition-all" />
+    <div className={`relative overflow-hidden rounded-2xl ${bgColor} p-5 sm:p-6 border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 group hover:-translate-y-0.5`}>
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-4">
-          <div className="p-2.5 bg-white/10 backdrop-blur-sm rounded-xl border border-white/10">
-            <Icon className="h-5 w-5 text-white" />
+          <div className={`p-2.5 rounded-xl border ${accentColor}`}>
+            <Icon className="h-5 w-5" />
           </div>
           <div className="flex items-center gap-2">
             {tooltip && (
               <div className="relative">
                 <button 
                   onClick={() => setShowTooltip(!showTooltip)}
-                  className="p-1 rounded-full hover:bg-white/10 transition-colors"
+                  className="p-1 rounded-full hover:bg-slate-100 transition-colors"
                 >
-                  <Info className="h-3.5 w-3.5 text-white/40 hover:text-white/70" />
+                  <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600" />
                 </button>
                 {showTooltip && (
-                  <div className="absolute right-0 top-7 z-50 w-48 p-3 bg-[rgba(14,13,10,0.95)] border border-[#d4af37]/30 rounded-xl text-xs text-white/80 shadow-xl backdrop-blur-xl">
+                  <div className="absolute right-0 top-7 z-50 w-48 p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 shadow-lg">
                     {tooltip}
-                    <div className="absolute -top-1 right-3 w-2 h-2 bg-[rgba(14,13,10,0.95)] border-l border-t border-[#d4af37]/30 rotate-45" />
+                    <div className="absolute -top-1 right-3 w-2 h-2 bg-white border-l border-t border-slate-200 rotate-45" />
                   </div>
                 )}
               </div>
             )}
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${status.badge} ${status.color}`}>{status.text}</span>
+            <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${status.badge}`}>{status.text}</span>
           </div>
         </div>
         <div className="mb-3">
           <div className="flex items-baseline gap-1">
-            <span className="text-3xl sm:text-4xl font-bold text-white">{score.toFixed(1)}</span>
-            <span className="text-lg text-white/50">/{maxScore}</span>
+            <span className="text-3xl sm:text-4xl font-bold text-slate-900">{score.toFixed(1)}</span>
+            <span className="text-lg text-slate-400">/{maxScore}</span>
           </div>
-          <p className="text-sm text-white/70 mt-1">{label}</p>
+          <p className="text-sm text-slate-500 mt-1">{label}</p>
         </div>
-        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
           <div 
-            className="h-full bg-gradient-to-r from-white/70 to-white/90 rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(255,255,255,0.3)]"
+            className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-1000 ease-out"
             style={{ width: `${percentage}%` }}
           />
         </div>
@@ -95,22 +81,22 @@ function AchievementBadge({ icon: Icon, title, description, unlocked, color }: {
   icon: typeof Star; title: string; description: string; unlocked: boolean; color: string;
 }) {
   return (
-    <div className={`relative p-4 rounded-xl border backdrop-blur-sm transition-all duration-300 group ${
+    <div className={`relative p-4 rounded-xl border transition-all duration-300 group ${
       unlocked 
-        ? `bg-gradient-to-br ${color} border-white/20 shadow-[0_4px_20px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_20px_rgba(139,92,246,0.2)] hover:scale-[1.02]` 
-        : 'bg-[rgba(18,18,30,0.5)] border-white/5 opacity-60 grayscale'
+        ? `${color} shadow-sm hover:shadow-md hover:scale-[1.02]` 
+        : 'bg-slate-50 border-slate-200 opacity-60 grayscale'
     }`}>
       <div className="flex items-center gap-3">
-        <div className={`p-2.5 rounded-xl transition-all ${unlocked ? 'bg-white/15 backdrop-blur-sm border border-white/10' : 'bg-white/5'}`}>
-          <Icon className={`h-5 w-5 ${unlocked ? 'text-white' : 'text-white/40'}`} />
+        <div className={`p-2.5 rounded-xl transition-all ${unlocked ? 'bg-white/80 border border-slate-200' : 'bg-slate-100'}`}>
+          <Icon className={`h-5 w-5 ${unlocked ? 'text-slate-700' : 'text-slate-400'}`} />
         </div>
         <div>
-          <p className={`font-semibold text-sm ${unlocked ? 'text-white' : 'text-white/40'}`}>{title}</p>
-          <p className={`text-xs ${unlocked ? 'text-white/70' : 'text-white/30'}`}>{description}</p>
+          <p className={`font-semibold text-sm ${unlocked ? 'text-slate-800' : 'text-slate-400'}`}>{title}</p>
+          <p className={`text-xs ${unlocked ? 'text-slate-500' : 'text-slate-400'}`}>{description}</p>
         </div>
       </div>
       {unlocked && (
-        <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/30">
+        <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-sm">
           <span className="text-[10px] text-white font-bold">✓</span>
         </div>
       )}
@@ -123,24 +109,23 @@ function StatCard({ icon: Icon, value, label, color, trend }: {
   icon: typeof Eye; value: string | number; label: string; color: string; trend?: number;
 }) {
   return (
-    <div className={`relative bg-gradient-to-br ${color} backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden group hover:scale-[1.02] hover:shadow-[0_8px_32px_rgba(212,175,55,0.15)] transition-all duration-300`}>
+    <div className={`relative ${color} rounded-2xl border border-slate-200 overflow-hidden group hover:shadow-md transition-all duration-300`}>
       <div className="p-4 sm:p-5 relative">
-        <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/15 transition-all" />
         <div className="flex items-center gap-3 sm:gap-4 relative">
-          <div className="bg-white/15 backdrop-blur-sm p-2.5 sm:p-3 rounded-xl shrink-0 shadow-lg border border-white/10">
-            <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+          <div className="bg-white/80 p-2.5 sm:p-3 rounded-xl shrink-0 shadow-sm border border-slate-200">
+            <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-slate-700" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <p className="text-2xl sm:text-3xl font-bold text-white">{value}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-slate-900">{value}</p>
               {trend !== undefined && trend !== 0 && (
-                <div className={`flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full ${trend > 0 ? 'text-green-300 bg-green-500/20' : 'text-red-300 bg-red-500/20'}`}>
+                <div className={`flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full ${trend > 0 ? 'text-red-600 bg-red-50' : 'text-green-600 bg-green-50'}`}>
                   {trend > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                   <span>{trend > 0 ? '+' : ''}{trend.toFixed(1)}</span>
                 </div>
               )}
             </div>
-            <p className="text-xs sm:text-sm text-white/70 truncate">{label}</p>
+            <p className="text-xs sm:text-sm text-slate-500 truncate">{label}</p>
           </div>
         </div>
       </div>
@@ -154,20 +139,20 @@ function LabeledComment({ icon: Icon, label, comment, score, maxScore }: {
 }) {
   if (!comment) return null;
   return (
-    <div className="p-3 bg-white/5 rounded-lg border border-white/5">
+    <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-2">
-          <Icon className="h-3.5 w-3.5 text-[#d4af37]" />
-          <span className="text-xs font-medium text-white/70">{label}</span>
+          <Icon className="h-3.5 w-3.5 text-amber-600" />
+          <span className="text-xs font-medium text-slate-500">{label}</span>
         </div>
         {score !== null && (
           <span className={`text-xs font-bold ${
-            (score / maxScore) >= 0.9 ? 'text-emerald-400' :
-            (score / maxScore) >= 0.7 ? 'text-[#d4af37]' : 'text-red-400'
+            (score / maxScore) >= 0.9 ? 'text-emerald-600' :
+            (score / maxScore) >= 0.7 ? 'text-amber-600' : 'text-red-600'
           }`}>{score}/{maxScore}</span>
         )}
       </div>
-      <p className="text-sm text-white/80 leading-relaxed">{comment}</p>
+      <p className="text-sm text-slate-700 leading-relaxed">{comment}</p>
     </div>
   );
 }
@@ -188,7 +173,6 @@ function MonthSelector({ selectedMonth, selectedYear, onChange }: {
     const now = new Date();
     const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1;
     const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear;
-    // Don't go beyond current month
     if (nextYear > now.getFullYear() || (nextYear === now.getFullYear() && nextMonth > now.getMonth() + 1)) return;
     onChange(nextMonth, nextYear);
   };
@@ -200,25 +184,25 @@ function MonthSelector({ selectedMonth, selectedYear, onChange }: {
     <div className="flex items-center gap-2">
       <button
         onClick={handlePrev}
-        className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+        className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm"
       >
-        <ChevronLeft className="h-4 w-4 text-white/70" />
+        <ChevronLeft className="h-4 w-4 text-slate-600" />
       </button>
-      <div className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 min-w-[160px] text-center">
-        <span className="text-sm font-medium text-white">
+      <div className="px-4 py-2 rounded-xl bg-white border border-slate-200 min-w-[160px] text-center shadow-sm">
+        <span className="text-sm font-medium text-slate-800">
           {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
         </span>
       </div>
       <button
         onClick={handleNext}
         disabled={isCurrentMonth}
-        className={`p-2 rounded-lg border transition-colors ${
+        className={`p-2 rounded-lg border transition-colors shadow-sm ${
           isCurrentMonth 
-            ? 'bg-white/[0.02] border-white/5 cursor-not-allowed' 
-            : 'bg-white/5 border-white/10 hover:bg-white/10'
+            ? 'bg-slate-50 border-slate-100 cursor-not-allowed' 
+            : 'bg-white border-slate-200 hover:bg-slate-50'
         }`}
       >
-        <ChevronRight className={`h-4 w-4 ${isCurrentMonth ? 'text-white/20' : 'text-white/70'}`} />
+        <ChevronRight className={`h-4 w-4 ${isCurrentMonth ? 'text-slate-300' : 'text-slate-600'}`} />
       </button>
     </div>
   );
@@ -231,7 +215,6 @@ export default function GPPortal() {
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [lastRefresh, setLastRefresh] = useState(new Date());
   
-  // Month selector for error/attitude details
   const now = new Date();
   const [detailMonth, setDetailMonth] = useState(now.getMonth() + 1);
   const [detailYear, setDetailYear] = useState(now.getFullYear());
@@ -241,7 +224,6 @@ export default function GPPortal() {
     { enabled: !!token, refetchInterval: 30000, refetchOnWindowFocus: true }
   );
 
-  // Fetch month-specific error/attitude details
   const { data: monthDetails, isLoading: monthDetailsLoading } = trpc.gpAccess.getMonthDetails.useQuery(
     { token: token || "", month: detailMonth, year: detailYear },
     { enabled: !!token && !!data }
@@ -259,7 +241,6 @@ export default function GPPortal() {
     });
   };
 
-  // Calculate achievements
   const achievements = useMemo(() => {
     if (!data) return [];
     const totalEvals = data.evaluations.length;
@@ -271,25 +252,24 @@ export default function GPPortal() {
     const attitude = data.monthlyStats?.current?.attitude ?? 0;
     
     return [
-      { icon: Star, title: 'First Steps', description: 'Complete your first evaluation', unlocked: totalEvals >= 1, color: 'from-[#d4af37]/30 to-[#b8860b]/30' },
-      { icon: Flame, title: 'On Fire', description: 'Complete 5 evaluations', unlocked: totalEvals >= 5, color: 'from-[#8b0000]/30 to-red-500/30' },
-      { icon: Crown, title: 'Excellence', description: 'Average score above 20', unlocked: avgScore >= 20, color: 'from-yellow-500/30 to-[#d4af37]/30' },
-      { icon: Gem, title: 'Perfect Score', description: `Get a perfect ${MAX_TOTAL_SCORE}/${MAX_TOTAL_SCORE}`, unlocked: perfectScores > 0, color: 'from-[#d4af37]/30 to-[#8b0000]/30' },
-      { icon: Shield, title: 'Flawless', description: 'Zero mistakes this month', unlocked: mistakes === 0, color: 'from-green-500/30 to-emerald-500/30' },
-      { icon: Heart, title: 'Team Player', description: 'Positive attitude score', unlocked: attitude > 0, color: 'from-[#8b0000]/30 to-rose-500/30' },
+      { icon: Star, title: 'First Steps', description: 'Complete your first evaluation', unlocked: totalEvals >= 1, color: 'bg-amber-50 border-amber-200' },
+      { icon: Flame, title: 'On Fire', description: 'Complete 5 evaluations', unlocked: totalEvals >= 5, color: 'bg-orange-50 border-orange-200' },
+      { icon: Crown, title: 'Excellence', description: 'Average score above 20', unlocked: avgScore >= 20, color: 'bg-yellow-50 border-yellow-200' },
+      { icon: Gem, title: 'Perfect Score', description: `Get a perfect ${MAX_TOTAL_SCORE}/${MAX_TOTAL_SCORE}`, unlocked: perfectScores > 0, color: 'bg-purple-50 border-purple-200' },
+      { icon: Shield, title: 'Flawless', description: 'Zero mistakes this month', unlocked: mistakes === 0, color: 'bg-green-50 border-green-200' },
+      { icon: Heart, title: 'Team Player', description: 'Positive attitude score', unlocked: attitude > 0, color: 'bg-pink-50 border-pink-200' },
     ];
   }, [data]);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0e0d0a]">
-        <AnimatedBackground />
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center relative z-10">
           <div className="relative">
-            <div className="w-16 h-16 border-2 border-[#d4af37]/20 rounded-full animate-spin border-t-[#d4af37]" />
-            <Star className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-6 w-6 text-[#d4af37] animate-pulse" />
+            <div className="w-16 h-16 border-2 border-amber-200 rounded-full animate-spin border-t-amber-500" />
+            <Star className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-6 w-6 text-amber-500 animate-pulse" />
           </div>
-          <p className="mt-4 text-white/60 text-sm">Loading your performance data...</p>
+          <p className="mt-4 text-slate-500 text-sm">Loading your performance data...</p>
         </div>
       </div>
     );
@@ -297,16 +277,15 @@ export default function GPPortal() {
 
   if (error || !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0e0d0a]">
-        <AnimatedBackground />
-        <Card className="max-w-md w-full mx-4 bg-white/5 backdrop-blur-xl border-white/10 relative z-10">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Card className="max-w-md w-full mx-4 bg-white border-slate-200 shadow-sm relative z-10">
           <CardContent className="pt-8 text-center">
-            <div className="mx-auto mb-4 p-4 bg-red-500/20 rounded-full w-fit">
-              <AlertCircle className="h-10 w-10 text-red-400" />
+            <div className="mx-auto mb-4 p-4 bg-red-50 rounded-full w-fit">
+              <AlertCircle className="h-10 w-10 text-red-500" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Access Error</h2>
-            <p className="text-white/60 mb-6">{error?.message || 'Unable to load your performance data. The link may be invalid or expired.'}</p>
-            <Button onClick={() => refetch()} className="bg-[#d4af37] hover:bg-[#b8860b] text-black">
+            <h2 className="text-xl font-bold text-slate-900 mb-2">Access Error</h2>
+            <p className="text-slate-500 mb-6">{error?.message || 'Unable to load your performance data. The link may be invalid or expired.'}</p>
+            <Button onClick={() => refetch()} className="bg-amber-500 hover:bg-amber-600 text-white">
               <RefreshCw className="h-4 w-4 mr-2" /> Try Again
             </Button>
           </CardContent>
@@ -329,30 +308,28 @@ export default function GPPortal() {
     new Date(b.evaluationDate || 0).getTime() - new Date(a.evaluationDate || 0).getTime()
   );
 
-  // Error/attitude data from the month selector
   const errorDetails = monthDetails?.errorDetails || [];
   const attitudeDetails = monthDetails?.attitudeDetails || [];
 
   return (
-    <div className="min-h-screen bg-[#0e0d0a] text-white relative">
-      <AnimatedBackground />
+    <div className="min-h-screen bg-slate-50 text-slate-900 relative">
       
       {/* Header */}
-      <header className="relative z-10 border-b border-white/10 bg-[rgba(14,13,10,0.8)] backdrop-blur-xl sticky top-0">
+      <header className="relative z-10 border-b border-slate-200 bg-white/90 backdrop-blur-sm sticky top-0">
         <div className="container py-4 sm:py-5 flex items-center justify-between">
           <div className="flex items-center gap-3 sm:gap-4">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-[#d4af37] to-[#8b0000] flex items-center justify-center shadow-lg shadow-[#d4af37]/20">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-sm">
               <Star className="h-6 w-6 sm:h-7 sm:w-7 text-white" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-[#d4af37] via-[#f0d060] to-[#d4af37] bg-clip-text text-transparent">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
                 {data.gpName}
               </h1>
-              <p className="text-xs sm:text-sm text-white/50">Performance Dashboard</p>
+              <p className="text-xs sm:text-sm text-slate-500">Performance Dashboard</p>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <span className="text-xs text-white/30 hidden sm:block">
+            <span className="text-xs text-slate-400 hidden sm:block">
               Updated {format(lastRefresh, 'HH:mm')}
             </span>
             <Button
@@ -360,7 +337,7 @@ export default function GPPortal() {
               size="sm"
               onClick={() => refetch()}
               disabled={isFetching}
-              className="bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white"
+              className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800"
             >
               <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
             </Button>
@@ -378,7 +355,8 @@ export default function GPPortal() {
               maxScore={MAX_TOTAL_SCORE} 
               label="Overall Score" 
               icon={Star}
-              gradient="from-[#d4af37]/25 via-[#b8860b]/20 to-[#8b0000]/25"
+              bgColor="bg-white"
+              accentColor="bg-amber-50 border-amber-200 text-amber-600"
               tooltip={`Total of Appearance (${MAX_APPEARANCE_SCORE}) + Game Performance (${MAX_GAME_PERFORMANCE_SCORE}) = ${MAX_TOTAL_SCORE} max`}
             />
             <ScoreCard 
@@ -386,7 +364,8 @@ export default function GPPortal() {
               maxScore={MAX_APPEARANCE_SCORE} 
               label="Appearance" 
               icon={Sparkles}
-              gradient="from-green-500/20 via-emerald-500/15 to-teal-500/20"
+              bgColor="bg-white"
+              accentColor="bg-emerald-50 border-emerald-200 text-emerald-600"
               tooltip={`Hair (${SCORE_CONFIG.hair.max}) + Makeup (${SCORE_CONFIG.makeup.max}) + Outfit (${SCORE_CONFIG.outfit.max}) + Posture (${SCORE_CONFIG.posture.max}) = ${MAX_APPEARANCE_SCORE} max`}
             />
             <ScoreCard 
@@ -394,7 +373,8 @@ export default function GPPortal() {
               maxScore={MAX_GAME_PERFORMANCE_SCORE} 
               label="Game Performance" 
               icon={Gamepad2}
-              gradient="from-[#b8860b]/20 via-[#d4af37]/15 to-yellow-500/20"
+              bgColor="bg-white"
+              accentColor="bg-blue-50 border-blue-200 text-blue-600"
               tooltip={`Dealing Style (${SCORE_CONFIG.dealingStyle.max}) + Game Performance (${SCORE_CONFIG.gamePerformance.max}) = ${MAX_GAME_PERFORMANCE_SCORE} max`}
             />
           </div>
@@ -404,8 +384,8 @@ export default function GPPortal() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Quick Stats */}
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2 text-white">
-              <Target className="h-5 w-5 text-[#d4af37]" />
+            <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-800">
+              <Target className="h-5 w-5 text-amber-500" />
               This Month's Stats
             </h2>
             <div className="grid grid-cols-2 gap-3">
@@ -413,13 +393,13 @@ export default function GPPortal() {
                 icon={Eye} 
                 value={totalEvals} 
                 label="Total Evaluations" 
-                color="from-[#d4af37]/20 to-[#b8860b]/20"
+                color="bg-amber-50"
               />
               <StatCard 
                 icon={AlertTriangle} 
                 value={data.monthlyStats?.current?.mistakes ?? 0} 
                 label="Mistakes" 
-                color="from-[#8b0000]/20 to-red-500/20"
+                color="bg-red-50"
                 trend={data.monthlyStats?.previous ? 
                   (data.monthlyStats.current?.mistakes ?? 0) - (data.monthlyStats.previous.mistakes ?? 0) : undefined}
               />
@@ -427,22 +407,22 @@ export default function GPPortal() {
                 icon={ThumbsUp} 
                 value={data.monthlyStats?.current?.attitude ?? 0} 
                 label="Attitude Score" 
-                color="from-green-500/20 to-emerald-500/20"
+                color="bg-green-50"
               />
               <StatCard 
                 icon={Gamepad2} 
                 value={data.monthlyStats?.current?.totalGames ?? 0} 
                 label="Total Games" 
-                color="from-[#b8860b]/20 to-yellow-500/20"
+                color="bg-blue-50"
               />
             </div>
           </div>
 
           {/* Recent Evaluations */}
-          <Card className="bg-white/5 backdrop-blur-xl border-white/10">
+          <Card className="bg-white border-slate-200 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-white text-base flex items-center gap-2">
-                <Clock className="h-4 w-4 text-[#d4af37]" />
+              <CardTitle className="text-slate-800 text-base flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-500" />
                 Recent Evaluations
               </CardTitle>
             </CardHeader>
@@ -450,55 +430,51 @@ export default function GPPortal() {
               {recentEvaluations.length > 0 ? (
                 <div className="space-y-2.5">
                   {recentEvaluations.slice(0, 4).map((eval_: any) => (
-                    <div key={eval_.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors">
+                    <div key={eval_.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 rounded-full shadow-lg ${
-                          (eval_.totalScore || 0) >= 20 ? 'bg-green-400 shadow-green-400/50' :
-                          (eval_.totalScore || 0) >= 18 ? 'bg-yellow-400 shadow-yellow-400/50' : 
-                          'bg-red-400 shadow-red-400/50'
+                        <div className={`w-3 h-3 rounded-full ${
+                          (eval_.totalScore || 0) >= 20 ? 'bg-green-500' :
+                          (eval_.totalScore || 0) >= 18 ? 'bg-yellow-500' :
+                          'bg-red-500'
                         }`} />
                         <div>
-                          <p className="text-white font-medium">
+                          <p className="text-sm font-medium text-slate-800">
                             {eval_.evaluationDate ? format(new Date(eval_.evaluationDate), "MMM d, yyyy") : "Unknown"}
                           </p>
-                          <p className="text-xs text-white/40">{eval_.game || 'Game'}</p>
+                          <p className="text-xs text-slate-500">{eval_.game || 'Game Session'}</p>
                         </div>
                       </div>
-                      <Badge className={`text-lg px-3 py-1 ${
-                        (eval_.totalScore || 0) >= 20 ? 'bg-green-500/20 text-green-300 border-green-500/30' :
-                        (eval_.totalScore || 0) >= 18 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' : 
-                        'bg-red-500/20 text-red-300 border-red-500/30'
-                      }`}>
-                        {eval_.totalScore}/{MAX_TOTAL_SCORE}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-lg font-bold ${
+                          (eval_.totalScore || 0) >= 20 ? 'text-green-600' :
+                          (eval_.totalScore || 0) >= 18 ? 'text-amber-600' :
+                          'text-red-600'
+                        }`}>{eval_.totalScore}</span>
+                        <span className="text-xs text-slate-400">/{MAX_TOTAL_SCORE}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-12 text-white/40">
-                  <Clock className="h-12 w-12 opacity-50 mx-auto mb-4" />
-                  <p className="font-medium">No recent evaluations</p>
+                <div className="text-center py-8">
+                  <Clock className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-slate-500 text-sm">No evaluations yet</p>
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Monthly Performance Trend Chart */}
+        {/* Score Trend Chart */}
         {data.monthlyHistory && data.monthlyHistory.length > 0 && (
-          <section>
-            <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-              <TrendingUp className="h-5 w-5 text-[#d4af37]" />
-              Monthly Performance Trend
-            </h2>
-            
-            <Card className="bg-white/5 backdrop-blur-xl border-white/10 mb-4">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-white text-base flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-[#d4af37]" />
-                  Score Trends (6-Month Overview)
+          <section className="space-y-4">
+            <Card className="bg-white border-slate-200 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-slate-800 flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-amber-500" />
+                  Score Trend
                 </CardTitle>
-                <CardDescription className="text-white/50 text-sm">
+                <CardDescription className="text-slate-500 text-sm">
                   Average scores per month — Total, Appearance, and Game Performance
                 </CardDescription>
               </CardHeader>
@@ -508,43 +484,42 @@ export default function GPPortal() {
                     <AreaChart data={data.monthlyHistory} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                       <defs>
                         <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#d4af37" stopOpacity={0.4} />
-                          <stop offset="95%" stopColor="#d4af37" stopOpacity={0.05} />
+                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.02} />
                         </linearGradient>
                         <linearGradient id="gradAppearance" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#8b0000" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#8b0000" stopOpacity={0.05} />
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
                         </linearGradient>
                         <linearGradient id="gradPerformance" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#b8860b" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#b8860b" stopOpacity={0.05} />
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.02} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis 
                         dataKey="label" 
-                        tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} 
-                        axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                        tick={{ fill: '#64748b', fontSize: 12 }} 
+                        axisLine={{ stroke: '#cbd5e1' }}
                         tickLine={false}
                       />
                       <YAxis 
-                        tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} 
-                        axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                        tick={{ fill: '#64748b', fontSize: 12 }} 
+                        axisLine={{ stroke: '#cbd5e1' }}
                         tickLine={false}
                         domain={[0, MAX_TOTAL_SCORE]}
                         ticks={[0, 5, 10, 15, 20, MAX_TOTAL_SCORE]}
                       />
                       <Tooltip 
                         contentStyle={{ 
-                          backgroundColor: 'rgba(14, 13, 10, 0.95)', 
-                          border: '1px solid rgba(212, 175, 55, 0.3)', 
+                          backgroundColor: '#ffffff', 
+                          border: '1px solid #e2e8f0', 
                           borderRadius: '12px',
-                          backdropFilter: 'blur(20px)',
-                          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                          color: '#fff',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                          color: '#1e293b',
                           padding: '12px 16px'
                         }}
-                        labelStyle={{ color: 'rgba(255,255,255,0.7)', marginBottom: '8px', fontWeight: 600 }}
+                        labelStyle={{ color: '#64748b', marginBottom: '8px', fontWeight: 600 }}
                         formatter={(value: number, name: string) => {
                           const labels: Record<string, string> = {
                             avgTotal: 'Total Score',
@@ -554,36 +529,36 @@ export default function GPPortal() {
                           return [value.toFixed(1), labels[name] || name];
                         }}
                       />
-                      <Area type="monotone" dataKey="avgTotal" stroke="#d4af37" strokeWidth={2.5}
+                      <Area type="monotone" dataKey="avgTotal" stroke="#f59e0b" strokeWidth={2.5}
                         fill="url(#gradTotal)" name="avgTotal"
-                        dot={{ fill: '#d4af37', strokeWidth: 0, r: 4 }}
-                        activeDot={{ r: 6, fill: '#d4af37', stroke: '#fff', strokeWidth: 2 }}
+                        dot={{ fill: '#f59e0b', strokeWidth: 0, r: 4 }}
+                        activeDot={{ r: 6, fill: '#f59e0b', stroke: '#fff', strokeWidth: 2 }}
                       />
-                      <Area type="monotone" dataKey="avgAppearance" stroke="#8b0000" strokeWidth={2}
+                      <Area type="monotone" dataKey="avgAppearance" stroke="#10b981" strokeWidth={2}
                         fill="url(#gradAppearance)" name="avgAppearance"
-                        dot={{ fill: '#8b0000', strokeWidth: 0, r: 3 }}
-                        activeDot={{ r: 5, fill: '#8b0000', stroke: '#fff', strokeWidth: 2 }}
+                        dot={{ fill: '#10b981', strokeWidth: 0, r: 3 }}
+                        activeDot={{ r: 5, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }}
                       />
-                      <Area type="monotone" dataKey="avgPerformance" stroke="#b8860b" strokeWidth={2}
+                      <Area type="monotone" dataKey="avgPerformance" stroke="#3b82f6" strokeWidth={2}
                         fill="url(#gradPerformance)" name="avgPerformance"
-                        dot={{ fill: '#b8860b', strokeWidth: 0, r: 3 }}
-                        activeDot={{ r: 5, fill: '#b8860b', stroke: '#fff', strokeWidth: 2 }}
+                        dot={{ fill: '#3b82f6', strokeWidth: 0, r: 3 }}
+                        activeDot={{ r: 5, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
                 <div className="flex flex-wrap justify-center gap-4 mt-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-[#d4af37]" />
-                    <span className="text-xs text-white/60">Total Score (max {MAX_TOTAL_SCORE})</span>
+                    <div className="w-3 h-3 rounded-full bg-amber-500" />
+                    <span className="text-xs text-slate-600">Total Score (max {MAX_TOTAL_SCORE})</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-[#8b0000]" />
-                    <span className="text-xs text-white/60">Appearance (max {MAX_APPEARANCE_SCORE})</span>
+                    <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                    <span className="text-xs text-slate-600">Appearance (max {MAX_APPEARANCE_SCORE})</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-[#b8860b]" />
-                    <span className="text-xs text-white/60">Game Performance (max {MAX_GAME_PERFORMANCE_SCORE})</span>
+                    <div className="w-3 h-3 rounded-full bg-blue-500" />
+                    <span className="text-xs text-slate-600">Game Performance (max {MAX_GAME_PERFORMANCE_SCORE})</span>
                   </div>
                 </div>
               </CardContent>
@@ -594,10 +569,10 @@ export default function GPPortal() {
               {data.monthlyHistory.map((month: any) => (
                 <div 
                   key={`${month.year}-${month.month}`}
-                  className={`relative p-4 rounded-xl border backdrop-blur-xl transition-all duration-300 hover:scale-[1.03] cursor-pointer ${
+                  className={`relative p-4 rounded-xl border transition-all duration-300 hover:scale-[1.03] cursor-pointer ${
                     month.evalCount > 0 
-                      ? 'bg-white/5 border-white/10 hover:border-[#d4af37]/30 hover:shadow-[0_4px_20px_rgba(212,175,55,0.15)]' 
-                      : 'bg-white/[0.02] border-white/5 opacity-50'
+                      ? 'bg-white border-slate-200 hover:border-amber-300 hover:shadow-md shadow-sm' 
+                      : 'bg-slate-50 border-slate-100 opacity-50'
                   }`}
                   onClick={() => {
                     if (month.evalCount > 0) {
@@ -606,26 +581,26 @@ export default function GPPortal() {
                     }
                   }}
                 >
-                  <p className="text-xs text-white/50 font-medium mb-2">{month.label}</p>
+                  <p className="text-xs text-slate-500 font-medium mb-2">{month.label}</p>
                   {month.evalCount > 0 ? (
                     <>
-                      <p className="text-2xl font-bold text-white">{month.avgTotal.toFixed(1)}</p>
-                      <p className="text-xs text-white/40 mt-1">{month.evalCount} eval{month.evalCount !== 1 ? 's' : ''}</p>
-                      <div className="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <p className="text-2xl font-bold text-slate-900">{month.avgTotal.toFixed(1)}</p>
+                      <p className="text-xs text-slate-400 mt-1">{month.evalCount} eval{month.evalCount !== 1 ? 's' : ''}</p>
+                      <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                         <div 
-                          className="h-full rounded-full bg-gradient-to-r from-[#d4af37] to-[#b8860b] transition-all duration-500"
+                          className="h-full rounded-full bg-gradient-to-r from-amber-400 to-amber-500 transition-all duration-500"
                           style={{ width: `${(month.avgTotal / MAX_TOTAL_SCORE) * 100}%` }}
                         />
                       </div>
                       {month.highScore > 0 && (
                         <div className="flex justify-between mt-2">
-                          <span className="text-[10px] text-green-400/70">H: {month.highScore}</span>
-                          <span className="text-[10px] text-red-400/70">L: {month.lowScore}</span>
+                          <span className="text-[10px] text-green-600">H: {month.highScore}</span>
+                          <span className="text-[10px] text-red-500">L: {month.lowScore}</span>
                         </div>
                       )}
                     </>
                   ) : (
-                    <p className="text-sm text-white/30">No data</p>
+                    <p className="text-sm text-slate-400">No data</p>
                   )}
                 </div>
               ))}
@@ -636,63 +611,63 @@ export default function GPPortal() {
         {/* Bonus Status */}
         {data.monthlyStats?.current && (
           <section>
-            <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-              <Gift className="h-5 w-5 text-pink-400" />
+            <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-slate-800">
+              <Gift className="h-5 w-5 text-pink-500" />
               Bonus Status
             </h2>
             
-            <Card className={`overflow-hidden ${
+            <Card className={`overflow-hidden shadow-sm ${
               data.monthlyStats.current.bonus.eligible 
-                ? 'bg-gradient-to-br from-green-500/20 via-emerald-500/10 to-[#d4af37]/20 border-green-500/30' 
-                : 'bg-white/5 border-white/10'
-            } backdrop-blur-xl`}>
+                ? 'bg-gradient-to-br from-green-50 via-emerald-50 to-amber-50 border-green-200' 
+                : 'bg-white border-slate-200'
+            }`}>
               <CardContent className="p-6 sm:p-8">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <div className="flex items-center gap-4">
-                      <div className={`p-4 rounded-2xl ${data.monthlyStats.current.bonus.eligible ? 'bg-green-500/30' : 'bg-white/10'}`}>
-                        <Award className={`h-10 w-10 ${data.monthlyStats.current.bonus.eligible ? 'text-green-300' : 'text-white/50'}`} />
+                      <div className={`p-4 rounded-2xl ${data.monthlyStats.current.bonus.eligible ? 'bg-green-100' : 'bg-slate-100'}`}>
+                        <Award className={`h-10 w-10 ${data.monthlyStats.current.bonus.eligible ? 'text-green-600' : 'text-slate-400'}`} />
                       </div>
                       <div>
-                        <h3 className="text-xl font-bold text-white">
+                        <h3 className="text-xl font-bold text-slate-900">
                           {data.monthlyStats.current.bonus.eligible 
                             ? `Level ${data.monthlyStats.current.bonus.level} Bonus!` 
                             : 'Not Yet Eligible'}
                         </h3>
-                        <p className="text-white/60 text-sm">{data.monthlyStats.current.bonus.reason}</p>
+                        <p className="text-slate-500 text-sm">{data.monthlyStats.current.bonus.reason}</p>
                       </div>
                     </div>
                     {data.monthlyStats.current.bonus.eligible && data.monthlyStats.current.bonus.rate && (
-                      <div className="p-4 bg-white/10 rounded-xl">
-                        <p className="text-sm text-white/60">Bonus Rate</p>
-                        <p className="text-3xl font-bold text-green-300">+€{data.monthlyStats.current.bonus.rate.toFixed(2)}/hr</p>
+                      <div className="p-4 bg-white rounded-xl border border-green-200">
+                        <p className="text-sm text-slate-500">Bonus Rate</p>
+                        <p className="text-3xl font-bold text-green-600">+€{data.monthlyStats.current.bonus.rate.toFixed(2)}/hr</p>
                       </div>
                     )}
                   </div>
                   <div className="space-y-3">
-                    <div className="p-4 bg-white/5 rounded-xl">
+                    <div className="p-4 bg-white rounded-xl border border-slate-200">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm text-white/60">Good Games (GGs)</span>
-                        <span className="text-2xl font-bold text-[#d4af37]">{data.monthlyStats.current.bonus.ggs?.toLocaleString()}</span>
+                        <span className="text-sm text-slate-500">Good Games (GGs)</span>
+                        <span className="text-2xl font-bold text-amber-600">{data.monthlyStats.current.bonus.ggs?.toLocaleString()}</span>
                       </div>
                       <Progress 
                         value={Math.min((data.monthlyStats.current.bonus.ggs / 5000) * 100, 100)} 
-                        className="h-2 bg-white/10" 
+                        className="h-2 bg-slate-100" 
                       />
-                      <div className="flex justify-between mt-2 text-xs text-white/40">
+                      <div className="flex justify-between mt-2 text-xs text-slate-400">
                         <span>0</span>
-                        <span className="text-[#d4af37]">2,500 (L1)</span>
-                        <span className="text-green-400">5,000 (L2)</span>
+                        <span className="text-amber-600">2,500 (L1)</span>
+                        <span className="text-green-600">5,000 (L2)</span>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 bg-white/5 rounded-xl text-center">
-                        <p className="text-xs text-white/50">Total Games</p>
-                        <p className="text-xl font-bold text-white">{(data.monthlyStats.current.totalGames || 0).toLocaleString()}</p>
+                      <div className="p-3 bg-white rounded-xl border border-slate-200 text-center">
+                        <p className="text-xs text-slate-500">Total Games</p>
+                        <p className="text-xl font-bold text-slate-900">{(data.monthlyStats.current.totalGames || 0).toLocaleString()}</p>
                       </div>
-                      <div className="p-3 bg-white/5 rounded-xl text-center">
-                        <p className="text-xs text-white/50">Mistakes</p>
-                        <p className="text-xl font-bold text-white">{data.monthlyStats.current.mistakes || 0}</p>
+                      <div className="p-3 bg-white rounded-xl border border-slate-200 text-center">
+                        <p className="text-xs text-slate-500">Mistakes</p>
+                        <p className="text-xl font-bold text-slate-900">{data.monthlyStats.current.mistakes || 0}</p>
                       </div>
                     </div>
                   </div>
@@ -704,10 +679,10 @@ export default function GPPortal() {
 
         {/* Achievements */}
         <section>
-          <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-            <Trophy className="h-5 w-5 text-[#d4af37]" />
+          <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-slate-800">
+            <Trophy className="h-5 w-5 text-amber-500" />
             Achievements
-            <Badge className="ml-2 bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
+            <Badge className="ml-2 bg-amber-50 text-amber-700 border-amber-200">
               {achievements.filter(a => a.unlocked).length}/{achievements.length}
             </Badge>
           </h2>
@@ -720,11 +695,11 @@ export default function GPPortal() {
 
         {/* Evaluation History - Grouped by Month */}
         <section>
-          <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-            <Calendar className="h-5 w-5 text-[#d4af37]" />
+          <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-slate-800">
+            <Calendar className="h-5 w-5 text-amber-500" />
             Evaluation History
             {data.evaluations.length > 0 && (
-              <Badge className="ml-2 bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
+              <Badge className="ml-2 bg-amber-50 text-amber-700 border-amber-200">
                 {data.evaluations.length} total
               </Badge>
             )}
@@ -752,8 +727,8 @@ export default function GPPortal() {
                         onClick={() => setSelectedEvalMonth('all')}
                         className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
                           selectedEvalMonth === 'all'
-                            ? 'bg-[#d4af37]/30 text-[#f0d060] border border-[#d4af37]/40 shadow-[0_0_12px_rgba(212,175,55,0.2)]'
-                            : 'bg-white/5 text-white/60 border border-white/10 hover:bg-white/10'
+                            ? 'bg-amber-500 text-white shadow-sm'
+                            : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                         }`}
                       >
                         All Months
@@ -764,8 +739,8 @@ export default function GPPortal() {
                           onClick={() => setSelectedEvalMonth(m.key)}
                           className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
                             selectedEvalMonth === m.key
-                              ? 'bg-[#d4af37]/30 text-[#f0d060] border border-[#d4af37]/40 shadow-[0_0_12px_rgba(212,175,55,0.2)]'
-                              : 'bg-white/5 text-white/60 border border-white/10 hover:bg-white/10'
+                              ? 'bg-amber-500 text-white shadow-sm'
+                              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                           }`}
                         >
                           {m.label}
@@ -808,64 +783,64 @@ export default function GPPortal() {
                             return next;
                           });
                         }}
-                        className="w-full flex items-center justify-between p-4 rounded-xl bg-white/[0.06] backdrop-blur-xl border border-white/10 hover:bg-white/[0.09] hover:border-white/15 transition-all duration-300 group"
+                        className="w-full flex items-center justify-between p-4 rounded-xl bg-white border border-slate-200 hover:border-amber-300 hover:shadow-sm transition-all duration-300 group shadow-sm"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="p-2.5 rounded-xl bg-[#d4af37]/20 border border-[#d4af37]/30">
-                            <Calendar className="h-5 w-5 text-[#d4af37]" />
+                          <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200">
+                            <Calendar className="h-5 w-5 text-amber-600" />
                           </div>
                           <div className="text-left">
-                            <p className="text-white font-semibold text-base">{group.label}</p>
-                            <p className="text-white/50 text-sm">{group.evaluations.length} evaluation{group.evaluations.length !== 1 ? 's' : ''}</p>
+                            <p className="text-slate-800 font-semibold text-base">{group.label}</p>
+                            <p className="text-slate-500 text-sm">{group.evaluations.length} evaluation{group.evaluations.length !== 1 ? 's' : ''}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
                           <div className="hidden sm:flex items-center gap-3">
                             <div className="text-right">
-                              <p className={`text-lg font-bold ${monthAvg >= 20 ? 'text-green-400' : monthAvg >= 18 ? 'text-yellow-400' : 'text-red-400'}`}>
+                              <p className={`text-lg font-bold ${monthAvg >= 20 ? 'text-green-600' : monthAvg >= 18 ? 'text-amber-600' : 'text-red-600'}`}>
                                 {monthAvg.toFixed(1)}
                               </p>
-                              <p className="text-xs text-white/40">avg score</p>
+                              <p className="text-xs text-slate-400">avg score</p>
                             </div>
-                            <div className="h-8 w-px bg-white/10" />
+                            <div className="h-8 w-px bg-slate-200" />
                             <div className="flex gap-2">
-                              <Badge className="bg-green-500/15 text-green-300/80 border-green-500/20 text-xs">
+                              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">
                                 <Sparkles className="h-3 w-3 mr-1" />{monthAppAvg.toFixed(1)}
                               </Badge>
-                              <Badge className="bg-[#d4af37]/15 text-[#d4af37]/80 border-[#d4af37]/20 text-xs">
+                              <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
                                 <Gamepad2 className="h-3 w-3 mr-1" />{monthGameAvg.toFixed(1)}
                               </Badge>
                             </div>
                           </div>
-                          {isMonthExpanded ? <ChevronUp className="h-5 w-5 text-white/40" /> : <ChevronDown className="h-5 w-5 text-white/40" />}
+                          {isMonthExpanded ? <ChevronUp className="h-5 w-5 text-slate-400" /> : <ChevronDown className="h-5 w-5 text-slate-400" />}
                         </div>
                       </button>
 
                       {/* Mobile month summary */}
                       {isMonthExpanded && (
                         <div className="flex gap-2 sm:hidden px-1">
-                          <div className={`flex-1 p-2 rounded-lg text-center ${monthAvg >= 20 ? 'bg-green-500/15' : monthAvg >= 18 ? 'bg-yellow-500/15' : 'bg-red-500/15'}`}>
-                            <p className={`text-lg font-bold ${monthAvg >= 20 ? 'text-green-400' : monthAvg >= 18 ? 'text-yellow-400' : 'text-red-400'}`}>{monthAvg.toFixed(1)}</p>
-                            <p className="text-[10px] text-white/40">avg</p>
+                          <div className={`flex-1 p-2 rounded-lg text-center ${monthAvg >= 20 ? 'bg-green-50' : monthAvg >= 18 ? 'bg-amber-50' : 'bg-red-50'}`}>
+                            <p className={`text-lg font-bold ${monthAvg >= 20 ? 'text-green-600' : monthAvg >= 18 ? 'text-amber-600' : 'text-red-600'}`}>{monthAvg.toFixed(1)}</p>
+                            <p className="text-[10px] text-slate-400">avg</p>
                           </div>
-                          <div className="flex-1 p-2 rounded-lg text-center bg-green-500/10">
-                            <p className="text-lg font-bold text-green-300">{monthAppAvg.toFixed(1)}</p>
-                            <p className="text-[10px] text-white/40">appearance</p>
+                          <div className="flex-1 p-2 rounded-lg text-center bg-emerald-50">
+                            <p className="text-lg font-bold text-emerald-600">{monthAppAvg.toFixed(1)}</p>
+                            <p className="text-[10px] text-slate-400">appearance</p>
                           </div>
-                          <div className="flex-1 p-2 rounded-lg text-center bg-[#d4af37]/10">
-                            <p className="text-lg font-bold text-[#d4af37]">{monthGameAvg.toFixed(1)}</p>
-                            <p className="text-[10px] text-white/40">game</p>
+                          <div className="flex-1 p-2 rounded-lg text-center bg-blue-50">
+                            <p className="text-lg font-bold text-blue-600">{monthGameAvg.toFixed(1)}</p>
+                            <p className="text-[10px] text-slate-400">game</p>
                           </div>
                         </div>
                       )}
 
                       {/* Individual evaluations */}
                       {isMonthExpanded && (
-                        <div className="space-y-3 pl-2 sm:pl-4 border-l-2 border-[#d4af37]/20">
+                        <div className="space-y-3 pl-2 sm:pl-4 border-l-2 border-amber-200">
                           {group.evaluations.map((evaluation: any) => {
                             const isExpanded = expandedEvaluations.has(evaluation.id);
                             return (
-                              <Card key={evaluation.id} className="bg-white/5 backdrop-blur-xl border-white/10 overflow-hidden hover:bg-white/[0.07] transition-all">
+                              <Card key={evaluation.id} className="bg-white border-slate-200 overflow-hidden hover:border-slate-300 transition-all shadow-sm">
                                 <CardContent className="p-0">
                                   <button
                                     onClick={() => toggleEvaluation(evaluation.id)}
@@ -873,111 +848,87 @@ export default function GPPortal() {
                                   >
                                     <div className="flex items-center gap-4">
                                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${
-                                        (evaluation.totalScore || 0) >= 20 ? 'bg-green-500/20 text-green-300' :
-                                        (evaluation.totalScore || 0) >= 18 ? 'bg-yellow-500/20 text-yellow-300' :
-                                        'bg-red-500/20 text-red-300'
+                                        (evaluation.totalScore || 0) >= 20 ? 'bg-green-50 text-green-600' :
+                                        (evaluation.totalScore || 0) >= 18 ? 'bg-amber-50 text-amber-600' :
+                                        'bg-red-50 text-red-600'
                                       }`}>
                                         {evaluation.totalScore}
                                       </div>
                                       <div>
-                                        <p className="font-semibold text-white">
+                                        <p className="font-semibold text-slate-800">
                                           {evaluation.evaluationDate ? format(new Date(evaluation.evaluationDate), "MMMM d, yyyy") : "Unknown Date"}
                                         </p>
-                                        <p className="text-sm text-white/50">{evaluation.game || 'Game Session'}</p>
+                                        <p className="text-sm text-slate-500">{evaluation.game || 'Game Session'}</p>
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-3">
                                       <div className="hidden sm:flex gap-2">
-                                        <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
+                                        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
                                           <Sparkles className="h-3 w-3 mr-1" />{evaluation.appearanceScore}/{MAX_APPEARANCE_SCORE}
                                         </Badge>
-                                        <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
+                                        <Badge className="bg-blue-50 text-blue-700 border-blue-200">
                                           <Gamepad2 className="h-3 w-3 mr-1" />{evaluation.gamePerformanceTotalScore}/{MAX_GAME_PERFORMANCE_SCORE}
                                         </Badge>
                                       </div>
-                                      {isExpanded ? <ChevronUp className="h-5 w-5 text-white/40" /> : <ChevronDown className="h-5 w-5 text-white/40" />}
+                                      {isExpanded ? <ChevronUp className="h-5 w-5 text-slate-400" /> : <ChevronDown className="h-5 w-5 text-slate-400" />}
                                     </div>
                                   </button>
                                   
                                   {isExpanded && (
-                                    <div className="px-4 sm:px-5 pb-5 pt-2 border-t border-white/10 space-y-4 animate-in slide-in-from-top-2">
+                                    <div className="px-4 sm:px-5 pb-5 pt-2 border-t border-slate-200 space-y-4 animate-in slide-in-from-top-2">
                                       {/* Mobile badges */}
                                       <div className="flex gap-2 sm:hidden">
-                                        <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
-                                          <Sparkles className="h-3 w-3 mr-1" />Appearance: {evaluation.appearanceScore}/{MAX_APPEARANCE_SCORE}
+                                        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                                          <Sparkles className="h-3 w-3 mr-1" />{evaluation.appearanceScore}/{MAX_APPEARANCE_SCORE}
                                         </Badge>
-                                        <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">
-                                          <Gamepad2 className="h-3 w-3 mr-1" />Game: {evaluation.gamePerformanceTotalScore}/{MAX_GAME_PERFORMANCE_SCORE}
+                                        <Badge className="bg-blue-50 text-blue-700 border-blue-200">
+                                          <Gamepad2 className="h-3 w-3 mr-1" />{evaluation.gamePerformanceTotalScore}/{MAX_GAME_PERFORMANCE_SCORE}
                                         </Badge>
                                       </div>
                                       
-                                      {/* Appearance Details */}
-                                      <div>
-                                        <p className="text-sm font-medium text-white/60 mb-3 flex items-center gap-2">
-                                          <Sparkles className="h-4 w-4" />
-                                          Appearance Breakdown
-                                        </p>
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                          {[
-                                            { icon: Scissors, label: 'Hair', score: evaluation.hairScore, max: SCORE_CONFIG.hair.max },
-                                            { icon: Palette, label: 'Makeup', score: evaluation.makeupScore, max: SCORE_CONFIG.makeup.max },
-                                            { icon: Shirt, label: 'Outfit', score: evaluation.outfitScore, max: SCORE_CONFIG.outfit.max },
-                                            { icon: PersonStanding, label: 'Posture', score: evaluation.postureScore, max: SCORE_CONFIG.posture.max },
-                                          ].map((item) => (
-                                            <div key={item.label} className="p-3 bg-white/5 rounded-lg">
-                                              <div className="flex items-center gap-2 mb-2">
-                                                <item.icon className="h-4 w-4 text-green-400" />
-                                                <span className="text-xs text-white/60">{item.label}</span>
-                                              </div>
-                                              <div className="flex items-center gap-2">
-                                                <span className="text-lg font-bold text-white">{item.score ?? 0}</span>
-                                                <span className="text-xs text-white/40">/{item.max}</span>
-                                              </div>
-                                              <Progress value={((item.score ?? 0) / item.max) * 100} className="h-1.5 mt-2 bg-white/10" />
+                                      {/* Score breakdown */}
+                                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                        {[
+                                          { label: 'Hair', score: evaluation.hairScore, max: SCORE_CONFIG.hair.max, icon: Scissors },
+                                          { label: 'Makeup', score: evaluation.makeupScore, max: SCORE_CONFIG.makeup.max, icon: Palette },
+                                          { label: 'Outfit', score: evaluation.outfitScore, max: SCORE_CONFIG.outfit.max, icon: Shirt },
+                                          { label: 'Posture', score: evaluation.postureScore, max: SCORE_CONFIG.posture.max, icon: PersonStanding },
+                                          { label: 'Dealing', score: evaluation.dealingStyleScore, max: SCORE_CONFIG.dealingStyle.max, icon: Gamepad2 },
+                                          { label: 'Game Perf', score: evaluation.gamePerformanceScore, max: SCORE_CONFIG.gamePerformance.max, icon: Star },
+                                        ].map(({ label, score, max, icon: ItemIcon }) => (
+                                          <div key={label} className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                            <div className="flex items-center gap-2 mb-1">
+                                              <ItemIcon className="h-3.5 w-3.5 text-amber-500" />
+                                              <span className="text-xs text-slate-500">{label}</span>
                                             </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                      
-                                      {/* Game Performance Details */}
-                                      <div>
-                                        <p className="text-sm font-medium text-white/60 mb-3 flex items-center gap-2">
-                                          <Gamepad2 className="h-4 w-4" />
-                                          Game Performance Breakdown
-                                        </p>
-                                        <div className="grid grid-cols-2 gap-3">
-                                          {[
-                                            { label: 'Dealing Style', score: evaluation.dealingStyleScore, max: SCORE_CONFIG.dealingStyle.max },
-                                            { label: 'Game Performance', score: evaluation.gamePerformanceScore, max: SCORE_CONFIG.gamePerformance.max },
-                                          ].map((item) => (
-                                            <div key={item.label} className="p-3 bg-white/5 rounded-lg">
-                                              <div className="flex items-center justify-between mb-2">
-                                                <span className="text-xs text-white/60">{item.label}</span>
-                                                <span className="text-lg font-bold text-white">{item.score ?? 0}/{item.max}</span>
-                                              </div>
-                                              <Progress value={((item.score ?? 0) / item.max) * 100} className="h-1.5 bg-white/10" />
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                      
-                                      {/* Labeled Comments per Category */}
-                                      {(evaluation.hairComment || evaluation.makeupComment || evaluation.outfitComment || evaluation.postureComment || evaluation.dealingStyleComment || evaluation.gamePerformanceComment) && (
-                                        <div>
-                                          <p className="text-sm font-medium text-white/60 mb-3 flex items-center gap-2">
-                                            <MessageSquare className="h-4 w-4" />
-                                            Evaluator Comments
-                                          </p>
-                                          <div className="space-y-2">
-                                            <LabeledComment icon={Scissors} label="Hair" comment={evaluation.hairComment} score={evaluation.hairScore} maxScore={SCORE_CONFIG.hair.max} />
-                                            <LabeledComment icon={Palette} label="Makeup" comment={evaluation.makeupComment} score={evaluation.makeupScore} maxScore={SCORE_CONFIG.makeup.max} />
-                                            <LabeledComment icon={Shirt} label="Outfit" comment={evaluation.outfitComment} score={evaluation.outfitScore} maxScore={SCORE_CONFIG.outfit.max} />
-                                            <LabeledComment icon={PersonStanding} label="Posture" comment={evaluation.postureComment} score={evaluation.postureScore} maxScore={SCORE_CONFIG.posture.max} />
-                                            <LabeledComment icon={Gamepad2} label="Dealing Style" comment={evaluation.dealingStyleComment} score={evaluation.dealingStyleScore} maxScore={SCORE_CONFIG.dealingStyle.max} />
-                                            <LabeledComment icon={Target} label="Game Performance" comment={evaluation.gamePerformanceComment} score={evaluation.gamePerformanceScore} maxScore={SCORE_CONFIG.gamePerformance.max} />
+                                            <p className={`text-lg font-bold ${
+                                              score !== null && max > 0 && (score / max) >= 0.9 ? 'text-green-600' :
+                                              score !== null && max > 0 && (score / max) >= 0.7 ? 'text-amber-600' : 'text-red-600'
+                                            }`}>
+                                              {score ?? '—'}<span className="text-xs text-slate-400 font-normal">/{max}</span>
+                                            </p>
                                           </div>
-                                        </div>
-                                      )}
+                                        ))}
+                                      </div>
+
+                                      {/* Comments */}
+                                      <div className="space-y-2">
+                                        <LabeledComment icon={Scissors} label="Hair" comment={evaluation.hairComment} score={evaluation.hairScore} maxScore={SCORE_CONFIG.hair.max} />
+                                        <LabeledComment icon={Palette} label="Makeup" comment={evaluation.makeupComment} score={evaluation.makeupScore} maxScore={SCORE_CONFIG.makeup.max} />
+                                        <LabeledComment icon={Shirt} label="Outfit" comment={evaluation.outfitComment} score={evaluation.outfitScore} maxScore={SCORE_CONFIG.outfit.max} />
+                                        <LabeledComment icon={PersonStanding} label="Posture" comment={evaluation.postureComment} score={evaluation.postureScore} maxScore={SCORE_CONFIG.posture.max} />
+                                        <LabeledComment icon={Gamepad2} label="Dealing Style" comment={evaluation.dealingStyleComment} score={evaluation.dealingStyleScore} maxScore={SCORE_CONFIG.dealingStyle.max} />
+                                        <LabeledComment icon={Star} label="Game Performance" comment={evaluation.gamePerformanceComment} score={evaluation.gamePerformanceScore} maxScore={SCORE_CONFIG.gamePerformance.max} />
+                                        {evaluation.generalComment && (
+                                          <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                                            <div className="flex items-center gap-2 mb-1.5">
+                                              <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
+                                              <span className="text-xs font-medium text-amber-700">General Comment</span>
+                                            </div>
+                                            <p className="text-sm text-slate-700 leading-relaxed">{evaluation.generalComment}</p>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   )}
                                 </CardContent>
@@ -992,115 +943,91 @@ export default function GPPortal() {
               })()}
             </div>
           ) : (
-            <Card className="bg-white/5 backdrop-blur-xl border-white/10">
-              <CardContent className="py-16 text-center">
-                <Calendar className="h-16 w-16 text-white/20 mx-auto mb-6" />
-                <h3 className="text-xl font-semibold text-white mb-2">No evaluations yet</h3>
-                <p className="text-white/50 max-w-md mx-auto">Your evaluation history will appear here after your first evaluation.</p>
+            <Card className="bg-white border-slate-200 shadow-sm">
+              <CardContent className="py-12 text-center">
+                <Calendar className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 font-medium">No evaluations yet</p>
+                <p className="text-sm text-slate-400 mt-1">Your evaluation history will appear here</p>
               </CardContent>
             </Card>
           )}
         </section>
 
-        {/* Error & Attitude Details — Month Selector */}
-        <section>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-            <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2 text-white">
-              <FileText className="h-5 w-5 text-[#d4af37]" />
-              Monthly Details
-            </h2>
-            <MonthSelector 
-              selectedMonth={detailMonth} 
-              selectedYear={detailYear} 
-              onChange={(m, y) => { setDetailMonth(m); setDetailYear(y); }} 
-            />
-          </div>
-
-          {monthDetailsLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-[#d4af37]" />
+        {/* Error & Attitude Details */}
+        {data.monthlyStats && (
+          <section>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2 text-slate-800">
+                <FileText className="h-5 w-5 text-amber-500" />
+                Monthly Details
+              </h2>
+              <MonthSelector 
+                selectedMonth={detailMonth} 
+                selectedYear={detailYear} 
+                onChange={(m, y) => { setDetailMonth(m); setDetailYear(y); }}
+              />
             </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Month Stats Summary */}
-              {monthDetails?.stats && (
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="p-4 bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 text-center">
-                    <p className="text-xs text-white/50 mb-1">Attitude</p>
-                    <p className={`text-2xl font-bold ${(monthDetails.stats.attitude ?? 0) > 0 ? 'text-green-400' : (monthDetails.stats.attitude ?? 0) < 0 ? 'text-red-400' : 'text-white/50'}`}>
-                      {monthDetails.stats.attitude ?? 0}
-                    </p>
-                  </div>
-                  <div className="p-4 bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 text-center">
-                    <p className="text-xs text-white/50 mb-1">Mistakes</p>
-                    <p className="text-2xl font-bold text-[#d4af37]">{monthDetails.stats.mistakes ?? 0}</p>
-                  </div>
-                  <div className="p-4 bg-white/5 backdrop-blur-xl rounded-xl border border-white/10 text-center">
-                    <p className="text-xs text-white/50 mb-1">Total Games</p>
-                    <p className="text-2xl font-bold text-white">{(monthDetails.stats.totalGames ?? 0).toLocaleString()}</p>
-                  </div>
-                </div>
-              )}
 
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Error Details */}
               <div>
-                <h3 className="text-base font-semibold mb-3 flex items-center gap-2 text-white">
-                  <AlertTriangle className="h-4 w-4 text-[#d4af37]" />
+                <h3 className="text-base font-semibold mb-3 flex items-center gap-2 text-slate-800">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
                   Errors & Mistakes
                   {errorDetails.length > 0 && (
-                    <Badge className="ml-2 bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">{errorDetails.length}</Badge>
+                    <Badge className="ml-2 bg-red-50 text-red-700 border-red-200">{errorDetails.length}</Badge>
                   )}
                 </h3>
                 
                 {errorDetails.length > 0 ? (
-                  <Card className="bg-white/5 backdrop-blur-xl border-white/10 overflow-hidden">
+                  <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
                     <CardContent className="p-0">
-                      <div className="divide-y divide-white/10">
+                      <div className="divide-y divide-slate-200">
                         {errorDetails.map((err: any, index: number) => (
-                          <div key={err.id || index} className="p-4 hover:bg-white/5 transition-colors">
+                          <div key={err.id || index} className="p-4 hover:bg-slate-50 transition-colors">
                             <div className="flex items-start gap-4">
                               <div className={`shrink-0 p-2.5 rounded-xl ${
-                                err.severity === 'critical' ? 'bg-red-500/20' :
-                                err.severity === 'high' ? 'bg-orange-500/20' :
-                                err.severity === 'medium' ? 'bg-[#d4af37]/20' :
-                                'bg-yellow-500/20'
+                                err.severity === 'critical' ? 'bg-red-50' :
+                                err.severity === 'high' ? 'bg-orange-50' :
+                                err.severity === 'medium' ? 'bg-amber-50' :
+                                'bg-yellow-50'
                               }`}>
                                 <AlertTriangle className={`h-5 w-5 ${
-                                  err.severity === 'critical' ? 'text-red-400' :
-                                  err.severity === 'high' ? 'text-orange-400' :
-                                  err.severity === 'medium' ? 'text-[#d4af37]' :
-                                  'text-yellow-400'
+                                  err.severity === 'critical' ? 'text-red-500' :
+                                  err.severity === 'high' ? 'text-orange-500' :
+                                  err.severity === 'medium' ? 'text-amber-500' :
+                                  'text-yellow-500'
                                 }`} />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex flex-wrap items-center gap-2 mb-2">
                                   {err.errorType && (
-                                    <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/30">{err.errorType}</Badge>
+                                    <Badge className="bg-amber-50 text-amber-700 border-amber-200">{err.errorType}</Badge>
                                   )}
                                   {err.gameType && (
-                                    <Badge className="bg-white/10 text-white/70 border-white/20">{err.gameType}</Badge>
+                                    <Badge className="bg-slate-100 text-slate-600 border-slate-200">{err.gameType}</Badge>
                                   )}
                                   {err.errorCategory && (
-                                    <Badge className="bg-white/10 text-white/70 border-white/20">{err.errorCategory}</Badge>
+                                    <Badge className="bg-slate-100 text-slate-600 border-slate-200">{err.errorCategory}</Badge>
                                   )}
                                   <Badge className={`${
                                     err.source === 'screenshot' 
-                                      ? 'bg-green-500/20 text-green-300 border-green-500/30' 
-                                      : 'bg-gray-500/20 text-gray-300 border-gray-500/30'
+                                      ? 'bg-green-50 text-green-700 border-green-200' 
+                                      : 'bg-slate-100 text-slate-600 border-slate-200'
                                   }`}>
                                     {err.source === 'screenshot' ? 'Screenshot' : 'Excel'}
                                   </Badge>
                                 </div>
-                                <p className="text-white font-medium text-base">{err.errorDescription || 'Error recorded'}</p>
-                                {err.tableId && <p className="text-sm text-white/50 mt-1">Table: {err.tableId}</p>}
+                                <p className="text-slate-800 font-medium text-base">{err.errorDescription || 'Error recorded'}</p>
+                                {err.tableId && <p className="text-sm text-slate-500 mt-1">Table: {err.tableId}</p>}
                                 <div className="flex items-center gap-4 mt-2">
-                                  <p className="text-xs text-white/30">
+                                  <p className="text-xs text-slate-400">
                                     {err.errorDate ? format(new Date(err.errorDate), "MMM d, yyyy") :
                                      err.createdAt ? format(new Date(err.createdAt), "MMM d, yyyy") : "Unknown date"}
                                   </p>
                                   {err.screenshotUrl && (
                                     <a href={err.screenshotUrl} target="_blank" rel="noopener noreferrer"
-                                      className="text-xs text-[#d4af37] hover:text-[#e6c84b] flex items-center gap-1">
+                                      className="text-xs text-amber-600 hover:text-amber-700 flex items-center gap-1">
                                       <Eye className="h-3 w-3" /> View Screenshot
                                     </a>
                                   )}
@@ -1113,11 +1040,11 @@ export default function GPPortal() {
                     </CardContent>
                   </Card>
                 ) : (
-                  <Card className="bg-white/5 backdrop-blur-xl border-white/10">
+                  <Card className="bg-white border-slate-200 shadow-sm">
                     <CardContent className="py-10 text-center">
-                      <Shield className="h-10 w-10 text-green-400/50 mx-auto mb-3" />
-                      <p className="text-white/50 font-medium">No errors recorded for {MONTH_NAMES[detailMonth - 1]} {detailYear}</p>
-                      <p className="text-xs text-white/30 mt-1">Great job keeping it clean!</p>
+                      <Shield className="h-10 w-10 text-green-400 mx-auto mb-3" />
+                      <p className="text-slate-600 font-medium">No errors recorded for {MONTH_NAMES[detailMonth - 1]} {detailYear}</p>
+                      <p className="text-xs text-slate-400 mt-1">Great job keeping it clean!</p>
                     </CardContent>
                   </Card>
                 )}
@@ -1125,11 +1052,11 @@ export default function GPPortal() {
 
               {/* Attitude Feedback */}
               <div>
-                <h3 className="text-base font-semibold mb-3 flex items-center gap-2 text-white">
-                  <Heart className="h-4 w-4 text-pink-400" />
+                <h3 className="text-base font-semibold mb-3 flex items-center gap-2 text-slate-800">
+                  <Heart className="h-4 w-4 text-pink-500" />
                   Attitude Feedback
                   {attitudeDetails.length > 0 && (
-                    <Badge className="ml-2 bg-pink-500/20 text-pink-300 border-pink-500/30">{attitudeDetails.length}</Badge>
+                    <Badge className="ml-2 bg-pink-50 text-pink-700 border-pink-200">{attitudeDetails.length}</Badge>
                   )}
                 </h3>
                 
@@ -1137,77 +1064,77 @@ export default function GPPortal() {
                   <div className="space-y-3">
                     {/* Attitude summary */}
                     <div className="grid grid-cols-3 gap-3">
-                      <div className="p-3 bg-green-500/10 rounded-xl border border-green-500/20 text-center">
-                        <ThumbsUp className="h-5 w-5 text-green-400 mx-auto mb-1" />
-                        <p className="text-lg font-bold text-green-400">
+                      <div className="p-3 bg-green-50 rounded-xl border border-green-200 text-center">
+                        <ThumbsUp className="h-5 w-5 text-green-600 mx-auto mb-1" />
+                        <p className="text-lg font-bold text-green-600">
                           {attitudeDetails.filter((a: any) => a.attitudeType === 'positive' || (a.attitudeScore && a.attitudeScore > 0)).length}
                         </p>
-                        <p className="text-xs text-white/40">Positive</p>
+                        <p className="text-xs text-slate-500">Positive</p>
                       </div>
-                      <div className="p-3 bg-white/5 rounded-xl border border-white/10 text-center">
-                        <span className="text-lg text-white/40 block mb-1">—</span>
-                        <p className="text-lg font-bold text-white/50">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                        <span className="text-lg text-slate-400 block mb-1">—</span>
+                        <p className="text-lg font-bold text-slate-500">
                           {attitudeDetails.filter((a: any) => a.attitudeType === 'neutral').length}
                         </p>
-                        <p className="text-xs text-white/40">Neutral</p>
+                        <p className="text-xs text-slate-500">Neutral</p>
                       </div>
-                      <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20 text-center">
-                        <ThumbsDown className="h-5 w-5 text-red-400 mx-auto mb-1" />
-                        <p className="text-lg font-bold text-red-400">
+                      <div className="p-3 bg-red-50 rounded-xl border border-red-200 text-center">
+                        <ThumbsDown className="h-5 w-5 text-red-500 mx-auto mb-1" />
+                        <p className="text-lg font-bold text-red-500">
                           {attitudeDetails.filter((a: any) => a.attitudeType === 'negative' || (a.attitudeScore && a.attitudeScore < 0)).length}
                         </p>
-                        <p className="text-xs text-white/40">Negative</p>
+                        <p className="text-xs text-slate-500">Negative</p>
                       </div>
                     </div>
 
                     {/* Individual attitude entries */}
-                    <Card className="bg-white/5 backdrop-blur-xl border-white/10 overflow-hidden">
+                    <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
                       <CardContent className="p-0">
-                        <div className="divide-y divide-white/10">
+                        <div className="divide-y divide-slate-200">
                           {attitudeDetails.map((att: any) => {
                             const isPositive = att.attitudeType === 'positive' || (att.attitudeScore && att.attitudeScore > 0);
                             const isNegative = att.attitudeType === 'negative' || (att.attitudeScore && att.attitudeScore < 0);
                             return (
-                              <div key={att.id} className="p-4 hover:bg-white/5 transition-colors">
+                              <div key={att.id} className="p-4 hover:bg-slate-50 transition-colors">
                                 <div className="flex items-start gap-4">
                                   <div className={`shrink-0 p-2.5 rounded-xl ${
-                                    isPositive ? 'bg-green-500/20' : isNegative ? 'bg-red-500/20' : 'bg-white/10'
+                                    isPositive ? 'bg-green-50' : isNegative ? 'bg-red-50' : 'bg-slate-100'
                                   }`}>
                                     {isPositive ? (
-                                      <ThumbsUp className="h-5 w-5 text-green-400" />
+                                      <ThumbsUp className="h-5 w-5 text-green-600" />
                                     ) : isNegative ? (
-                                      <ThumbsDown className="h-5 w-5 text-red-400" />
+                                      <ThumbsDown className="h-5 w-5 text-red-500" />
                                     ) : (
-                                      <span className="h-5 w-5 flex items-center justify-center text-white/40">—</span>
+                                      <span className="h-5 w-5 flex items-center justify-center text-slate-400">—</span>
                                     )}
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-1">
                                       <Badge className={`${
-                                        isPositive ? 'bg-green-500/20 text-green-300 border-green-500/30' :
-                                        isNegative ? 'bg-red-500/20 text-red-300 border-red-500/30' :
-                                        'bg-white/10 text-white/60 border-white/20'
+                                        isPositive ? 'bg-green-50 text-green-700 border-green-200' :
+                                        isNegative ? 'bg-red-50 text-red-700 border-red-200' :
+                                        'bg-slate-100 text-slate-600 border-slate-200'
                                       }`}>
                                         {isPositive ? '+1 Positive' : isNegative ? '-1 Negative' : 'Neutral'}
                                       </Badge>
                                       {att.attitudeCategory && (
-                                        <Badge className="bg-white/10 text-white/60 border-white/20">{att.attitudeCategory}</Badge>
+                                        <Badge className="bg-slate-100 text-slate-600 border-slate-200">{att.attitudeCategory}</Badge>
                                       )}
                                     </div>
                                     {(att.comment || att.description) && (
-                                      <p className="text-white/80 text-sm mt-2">{att.comment || att.description}</p>
+                                      <p className="text-slate-700 text-sm mt-2">{att.comment || att.description}</p>
                                     )}
                                     <div className="flex items-center gap-4 mt-2">
                                       {att.evaluatorName && (
-                                        <p className="text-xs text-white/30">By: {att.evaluatorName}</p>
+                                        <p className="text-xs text-slate-400">By: {att.evaluatorName}</p>
                                       )}
-                                      <p className="text-xs text-white/30">
+                                      <p className="text-xs text-slate-400">
                                         {att.evaluationDate ? format(new Date(att.evaluationDate), "MMM d, yyyy") :
                                          att.createdAt ? format(new Date(att.createdAt), "MMM d, yyyy") : ""}
                                       </p>
                                       {att.screenshotUrl && (
                                         <a href={att.screenshotUrl} target="_blank" rel="noopener noreferrer"
-                                          className="text-xs text-[#d4af37] hover:text-[#e6c84b] flex items-center gap-1">
+                                          className="text-xs text-amber-600 hover:text-amber-700 flex items-center gap-1">
                                           <Eye className="h-3 w-3" /> View
                                         </a>
                                       )}
@@ -1222,23 +1149,23 @@ export default function GPPortal() {
                     </Card>
                   </div>
                 ) : (
-                  <Card className="bg-white/5 backdrop-blur-xl border-white/10">
+                  <Card className="bg-white border-slate-200 shadow-sm">
                     <CardContent className="py-10 text-center">
-                      <Heart className="h-10 w-10 text-pink-400/30 mx-auto mb-3" />
-                      <p className="text-white/50 font-medium">No attitude feedback for {MONTH_NAMES[detailMonth - 1]} {detailYear}</p>
+                      <Heart className="h-10 w-10 text-pink-300 mx-auto mb-3" />
+                      <p className="text-slate-600 font-medium">No attitude feedback for {MONTH_NAMES[detailMonth - 1]} {detailYear}</p>
                     </CardContent>
                   </Card>
                 )}
               </div>
             </div>
-          )}
-        </section>
+          </section>
+        )}
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-white/10 py-6 mt-10 relative z-10">
+      <footer className="border-t border-slate-200 py-6 mt-10 relative z-10 bg-white">
         <div className="container text-center">
-          <p className="text-white/30 text-sm">GP Performance Dashboard — Auto-refreshes every 30 seconds</p>
+          <p className="text-slate-400 text-sm">GP Performance Dashboard — Auto-refreshes every 30 seconds</p>
         </div>
       </footer>
     </div>

@@ -562,7 +562,7 @@ export default function ReportsPage() {
                         ) : (
                           <div className="h-4 w-4 rounded-full border border-border shrink-0" />
                         )}
-                        <span className={generationStep >= step ? 'text-foreground/80' : 'text-muted-foreground/50'}>
+                        <span className={generationStep >= step ? 'text-foreground' : 'text-muted-foreground'}>
                           {label}
                         </span>
                       </div>

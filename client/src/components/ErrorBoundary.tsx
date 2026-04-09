@@ -59,16 +59,16 @@ class ErrorBoundary extends Component<Props, State> {
               <AlertTriangle className="h-8 w-8 text-red-400" />
             </div>
 
-            <h2 className="text-xl font-semibold text-white mb-2">
+            <h2 className="text-xl font-semibold text-foreground mb-2">
               Something went wrong
             </h2>
-            <p className="text-white/40 text-sm mb-6">
+            <p className="text-muted-foreground text-sm mb-6">
               {this.state.error?.message || "An unexpected error occurred. Please try again."}
             </p>
 
             {isDev && this.state.error?.stack && (
-              <div className="w-full mb-6 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] overflow-auto max-h-48">
-                <pre className="text-xs text-white/30 whitespace-pre-wrap text-left font-mono">
+              <div className="w-full mb-6 p-4 rounded-xl bg-muted border border-border overflow-auto max-h-48">
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap text-left font-mono">
                   {this.state.error.stack}
                 </pre>
               </div>
@@ -79,8 +79,8 @@ class ErrorBoundary extends Component<Props, State> {
                 onClick={this.handleReset}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium",
-                  "bg-white/[0.05] text-white/70 border border-white/[0.08]",
-                  "hover:bg-white/[0.08] hover:text-white transition-all cursor-pointer"
+                  "bg-muted text-foreground border border-border",
+                  "hover:bg-accent hover:text-accent-foreground transition-all cursor-pointer"
                 )}
               >
                 <Bug className="h-4 w-4" />
@@ -90,8 +90,8 @@ class ErrorBoundary extends Component<Props, State> {
                 onClick={this.handleGoHome}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium",
-                  "bg-white/[0.05] text-white/70 border border-white/[0.08]",
-                  "hover:bg-white/[0.08] hover:text-white transition-all cursor-pointer"
+                  "bg-muted text-foreground border border-border",
+                  "hover:bg-accent hover:text-accent-foreground transition-all cursor-pointer"
                 )}
               >
                 <Home className="h-4 w-4" />

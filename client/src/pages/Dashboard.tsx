@@ -215,7 +215,7 @@ export default function Dashboard() {
                 <Progress value={evaluationProgress} className="h-2 bg-muted" />
               </div>
               <span className="font-bold text-primary text-sm sm:text-base">{evaluationProgress}%</span>
-              <span className="text-muted-foreground/60 text-xs sm:text-sm hidden sm:inline">({evaluatedGPs}/{totalGPs} GPs)</span>
+              <span className="text-muted-foreground text-xs sm:text-sm hidden sm:inline">({evaluatedGPs}/{totalGPs} GPs)</span>
             </div>
             {pendingGPs > 0 && (
               <Badge variant="violet" size="sm">{pendingGPs} pending</Badge>
@@ -295,8 +295,8 @@ export default function Dashboard() {
               </ResponsiveContainer>
             ) : (
               <div className="flex flex-col items-center justify-center h-48">
-                <BarChart3 className="h-10 w-10 text-muted-foreground/20 mb-3" />
-                <p className="text-muted-foreground/60 text-sm">No evaluation data for this period</p>
+                <BarChart3 className="h-10 w-10 text-muted-foreground mb-3" />
+                <p className="text-muted-foreground text-sm">No evaluation data for this period</p>
               </div>
             )}
           </CardContent>
@@ -349,8 +349,8 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-48">
-                <PieChart className="h-10 w-10 text-muted-foreground/20 mb-3" />
-                <p className="text-muted-foreground/60 text-sm">No data available</p>
+                <PieChart className="h-10 w-10 text-muted-foreground mb-3" />
+                <p className="text-muted-foreground text-sm">No data available</p>
               </div>
             )}
           </CardContent>
@@ -399,8 +399,8 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-32">
-                <Award className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                <p className="text-muted-foreground/60 text-sm">No evaluations yet</p>
+                <Award className="h-8 w-8 text-muted-foreground mb-2" />
+                <p className="text-muted-foreground text-sm">No evaluations yet</p>
               </div>
             )}
           </CardContent>
@@ -444,7 +444,7 @@ export default function Dashboard() {
                   <Award className="h-5 w-5 text-emerald-500" />
                 </div>
                 <p className="text-emerald-600 dark:text-emerald-400 text-sm font-medium">All GPs performing well!</p>
-                <p className="text-muted-foreground/60 text-xs mt-0.5">No scores below 16</p>
+                <p className="text-muted-foreground text-xs mt-0.5">No scores below 16</p>
               </div>
             )}
           </CardContent>
@@ -557,8 +557,8 @@ function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { i
               </ResponsiveContainer>
             ) : (
               <div className="flex flex-col items-center justify-center h-48">
-                <TrendingUp className="h-10 w-10 text-muted-foreground/20 mb-3" />
-                <p className="text-muted-foreground/60 text-sm">No trend data available</p>
+                <TrendingUp className="h-10 w-10 text-muted-foreground mb-3" />
+                <p className="text-muted-foreground text-sm">No trend data available</p>
               </div>
             )}
           </CardContent>
@@ -603,8 +603,8 @@ function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { i
               </ResponsiveContainer>
             ) : (
               <div className="flex flex-col items-center justify-center h-48">
-                <BarChart3 className="h-10 w-10 text-muted-foreground/20 mb-3" />
-                <p className="text-muted-foreground/60 text-sm">No volume data available</p>
+                <BarChart3 className="h-10 w-10 text-muted-foreground mb-3" />
+                <p className="text-muted-foreground text-sm">No volume data available</p>
               </div>
             )}
           </CardContent>
@@ -630,16 +630,16 @@ function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { i
                   <div key={i} className="rounded-xl border border-border bg-card/50 p-3 text-center space-y-2 transition-all hover:border-primary/20 hover:bg-card">
                     <p className="text-xs text-muted-foreground font-medium">{m.label}</p>
                     <p className="text-lg font-bold text-foreground">{m.avgTotalScore > 0 ? m.avgTotalScore.toFixed(1) : '—'}</p>
-                    <p className="text-[10px] text-muted-foreground/60">avg score</p>
+                    <p className="text-[10px] text-muted-foreground">avg score</p>
                     <div className="flex items-center justify-center gap-2 text-[10px]">
                       <span className="text-emerald-600 dark:text-emerald-400">{m.totalEvaluations} evals</span>
-                      <span className="text-muted-foreground/30">·</span>
+                      <span className="text-muted-foreground">·</span>
                       <span className="text-primary">{m.uniqueGPs} GPs</span>
                     </div>
                     {m.topScore > 0 && (
                       <div className="flex items-center justify-center gap-1.5 text-[10px]">
                         <span className="text-emerald-600 dark:text-emerald-400">↑{m.topScore}</span>
-                        <span className="text-muted-foreground/30">/</span>
+                        <span className="text-muted-foreground">/</span>
                         <span className="text-rose-500">↓{m.lowScore}</span>
                       </div>
                     )}
@@ -648,8 +648,8 @@ function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { i
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-32">
-                <Target className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                <p className="text-muted-foreground/60 text-sm">No summary data available</p>
+                <Target className="h-8 w-8 text-muted-foreground mb-2" />
+                <p className="text-muted-foreground text-sm">No summary data available</p>
               </div>
             )}
           </CardContent>
@@ -724,9 +724,9 @@ function GPMonthlyComparisonSection({ isMobile }: { isMobile: boolean }) {
       {!selectedGpId ? (
         <Card variant="glass">
           <CardContent className="flex flex-col items-center justify-center h-48 py-8">
-            <Users className="h-10 w-10 text-muted-foreground/20 mb-3" />
+            <Users className="h-10 w-10 text-muted-foreground mb-3" />
             <p className="text-muted-foreground text-sm">Select a Game Presenter to view their monthly comparison</p>
-            <p className="text-muted-foreground/50 text-xs mt-1">Choose a team and GP from the dropdowns above</p>
+            <p className="text-muted-foreground text-xs mt-1">Choose a team and GP from the dropdowns above</p>
           </CardContent>
         </Card>
       ) : isLoadingHistory ? (
@@ -792,20 +792,20 @@ function GPMonthlyComparisonSection({ isMobile }: { isMobile: boolean }) {
                     <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-card/50 border border-border hover:border-primary/20 transition-all">
                       <div className="text-center min-w-[50px]">
                         <p className="text-xs font-medium text-muted-foreground">{m.label}</p>
-                        <p className="text-[10px] text-muted-foreground/50">{m.evalCount} evals</p>
+                        <p className="text-[10px] text-muted-foreground">{m.evalCount} evals</p>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className={`text-lg font-bold ${
                             m.avgTotal >= 20 ? 'text-emerald-500' :
                             m.avgTotal >= 16 ? 'text-primary' :
-                            m.avgTotal > 0 ? 'text-rose-500' : 'text-muted-foreground/30'
+                            m.avgTotal > 0 ? 'text-rose-500' : 'text-muted-foreground'
                           }`}>
                             {m.avgTotal > 0 ? m.avgTotal.toFixed(1) : '—'}
                           </span>
                           {scoreDiff !== null && (
                             <span className={`text-xs font-medium ${
-                              scoreDiff > 0 ? 'text-emerald-500' : scoreDiff < 0 ? 'text-rose-500' : 'text-muted-foreground/50'
+                              scoreDiff > 0 ? 'text-emerald-500' : scoreDiff < 0 ? 'text-rose-500' : 'text-muted-foreground'
                             }`}>
                               {scoreDiff > 0 ? '+' : ''}{scoreDiff.toFixed(1)}
                             </span>
@@ -825,7 +825,7 @@ function GPMonthlyComparisonSection({ isMobile }: { isMobile: boolean }) {
                       {m.highScore > 0 && (
                         <div className="text-right text-[10px]">
                           <span className="text-emerald-500">↑{m.highScore.toFixed(1)}</span>
-                          <span className="text-muted-foreground/30 mx-0.5">/</span>
+                          <span className="text-muted-foreground mx-0.5">/</span>
                           <span className="text-rose-500">↓{m.lowScore.toFixed(1)}</span>
                         </div>
                       )}
@@ -839,7 +839,7 @@ function GPMonthlyComparisonSection({ isMobile }: { isMobile: boolean }) {
       ) : (
         <Card variant="glass">
           <CardContent className="flex flex-col items-center justify-center h-48 py-8">
-            <TrendingUp className="h-10 w-10 text-muted-foreground/20 mb-3" />
+            <TrendingUp className="h-10 w-10 text-muted-foreground mb-3" />
             <p className="text-muted-foreground text-sm">No history data available for this GP</p>
           </CardContent>
         </Card>
@@ -876,9 +876,9 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
         </div>
         <Card variant="glass">
           <CardContent className="flex flex-col items-center justify-center h-48 py-8">
-            <Users className="h-10 w-10 text-muted-foreground/20 mb-3" />
+            <Users className="h-10 w-10 text-muted-foreground mb-3" />
             <p className="text-muted-foreground text-sm">No team data available for comparison</p>
-            <p className="text-muted-foreground/50 text-xs mt-1">Add teams and evaluations to see cross-team analytics</p>
+            <p className="text-muted-foreground text-xs mt-1">Add teams and evaluations to see cross-team analytics</p>
           </CardContent>
         </Card>
       </div>
@@ -968,8 +968,8 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                 </ResponsiveContainer>
               ) : (
                 <div className="flex flex-col items-center justify-center h-48">
-                  <BarChart3 className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                  <p className="text-muted-foreground/60 text-sm">No team data available</p>
+                  <BarChart3 className="h-8 w-8 text-muted-foreground mb-2" />
+                  <p className="text-muted-foreground text-sm">No team data available</p>
                 </div>
               )}
             </CardContent>
@@ -994,8 +994,8 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-foreground/80 truncate">{team.teamName}</p>
-                        <span className="text-[10px] text-muted-foreground/60">FM: {team.floorManager}</span>
+                        <p className="text-sm font-medium text-foreground truncate">{team.teamName}</p>
+                        <span className="text-[10px] text-muted-foreground">FM: {team.floorManager}</span>
                       </div>
                       <div className="flex items-center gap-3 mt-0.5">
                         <span className="text-[10px] text-muted-foreground">{team.gpCount} GPs</span>
@@ -1006,11 +1006,11 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                       <p className={`text-lg font-bold ${
                         team.avgTotalScore >= 20 ? 'text-emerald-500' :
                         team.avgTotalScore >= 16 ? 'text-primary' :
-                        team.avgTotalScore > 0 ? 'text-rose-500' : 'text-muted-foreground/30'
+                        team.avgTotalScore > 0 ? 'text-rose-500' : 'text-muted-foreground'
                       }`}>
                         {team.avgTotalScore > 0 ? team.avgTotalScore.toFixed(1) : '—'}
                       </p>
-                      <p className="text-[10px] text-muted-foreground/60">avg score</p>
+                      <p className="text-[10px] text-muted-foreground">avg score</p>
                     </div>
                   </div>
                 ))}
@@ -1082,8 +1082,8 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                     <tbody>
                       {allGPs.map((gp, idx) => (
                         <tr key={`${gp.id}-${gp.teamName}`} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
-                          <td className="py-2 px-2 text-muted-foreground/60">{idx + 1}</td>
-                          <td className="py-2 px-2 text-foreground/80 font-medium">{gp.name}</td>
+                          <td className="py-2 px-2 text-muted-foreground">{idx + 1}</td>
+                          <td className="py-2 px-2 text-foreground font-medium">{gp.name}</td>
                           <td className="py-2 px-2">
                             <span className="inline-flex items-center gap-1">
                               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: TEAM_COLORS[comparisonData.findIndex(t => t.teamName === gp.teamName) % TEAM_COLORS.length] }} />
@@ -1097,7 +1097,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                           }`}>{gp.avgTotalScore.toFixed(1)}</td>
                           <td className="py-2 px-2 text-right text-muted-foreground">{gp.avgAppearanceScore.toFixed(1)}</td>
                           <td className="py-2 px-2 text-right text-muted-foreground">{gp.avgPerformanceScore.toFixed(1)}</td>
-                          <td className="py-2 px-2 text-right text-muted-foreground/60">{gp.evaluationCount}</td>
+                          <td className="py-2 px-2 text-right text-muted-foreground">{gp.evaluationCount}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1106,8 +1106,8 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
               </>
             ) : (
               <div className="flex flex-col items-center justify-center h-48">
-                <Users className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                <p className="text-muted-foreground/60 text-sm">No GP data available for comparison</p>
+                <Users className="h-8 w-8 text-muted-foreground mb-2" />
+                <p className="text-muted-foreground text-sm">No GP data available for comparison</p>
               </div>
             )}
           </CardContent>
