@@ -2,12 +2,9 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { 
   Upload as UploadIcon, 
@@ -21,22 +18,20 @@ import {
   Star,
   Sparkles,
   Link2,
-  Clipboard,
-  Zap,
   RotateCcw,
   Trash2,
-  ImageIcon,
   Clock,
-  TrendingUp,
-  ChevronRight,
+  ChevronDown,
+  ChevronUp,
   FileCheck,
-  Keyboard,
   Heart,
   AlertTriangle,
   ThumbsUp,
   ThumbsDown,
-  MessageSquare,
-  CloudUpload
+  CloudUpload,
+  ImagePlus,
+  Scissors,
+  Clipboard
 } from "lucide-react";
 
 // ============ TYPES ============
@@ -97,6 +92,7 @@ interface FileWithPreview {
   error?: string;
   progress?: number;
   processingTime?: number;
+  expanded?: boolean;
 }
 
 type UploadType = "evaluations" | "attitude";
@@ -135,6 +131,365 @@ async function compressImage(file: File, maxWidth: number = 1920, quality: numbe
   });
 }
 
+function getScoreColor(score: number, maxScore: number): string {
+  const pct = (score / maxScore) * 100;
+  if (pct >= 80) return "text-emerald-600";
+  if (pct >= 60) return "text-amber-600";
+  return "text-red-600";
+}
+
+function getScoreBg(score: number, maxScore: number): string {
+  const pct = (score / maxScore) * 100;
+  if (pct >= 80) return "bg-emerald-50 border-emerald-200";
+  if (pct >= 60) return "bg-amber-50 border-amber-200";
+  return "bg-red-50 border-red-200";
+}
+
+// ============ SCORE BAR COMPONENT ============
+
+function ScoreBar({ label, score, maxScore, comment }: { label: string; score: number; maxScore: number; comment?: string }) {
+  const pct = (score / maxScore) * 100;
+  const barColor = pct >= 80 ? "bg-emerald-500" : pct >= 60 ? "bg-amber-500" : "bg-red-500";
+  
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">{label}</span>
+        <span className={`font-semibold ${getScoreColor(score, maxScore)}`}>{score}/{maxScore}</span>
+      </div>
+      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+      {comment && <p className="text-xs text-muted-foreground mt-0.5 italic">{comment}</p>}
+    </div>
+  );
+}
+
+// ============ RESULT CARD COMPONENT ============
+
+function EvaluationResultCard({ file, onRemove, onRetry }: { file: FileWithPreview; onRemove: (id: string) => void; onRetry: (id: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const data = file.extractedData;
+  
+  if (file.status === "uploading") {
+    return (
+      <div className="border border-border rounded-xl p-4 bg-background animate-pulse">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-muted">
+            <img src={file.preview} alt="" className="w-full h-full object-cover opacity-50" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-sm font-medium text-foreground">Extracting data with AI...</span>
+            </div>
+            <Progress value={file.progress || 0} className="h-1.5 rounded-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  if (file.status === "error") {
+    return (
+      <div className="border border-red-200 rounded-xl p-4 bg-red-50/50">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 relative">
+            <img src={file.preview} alt="" className="w-full h-full object-cover opacity-50" />
+            <div className="absolute inset-0 flex items-center justify-center bg-red-500/20">
+              <AlertCircle className="h-6 w-6 text-red-500" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-red-700">Failed to process</p>
+            <p className="text-xs text-red-500 mt-0.5 truncate">{file.error || "Unknown error"}</p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" size="sm" onClick={() => onRetry(file.id)} className="text-xs h-8">
+              <RotateCcw className="h-3 w-3 mr-1" />
+              Retry
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => onRemove(file.id)} className="text-xs h-8 text-red-500 hover:text-red-700">
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  if (file.status === "pending") {
+    return (
+      <div className="border border-border rounded-xl p-4 bg-muted/30">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0">
+            <img src={file.preview} alt="" className="w-full h-full object-cover" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground truncate">{file.file.name}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Waiting to process...</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => onRemove(file.id)} className="text-xs h-8 text-muted-foreground hover:text-red-500 shrink-0">
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  
+  // Success state
+  if (!data) return null;
+  
+  const totalScore = data.totalScore || 0;
+  const maxPossible = 22;
+  const scorePct = (totalScore / maxPossible) * 100;
+  
+  return (
+    <div className="border border-border rounded-xl bg-background overflow-hidden hover:shadow-md transition-shadow">
+      {/* Main row - always visible */}
+      <div 
+        className="flex items-center gap-4 p-4 cursor-pointer"
+        onClick={() => setExpanded(!expanded)}
+      >
+        {/* Thumbnail */}
+        <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-border">
+          <img src={file.preview} alt="" className="w-full h-full object-cover" />
+        </div>
+        
+        {/* GP Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-foreground truncate">{data.presenterName}</p>
+            {file.matchInfo?.isNewGP && (
+              <Badge className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-200 shrink-0">New</Badge>
+            )}
+            {file.matchInfo && !file.matchInfo.isExactMatch && !file.matchInfo.isNewGP && (
+              <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border-blue-200 shrink-0">
+                <Link2 className="h-2.5 w-2.5 mr-0.5" />
+                {file.matchInfo.similarity}%
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+            {data.date && (
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                {data.date}
+              </span>
+            )}
+            {data.game && (
+              <span className="flex items-center gap-1">
+                <Gamepad2 className="h-3 w-3" />
+                {data.game}
+              </span>
+            )}
+            {file.processingTime && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {(file.processingTime / 1000).toFixed(1)}s
+              </span>
+            )}
+          </div>
+        </div>
+        
+        {/* Score */}
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border shrink-0 ${getScoreBg(totalScore, maxPossible)}`}>
+          <Star className={`h-4 w-4 ${getScoreColor(totalScore, maxPossible)}`} />
+          <span className={`text-lg font-bold ${getScoreColor(totalScore, maxPossible)}`}>{totalScore}</span>
+          <span className="text-xs text-muted-foreground">/{maxPossible}</span>
+        </div>
+        
+        {/* Expand toggle */}
+        <button className="shrink-0 p-1 rounded-md hover:bg-muted transition-colors">
+          {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </button>
+      </div>
+      
+      {/* Expanded details */}
+      {expanded && (
+        <div className="border-t border-border px-4 pb-4 pt-3 space-y-3 bg-muted/20">
+          {/* Match info */}
+          {file.matchInfo && !file.matchInfo.isExactMatch && !file.matchInfo.isNewGP && (
+            <div className="flex items-center gap-2 text-sm p-2.5 rounded-lg bg-blue-50 border border-blue-200">
+              <Link2 className="h-4 w-4 text-blue-600" />
+              <span className="text-blue-700">
+                Matched to <strong>{file.matchInfo.matchedName}</strong> ({file.matchInfo.similarity}% similarity)
+              </span>
+            </div>
+          )}
+          
+          {/* Score breakdown */}
+          <div className="space-y-2.5">
+            {[
+              { key: "hair", label: "Hair" },
+              { key: "makeup", label: "Makeup" },
+              { key: "outfit", label: "Outfit" },
+              { key: "posture", label: "Posture" },
+              { key: "dealingStyle", label: "Dealing Style" },
+              { key: "gamePerformance", label: "Game Performance" },
+            ].map(({ key, label }) => {
+              const scoreData = data[key as keyof ExtractedData] as { score: number; maxScore: number; comment?: string } | undefined;
+              if (!scoreData) return null;
+              return <ScoreBar key={key} label={label} score={scoreData.score} maxScore={scoreData.maxScore} comment={scoreData.comment} />;
+            })}
+          </div>
+          
+          {/* Evaluator */}
+          {data.evaluatorName && (
+            <p className="text-xs text-muted-foreground pt-1">
+              Evaluated by: <span className="font-medium text-foreground">{data.evaluatorName}</span>
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ ATTITUDE RESULT CARD ============
+
+function AttitudeResultCard({ file, onRemove, onRetry }: { file: FileWithPreview; onRemove: (id: string) => void; onRetry: (id: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const data = file.attitudeData;
+  
+  if (file.status === "uploading") {
+    return (
+      <div className="border border-border rounded-xl p-4 bg-background animate-pulse">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-muted">
+            <img src={file.preview} alt="" className="w-full h-full object-cover opacity-50" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-sm font-medium text-foreground">Extracting attitude data...</span>
+            </div>
+            <Progress value={file.progress || 0} className="h-1.5 rounded-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  if (file.status === "error") {
+    return (
+      <div className="border border-red-200 rounded-xl p-4 bg-red-50/50">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 relative">
+            <img src={file.preview} alt="" className="w-full h-full object-cover opacity-50" />
+            <div className="absolute inset-0 flex items-center justify-center bg-red-500/20">
+              <AlertCircle className="h-6 w-6 text-red-500" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-red-700">Failed to process</p>
+            <p className="text-xs text-red-500 mt-0.5 truncate">{file.error || "Unknown error"}</p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" size="sm" onClick={() => onRetry(file.id)} className="text-xs h-8">
+              <RotateCcw className="h-3 w-3 mr-1" />
+              Retry
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => onRemove(file.id)} className="text-xs h-8 text-red-500 hover:text-red-700">
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  if (file.status === "pending") {
+    return (
+      <div className="border border-border rounded-xl p-4 bg-muted/30">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0">
+            <img src={file.preview} alt="" className="w-full h-full object-cover" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground truncate">{file.file.name}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Waiting to process...</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => onRemove(file.id)} className="text-xs h-8 text-muted-foreground hover:text-red-500 shrink-0">
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!data) return null;
+  
+  return (
+    <div className="border border-border rounded-xl bg-background overflow-hidden hover:shadow-md transition-shadow">
+      <div 
+        className="flex items-center gap-4 p-4 cursor-pointer"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-border">
+          <img src={file.preview} alt="" className="w-full h-full object-cover" />
+        </div>
+        
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-foreground truncate">{data.gpName || "Unknown GP"}</p>
+          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+            <span>{data.totalEntries} entries</span>
+            {file.processingTime && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {(file.processingTime / 1000).toFixed(1)}s
+              </span>
+            )}
+          </div>
+        </div>
+        
+        {/* Attitude summary badges */}
+        <div className="flex items-center gap-2 shrink-0">
+          {data.totalPositive > 0 && (
+            <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold">
+              <ThumbsUp className="h-3 w-3" />
+              +{data.totalPositive}
+            </span>
+          )}
+          {data.totalNegative > 0 && (
+            <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm font-semibold">
+              <ThumbsDown className="h-3 w-3" />
+              -{data.totalNegative}
+            </span>
+          )}
+        </div>
+        
+        <button className="shrink-0 p-1 rounded-md hover:bg-muted transition-colors">
+          {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </button>
+      </div>
+      
+      {expanded && data.entries && data.entries.length > 0 && (
+        <div className="border-t border-border px-4 pb-4 pt-3 space-y-2 bg-muted/20">
+          {data.entries.map((entry, idx) => (
+            <div key={idx} className={`p-3 rounded-lg text-sm ${entry.type === 'POSITIVE' ? 'bg-emerald-50 border-l-3 border-emerald-500' : 'bg-red-50 border-l-3 border-red-500'}`}>
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  {entry.type === "POSITIVE" ? (
+                    <ThumbsUp className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : (
+                    <ThumbsDown className="h-3.5 w-3.5 text-red-600" />
+                  )}
+                  <span className={`font-medium ${entry.type === "POSITIVE" ? "text-emerald-700" : "text-red-700"}`}>
+                    {entry.type === "POSITIVE" ? `+${entry.score}` : `${entry.score}`}
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground">{entry.date}</span>
+              </div>
+              <p className="text-muted-foreground ml-5">{entry.comment}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ============ MAIN COMPONENT ============
 
 export default function UploadPage() {
@@ -144,13 +499,9 @@ export default function UploadPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [overallProgress, setOverallProgress] = useState(0);
-  const [selectedFile, setSelectedFile] = useState<FileWithPreview | null>(null);
-  const [autoProcess, setAutoProcess] = useState(true);
-  const [showKeyboardHints, setShowKeyboardHints] = useState(false);
   const [selectedGpId, setSelectedGpId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const processingRef = useRef(false);
-  const startTimeRef = useRef<number>(0);
 
   const { data: gpList } = trpc.gamePresenter.list.useQuery();
 
@@ -161,60 +512,19 @@ export default function UploadPage() {
 
   const stats = useMemo(() => {
     const successFiles = files.filter(f => f.status === "success");
-    const avgTime = successFiles.length > 0 
-      ? successFiles.reduce((sum, f) => sum + (f.processingTime || 0), 0) / successFiles.length 
-      : 0;
-    
-    if (activeTab === "evaluations") {
-      const avgScore = successFiles.length > 0
-        ? successFiles.reduce((sum, f) => sum + (f.extractedData?.totalScore || 0), 0) / successFiles.length
-        : 0;
-      return {
-        total: files.length,
-        success: successFiles.length,
-        pending: files.filter(f => f.status === "pending").length,
-        uploading: files.filter(f => f.status === "uploading").length,
-        error: files.filter(f => f.status === "error").length,
-        avgTime: avgTime / 1000,
-        avgScore,
-        newGPs: successFiles.filter(f => f.matchInfo?.isNewGP).length,
-      };
-    } else {
-      const positive = successFiles.reduce((sum, f) => sum + (f.attitudeData?.totalPositive || 0), 0);
-      const negative = successFiles.reduce((sum, f) => sum + (f.attitudeData?.totalNegative || 0), 0);
-      const totalEntries = successFiles.reduce((sum, f) => sum + (f.attitudeData?.totalEntries || 0), 0);
-      return {
-        total: files.length,
-        success: successFiles.length,
-        pending: files.filter(f => f.status === "pending").length,
-        uploading: files.filter(f => f.status === "uploading").length,
-        error: files.filter(f => f.status === "error").length,
-        avgTime: avgTime / 1000,
-        positive,
-        negative,
-        totalEntries,
-      };
-    }
-  }, [files, activeTab]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setSelectedFile(null);
-      } else if (e.key === 'Delete' && selectedFile) {
-        removeFile(selectedFile.id);
-      } else if (e.key === 'o' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        fileInputRef.current?.click();
-      } else if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
-        setShowKeyboardHints(prev => !prev);
-      }
+    const errorFiles = files.filter(f => f.status === "error");
+    const pendingFiles = files.filter(f => f.status === "pending");
+    const uploadingFiles = files.filter(f => f.status === "uploading");
+    return {
+      total: files.length,
+      success: successFiles.length,
+      pending: pendingFiles.length,
+      uploading: uploadingFiles.length,
+      error: errorFiles.length,
     };
+  }, [files]);
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedFile]);
-
+  // Clipboard paste handler
   useEffect(() => {
     const handlePaste = async (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -233,29 +543,28 @@ export default function UploadPage() {
 
       if (imageFiles.length > 0) {
         e.preventDefault();
-        toast.success(`📋 Pasted ${imageFiles.length} image${imageFiles.length > 1 ? 's' : ''} from clipboard`, {
-          duration: 2000,
-        });
+        toast.success(`Pasted ${imageFiles.length} image${imageFiles.length > 1 ? 's' : ''} from clipboard`);
         addFiles(imageFiles);
       }
     };
 
     document.addEventListener("paste", handlePaste);
     return () => document.removeEventListener("paste", handlePaste);
-  }, [autoProcess]);
+  }, []);
 
+  // Auto-process pending files
   useEffect(() => {
-    if (autoProcess && !processingRef.current) {
+    if (!processingRef.current) {
       const pendingFiles = files.filter(f => f.status === "pending");
       if (pendingFiles.length > 0) {
         processFiles();
       }
     }
-  }, [files, autoProcess]);
+  }, [files]);
 
+  // Clear files when switching tabs
   useEffect(() => {
     setFiles([]);
-    setSelectedFile(null);
   }, [activeTab]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -275,9 +584,6 @@ export default function UploadPage() {
       (file) => file.type.startsWith("image/")
     );
     if (droppedFiles.length > 0) {
-      toast.success(`📁 Dropped ${droppedFiles.length} file${droppedFiles.length > 1 ? 's' : ''}`, {
-        duration: 2000,
-      });
       addFiles(droppedFiles);
     }
   }, []);
@@ -288,9 +594,6 @@ export default function UploadPage() {
         (file) => file.type.startsWith("image/")
       );
       if (selectedFiles.length > 0) {
-        toast.success(`📁 Selected ${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''}`, {
-          duration: 2000,
-        });
         addFiles(selectedFiles);
       }
       e.target.value = "";
@@ -311,14 +614,9 @@ export default function UploadPage() {
   const removeFile = (id: string) => {
     setFiles((prev) => {
       const file = prev.find(f => f.id === id);
-      if (file) {
-        URL.revokeObjectURL(file.preview);
-      }
+      if (file) URL.revokeObjectURL(file.preview);
       return prev.filter(f => f.id !== id);
     });
-    if (selectedFile?.id === id) {
-      setSelectedFile(null);
-    }
   };
 
   const retryFile = (id: string) => {
@@ -334,7 +632,6 @@ export default function UploadPage() {
     processingRef.current = true;
     setIsProcessing(true);
     setOverallProgress(0);
-    startTimeRef.current = Date.now();
 
     let processed = 0;
     const total = pendingFiles.length;
@@ -391,7 +688,7 @@ export default function UploadPage() {
             ));
           } else if (activeTab === "attitude") {
             if (!selectedGpId) {
-              throw new Error("Please select a Game Presenter before uploading");
+              throw new Error("Please select a Game Presenter first");
             }
             result = await uploadAttitudeMutation.mutateAsync({
               imageBase64: base64,
@@ -443,31 +740,11 @@ export default function UploadPage() {
 
     processingRef.current = false;
     setIsProcessing(false);
-    
-    const successCount = files.filter(f => f.status === "success").length + 
-                        pendingFiles.filter(f => files.find(ff => ff.id === f.id)?.status === "success").length;
-    
-    if (successCount > 0) {
-      toast.success(`✨ Processed ${successCount} ${activeTab} screenshot${successCount > 1 ? 's' : ''}!`, {
-        duration: 3000,
-      });
-    }
   };
 
   const clearAll = () => {
     files.forEach(f => URL.revokeObjectURL(f.preview));
     setFiles([]);
-    setSelectedFile(null);
-  };
-
-  const clearCompleted = () => {
-    setFiles(prev => {
-      prev.filter(f => f.status === "success").forEach(f => URL.revokeObjectURL(f.preview));
-      return prev.filter(f => f.status !== "success");
-    });
-    if (selectedFile?.status === "success") {
-      setSelectedFile(null);
-    }
   };
 
   const retryFailed = () => {
@@ -476,625 +753,208 @@ export default function UploadPage() {
     ));
   };
 
-  const getTabDescription = () => {
-    switch (activeTab) {
-      case "evaluations": return "Upload evaluation screenshots for AI extraction";
-      case "attitude": return "Upload attitude entry screenshots (POSITIVE/NEGATIVE)";
-      default: return "Upload screenshots for AI extraction";
-    }
-  };
+  const hasFiles = files.length > 0;
 
   return (
-    <div className="space-y-6 p-4 md:p-6 min-h-screen">
+    <div className="space-y-5 p-4 md:p-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
-        <div className="page-header mb-0">
-          <h1 className="page-title">Upload Screenshots</h1>
-          <p className="page-subtitle">{getTabDescription()}</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 bg-muted/50 border border-border px-3 py-2 rounded-xl">
-            <Switch
-              id="auto-process"
-              checked={autoProcess}
-              onCheckedChange={setAutoProcess}
-            />
-            <Label htmlFor="auto-process" className="text-sm cursor-pointer">
-              Auto-process
-            </Label>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowKeyboardHints(prev => !prev)}
-            className="bg-muted/50 border border-border rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted"
-          >
-            <Keyboard className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Shortcuts</span>
-          </Button>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Upload Screenshots</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {activeTab === "evaluations" 
+              ? "Upload evaluation screenshots — AI extracts scores automatically" 
+              : "Upload attitude screenshots for selected GP"}
+          </p>
         </div>
       </div>
 
-      {/* Keyboard Hints */}
-      {showKeyboardHints && (
-        <div className="p-4 rounded-2xl bg-muted/30 border border-border/50">
-          <div className="flex flex-wrap gap-4 text-sm">
-            {[
-              { key: "Ctrl+V", desc: "Paste from clipboard" },
-              { key: "Ctrl+O", desc: "Open file picker" },
-              { key: "Esc", desc: "Deselect" },
-              { key: "Del", desc: "Remove selected" },
-              { key: "?", desc: "Toggle hints" },
-            ].map(({ key, desc }) => (
-              <div key={key} className="flex items-center gap-2">
-                <kbd className="px-2 py-1 glass-strong rounded-lg text-xs font-mono">{key}</kbd>
-                <span className="text-muted-foreground">{desc}</span>
-              </div>
+      {/* Tab Switcher */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as UploadType)}>
+        <TabsList className="bg-muted/50 border border-border rounded-xl p-1">
+          <TabsTrigger value="evaluations" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <FileCheck className="h-4 w-4" />
+            Evaluations
+          </TabsTrigger>
+          <TabsTrigger value="attitude" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <Heart className="h-4 w-4" />
+            Attitude
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {/* GP Selector for Attitude */}
+      {activeTab === "attitude" && (
+        <div className="p-4 rounded-xl border border-border bg-background">
+          <label className="text-sm font-medium text-foreground block mb-2">Select Game Presenter</label>
+          <select
+            className="w-full rounded-lg px-3 py-2.5 border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            value={selectedGpId || ""}
+            onChange={(e) => setSelectedGpId(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">Choose a GP...</option>
+            {gpList?.map((gp) => (
+              <option key={gp.id} value={gp.id}>{gp.name}</option>
             ))}
+          </select>
+          {!selectedGpId && (
+            <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              Select a GP before uploading attitude screenshots
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Upload Zone */}
+      <div
+        className={`relative rounded-xl border-2 border-dashed transition-all cursor-pointer ${
+          isDragging 
+            ? "border-primary bg-primary/5 scale-[1.01]" 
+            : hasFiles 
+              ? "border-border bg-muted/20 hover:border-primary/50 hover:bg-muted/30" 
+              : "border-border bg-muted/20 hover:border-primary/50 hover:bg-muted/30"
+        } ${hasFiles ? "p-6" : "p-12"}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          multiple
+          accept="image/*"
+          onChange={handleFileSelect}
+        />
+        <div className="flex flex-col items-center gap-3 text-center">
+          {hasFiles ? (
+            <>
+              <div className="flex items-center gap-3 text-muted-foreground">
+                <ImagePlus className="h-5 w-5" />
+                <span className="text-sm font-medium">Drop more screenshots or click to add</span>
+                <span className="text-xs px-2 py-0.5 rounded-md bg-muted border border-border">Ctrl+V</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <CloudUpload className={`h-8 w-8 transition-colors ${isDragging ? "text-primary" : "text-primary/60"}`} />
+              </div>
+              <div>
+                <p className="font-semibold text-lg text-foreground">
+                  {isDragging ? "Drop files here" : "Drop screenshots here or click to upload"}
+                </p>
+                <p className="text-sm text-muted-foreground mt-1.5">
+                  PNG, JPG, WEBP — multiple files supported
+                </p>
+              </div>
+              <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted border border-border">
+                  <Clipboard className="h-3 w-3" />
+                  Ctrl+V to paste
+                </span>
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted border border-border">
+                  <ImagePlus className="h-3 w-3" />
+                  Click to browse
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Processing Progress */}
+      {isProcessing && (
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20">
+          <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
+          <div className="flex-1">
+            <Progress value={overallProgress} className="h-1.5 rounded-full" />
+          </div>
+          <span className="text-sm font-medium text-primary shrink-0">{Math.round(overallProgress)}%</span>
+        </div>
+      )}
+
+      {/* Action Bar */}
+      {hasFiles && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{stats.total} file{stats.total !== 1 ? "s" : ""}</span>
+            {stats.success > 0 && (
+              <span className="flex items-center gap-1 text-emerald-600">
+                <CheckCircle className="h-3.5 w-3.5" />
+                {stats.success} done
+              </span>
+            )}
+            {stats.uploading > 0 && (
+              <span className="flex items-center gap-1 text-blue-600">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {stats.uploading} processing
+              </span>
+            )}
+            {stats.error > 0 && (
+              <span className="flex items-center gap-1 text-red-600">
+                <AlertCircle className="h-3.5 w-3.5" />
+                {stats.error} failed
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {stats.error > 0 && (
+              <Button variant="outline" size="sm" onClick={retryFailed} className="text-xs h-8">
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Retry failed
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={clearAll} className="text-xs h-8 text-muted-foreground hover:text-red-600">
+              <Trash2 className="h-3 w-3 mr-1" />
+              Clear all
+            </Button>
           </div>
         </div>
       )}
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as UploadType)}>
-        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 w-full sm:w-auto">
-          <TabsTrigger value="evaluations" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-lg">
-            <FileCheck className="h-4 w-4" />
-            <span>Evaluations</span>
-          </TabsTrigger>
-          <TabsTrigger value="attitude" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-lg">
-            <Heart className="h-4 w-4" />
-            <span>Attitude</span>
-          </TabsTrigger>
-        </TabsList>
+      {/* Results List */}
+      {hasFiles && (
+        <div className="space-y-3">
+          {files.map((file) => (
+            activeTab === "evaluations" ? (
+              <EvaluationResultCard key={file.id} file={file} onRemove={removeFile} onRetry={retryFile} />
+            ) : (
+              <AttitudeResultCard key={file.id} file={file} onRemove={removeFile} onRetry={retryFile} />
+            )
+          ))}
+        </div>
+      )}
 
-        {/* Stats Cards */}
-        {stats.success > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 animate-stagger">
-            <div className="stat-card-enhanced green">
-              <div className="flex items-center gap-3">
-                <div className="icon-box icon-box-green">
-                  <CheckCircle className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold counter-value">{stats.success}</p>
-                  <p className="text-xs text-muted-foreground">Processed</p>
-                </div>
-              </div>
+      {/* Batch Summary */}
+      {stats.success > 0 && !isProcessing && stats.pending === 0 && stats.uploading === 0 && (
+        <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+              <CheckCircle className="h-5 w-5 text-emerald-600" />
             </div>
-            <div className="stat-card-enhanced violet">
-              <div className="flex items-center gap-3">
-                <div className="icon-box icon-box-violet">
-                  <Clock className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold counter-value">{stats.avgTime.toFixed(1)}s</p>
-                  <p className="text-xs text-muted-foreground">Avg. Time</p>
-                </div>
-              </div>
-            </div>
-            {activeTab === "evaluations" && "avgScore" in stats && (
-              <>
-                <div className="stat-card-enhanced violet">
-                  <div className="flex items-center gap-3">
-                    <div className="icon-box icon-box-violet">
-                      <Star className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold counter-value">{(stats as any).avgScore.toFixed(1)}</p>
-                      <p className="text-xs text-muted-foreground">Avg. Score</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="stat-card-enhanced violet">
-                  <div className="flex items-center gap-3">
-                    <div className="icon-box icon-box-violet">
-                      <User className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold counter-value">{(stats as any).newGPs}</p>
-                      <p className="text-xs text-muted-foreground">New GPs</p>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-            {activeTab === "attitude" && "positive" in stats && (
-              <>
-                <div className="stat-card-enhanced green">
-                  <div className="flex items-center gap-3">
-                    <div className="icon-box icon-box-green">
-                      <ThumbsUp className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-green-400 counter-value">+{(stats as any).positive}</p>
-                      <p className="text-xs text-muted-foreground">Positive</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="stat-card-enhanced red">
-                  <div className="flex items-center gap-3">
-                    <div className="icon-box icon-box-red">
-                      <ThumbsDown className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-red-400 counter-value">-{(stats as any).negative}</p>
-                      <p className="text-xs text-muted-foreground">Negative</p>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-          {/* Upload Area */}
-          <div className="lg:col-span-2 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-            <div className="unified-card overflow-hidden">
-              <div className="unified-card-header">
-                <div className="icon-box icon-box-violet">
-                  <CloudUpload className="h-5 w-5" />
-                </div>
-                <div className="section-header">
-                  <h3 className="section-title">Upload Area</h3>
-                  <p className="section-subtitle">Drag & drop or paste screenshots</p>
-                </div>
-              </div>
-              <div className="p-5">
-                {/* GP Selector for Attitude Tab */}
-                {activeTab === "attitude" && (
-                  <div className="mb-5 p-4 glass-subtle rounded-xl">
-                    <Label className="text-sm font-medium mb-2 block">Select Game Presenter</Label>
-                    <select
-                      className="w-full glass-input rounded-xl px-4 py-3 border-0 focus:ring-2 focus:ring-primary/50"
-                      value={selectedGpId || ""}
-                      onChange={(e) => setSelectedGpId(e.target.value ? Number(e.target.value) : null)}
-                      
-                    >
-                      <option value="">Choose a GP...</option>
-                      {gpList?.map((gp) => (
-                        <option key={gp.id} value={gp.id}>
-                          {gp.name}
-                        </option>
-                      ))}
-                    </select>
-                    {!selectedGpId && (
-                      <p className="text-xs text-primary mt-2 flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3" />
-                        Please select a GP before uploading attitude screenshots
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Drop Zone */}
-                <div
-                  className={`upload-zone-enhanced ${isDragging ? 'dragging' : ''}`}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    multiple
-                    accept="image/*"
-                    onChange={handleFileSelect}
-                  />
-                  <div className="flex flex-col items-center gap-4 relative z-10">
-                    <div className="upload-icon-box">
-                      <UploadIcon className={`h-10 w-10 transition-colors ${isDragging ? "text-primary" : "text-primary/70"}`} />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-xl text-foreground">
-                        {isDragging ? "Drop files here!" : "Drop screenshots or click to upload"}
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        PNG, JPG, WEBP • Multiple files • Paste with Ctrl+V
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Files List */}
-                {files.length > 0 && (
-                  <div className="mt-6 space-y-4">
-                    {/* Stats Bar */}
-                    <div className="flex items-center justify-between flex-wrap gap-3 p-3 glass-subtle rounded-xl">
-                      <div className="flex gap-4 text-sm">
-                        <span className="font-medium">
-                          {files.length} file{files.length !== 1 ? "s" : ""}
-                        </span>
-                        {stats.uploading > 0 && (
-                          <span className="text-blue-500 flex items-center gap-1">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            {stats.uploading} processing
-                          </span>
-                        )}
-                        {stats.success > 0 && (
-                          <span className="text-green-500 flex items-center gap-1">
-                            <CheckCircle className="h-3 w-3" />
-                            {stats.success} done
-                          </span>
-                        )}
-                        {stats.error > 0 && (
-                          <span className="text-red-500 flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3" />
-                            {stats.error} failed
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        {stats.error > 0 && (
-                          <Button variant="outline" size="sm" onClick={retryFailed} className="glass-button rounded-lg border-0">
-                            <RotateCcw className="h-3 w-3 mr-1" />
-                            Retry Failed
-                          </Button>
-                        )}
-                        {stats.success > 0 && (
-                          <Button variant="outline" size="sm" onClick={clearCompleted} className="glass-button rounded-lg border-0">
-                            Clear Done
-                          </Button>
-                        )}
-                        {!autoProcess && stats.pending > 0 && (
-                          <Button
-                            onClick={processFiles}
-                            disabled={isProcessing}
-                            size="sm"
-                            className="rounded-lg bg-gradient-to-r from-primary to-primary/80"
-                          >
-                            {isProcessing ? (
-                              <>
-                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                Processing...
-                              </>
-                            ) : (
-                              <>
-                                <Sparkles className="mr-1 h-3 w-3" />
-                                Process {stats.pending}
-                              </>
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Overall Progress */}
-                    {isProcessing && (
-                      <div className="space-y-2 p-3 glass-subtle rounded-xl">
-                        <Progress value={overallProgress} className="h-2 rounded-full" />
-                        <p className="text-xs text-muted-foreground text-center">
-                          Processing... {Math.round(overallProgress)}%
-                        </p>
-                      </div>
-                    )}
-
-                    {/* File Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                      {files.map((file) => (
-                        <div
-                          key={file.id}
-                          className={`relative group glass-card rounded-xl overflow-hidden cursor-pointer transition-all ${
-                            selectedFile?.id === file.id ? "ring-2 ring-primary shadow-glow" : "hover:shadow-lg hover:scale-[1.02]"
-                          }`}
-                          onClick={() => file.status === "success" && setSelectedFile(file)}
-                        >
-                          <div className="aspect-[3/4] relative">
-                            <img
-                              src={file.preview}
-                              alt={file.file.name}
-                              className="w-full h-full object-cover"
-                            />
-                            {/* Status Overlay */}
-                            <div
-                              className={`absolute inset-0 flex items-center justify-center transition-all ${
-                                file.status === "uploading"
-                                  ? "bg-black/60 backdrop-blur-sm"
-                                  : file.status === "success"
-                                  ? "bg-green-500/20"
-                                  : file.status === "error"
-                                  ? "bg-red-500/30 backdrop-blur-sm"
-                                  : "bg-black/20"
-                              }`}
-                            >
-                              {file.status === "uploading" && (
-                                <div className="text-center">
-                                  <Loader2 className="h-10 w-10 text-foreground animate-spin mx-auto" />
-                                  <p className="text-foreground text-sm mt-2 font-medium">{file.progress}%</p>
-                                </div>
-                              )}
-                              {file.status === "success" && (
-                                <div className="p-3 rounded-full bg-green-500/30 backdrop-blur-sm">
-                                  <CheckCircle className="h-10 w-10 text-green-400" />
-                                </div>
-                              )}
-                              {file.status === "error" && (
-                                <div className="text-center p-3">
-                                  <AlertCircle className="h-10 w-10 text-red-400 mx-auto" />
-                                  <Button
-                                    size="sm"
-                                    className="mt-3 glass-button rounded-lg"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      retryFile(file.id);
-                                    }}
-                                  >
-                                    <RotateCcw className="h-3 w-3 mr-1" />
-                                    Retry
-                                  </Button>
-                                </div>
-                              )}
-                              {file.status === "pending" && (
-                                <div className="p-3 glass-strong rounded-full">
-                                  <UploadIcon className="h-8 w-8 text-muted-foreground" />
-                                </div>
-                              )}
-                            </div>
-                            {/* Progress Bar for uploading */}
-                            {file.status === "uploading" && (
-                              <div className="absolute bottom-0 left-0 right-0">
-                                <Progress value={file.progress} className="h-1.5 rounded-none" />
-                              </div>
-                            )}
-                          </div>
-                          {/* File Info */}
-                          <div className="p-3 space-y-2">
-                            <p className="text-sm truncate font-medium">
-                              {file.extractedData?.presenterName || file.attitudeData?.gpName || file.errorData?.presenterName || file.file.name}
-                            </p>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {activeTab === "attitude" && file.attitudeData && (
-                                <Badge className={`text-xs rounded-lg ${file.attitudeData.totalNegative > file.attitudeData.totalPositive ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"}`}>
-                                  {file.attitudeData.totalEntries} entries
-                                </Badge>
-                              )}
-                              {file.matchInfo?.isNewGP && (
-                                <Badge className="text-xs rounded-lg bg-primary/15 text-primary">
-                                  New GP
-                                </Badge>
-                              )}
-                              {file.processingTime && file.status === "success" && (
-                                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <Clock className="h-3 w-3" />
-                                  {(file.processingTime / 1000).toFixed(1)}s
-                                </span>
-                              )}
-                            </div>
-                            {file.error && (
-                              <p className="text-xs text-red-400 truncate">{file.error}</p>
-                            )}
-                          </div>
-                          {/* Remove Button */}
-                          {(file.status === "pending" || file.status === "error") && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeFile(file.id);
-                              }}
-                              className="absolute top-2 right-2 p-2 rounded-full glass-strong text-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/50"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Details Panel */}
-          <div className="lg:col-span-1 animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
-            <div className="unified-card sticky top-4 overflow-hidden">
-              <div className="unified-card-header">
-                <div className="icon-box icon-box-violet">
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div className="section-header">
-                  <h3 className="section-title">Extracted Data</h3>
-                  <p className="section-subtitle">
-                    {selectedFile ? `${selectedFile.extractedData?.presenterName || selectedFile.attitudeData?.gpName || 'Unknown'}` : "Select a file"}
-                  </p>
-                </div>
-              </div>
-              <div className="p-5">
-                {selectedFile?.status === "success" ? (
-                  <div className="space-y-5">
-                    {/* Evaluation Details */}
-                    {activeTab === "evaluations" && selectedFile.extractedData && (
-                      <>
-                        {/* GP Name & Match Info */}
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <User className="h-4 w-4" />
-                            <span>Game Presenter</span>
-                          </div>
-                          <div className="pl-6">
-                            <p className="font-semibold text-lg">{selectedFile.extractedData.presenterName}</p>
-                            {selectedFile.matchInfo && !selectedFile.matchInfo.isExactMatch && !selectedFile.matchInfo.isNewGP && (
-                              <div className="mt-2 p-3 glass-subtle rounded-xl">
-                                <div className="flex items-center gap-2 text-sm">
-                                  <Link2 className="h-4 w-4 text-primary" />
-                                  <span>
-                                    Matched to: <strong>{selectedFile.matchInfo.matchedName}</strong>
-                                  </span>
-                                </div>
-                                <div className="mt-2 flex items-center gap-2">
-                                  <Progress value={selectedFile.matchInfo.similarity} className="h-2 flex-1 rounded-full" />
-                                  <span className="text-xs font-medium">{selectedFile.matchInfo.similarity}%</span>
-                                </div>
-                              </div>
-                            )}
-                            {selectedFile.matchInfo?.isNewGP && (
-                              <Badge className="mt-2 bg-green-500/20 text-green-400 rounded-lg">
-                                New GP Created
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Date & Game */}
-                        <div className="grid grid-cols-2 gap-4">
-                          {selectedFile.extractedData.date && (
-                            <div className="glass-subtle p-3 rounded-xl">
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                                <Calendar className="h-3 w-3" />
-                                <span>Date</span>
-                              </div>
-                              <p className="text-sm font-medium">{selectedFile.extractedData.date}</p>
-                            </div>
-                          )}
-                          {selectedFile.extractedData.game && (
-                            <div className="glass-subtle p-3 rounded-xl">
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                                <Gamepad2 className="h-3 w-3" />
-                                <span>Game</span>
-                              </div>
-                              <p className="text-sm font-medium">{selectedFile.extractedData.game}</p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Total Score */}
-                        {selectedFile.extractedData.totalScore !== undefined && (
-                          <div className="p-4 rounded-xl bg-gradient-to-br from-primary/20 to-primary/20">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium">Total Score</span>
-                              <div className="flex items-center gap-2">
-                                <Star className="h-6 w-6 text-primary fill-primary" />
-                                <span className="text-3xl font-bold">{selectedFile.extractedData.totalScore}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Scores Breakdown */}
-                        <div className="space-y-3">
-                          <p className="text-sm font-medium text-muted-foreground">Scores Breakdown</p>
-                          <div className="space-y-3">
-                            {[
-                              { key: "hair", label: "Hair" },
-                              { key: "makeup", label: "Makeup" },
-                              { key: "outfit", label: "Outfit" },
-                              { key: "posture", label: "Posture" },
-                              { key: "dealingStyle", label: "Dealing Style" },
-                              { key: "gamePerformance", label: "Game Performance" },
-                            ].map(({ key, label }) => {
-                              const data = selectedFile.extractedData?.[key as keyof ExtractedData] as { score: number; maxScore: number; comment?: string } | undefined;
-                              if (!data) return null;
-                              const percentage = (data.score / data.maxScore) * 100;
-                              return (
-                                <div key={key} className="glass-subtle p-3 rounded-xl space-y-2">
-                                  <div className="flex items-center justify-between text-sm">
-                                    <span className="font-medium">{label}</span>
-                                    <span className={`font-bold ${percentage >= 80 ? "text-green-600" : percentage >= 60 ? "text-primary" : "text-red-500"}`}>
-                                      {data.score}/{data.maxScore}
-                                    </span>
-                                  </div>
-                                  <Progress 
-                                    value={percentage} 
-                                    className={`h-2 rounded-full ${percentage >= 80 ? "[&>div]:bg-green-500" : percentage >= 60 ? "[&>div]:bg-primary" : "[&>div]:bg-red-500"}`}
-                                  />
-                                  {data.comment && (
-                                    <p className="text-xs text-muted-foreground italic">
-                                      {data.comment}
-                                    </p>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Attitude Details */}
-                    {activeTab === "attitude" && selectedFile.attitudeData && (
-                      <>
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <User className="h-4 w-4" />
-                            <span>Game Presenter</span>
-                          </div>
-                          <p className="pl-6 font-semibold text-lg">{selectedFile.attitudeData.gpName || 'Unknown'}</p>
-                        </div>
-
-                        {/* Summary Stats */}
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="glass-subtle p-3 rounded-xl text-center">
-                            <p className="text-2xl font-bold">{selectedFile.attitudeData.totalEntries}</p>
-                            <p className="text-xs text-muted-foreground">Total</p>
-                          </div>
-                          <div className="p-3 rounded-xl text-center bg-green-500/20">
-                            <p className="text-2xl font-bold text-green-400">+{selectedFile.attitudeData.totalPositive}</p>
-                            <p className="text-xs text-muted-foreground">Positive</p>
-                          </div>
-                          <div className="p-3 rounded-xl text-center bg-red-500/20">
-                            <p className="text-2xl font-bold text-red-400">-{selectedFile.attitudeData.totalNegative}</p>
-                            <p className="text-xs text-muted-foreground">Negative</p>
-                          </div>
-                        </div>
-
-                        {/* Entries List */}
-                        <div className="space-y-3">
-                          <p className="text-sm font-medium text-muted-foreground">Entries ({selectedFile.attitudeData.entries?.length || 0})</p>
-                          <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
-                            {selectedFile.attitudeData.entries?.map((entry, idx) => (
-                              <div key={idx} className={`p-3 rounded-xl ${entry.type === 'POSITIVE' ? 'bg-green-500/10 border-l-2 border-green-500' : 'bg-red-500/10 border-l-2 border-red-500'}`}>
-                                <div className="flex items-center justify-between mb-2">
-                                  <Badge className={`text-xs rounded-lg ${entry.type === "POSITIVE" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
-                                    {entry.type === "POSITIVE" ? (
-                                      <><ThumbsUp className="h-3 w-3 mr-1" /> POSITIVE</>
-                                    ) : (
-                                      <><ThumbsDown className="h-3 w-3 mr-1" /> NEGATIVE</>
-                                    )}
-                                  </Badge>
-                                  <span className={`font-bold ${entry.score > 0 ? "text-green-400" : "text-red-400"}`}>
-                                    {entry.score > 0 ? "+" : ""}{entry.score}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-muted-foreground mb-1">{entry.date}</p>
-                                <p className="text-sm">{entry.comment}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Processing Time */}
-                    {selectedFile.processingTime && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground glass-subtle p-3 rounded-xl">
-                        <Clock className="h-4 w-4" />
-                        <span>Processed in {(selectedFile.processingTime / 1000).toFixed(1)}s</span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="empty-state py-12">
-                    <div className="empty-state-icon">
-                      <Sparkles className="h-8 w-8 text-primary/50" />
-                    </div>
-                    <p className="empty-state-title">No data yet</p>
-                    <p className="empty-state-description">
-                      Upload and process screenshots to see extracted data
-                    </p>
-                    <p className="text-xs mt-4 text-muted-foreground">
-                      Tip: Press Ctrl+V to paste from clipboard
-                    </p>
-                  </div>
-                )}
-              </div>
+            <div>
+              <p className="font-semibold text-emerald-800">
+                {stats.success} screenshot{stats.success !== 1 ? "s" : ""} processed successfully
+              </p>
+              <p className="text-sm text-emerald-600 mt-0.5">
+                {stats.error > 0 ? `${stats.error} failed — click "Retry failed" above` : "All data has been saved to the database"}
+              </p>
             </div>
           </div>
         </div>
-      </Tabs>
+      )}
+
+      {/* Empty state hint */}
+      {!hasFiles && (
+        <div className="text-center py-8">
+          <p className="text-sm text-muted-foreground">
+            Tip: You can paste screenshots directly from clipboard with <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border text-xs font-mono">Ctrl+V</kbd>
+          </p>
+        </div>
+      )}
     </div>
   );
 }
