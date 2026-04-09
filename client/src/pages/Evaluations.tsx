@@ -332,7 +332,7 @@ export default function EvaluationsPage() {
     deleteByMonthMutation.mutate({ year: clearYear, month: clearMonth });
   };
 
-  const getScoreBadge = (score: number, max: number = 24) => {
+  const getScoreBadge = (score: number, max: number = 22) => {
     const pct = score / max;
     if (pct >= 0.85) return "bg-green-500/20 text-green-400 border border-green-500/30";
     if (pct >= 0.7) return "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30";
@@ -455,7 +455,7 @@ export default function EvaluationsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {[2024, 2025, 2026, 2027].map((year) => (
+                      {Array.from({ length: new Date().getFullYear() - 2023 }, (_, i) => 2024 + i).concat([new Date().getFullYear() + 1]).filter((v, i, a) => a.indexOf(v) === i).map((year) => (
                         <SelectItem key={year} value={String(year)}>{year}</SelectItem>
                       ))}
                     </SelectContent>
@@ -595,9 +595,9 @@ export default function EvaluationsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All years</SelectItem>
-                {[2024, 2025, 2026].map((year) => (
-                  <SelectItem key={year} value={String(year)}>{year}</SelectItem>
-                ))}
+{Array.from({ length: new Date().getFullYear() - 2023 }, (_, i) => 2024 + i).concat([new Date().getFullYear() + 1]).filter((v, i, a) => a.indexOf(v) === i).map((year) => (
+                    <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                  ))}
               </SelectContent>
             </Select>
             

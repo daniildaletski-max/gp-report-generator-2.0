@@ -557,8 +557,8 @@ function MonthlyTrendSection({ isMobile }: { isMobile: boolean }) {
                   tickFormatter={(v) => v.split(' ')[0]}
                 />
                 <YAxis 
-                  domain={[0, 24]} 
-                  ticks={[0, 6, 12, 18, 24]}
+domain={[0, 22]} 
+                   ticks={[0, 5, 10, 15, 22]}
                   tick={{ fontSize: isMobile ? 9 : 11, fill: 'rgba(255,255,255,0.35)' }}
                   width={isMobile ? 28 : 35}
                 />
@@ -964,8 +964,8 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                 <ResponsiveContainer width="100%" height={Math.max(200, teamOverviewData.length * 60)}>
                   <BarChart data={teamOverviewData} layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
-                    <XAxis type="number" domain={[0, 23]} tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="name" width={isMobile ? 60 : 100} tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11 }} axisLine={false} tickLine={false} />
+<XAxis type="number" domain={[0, 22]} tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                     <YAxis type="category" dataKey="name" width={isMobile ? 60 : 100} tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11 }} axisLine={false} tickLine={false} />
                     <Tooltip
                       contentStyle={{
                         background: 'rgba(14, 13, 10, 0.95)',
@@ -1059,8 +1059,8 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                 <ResponsiveContainer width="100%" height={Math.min(500, Math.max(250, allGPs.length * 28))}>
                   <BarChart data={allGPs.slice(0, 20)} layout="vertical" margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
-                    <XAxis type="number" domain={[0, 23]} tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis 
+<XAxis type="number" domain={[0, 22]} tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                     <YAxis 
                       type="category" 
                       dataKey="name" 
                       width={isMobile ? 80 : 120} 

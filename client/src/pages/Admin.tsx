@@ -1512,24 +1512,26 @@ function ErrorFilesTab({
     if (!file) return;
 
     setIsUploading(true);
+    const inputEl = e.target;
     try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(",")[1];
-        await uploadMutation.mutateAsync({
-filename: file.name,
-                  errorType: errorType,
-                  month: selectedMonth,
-                  year: selectedYear,
-                  fileBase64: base64,
-        });
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      toast.error("Failed to read file");
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsDataURL(file);
+      });
+      await uploadMutation.mutateAsync({
+        filename: file.name,
+        errorType: errorType,
+        month: selectedMonth,
+        year: selectedYear,
+        fileBase64: base64,
+      });
+    } catch (error: any) {
+      if (!error?.data?.code) toast.error("Failed to read file");
     } finally {
       setIsUploading(false);
-      e.target.value = "";
+      inputEl.value = "";
     }
   };
 
@@ -1590,7 +1592,7 @@ filename: file.name,
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {[2024, 2025, 2026].map((year) => (
+                  {Array.from({ length: new Date().getFullYear() - 2023 }, (_, i) => 2024 + i).concat([new Date().getFullYear() + 1]).filter((v, i, a) => a.indexOf(v) === i).map((year) => (
                     <SelectItem key={year} value={String(year)}>{year}</SelectItem>
                   ))}
                 </SelectContent>
@@ -2581,7 +2583,7 @@ function GPStatsTab({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {[2024, 2025, 2026].map((year) => (
+              {Array.from({ length: new Date().getFullYear() - 2023 }, (_, i) => 2024 + i).concat([new Date().getFullYear() + 1]).filter((v, i, a) => a.indexOf(v) === i).map((year) => (
                 <SelectItem key={year} value={String(year)}>{year}</SelectItem>
               ))}
             </SelectContent>

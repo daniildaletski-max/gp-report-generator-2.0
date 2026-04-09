@@ -52,7 +52,7 @@ async function generateChartImage(
       },
       options: {
         scales: {
-          y: { beginAtZero: true, max: 24 },
+          y: { beginAtZero: true, max: 22 },
         },
         plugins: {
           title: { display: true, text: "GP Performance Scores" },

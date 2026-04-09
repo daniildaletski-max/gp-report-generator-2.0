@@ -713,17 +713,23 @@ export async function createGpError(data: InsertGpError): Promise<GpError> {
   return newError[0];
 }
 
-export async function deleteGpErrorsByMonthYear(month: number, year: number, userId?: number): Promise<void> {
+export async function deleteGpErrorsByMonthYear(month: number, year: number, userId?: number, errorFileId?: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0, 23, 59, 59);
-
-  const conditions = [
-    gte(gpErrors.errorDate, startDate),
-    lte(gpErrors.errorDate, endDate),
-  ];
+  const conditions: any[] = [];
+  
+  // If errorFileId is provided, delete only errors from that specific file
+  if (errorFileId) {
+    conditions.push(eq(gpErrors.errorFileId, errorFileId));
+  } else {
+    // Fallback: delete by date range
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+    conditions.push(gte(gpErrors.errorDate, startDate));
+    conditions.push(lte(gpErrors.errorDate, endDate));
+  }
+  
   // User isolation: only delete errors belonging to this user
   if (userId) {
     conditions.push(eq(gpErrors.userId, userId));

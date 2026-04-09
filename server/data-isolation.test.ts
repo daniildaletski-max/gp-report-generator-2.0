@@ -252,7 +252,7 @@ describe('data isolation - router source code verification', () => {
   it('should pass userId to deleteGpErrorsByMonthYear in routers', async () => {
     const fs = await import('fs');
     const source = fs.readFileSync('./server/routers.ts', 'utf-8');
-    expect(source).toContain('db.deleteGpErrorsByMonthYear(input.month, input.year, ctx.user.id)');
+    expect(source).toContain('db.deleteGpErrorsByMonthYear(input.month, input.year, ctx.user.id');
   });
 
   it('should pass userId to updateGPMistakesDirectly in routers', async () => {

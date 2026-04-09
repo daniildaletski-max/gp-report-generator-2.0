@@ -1952,7 +1952,8 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         
         if (existingFile) {
           // Delete existing file and its error records before uploading new one
-          await db.deleteGpErrorsByMonthYear(input.month, input.year, ctx.user.id);
+          // Pass errorFileId to only delete errors from this specific file type
+          await db.deleteGpErrorsByMonthYear(input.month, input.year, ctx.user.id, existingFile.id);
           if (ctx.user.role !== 'admin') {
             await db.deleteErrorFileByUser(existingFile.id, ctx.user.id);
           } else {
@@ -2110,10 +2111,9 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           userId: ctx.user.id, // Data isolation
         });
 
-        // Delete any remaining error records for this month/year (in case no existing file was found but records exist)
-        if (!replacedFileId) {
-          await db.deleteGpErrorsByMonthYear(input.month, input.year, ctx.user.id);
-        }
+        // Note: We only delete errors when replacing an existing file (handled above with errorFileId filter).
+        // We do NOT delete all errors for this month/year when uploading a new file type,
+        // as that would wipe out errors from the other error type (playgon vs MG).
         
         // Update GP mistakes directly from parsed error counts
         const notFoundGPs: string[] = [];
@@ -2298,6 +2298,91 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         
         await db.deactivateGpAccessToken(input.id);
         return { success: true };
+      }),
+
+    // Public endpoint: Get errors/attitudes for a specific month (GP portal)
+    getMonthDetails: publicProcedure
+      .input(z.object({ token: z.string(), month: z.number().min(1).max(12), year: z.number() }))
+      .query(async ({ input }) => {
+        const accessToken = await db.getGpAccessTokenByToken(input.token);
+        if (!accessToken) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired access link' });
+        }
+        await db.updateGpAccessTokenLastAccess(accessToken.id);
+
+        const gp = await db.getGamePresenterById(accessToken.gamePresenterId);
+        if (!gp) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
+        }
+
+        // Get stats for selected month
+        const stats = await db.getMonthlyGpStats(accessToken.gamePresenterId, input.month, input.year);
+
+        // Get error screenshots for selected month
+        const errorScreenshots = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
+        const attitudeDetails = await db.getAttitudeScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
+        const gpErrors = await db.getGpErrorsForPortal(accessToken.gamePresenterId, input.month, input.year);
+
+        // Get evaluations for this specific month
+        const allEvals = await db.getGpEvaluationsForPortal(accessToken.gamePresenterId);
+        const monthEvals = allEvals.filter(e => {
+          if (!e.evaluationDate) return false;
+          const d = new Date(e.evaluationDate);
+          return d.getMonth() + 1 === input.month && d.getFullYear() === input.year;
+        });
+
+        const errorDetails = [
+          ...errorScreenshots.map(e => ({
+            id: e.id,
+            source: 'screenshot' as const,
+            errorType: e.errorType,
+            errorDescription: e.errorDescription,
+            errorCategory: e.errorCategory,
+            severity: e.severity,
+            gameType: e.gameType,
+            tableId: e.tableId,
+            screenshotUrl: e.screenshotUrl,
+            errorDate: e.errorDate,
+            createdAt: e.createdAt,
+          })),
+          ...gpErrors.map(e => ({
+            id: `excel-${e.id}`,
+            source: 'excel' as const,
+            errorType: e.errorCode || 'excel_error',
+            errorDescription: e.errorDescription,
+            errorCategory: null,
+            severity: 'medium' as const,
+            gameType: e.gameType,
+            tableId: e.tableId,
+            screenshotUrl: null,
+            errorDate: e.errorDate,
+            createdAt: e.createdAt,
+          })),
+        ];
+
+        return {
+          month: input.month,
+          year: input.year,
+          stats: stats ? {
+            attitude: stats.attitude,
+            mistakes: stats.mistakes,
+            totalGames: stats.totalGames,
+          } : null,
+          evaluations: monthEvals,
+          errorDetails,
+          attitudeDetails: attitudeDetails.map(a => ({
+            id: a.id,
+            attitudeScore: a.attitudeScore,
+            attitudeType: a.attitudeType,
+            attitudeCategory: a.attitudeCategory,
+            comment: a.comment || a.description,
+            description: a.description,
+            evaluationDate: a.evaluationDate,
+            evaluatorName: a.evaluatorName,
+            screenshotUrl: a.screenshotUrl,
+            createdAt: a.createdAt,
+          })),
+        };
       }),
 
     // Public endpoint: Get GP evaluations by token (no auth required)
