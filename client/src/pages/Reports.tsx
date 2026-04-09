@@ -543,8 +543,8 @@ export default function ReportsPage() {
 
               {/* Generation Progress Indicator */}
               {isGenerating && generationStep > 0 && (
-                <div className="rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 p-4 space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-medium text-[#d4af37]">
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-primary">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Processing Report...
                   </div>
@@ -558,7 +558,7 @@ export default function ReportsPage() {
                         {generationStep > step ? (
                           <CheckCircle className="h-4 w-4 text-green-400 shrink-0" />
                         ) : generationStep === step ? (
-                          <Loader2 className="h-4 w-4 text-[#d4af37] animate-spin shrink-0" />
+                          <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
                         ) : (
                           <div className="h-4 w-4 rounded-full border border-border shrink-0" />
                         )}
@@ -581,7 +581,7 @@ export default function ReportsPage() {
                 <Button variant="outline" onClick={() => setShowNewReport(false)} disabled={isGenerating}>
                   Cancel
                 </Button>
-                <Button onClick={handleGenerate} disabled={isGenerating || !formData.teamId || !formData.reportMonth} className="bg-gradient-to-r from-[#d4af37] to-[#b8860b] text-black hover:from-[#e6c84b] hover:to-[#d4af37]">
+                <Button onClick={handleGenerate} disabled={isGenerating || !formData.teamId || !formData.reportMonth} className="bg-gradient-to-r from-primary to-primary/80 text-white hover:from-primary/90 hover:to-primary">
                   {isGenerating ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

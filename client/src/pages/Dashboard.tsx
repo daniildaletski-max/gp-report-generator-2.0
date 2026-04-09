@@ -71,7 +71,7 @@ function useChartTheme() {
 }
 
 // Purple-themed pie chart colors
-const PIE_COLORS = ['#d4af37', '#b8860b', '#c9a227', '#6b7280'];
+const PIE_COLORS = ['oklch(0.75 0.12 85)', 'oklch(0.65 0.12 85)', 'oklch(0.70 0.10 85)', '#6b7280'];
 
 export default function Dashboard() {
   const [currentDate] = useState(() => new Date());
@@ -235,7 +235,7 @@ export default function Dashboard() {
               <Upload className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Upload</span>
             </Button>
-            <Button size="sm" onClick={() => setLocation('/reports')} className="bg-gradient-to-r from-[#d4af37] to-[#b8860b] hover:from-[#b8860b] hover:to-[#8b6914] text-black rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300">
+            <Button size="sm" onClick={() => setLocation('/reports')} className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/80 hover:to-primary text-white rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300">
               <span className="hidden sm:inline">Generate Report</span>
               <span className="sm:hidden">Report</span>
               <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
@@ -297,9 +297,9 @@ export default function Dashboard() {
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px', paddingTop: 8 }} />
-                  <Bar dataKey="totalScore" name="Total" fill="#d4af37" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="appearance" name="Appearance" fill="#b8860b" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="performance" name="Performance" fill="#c9a227" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="totalScore" name="Total" fill="oklch(0.75 0.12 85)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="appearance" name="Appearance" fill="oklch(0.65 0.12 85)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="performance" name="Performance" fill="#6366f1" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -528,16 +528,16 @@ function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { i
                 <AreaChart data={trendData} margin={{ top: 10, right: 10, left: isMobile ? -10 : 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gradTotal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#d4af37" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#d4af37" stopOpacity={0} />
+                      <stop offset="5%" stopColor="oklch(0.75 0.12 85)" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="oklch(0.75 0.12 85)" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="gradAppearance" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#b8860b" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#b8860b" stopOpacity={0} />
+                      <stop offset="5%" stopColor="oklch(0.65 0.12 85)" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="oklch(0.65 0.12 85)" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="gradPerformance" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#c9a227" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#c9a227" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} className="chart-grid" />
@@ -558,9 +558,9 @@ function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { i
                     contentStyle={document.documentElement.classList.contains('dark') ? CHART_TOOLTIP_DARK : CHART_TOOLTIP_LIGHT}
                     formatter={(value: number, name: string) => [value.toFixed(1), name]}
                   />
-                  <Area type="monotone" dataKey="avgTotalScore" name="Total" stroke="#d4af37" fill="url(#gradTotal)" strokeWidth={2.5} dot={{ r: 4, fill: '#d4af37', strokeWidth: 0 }} />
-                  <Area type="monotone" dataKey="avgAppearanceScore" name="Appearance" stroke="#b8860b" fill="url(#gradAppearance)" strokeWidth={1.5} dot={{ r: 3, fill: '#b8860b', strokeWidth: 0 }} />
-                  <Area type="monotone" dataKey="avgPerformanceScore" name="Performance" stroke="#c9a227" fill="url(#gradPerformance)" strokeWidth={1.5} dot={{ r: 3, fill: '#c9a227', strokeWidth: 0 }} />
+                  <Area type="monotone" dataKey="avgTotalScore" name="Total" stroke="oklch(0.75 0.12 85)" fill="url(#gradTotal)" strokeWidth={2.5} dot={{ r: 4, fill: 'oklch(0.75 0.12 85)', strokeWidth: 0 }} />
+                  <Area type="monotone" dataKey="avgAppearanceScore" name="Appearance" stroke="oklch(0.65 0.12 85)" fill="url(#gradAppearance)" strokeWidth={1.5} dot={{ r: 3, fill: 'oklch(0.65 0.12 85)', strokeWidth: 0 }} />
+                  <Area type="monotone" dataKey="avgPerformanceScore" name="Performance" stroke="#6366f1" fill="url(#gradPerformance)" strokeWidth={1.5} dot={{ r: 3, fill: '#6366f1', strokeWidth: 0 }} />
                   <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px', paddingTop: 8 }} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -606,8 +606,8 @@ function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { i
                     contentStyle={document.documentElement.classList.contains('dark') ? CHART_TOOLTIP_DARK : CHART_TOOLTIP_LIGHT}
                   />
                   <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px', paddingTop: 8 }} />
-                  <Bar dataKey="totalEvaluations" name="Evaluations" fill="#d4af37" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="uniqueGPs" name="GPs Evaluated" fill="#c9a227" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="totalEvaluations" name="Evaluations" fill="oklch(0.75 0.12 85)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="uniqueGPs" name="GPs Evaluated" fill="#6366f1" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -776,9 +776,9 @@ function GPMonthlyComparisonSection({ isMobile }: { isMobile: boolean }) {
                     formatter={(value: number, name: string) => [typeof value === 'number' ? value.toFixed(1) : value, name]}
                   />
                   <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px', paddingTop: 8 }} />
-                  <Line type="monotone" dataKey="avgTotal" name="Total" stroke="#d4af37" strokeWidth={2.5} dot={{ r: 4, fill: '#d4af37', strokeWidth: 0 }} />
-                  <Line type="monotone" dataKey="avgAppearance" name="Appearance" stroke="#b8860b" strokeWidth={1.5} dot={{ r: 3, fill: '#b8860b', strokeWidth: 0 }} />
-                  <Line type="monotone" dataKey="avgPerformance" name="Performance" stroke="#c9a227" strokeWidth={1.5} dot={{ r: 3, fill: '#c9a227', strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="avgTotal" name="Total" stroke="oklch(0.75 0.12 85)" strokeWidth={2.5} dot={{ r: 4, fill: 'oklch(0.75 0.12 85)', strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="avgAppearance" name="Appearance" stroke="oklch(0.65 0.12 85)" strokeWidth={1.5} dot={{ r: 3, fill: 'oklch(0.65 0.12 85)', strokeWidth: 0 }} />
+                  <Line type="monotone" dataKey="avgPerformance" name="Performance" stroke="#6366f1" strokeWidth={1.5} dot={{ r: 3, fill: '#6366f1', strokeWidth: 0 }} />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -911,7 +911,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
     }))
   ).sort((a, b) => b.avgTotalScore - a.avgTotalScore);
 
-  const TEAM_COLORS = ['#d4af37', '#b8860b', '#b8860b', '#f43f5e', '#3b82f6', '#eab308', '#8b0000', '#14b8a6'];
+  const TEAM_COLORS = ['oklch(0.75 0.12 85)', 'oklch(0.65 0.12 85)', '#6366f1', '#f43f5e', '#3b82f6', '#eab308', '#dc2626', '#14b8a6'];
 
   return (
     <div className="space-y-4">
@@ -965,8 +965,8 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                         return team?.fullName || label;
                       }}
                     />
-                    <Bar dataKey="avgTotal" name="Total" fill="#d4af37" radius={[0, 6, 6, 0]} barSize={20} />
-                    <Bar dataKey="avgAppearance" name="Appearance" fill="#b8860b" radius={[0, 6, 6, 0]} barSize={20} />
+                    <Bar dataKey="avgTotal" name="Total" fill="oklch(0.75 0.12 85)" radius={[0, 6, 6, 0]} barSize={20} />
+                    <Bar dataKey="avgAppearance" name="Appearance" fill="oklch(0.65 0.12 85)" radius={[0, 6, 6, 0]} barSize={20} />
                     <Bar dataKey="avgPerformance" name="Performance" fill="#c8963e" radius={[0, 6, 6, 0]} barSize={20} />
                     <Legend 
                       wrapperStyle={{ fontSize: '11px' }}

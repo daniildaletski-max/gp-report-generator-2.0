@@ -53,7 +53,7 @@ class ErrorBoundary extends Component<Props, State> {
       const isDev = import.meta.env.DEV;
 
       return (
-        <div className="flex items-center justify-center min-h-screen p-8 bg-[#0a0906]">
+        <div className="flex items-center justify-center min-h-screen p-8 bg-background">
           <div className="flex flex-col items-center w-full max-w-lg text-center">
             <div className="h-16 w-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-6">
               <AlertTriangle className="h-8 w-8 text-red-400" />
@@ -101,9 +101,9 @@ class ErrorBoundary extends Component<Props, State> {
                 onClick={this.handleReload}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium",
-                  "bg-gradient-to-r from-[#d4af37] to-[#b8860b] text-black",
-                  "hover:from-[#b8860b] hover:to-[#8b6914] transition-all cursor-pointer",
-                  "shadow-lg shadow-[#d4af37]/20"
+                  "bg-gradient-to-r from-primary to-primary/80 text-white",
+                  "hover:from-primary/80 hover:to-primary transition-all cursor-pointer",
+                  "shadow-lg shadow-primary/20"
                 )}
               >
                 <RotateCcw className="h-4 w-4" />

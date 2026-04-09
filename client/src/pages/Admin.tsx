@@ -64,7 +64,7 @@ function FMRestrictedView() {
             Manage your team: {team?.teamName || "Loading..."}
           </p>
         </div>
-        <Badge className="bg-gradient-to-r from-[#d4af37]/20 to-[#b8860b]/20 border border-[#d4af37]/30 text-sm rounded-xl px-4 py-2">
+        <Badge className="bg-gradient-to-r from-primary/20 to-primary/20 border border-primary/30 text-sm rounded-xl px-4 py-2">
           <Users className="h-3 w-3 mr-1" />
           Floor Manager
         </Badge>
@@ -154,7 +154,7 @@ function FullAdminPanel() {
             <p className="page-subtitle">System administration and management</p>
           </div>
         </div>
-        <Badge className="bg-gradient-to-r from-[#d4af37]/20 to-[#b8860b]/20 text-[#d4af37] border border-[#d4af37]/30 rounded-xl px-4 py-2">
+        <Badge className="bg-gradient-to-r from-primary/20 to-primary/20 text-primary border border-primary/30 rounded-xl px-4 py-2">
           Administrator
         </Badge>
       </div>
@@ -316,15 +316,15 @@ function AdminOverviewTab() {
         </div>
         <div className="unified-card-body">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-[#d4af37]/10 hover:border-[#d4af37]/30 transition-all" onClick={() => toast.info("Navigate to Users tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-primary/10 hover:border-primary/30 transition-all" onClick={() => toast.info("Navigate to Users tab")}>
               <UserCog className="h-6 w-6" />
               <span>Manage Users</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-[#b8860b]/10 hover:border-[#b8860b]/30 transition-all" onClick={() => toast.info("Navigate to Teams tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-primary/10 hover:border-primary/30 transition-all" onClick={() => toast.info("Navigate to Teams tab")}>
               <Building2 className="h-6 w-6" />
               <span>Manage Teams</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-[#d4af37]/10 hover:border-[#d4af37]/30 transition-all" onClick={() => toast.info("Navigate to GP Stats tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-primary/10 hover:border-primary/30 transition-all" onClick={() => toast.info("Navigate to GP Stats tab")}>
               <Star className="h-6 w-6" />
               <span>View GP Stats</span>
             </Button>
@@ -2554,7 +2554,7 @@ function GPStatsTab({
               onValueChange={(v) => setSelectedTeamId(v === "all" ? null : Number(v))}
             >
               <SelectTrigger className="w-[160px] filter-select">
-                <Building2 className="h-4 w-4 mr-2 text-[#d4af37]" />
+                <Building2 className="h-4 w-4 mr-2 text-primary" />
                 <SelectValue placeholder="All teams" />
               </SelectTrigger>
               <SelectContent>
@@ -2569,7 +2569,7 @@ function GPStatsTab({
           )}
           <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
             <SelectTrigger className="w-[140px] filter-select">
-              <Calendar className="h-4 w-4 mr-2 text-[#d4af37]" />
+              <Calendar className="h-4 w-4 mr-2 text-primary" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2846,7 +2846,7 @@ function GPStatsTab({
             </div>
           </div>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#d4af37]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
             <input
               type="text"
               placeholder="Search by name..."
@@ -3455,7 +3455,7 @@ function SystemHealthMonitor() {
             </h3>
             <p className="section-subtitle">
               Last checked: {lastChecked}
-              {autoRefresh && <span className="text-[#d4af37] ml-1">• Auto-refresh ON</span>}
+              {autoRefresh && <span className="text-primary ml-1">• Auto-refresh ON</span>}
             </p>
           </div>
           <div className="flex items-center gap-2">

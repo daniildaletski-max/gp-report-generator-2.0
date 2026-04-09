@@ -203,7 +203,7 @@ export default function AttendancePage() {
               size="sm"
               onClick={handleSave}
               disabled={isSaving}
-              className="bg-gradient-to-r from-[#d4af37] to-[#b8860b] hover:from-[#e6c84b] hover:to-[#d4af37] text-black font-semibold shadow-lg shadow-[#d4af37]/20"
+              className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary text-white font-semibold shadow-lg shadow-primary/20"
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -313,20 +313,20 @@ export default function AttendancePage() {
 
       {/* Attendance Table */}
       <div className="glass-card overflow-hidden">
-        <div className="p-4 border-b border-[#d4af37]/10 flex items-center justify-between">
+        <div className="p-4 border-b border-primary/10 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-[#d4af37]" />
+            <Users className="h-4 w-4 text-primary" />
             <h3 className="font-semibold text-foreground/90">
               {selectedTeam?.teamName || "Team"} — {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
             </h3>
             {rows.length > 0 && (
-              <Badge variant="outline" className="ml-2 text-xs border-[#d4af37]/20 text-[#d4af37]">
+              <Badge variant="outline" className="ml-2 text-xs border-primary/20 text-primary">
                 {rows.length} GPs
               </Badge>
             )}
           </div>
           {hasDirtyRows && (
-            <Badge className="bg-[#d4af37]/15 text-[#d4af37] border border-[#d4af37]/25 text-xs">
+            <Badge className="bg-primary/15 text-primary border border-primary/25 text-xs">
               {rows.filter(r => r.isDirty).length} unsaved changes
             </Badge>
           )}
@@ -352,7 +352,7 @@ export default function AttendancePage() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[#d4af37]/10">
+                <tr className="border-b border-primary/10">
                   <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider sticky left-0 bg-card z-10 min-w-[160px]">
                     GP Name
                   </th>
@@ -388,7 +388,7 @@ export default function AttendancePage() {
                   </th>
                   <th className="text-center py-3 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider min-w-[60px]">
                     <div className="flex items-center justify-center gap-1">
-                      <MessageSquare className="h-3 w-3 text-[#d4af37]" />
+                      <MessageSquare className="h-3 w-3 text-primary" />
                       Remarks
                     </div>
                   </th>
@@ -406,8 +406,8 @@ export default function AttendancePage() {
                   />
                 ))}
                 {/* Totals Row */}
-                <tr className="border-t-2 border-[#d4af37]/20 bg-[#d4af37]/5">
-                  <td className="py-3 px-4 font-bold text-[#d4af37] sticky left-0 bg-[#d4af37]/5 z-10">
+                <tr className="border-t-2 border-primary/20 bg-primary/5">
+                  <td className="py-3 px-4 font-bold text-primary sticky left-0 bg-primary/5 z-10">
                     TOTAL ({rows.length} GPs)
                   </td>
                   <td className="py-3 px-2 text-center">
@@ -445,11 +445,11 @@ export default function AttendancePage() {
 
       {/* Sticky Save Bar (mobile) */}
       {hasDirtyRows && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-lg border-t border-[#d4af37]/15 z-50 sm:hidden">
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-lg border-t border-primary/15 z-50 sm:hidden">
           <Button
             onClick={handleSave}
             disabled={isSaving}
-            className="w-full bg-gradient-to-r from-[#d4af37] to-[#b8860b] hover:from-[#e6c84b] hover:to-[#d4af37] text-black font-semibold shadow-lg"
+            className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary text-white font-semibold shadow-lg"
           >
             {isSaving ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -485,7 +485,7 @@ function AttendanceTableRow({
       <tr
         className={`border-b border-border/50 transition-colors duration-200 ${
           row.isDirty
-            ? 'bg-[#d4af37]/5 border-l-2 border-l-[#d4af37]/40'
+            ? 'bg-primary/5 border-l-2 border-l-primary/40'
             : index % 2 === 0
             ? 'bg-transparent'
             : 'bg-muted/30'
@@ -493,11 +493,11 @@ function AttendanceTableRow({
       >
         {/* GP Name */}
         <td className={`py-2.5 px-4 sticky left-0 z-10 ${
-          row.isDirty ? 'bg-[#d4af37]/5' : index % 2 === 0 ? 'bg-card' : 'bg-card/95'
+          row.isDirty ? 'bg-primary/5' : index % 2 === 0 ? 'bg-card' : 'bg-card/95'
         }`}>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#d4af37]/15 to-[#b8860b]/10 flex items-center justify-center border border-[#d4af37]/15 shrink-0">
-              <span className="text-[10px] font-bold text-[#d4af37]">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary/15 to-primary/10 flex items-center justify-center border border-primary/15 shrink-0">
+              <span className="text-[10px] font-bold text-primary">
                 {row.gpName.charAt(0)}
               </span>
             </div>
@@ -505,7 +505,7 @@ function AttendanceTableRow({
               {row.gpName}
             </span>
             {row.isDirty && (
-              <span className="w-1.5 h-1.5 rounded-full bg-[#d4af37] animate-pulse-slow shrink-0" />
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse-slow shrink-0" />
             )}
           </div>
         </td>
@@ -568,7 +568,7 @@ function AttendanceTableRow({
             onClick={onToggleRemarks}
             className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
               row.remarks
-                ? 'bg-[#d4af37]/15 text-[#d4af37] border border-[#d4af37]/20 hover:bg-[#d4af37]/25'
+                ? 'bg-primary/15 text-primary border border-primary/20 hover:bg-primary/25'
                 : 'bg-muted/50 text-muted-foreground border border-border/50 hover:bg-muted'
             }`}
           >
@@ -579,10 +579,10 @@ function AttendanceTableRow({
 
       {/* Expanded Remarks Row */}
       {isExpanded && (
-        <tr className={`border-b border-border/50 ${row.isDirty ? 'bg-[#d4af37]/5' : 'bg-muted/20'}`}>
+        <tr className={`border-b border-border/50 ${row.isDirty ? 'bg-primary/5' : 'bg-muted/20'}`}>
           <td colSpan={7} className="py-2 px-4">
             <div className="flex items-start gap-2 max-w-2xl">
-              <MessageSquare className="h-4 w-4 text-[#d4af37] mt-2 shrink-0" />
+              <MessageSquare className="h-4 w-4 text-primary mt-2 shrink-0" />
               <Textarea
                 value={row.remarks}
                 onChange={e => onUpdateField(row.gpId, 'remarks', e.target.value)}
@@ -732,7 +732,7 @@ function AttendanceTrendCharts({ teamId }: { teamId: number }) {
           className="w-full glass-button text-muted-foreground hover:text-foreground gap-2"
           onClick={() => setShowCharts(true)}
         >
-          <LineChartIcon className="h-4 w-4 text-[#d4af37]" />
+          <LineChartIcon className="h-4 w-4 text-primary" />
           Show Attendance Trends (Last 6 Months)
         </Button>
       </div>
@@ -743,7 +743,7 @@ function AttendanceTrendCharts({ teamId }: { teamId: number }) {
     return (
       <div className="glass-card p-6">
         <div className="flex items-center gap-2 mb-4">
-          <LineChartIcon className="h-4 w-4 text-[#d4af37]" />
+          <LineChartIcon className="h-4 w-4 text-primary" />
           <h3 className="font-semibold text-foreground/90">Attendance Trends</h3>
         </div>
         <div className="space-y-3">
@@ -766,7 +766,7 @@ function AttendanceTrendCharts({ teamId }: { teamId: number }) {
     <div className="glass-card p-4 sm:p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <LineChartIcon className="h-4 w-4 text-[#d4af37]" />
+          <LineChartIcon className="h-4 w-4 text-primary" />
           <h3 className="font-semibold text-foreground/90">Attendance Trends — Last 6 Months</h3>
         </div>
         <Button
@@ -786,15 +786,15 @@ function AttendanceTrendCharts({ teamId }: { teamId: number }) {
           <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(212,175,55,0.1)" />
-                <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 11 }} />
-                <YAxis tick={{ fill: '#888', fontSize: 11 }} allowDecimals={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border, #e5e5e3)" />
+                <XAxis dataKey="name" tick={{ fill: 'var(--color-muted-foreground, #6b7280)', fontSize: 11 }} />
+                <YAxis tick={{ fill: 'var(--color-muted-foreground, #6b7280)', fontSize: 11 }} allowDecimals={false} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'rgba(17,17,17,0.95)',
-                    border: '1px solid rgba(212,175,55,0.2)',
+                    backgroundColor: 'var(--color-popover, #fff)',
+                    border: '1px solid var(--color-border, #e5e5e3)',
                     borderRadius: '8px',
-                    color: '#fff',
+                    color: 'var(--color-foreground, #111)',
                     fontSize: 12,
                   }}
                 />
@@ -834,15 +834,15 @@ function AttendanceTrendCharts({ teamId }: { teamId: number }) {
           <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={issuesData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(212,175,55,0.1)" />
-                <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 11 }} />
-                <YAxis tick={{ fill: '#888', fontSize: 11 }} allowDecimals={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border, #e5e5e3)" />
+                <XAxis dataKey="name" tick={{ fill: 'var(--color-muted-foreground, #6b7280)', fontSize: 11 }} />
+                <YAxis tick={{ fill: 'var(--color-muted-foreground, #6b7280)', fontSize: 11 }} allowDecimals={false} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'rgba(17,17,17,0.95)',
-                    border: '1px solid rgba(212,175,55,0.2)',
+                    backgroundColor: 'var(--color-popover, #fff)',
+                    border: '1px solid var(--color-border, #e5e5e3)',
                     borderRadius: '8px',
-                    color: '#fff',
+                    color: 'var(--color-foreground, #111)',
                     fontSize: 12,
                   }}
                 />
@@ -862,15 +862,15 @@ function AttendanceTrendCharts({ teamId }: { teamId: number }) {
         <div className="h-[200px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(212,175,55,0.1)" />
-              <XAxis dataKey="name" tick={{ fill: '#888', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#888', fontSize: 11 }} allowDecimals={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border, #e5e5e3)" />
+              <XAxis dataKey="name" tick={{ fill: 'var(--color-muted-foreground, #6b7280)', fontSize: 11 }} />
+              <YAxis tick={{ fill: 'var(--color-muted-foreground, #6b7280)', fontSize: 11 }} allowDecimals={false} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: 'rgba(17,17,17,0.95)',
-                  border: '1px solid rgba(212,175,55,0.2)',
+                  backgroundColor: 'var(--color-popover, #fff)',
+                  border: '1px solid var(--color-border, #e5e5e3)',
                   borderRadius: '8px',
-                  color: '#fff',
+                  color: 'var(--color-foreground, #111)',
                   fontSize: 12,
                 }}
               />

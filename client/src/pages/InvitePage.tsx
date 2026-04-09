@@ -150,7 +150,7 @@ export default function InvitePage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
       <Card className="w-full max-w-md overflow-hidden">
         {/* Header with gradient */}
-        <div className="bg-gradient-to-r from-[#d4af37] to-[#b8860b] p-6 text-white">
+        <div className="bg-gradient-to-r from-primary to-primary/80 p-6 text-white">
           <div className="flex items-center gap-3 mb-4">
             <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
               <Sparkles className="h-6 w-6" />
@@ -203,11 +203,11 @@ export default function InvitePage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-3 bg-[#d4af37]/10 border border-[#d4af37]/20 rounded-lg">
-              <Clock className="h-5 w-5 text-[#d4af37]" />
+            <div className="flex items-center gap-3 p-3 bg-primary/10 border border-primary/20 rounded-lg">
+              <Clock className="h-5 w-5 text-primary" />
               <div>
-                <p className="text-xs text-[#d4af37]">Expires</p>
-                <p className="font-medium text-[#d4af37]">
+                <p className="text-xs text-primary">Expires</p>
+                <p className="font-medium text-primary">
                   {format(new Date(invitation.expiresAt), "MMMM d, yyyy 'at' h:mm a")}
                 </p>
               </div>
@@ -216,7 +216,7 @@ export default function InvitePage() {
 
           {/* Login Button */}
           <Button 
-            className="w-full h-12 text-base gap-2 bg-gradient-to-r from-[#d4af37] to-[#b8860b] hover:from-[#b8860b] hover:to-[#8b6914]"
+            className="w-full h-12 text-base gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/80 hover:to-primary text-white"
             onClick={() => {
               // Store invitation token in sessionStorage for after login
               sessionStorage.setItem("pendingInviteToken", token || "");

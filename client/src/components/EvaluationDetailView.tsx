@@ -328,13 +328,13 @@ export default function EvaluationDetailView({
                           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{appearanceScore}/12</p>
                         </CardContent>
                       </Card>
-                      <Card className="bg-gradient-to-br from-[#d4af37]/10 to-[#d4af37]/5 border-[#d4af37]/20">
+                      <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
                         <CardContent className="p-3">
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-muted-foreground">Performance</span>
-                            <Trophy className="h-4 w-4 text-[#d4af37]" />
+                            <Trophy className="h-4 w-4 text-primary" />
                           </div>
-                          <p className="text-2xl font-bold text-[#d4af37]">{performanceScore}/10</p>
+                          <p className="text-2xl font-bold text-primary">{performanceScore}/10</p>
                         </CardContent>
                       </Card>
                     </div>
@@ -440,8 +440,8 @@ export default function EvaluationDetailView({
                       <p className="text-sm text-muted-foreground mt-1">Appearance</p>
                       <p className="text-xs text-muted-foreground">out of 12</p>
                     </div>
-                    <div className="text-center p-4 rounded-lg bg-gradient-to-br from-[#d4af37]/10 to-[#d4af37]/5">
-                      <p className="text-4xl font-bold text-[#d4af37]">{performanceScore}</p>
+                    <div className="text-center p-4 rounded-lg bg-gradient-to-br from-primary/10 to-primary/5">
+                      <p className="text-4xl font-bold text-primary">{performanceScore}</p>
                       <p className="text-sm text-muted-foreground mt-1">Performance</p>
                       <p className="text-xs text-muted-foreground">out of 10</p>
                     </div>

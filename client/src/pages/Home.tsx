@@ -18,7 +18,7 @@ export default function Home() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 rounded-full border-2 border-[#d4af37]/20 border-t-[#d4af37] animate-spin" />
+          <div className="h-10 w-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
         </div>
       </div>
     );
@@ -28,9 +28,9 @@ export default function Home() {
     <div className="min-h-screen text-foreground overflow-hidden">
       {/* Animated background orbs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[15%] left-[10%] w-[500px] h-[500px] bg-[#d4af37]/[0.03] rounded-full blur-[150px] animate-float" />
-        <div className="absolute top-[40%] right-[5%] w-[400px] h-[400px] bg-[#b8860b]/[0.03] rounded-full blur-[130px]" style={{ animation: 'float 8s ease-in-out infinite reverse' }} />
-        <div className="absolute bottom-[10%] left-[30%] w-[350px] h-[350px] bg-[#d4af37]/[0.02] rounded-full blur-[120px]" style={{ animation: 'float 10s ease-in-out infinite' }} />
+        <div className="absolute top-[15%] left-[10%] w-[500px] h-[500px] bg-primary/[0.03] rounded-full blur-[150px] animate-float" />
+        <div className="absolute top-[40%] right-[5%] w-[400px] h-[400px] bg-primary/[0.03] rounded-full blur-[130px]" style={{ animation: 'float 8s ease-in-out infinite reverse' }} />
+        <div className="absolute bottom-[10%] left-[30%] w-[350px] h-[350px] bg-primary/[0.02] rounded-full blur-[120px]" style={{ animation: 'float 10s ease-in-out infinite' }} />
         {/* Grid pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.015)_1px,transparent_1px)] bg-[size:60px_60px]" />
       </div>
@@ -39,7 +39,7 @@ export default function Home() {
       <header className="fixed top-0 left-0 right-0 z-50 glass-strong">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#d4af37] to-[#b8860b] flex items-center justify-center shadow-lg shadow-[#d4af37]/15 transition-transform duration-300 hover:scale-110">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/15 transition-transform duration-300 hover:scale-110">
               <Zap className="h-4 w-4 text-white" />
             </div>
             <span className="font-semibold text-foreground/90 tracking-tight">GP Report</span>
@@ -49,12 +49,12 @@ export default function Home() {
             {isAuthenticated ? (
               <>
                 <Link href="/dashboard">
-                  <Button variant="ghost" size="sm" className="text-foreground/50 hover:text-[#8b6914] hover:bg-[#d4af37]/8 rounded-xl transition-all duration-300">
+                  <Button variant="ghost" size="sm" className="text-foreground/50 hover:text-primary hover:bg-primary/8 rounded-xl transition-all duration-300">
                     Dashboard
                   </Button>
                 </Link>
                 <Link href="/upload">
-                  <Button size="sm" className="bg-gradient-to-r from-[#d4af37] to-[#b8860b] text-white hover:from-[#e6c84b] hover:to-[#d4af37] rounded-xl px-5 font-semibold shadow-lg shadow-[#d4af37]/15 transition-all duration-300 hover:shadow-[#d4af37]/25 hover:scale-105">
+                  <Button size="sm" className="bg-gradient-to-r from-primary to-primary/80 text-white hover:from-primary/90 hover:to-primary rounded-xl px-5 font-semibold shadow-lg shadow-primary/15 transition-all duration-300 hover:shadow-primary/25 hover:scale-105">
                     Upload
                   </Button>
                 </Link>
@@ -70,7 +70,7 @@ export default function Home() {
               </>
             ) : (
               <a href={getLoginUrl()}>
-                <Button size="sm" className="bg-gradient-to-r from-[#d4af37] to-[#b8860b] text-white hover:from-[#e6c84b] hover:to-[#d4af37] rounded-xl px-5 font-semibold shadow-lg shadow-[#d4af37]/15 transition-all duration-300 hover:shadow-[#d4af37]/25 hover:scale-105">
+                <Button size="sm" className="bg-gradient-to-r from-primary to-primary/80 text-white hover:from-primary/90 hover:to-primary rounded-xl px-5 font-semibold shadow-lg shadow-primary/15 transition-all duration-300 hover:shadow-primary/25 hover:scale-105">
                   Sign In
                 </Button>
               </a>
@@ -84,10 +84,10 @@ export default function Home() {
         <section className="min-h-[90vh] flex items-center justify-center px-6 relative">
           <div className={`max-w-3xl mx-auto text-center transition-all duration-1000 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
             {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#d4af37]/8 border border-[#d4af37]/15 mb-8 backdrop-blur-xl transition-all duration-300 hover:bg-[#d4af37]/12 hover:border-[#d4af37]/25">
-              <Sparkles className="w-4 h-4 text-[#d4af37]" />
-              <span className="text-sm text-[#8b6914] font-medium">AI-Powered Automation</span>
-              <ChevronRight className="w-3 h-3 text-[#d4af37]/40" />
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/8 border border-primary/15 mb-8 backdrop-blur-xl transition-all duration-300 hover:bg-primary/12 hover:border-primary/25">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span className="text-sm text-primary font-medium">AI-Powered Automation</span>
+              <ChevronRight className="w-3 h-3 text-primary/40" />
             </div>
 
             {/* Main heading */}
@@ -98,7 +98,7 @@ export default function Home() {
             </h1>
 
             {/* Subtitle */}
-            <p className="text-lg sm:text-xl text-foreground/40 max-w-lg mx-auto mb-12 leading-relaxed">
+            <p className="text-lg sm:text-xl text-muted-foreground max-w-lg mx-auto mb-12 leading-relaxed">
               Upload screenshots, extract data with AI, and generate professional reports in seconds.
             </p>
 
@@ -107,20 +107,20 @@ export default function Home() {
               {isAuthenticated ? (
                 <>
                   <Link href="/upload">
-                    <Button size="lg" className="w-full sm:w-auto bg-gradient-to-r from-[#d4af37] to-[#b8860b] text-white hover:from-[#e6c84b] hover:to-[#d4af37] rounded-2xl px-8 h-14 font-semibold shadow-xl shadow-[#d4af37]/15 transition-all duration-300 hover:shadow-[#d4af37]/25 hover:scale-[1.03] hover:-translate-y-0.5 group">
+                    <Button size="lg" className="w-full sm:w-auto bg-gradient-to-r from-primary to-primary/80 text-white hover:from-primary/90 hover:to-primary rounded-2xl px-8 h-14 font-semibold shadow-xl shadow-primary/15 transition-all duration-300 hover:shadow-primary/25 hover:scale-[1.03] hover:-translate-y-0.5 group">
                       Start uploading
                       <ArrowRight className="ml-2 h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
                     </Button>
                   </Link>
                   <Link href="/dashboard">
-                    <Button size="lg" variant="outline" className="w-full sm:w-auto rounded-2xl px-8 h-14 font-medium border-[#d4af37]/20 text-[#8b6914] hover:bg-[#d4af37]/5 hover:text-[#8b6914] hover:border-[#d4af37]/30 transition-all duration-300 hover:scale-[1.03]">
+                    <Button size="lg" variant="outline" className="w-full sm:w-auto rounded-2xl px-8 h-14 font-medium border-primary/20 text-primary hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-all duration-300 hover:scale-[1.03]">
                       View dashboard
                     </Button>
                   </Link>
                 </>
               ) : (
                 <a href={getLoginUrl()}>
-                  <Button size="lg" className="bg-gradient-to-r from-[#d4af37] to-[#b8860b] text-white hover:from-[#e6c84b] hover:to-[#d4af37] rounded-2xl px-8 h-14 font-semibold shadow-xl shadow-[#d4af37]/15 transition-all duration-300 hover:shadow-[#d4af37]/25 hover:scale-[1.03] hover:-translate-y-0.5 group">
+                  <Button size="lg" className="bg-gradient-to-r from-primary to-primary/80 text-white hover:from-primary/90 hover:to-primary rounded-2xl px-8 h-14 font-semibold shadow-xl shadow-primary/15 transition-all duration-300 hover:shadow-primary/25 hover:scale-[1.03] hover:-translate-y-0.5 group">
                     Get started
                     <ArrowRight className="ml-2 h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
                   </Button>
@@ -140,11 +140,11 @@ export default function Home() {
                 { value: "24/7", label: "Always available", icon: Activity },
               ].map((stat, i) => (
                 <div key={i} className="text-center group cursor-default transition-all duration-300 hover:-translate-y-1">
-                  <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-[#d4af37]/5 border border-[#d4af37]/10 mb-3 transition-all duration-300 group-hover:bg-[#d4af37]/10 group-hover:border-[#d4af37]/20 group-hover:shadow-lg group-hover:shadow-[#d4af37]/8">
-                    <stat.icon className="w-4 h-4 text-[#d4af37]/50 group-hover:text-[#d4af37] transition-colors" />
+                  <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-primary/5 border border-primary/10 mb-3 transition-all duration-300 group-hover:bg-primary/10 group-hover:border-primary/20 group-hover:shadow-lg group-hover:shadow-primary/8">
+                    <stat.icon className="w-4 h-4 text-primary/50 group-hover:text-primary transition-colors" />
                   </div>
                   <div className="text-3xl sm:text-4xl font-bold text-gradient-violet mb-2">{stat.value}</div>
-                  <div className="text-sm text-foreground/30 group-hover:text-foreground/50 transition-colors">{stat.label}</div>
+                  <div className="text-sm text-muted-foreground group-hover:text-foreground/70 transition-colors">{stat.label}</div>
                 </div>
               ))}
             </div>
@@ -156,7 +156,7 @@ export default function Home() {
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">How it works</h2>
-              <p className="text-foreground/35">Three simple steps to transform your workflow</p>
+              <p className="text-muted-foreground">Three simple steps to transform your workflow</p>
             </div>
 
             <div className="grid md:grid-cols-3 gap-6">
@@ -170,10 +170,10 @@ export default function Home() {
                     <feature.icon className="h-5 w-5" />
                   </div>
                   <div className={`text-xs font-semibold mb-2 tracking-widest uppercase ${
-                    feature.color === 'gold' ? 'text-[#8b6914]' : feature.color === 'red' ? 'text-[#dc2626]' : 'text-emerald-600'
+                    feature.color === 'gold' ? 'text-primary' : feature.color === 'red' ? 'text-red-600' : 'text-emerald-600'
                   }`}>Step {feature.step}</div>
                   <h3 className="text-xl font-semibold text-foreground mb-3">{feature.title}</h3>
-                  <p className="text-sm text-foreground/40 leading-relaxed">{feature.desc}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{feature.desc}</p>
                 </div>
               ))}
             </div>
@@ -185,7 +185,7 @@ export default function Home() {
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">Why choose us</h2>
-              <p className="text-foreground/35">Built for Floor Managers who value their time</p>
+              <p className="text-muted-foreground">Built for Floor Managers who value their time</p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-6">
@@ -199,7 +199,7 @@ export default function Home() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-foreground text-lg mb-2">{benefit.title}</h3>
-                    <p className="text-sm text-foreground/40 leading-relaxed">{benefit.desc}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{benefit.desc}</p>
                   </div>
                 </div>
               ))}
@@ -212,21 +212,21 @@ export default function Home() {
           <div className="max-w-xl mx-auto text-center">
             <div className="card-elevated p-12 relative overflow-hidden">
               {/* Background glow */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[200px] bg-[#d4af37]/5 rounded-full blur-[80px]" />
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[200px] bg-primary/5 rounded-full blur-[80px]" />
               
               <div className="relative z-10">
                 <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-4">Ready to get started?</h2>
-                <p className="text-foreground/40 mb-8">Join Floor Managers who have already streamlined their workflow.</p>
+                <p className="text-muted-foreground mb-8">Join Floor Managers who have already streamlined their workflow.</p>
                 {isAuthenticated ? (
                   <Link href="/upload">
-                    <Button className="bg-gradient-to-r from-[#d4af37] to-[#b8860b] text-white hover:from-[#e6c84b] hover:to-[#d4af37] rounded-2xl px-8 h-14 font-semibold shadow-xl shadow-[#d4af37]/15 transition-all duration-300 hover:shadow-[#d4af37]/25 hover:scale-[1.03] group">
+                    <Button className="bg-gradient-to-r from-primary to-primary/80 text-white hover:from-primary/90 hover:to-primary rounded-2xl px-8 h-14 font-semibold shadow-xl shadow-primary/15 transition-all duration-300 hover:shadow-primary/25 hover:scale-[1.03] group">
                       Start uploading now
                       <ArrowRight className="ml-2 h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
                     </Button>
                   </Link>
                 ) : (
                   <a href={getLoginUrl()}>
-                    <Button className="bg-gradient-to-r from-[#d4af37] to-[#b8860b] text-white hover:from-[#e6c84b] hover:to-[#d4af37] rounded-2xl px-8 h-14 font-semibold shadow-xl shadow-[#d4af37]/15 transition-all duration-300 hover:shadow-[#d4af37]/25 hover:scale-[1.03] group">
+                    <Button className="bg-gradient-to-r from-primary to-primary/80 text-white hover:from-primary/90 hover:to-primary rounded-2xl px-8 h-14 font-semibold shadow-xl shadow-primary/15 transition-all duration-300 hover:shadow-primary/25 hover:scale-[1.03] group">
                       Get started free
                       <ArrowRight className="ml-2 h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
                     </Button>
@@ -241,12 +241,12 @@ export default function Home() {
         <footer className="py-10 px-6 border-t border-border/50">
           <div className="max-w-6xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#d4af37] to-[#b8860b] flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
                 <Zap className="h-3.5 w-3.5 text-white" />
               </div>
-              <span className="text-sm text-foreground/30">GP Report Generator</span>
+              <span className="text-sm text-muted-foreground">GP Report Generator</span>
             </div>
-            <div className="text-xs text-foreground/20">
+            <div className="text-xs text-muted-foreground/70">
               &copy; 2026 All rights reserved
             </div>
           </div>
