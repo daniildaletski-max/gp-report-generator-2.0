@@ -29,8 +29,8 @@
   --radius: 0.625rem;
 
   /* Core — pure white bg, near-black text */
-  --color-background: oklch(0.98 0.002 80);
-  --color-foreground: oklch(0.13 0.02 260);
+  --color-background: oklch(0.97 0.002 80);
+  --color-foreground: oklch(0.10 0.02 260);
   --color-card: oklch(1.0 0 0);
   --color-card-foreground: oklch(0.13 0.02 260);
   --color-popover: oklch(1.0 0 0);
@@ -44,9 +44,9 @@
   --color-secondary: oklch(0.96 0.003 260);
   --color-secondary-foreground: oklch(0.25 0.02 260);
 
-  /* Muted — Visible gray */
+  /* Muted — Clearly visible gray */
   --color-muted: oklch(0.95 0.003 260);
-  --color-muted-foreground: oklch(0.40 0.02 260);
+  --color-muted-foreground: oklch(0.35 0.02 260);
 
   /* Accent */
   --color-accent: oklch(0.95 0.01 80);
@@ -555,7 +555,7 @@
     margin-bottom: 1rem;
   }
   .empty-state-title { font-size: 1rem; font-weight: 600; color: #4b5563; margin-bottom: 0.375rem; }
-  .empty-state-description { font-size: 0.8125rem; color: #6b7280; max-width: 20rem; line-height: 1.5; }
+  .empty-state-description { font-size: 0.8125rem; color: #4b5563; max-width: 20rem; line-height: 1.5; }
 
   /* ========================================
      SKELETON
@@ -607,7 +607,7 @@
     border: 1px solid rgba(212, 175, 55, 0.15);
   }
   .section-header-title { font-size: 1rem; font-weight: 600; color: #1f2937; }
-  .section-header-subtitle { font-size: 0.75rem; color: #6b7280; margin-top: 0.125rem; }
+  .section-header-subtitle { font-size: 0.75rem; color: #4b5563; margin-top: 0.125rem; }
 
   /* ========================================
      UNIFIED CARD
@@ -778,7 +778,7 @@
   }
   .page-subtitle {
     font-size: 0.875rem;
-    color: #6b7280;
+    color: #4b5563;
     margin-top: 0.25rem;
   }
   .section-title {
@@ -789,7 +789,7 @@
   }
   .section-subtitle {
     font-size: 0.8125rem;
-    color: #6b7280;
+    color: #4b5563;
     margin-bottom: 1rem;
   }
   .dashboard-header { margin-bottom: 1.5rem; }
@@ -801,7 +801,7 @@
   }
   .dashboard-subtitle {
     font-size: 0.875rem;
-    color: #6b7280;
+    color: #4b5563;
     margin-top: 0.25rem;
   }
 
@@ -883,7 +883,7 @@
   }
   .chart-subtitle {
     font-size: 0.75rem;
-    color: #6b7280;
+    color: #4b5563;
     margin-top: 0.25rem;
   }
 
@@ -1003,7 +1003,7 @@
   }
   .gp-empty-description {
     font-size: 0.8125rem;
-    color: #6b7280;
+    color: #4b5563;
     max-width: 20rem;
   }
 
@@ -1055,7 +1055,7 @@
     padding: 1.5rem;
     text-align: center;
     font-size: 0.8125rem;
-    color: #6b7280;
+    color: #4b5563;
   }
 
   /* ========================================
@@ -1101,7 +1101,7 @@
   .team-stat-value.indigo { color: #6d28d9; }
   .team-stat-label {
     font-size: 0.6875rem;
-    color: #6b7280;
+    color: #4b5563;
     margin-top: 0.125rem;
   }
 
@@ -1220,13 +1220,13 @@
   .stat-label {
     font-size: 0.75rem;
     font-weight: 600;
-    color: #6b7280;
+    color: #4b5563;
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
   .stat-sublabel {
     font-size: 0.6875rem;
-    color: #9ca3af;
+    color: #6b7280;
   }
 
   /* ========================================
@@ -1246,318 +1246,14 @@
 
 
 /* ============================================
-   DARK THEME OVERRIDES
-   Premium Gold & Black palette
-   ============================================ */
-
-.dark {
-  --color-background: oklch(0.08 0.01 60);
-  --color-foreground: oklch(0.95 0.01 80);
-  --color-card: oklch(0.11 0.01 60);
-  --color-card-foreground: oklch(0.95 0.01 80);
-  --color-popover: oklch(0.10 0.01 60);
-  --color-popover-foreground: oklch(0.95 0.01 80);
-  --color-primary: oklch(0.75 0.12 85);
-  --color-primary-foreground: oklch(0.10 0.01 60);
-  --color-secondary: oklch(0.14 0.01 60);
-  --color-secondary-foreground: oklch(0.85 0.01 80);
-  --color-muted: oklch(0.13 0.008 60);
-  --color-muted-foreground: oklch(0.55 0.01 80);
-  --color-accent: oklch(0.18 0.04 25);
-  --color-accent-foreground: oklch(0.95 0.01 80);
-  --color-destructive: oklch(0.45 0.20 25);
-  --color-destructive-foreground: oklch(0.98 0.01 80);
-  --color-border: oklch(0.20 0.01 60);
-  --color-input: oklch(0.12 0.01 60);
-  --color-ring: oklch(0.75 0.12 85);
-  --color-sidebar: oklch(0.06 0.01 60);
-  --color-sidebar-foreground: oklch(0.85 0.01 80);
-  --color-sidebar-primary: oklch(0.75 0.12 85);
-  --color-sidebar-primary-foreground: oklch(0.10 0.01 60);
-  --color-sidebar-accent: oklch(0.14 0.02 60);
-  --color-sidebar-accent-foreground: oklch(0.90 0.01 80);
-  --color-sidebar-border: oklch(0.16 0.01 60);
-  --color-sidebar-ring: oklch(0.75 0.12 85);
-}
-
-html.dark {
-  body {
-    background: linear-gradient(145deg, #0a0a08 0%, #0d0c08 50%, #080806 100%) !important;
-  }
-
-  ::-webkit-scrollbar-track { background: rgba(212, 175, 55, 0.02); }
-  ::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.15); }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(212, 175, 55, 0.3); }
-
-  /* Glass morphism — dark variant */
-  .glass {
-    background: linear-gradient(135deg, rgba(14, 13, 10, 0.7) 0%, rgba(18, 16, 10, 0.6) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.08) !important;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(212, 175, 55, 0.04) !important;
-  }
-
-  .glass-card {
-    background: linear-gradient(145deg, rgba(14, 13, 10, 0.75) 0%, rgba(10, 9, 6, 0.65) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.08) !important;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(212, 175, 55, 0.05) !important;
-  }
-  .glass-card:hover {
-    border-color: rgba(212, 175, 55, 0.2) !important;
-    box-shadow: 0 12px 40px rgba(212, 175, 55, 0.08), 0 4px 20px rgba(0, 0, 0, 0.4) !important;
-  }
-
-  .glass-elevated {
-    background: linear-gradient(145deg, rgba(16, 14, 10, 0.92) 0%, rgba(12, 10, 6, 0.88) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.1) !important;
-    box-shadow: 0 32px 100px rgba(0, 0, 0, 0.5), 0 0 80px rgba(212, 175, 55, 0.05) !important;
-  }
-
-  .glass-strong {
-    background: linear-gradient(180deg, rgba(8, 7, 4, 0.97) 0%, rgba(10, 9, 6, 0.95) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.06) !important;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
-  }
-
-  .glass-subtle {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(212, 175, 55, 0.02) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.05) !important;
-  }
-
-  .glass-interactive {
-    background: linear-gradient(145deg, rgba(14, 13, 10, 0.6) 0%, rgba(10, 9, 6, 0.5) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.08) !important;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25) !important;
-  }
-  .glass-interactive:hover {
-    border-color: rgba(212, 175, 55, 0.25) !important;
-    box-shadow: 0 20px 50px rgba(212, 175, 55, 0.1), 0 8px 25px rgba(0, 0, 0, 0.4) !important;
-  }
-
-  .glass-input {
-    background: linear-gradient(145deg, rgba(10, 9, 6, 0.8) 0%, rgba(8, 7, 4, 0.7) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.08) !important;
-    color: white !important;
-  }
-  .glass-input:focus {
-    border-color: rgba(212, 175, 55, 0.4) !important;
-    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1), 0 0 25px rgba(212, 175, 55, 0.06) !important;
-  }
-  .glass-input::placeholder { color: rgba(255, 255, 255, 0.3) !important; }
-
-  select.glass-input option,
-  .glass-input option,
-  .glass-subtle select option {
-    background-color: #1a1a14 !important;
-    color: #f0e6c8 !important;
-  }
-
-  .glass-panel {
-    background: linear-gradient(160deg, rgba(14, 13, 10, 0.7) 0%, rgba(10, 9, 6, 0.6) 50%, rgba(12, 11, 8, 0.65) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.08) !important;
-    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35) !important;
-  }
-
-  .glass-button {
-    background: linear-gradient(145deg, rgba(212, 175, 55, 0.15) 0%, rgba(180, 140, 30, 0.1) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.2) !important;
-    color: #d4af37 !important;
-    box-shadow: 0 2px 10px rgba(212, 175, 55, 0.1) !important;
-  }
-  .glass-button:hover {
-    background: linear-gradient(145deg, rgba(212, 175, 55, 0.25) 0%, rgba(180, 140, 30, 0.18) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.4) !important;
-    box-shadow: 0 8px 25px rgba(212, 175, 55, 0.15) !important;
-  }
-
-  /* Stat cards — dark */
-  .stat-card {
-    background: linear-gradient(145deg, rgba(22, 20, 16, 0.85) 0%, rgba(16, 14, 10, 0.75) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.16) !important;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
-  }
-  .stat-card:hover {
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
-    border-color: rgba(212, 175, 55, 0.25) !important;
-  }
-
-  .stat-card-enhanced {
-    background: linear-gradient(145deg, rgba(26, 24, 18, 0.9) 0%, rgba(18, 16, 12, 0.85) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.18) !important;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35) !important;
-  }
-  .stat-card-enhanced:hover {
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5) !important;
-    border-color: rgba(212, 175, 55, 0.3) !important;
-  }
-
-  .premium-card {
-    background: linear-gradient(145deg, rgba(18, 16, 12, 0.9) 0%, rgba(14, 12, 8, 0.85) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.1) !important;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
-  }
-  .premium-card:hover {
-    border-color: rgba(212, 175, 55, 0.25) !important;
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5) !important;
-  }
-
-  .floating-card {
-    background: linear-gradient(145deg, rgba(16, 14, 10, 0.8) 0%, rgba(12, 10, 6, 0.7) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.08) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
-  }
-  .floating-card:hover {
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5) !important;
-    border-color: rgba(212, 175, 55, 0.2) !important;
-  }
-
-  .card-elevated {
-    background: linear-gradient(145deg, rgba(18, 16, 12, 0.95) 0%, rgba(14, 12, 8, 0.9) 100%) !important;
-    border-color: rgba(212, 175, 55, 0.1) !important;
-    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4) !important;
-  }
-
-  /* Dark text colors */
-  .page-title, .dashboard-title, .section-title, .chart-title, .gp-grid-title, .leaderboard-title, .team-comparison-header { color: rgba(255, 255, 255, 0.95) !important; }
-  .page-subtitle, .dashboard-subtitle, .section-subtitle, .chart-subtitle { color: rgba(255, 255, 255, 0.4) !important; }
-  .stat-value { color: rgba(255, 255, 255, 0.98) !important; }
-  .stat-label { color: rgba(255, 255, 255, 0.7) !important; }
-  .stat-sublabel { color: rgba(255, 255, 255, 0.45) !important; }
-  .section-header-title { color: rgba(255, 255, 255, 0.85) !important; }
-  .section-header-subtitle { color: rgba(255, 255, 255, 0.35) !important; }
-  .empty-state-title, .gp-empty-title { color: rgba(255, 255, 255, 0.5) !important; }
-  .empty-state-description, .gp-empty-description { color: rgba(255, 255, 255, 0.25) !important; }
-  .leaderboard-name { color: rgba(255, 255, 255, 0.8) !important; }
-  .leaderboard-empty { color: rgba(255, 255, 255, 0.3) !important; }
-  .progress-label { color: rgba(255, 255, 255, 0.8) !important; }
-  .progress-value { color: rgba(255, 255, 255, 0.8) !important; }
-  .team-stat-label { color: rgba(255, 255, 255, 0.35) !important; }
-  .neutral { color: rgba(255, 255, 255, 0.5) !important; }
-  .gp-search-input { background: rgba(212, 175, 55, 0.04) !important; border-color: rgba(212, 175, 55, 0.1) !important; color: rgba(255, 255, 255, 0.8) !important; }
-  .gp-search-input::placeholder { color: rgba(255, 255, 255, 0.25) !important; }
-
-  /* Dark color utilities */
-  .blue { color: #d4af37 !important; }
-  .counter-value { color: #d4af37 !important; }
-  .counter-value.violet { color: #d4af37 !important; }
-  .gp-stat-value { color: #d4af37 !important; }
-  .leaderboard-badge { color: #d4af37 !important; }
-  .leaderboard-rank { background: rgba(212, 175, 55, 0.1) !important; color: #d4af37 !important; }
-  .team-stat-value.blue { color: #d4af37 !important; }
-  .team-stat-value.green { color: #4ade80 !important; }
-  .green { color: #4ade80 !important; }
-  .counter-value.green { color: #4ade80 !important; }
-  .positive { color: #4ade80 !important; }
-  .indigo { color: #b8860b !important; }
-  .team-stat-value.indigo { color: #b8860b !important; }
-
-  /* Dark icon containers */
-  .icon-container-gold { background: rgba(212, 175, 55, 0.1) !important; color: #d4af37 !important; border-color: rgba(212, 175, 55, 0.15) !important; }
-  .icon-container-red { background: rgba(139, 0, 0, 0.1) !important; color: #dc2626 !important; border-color: rgba(139, 0, 0, 0.15) !important; }
-  .icon-container-green { background: rgba(34, 197, 94, 0.1) !important; color: #4ade80 !important; border-color: rgba(34, 197, 94, 0.15) !important; }
-  .stat-icon-container { background: linear-gradient(135deg, rgba(212, 175, 55, 0.3) 0%, rgba(184, 134, 11, 0.18) 100%) !important; border-color: rgba(212, 175, 55, 0.35) !important; color: #f0d060 !important; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 0 0 8px rgba(212, 175, 55, 0.1) !important; }
-
-  /* Dark unified card, chart card, card-gold */
-  .unified-card { background: linear-gradient(145deg, rgba(14, 13, 10, 0.7) 0%, rgba(10, 9, 6, 0.6) 100%) !important; border-color: rgba(212, 175, 55, 0.08) !important; }
-  .unified-card:hover { border-color: rgba(212, 175, 55, 0.15) !important; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35) !important; }
-  .unified-card-header { border-color: rgba(212, 175, 55, 0.06) !important; }
-
-  .chart-card { background: linear-gradient(145deg, rgba(30, 27, 22, 0.95) 0%, rgba(22, 19, 14, 0.9) 100%) !important; border-color: rgba(212, 175, 55, 0.22) !important; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important; }
-  .chart-card:hover { border-color: rgba(212, 175, 55, 0.35) !important; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important; }
-  .chart-card-header { border-color: rgba(212, 175, 55, 0.15) !important; }
-
-  .card-gold { background: linear-gradient(145deg, rgba(30, 27, 22, 0.95) 0%, rgba(22, 19, 14, 0.9) 100%) !important; border-color: rgba(212, 175, 55, 0.25) !important; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important; }
-  .card-gold:hover { border-color: rgba(212, 175, 55, 0.4) !important; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 16px rgba(212, 175, 55, 0.08) !important; }
-
-  .gp-grid-card { background: linear-gradient(145deg, rgba(22, 20, 16, 0.85) 0%, rgba(16, 14, 10, 0.75) 100%) !important; border-color: rgba(212, 175, 55, 0.14) !important; }
-  .gp-grid-card:hover { border-color: rgba(212, 175, 55, 0.22) !important; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important; }
-  .gp-grid-header { border-color: rgba(212, 175, 55, 0.1) !important; }
-
-  /* Dark table */
-  .table-enhanced thead th { color: rgba(212, 175, 55, 0.4) !important; border-color: rgba(212, 175, 55, 0.06) !important; }
-  .table-enhanced tbody td { color: rgba(255, 255, 255, 0.7) !important; border-color: rgba(212, 175, 55, 0.04) !important; }
-  .table-enhanced tbody tr:hover { background: rgba(212, 175, 55, 0.03) !important; }
-
-  /* Dark filter bar */
-  .filter-bar { background: rgba(22, 20, 16, 0.6) !important; border-color: rgba(212, 175, 55, 0.12) !important; }
-  .filter-select { background: rgba(212, 175, 55, 0.08) !important; border-color: rgba(212, 175, 55, 0.15) !important; color: rgba(255, 255, 255, 0.85) !important; }
-  .filter-select option { background-color: #1a1a14 !important; color: #f0e6c8 !important; }
-
-  /* Dark upload area */
-  .upload-area { border-color: rgba(212, 175, 55, 0.15) !important; background: rgba(212, 175, 55, 0.02) !important; }
-  .upload-area:hover { border-color: rgba(212, 175, 55, 0.3) !important; background: rgba(212, 175, 55, 0.04) !important; }
-  .upload-area.active { border-color: rgba(212, 175, 55, 0.45) !important; background: rgba(212, 175, 55, 0.06) !important; }
-
-  /* Dark tooltip */
-  .tooltip-glass { background: rgba(8, 8, 6, 0.95) !important; border-color: rgba(212, 175, 55, 0.1) !important; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important; color: rgba(255, 255, 255, 0.9) !important; }
-
-  /* Dark text gradient */
-  .text-gradient-violet { background: linear-gradient(135deg, #d4af37 0%, #b8860b 50%, #e6c84b 100%) !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important; background-clip: text !important; }
-  .gradient-text-glow { background: linear-gradient(135deg, #d4af37, #b8860b, #e6c84b) !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important; background-clip: text !important; filter: drop-shadow(0 0 20px rgba(212, 175, 55, 0.25)) !important; }
-
-  /* Dark bulk actions */
-  .bulk-actions-bar { background: rgba(212, 175, 55, 0.06) !important; border-color: rgba(212, 175, 55, 0.12) !important; }
-  .bulk-actions-badge { background: rgba(212, 175, 55, 0.12) !important; color: #d4af37 !important; }
-
-  /* Dark badge overrides */
-  .badge-gold { background: rgba(212, 175, 55, 0.1) !important; color: #d4af37 !important; border-color: rgba(212, 175, 55, 0.2) !important; }
-  .badge-red { background: rgba(139, 0, 0, 0.1) !important; color: #ef4444 !important; border-color: rgba(139, 0, 0, 0.15) !important; }
-  .badge-green { background: rgba(34, 197, 94, 0.1) !important; color: #4ade80 !important; border-color: rgba(34, 197, 94, 0.15) !important; }
-
-  /* Dark icon boxes */
-  .icon-box-violet { background: rgba(212, 175, 55, 0.1) !important; color: #d4af37 !important; border-color: rgba(212, 175, 55, 0.15) !important; }
-  .icon-box-green { background: rgba(34, 197, 94, 0.1) !important; color: #4ade80 !important; border-color: rgba(34, 197, 94, 0.15) !important; }
-  .icon-box-red { background: rgba(139, 0, 0, 0.1) !important; color: #dc2626 !important; border-color: rgba(139, 0, 0, 0.15) !important; }
-
-  /* Dark upload icon box */
-  .upload-icon-box { background: linear-gradient(135deg, rgba(212, 175, 55, 0.14) 0%, rgba(184, 134, 11, 0.08) 100%) !important; border-color: rgba(212, 175, 55, 0.2) !important; color: #d4af37 !important; }
-
-  /* Dark section header */
-  .section-header-icon { background: rgba(212, 175, 55, 0.08) !important; border-color: rgba(212, 175, 55, 0.12) !important; }
-
-  /* Dark team comparison */
-  .team-comparison-card { background: rgba(212, 175, 55, 0.03) !important; border-color: rgba(212, 175, 55, 0.06) !important; }
-  .team-comparison-card:hover { border-color: rgba(212, 175, 55, 0.12) !important; background: rgba(212, 175, 55, 0.05) !important; }
-  .team-comparison-header { border-color: rgba(212, 175, 55, 0.06) !important; }
-
-  /* Dark progress bar */
-  .progress-track { background: rgba(255, 255, 255, 0.1) !important; }
-
-  /* Dark scrollbar */
-  .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.15) !important; }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(212, 175, 55, 0.25) !important; }
-
-  /* Dark skeleton */
-  .skeleton-enhanced { background: linear-gradient(90deg, rgba(212, 175, 55, 0.02) 25%, rgba(212, 175, 55, 0.05) 50%, rgba(212, 175, 55, 0.02) 75%) !important; }
-  .skeleton-stat-card { background: linear-gradient(90deg, rgba(212, 175, 55, 0.06) 25%, rgba(212, 175, 55, 0.12) 50%, rgba(212, 175, 55, 0.06) 75%) !important; border-color: rgba(212, 175, 55, 0.18) !important; }
-
-  /* Dark empty state */
-  .empty-state-icon { background: rgba(212, 175, 55, 0.05) !important; border-color: rgba(212, 175, 55, 0.1) !important; color: rgba(212, 175, 55, 0.2) !important; }
-  .gp-empty-icon { color: rgba(212, 175, 55, 0.2) !important; }
-
-  /* Recharts tooltip dark */
-  .recharts-default-tooltip {
-    background: rgba(8, 8, 6, 0.95) !important;
-    border-color: rgba(212, 175, 55, 0.15) !important;
-    color: rgba(255, 255, 255, 0.9) !important;
-  }
-}
-
-
-/* ============================================
    RECHARTS THEME-AWARE CLASSES
    ============================================ */
 .chart-tick text,
 .chart-tick tspan {
-  fill: #6b7280 !important;
+  fill: #374151 !important;
+  font-weight: 500 !important;
 }
 .chart-grid line {
   stroke: #e5e5e3 !important;
 }
 
-html.dark .chart-tick text,
-html.dark .chart-tick tspan {
-  fill: rgba(255, 255, 255, 0.35) !important;
-}
-html.dark .chart-grid line {
-  stroke: rgba(255, 255, 255, 0.04) !important;
-}

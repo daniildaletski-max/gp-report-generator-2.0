@@ -52,21 +52,12 @@ const CHART_TOOLTIP_LIGHT = {
   boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
 };
 
-const CHART_TOOLTIP_DARK = {
-  ...CHART_TOOLTIP_STYLE,
-  background: 'rgba(14, 13, 10, 0.95)',
-  border: '1px solid rgba(255, 255, 255, 0.1)',
-  color: '#fff',
-  boxShadow: '0 10px 40px rgba(0, 0, 0, 0.4)',
-};
-
 function useChartTheme() {
-  const isDark = document.documentElement.classList.contains('dark');
   return {
-    tooltipStyle: isDark ? CHART_TOOLTIP_DARK : CHART_TOOLTIP_LIGHT,
-    tickFill: isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.45)',
-    gridStroke: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)',
-    legendColor: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
+    tooltipStyle: CHART_TOOLTIP_LIGHT,
+    tickFill: '#374151',
+    gridStroke: '#e5e5e3',
+    legendColor: '#4b5563',
   };
 }
 
@@ -289,7 +280,7 @@ export default function Dashboard() {
                     width={isMobile ? 28 : 35}
                   />
                   <Tooltip 
-                    contentStyle={document.documentElement.classList.contains('dark') ? CHART_TOOLTIP_DARK : CHART_TOOLTIP_LIGHT}
+                    contentStyle={CHART_TOOLTIP_LIGHT}
                     formatter={(value: number, name: string) => [value.toFixed(1), name]}
                     labelFormatter={(label) => {
                       const gp = chartData.find(g => g.name === label);
@@ -343,7 +334,7 @@ export default function Dashboard() {
                       ))}
                     </Pie>
                     <Tooltip 
-                      contentStyle={document.documentElement.classList.contains('dark') ? CHART_TOOLTIP_DARK : CHART_TOOLTIP_LIGHT}
+                      contentStyle={CHART_TOOLTIP_LIGHT}
                     />
                   </RechartsPieChart>
                 </ResponsiveContainer>
@@ -555,7 +546,7 @@ function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { i
                     width={isMobile ? 28 : 35}
                   />
                   <Tooltip 
-                    contentStyle={document.documentElement.classList.contains('dark') ? CHART_TOOLTIP_DARK : CHART_TOOLTIP_LIGHT}
+                    contentStyle={CHART_TOOLTIP_LIGHT}
                     formatter={(value: number, name: string) => [value.toFixed(1), name]}
                   />
                   <Area type="monotone" dataKey="avgTotalScore" name="Total" stroke="oklch(0.75 0.12 85)" fill="url(#gradTotal)" strokeWidth={2.5} dot={{ r: 4, fill: 'oklch(0.75 0.12 85)', strokeWidth: 0 }} />
@@ -603,7 +594,7 @@ function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { i
                     width={isMobile ? 28 : 35}
                   />
                   <Tooltip 
-                    contentStyle={document.documentElement.classList.contains('dark') ? CHART_TOOLTIP_DARK : CHART_TOOLTIP_LIGHT}
+                    contentStyle={CHART_TOOLTIP_LIGHT}
                   />
                   <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px', paddingTop: 8 }} />
                   <Bar dataKey="totalEvaluations" name="Evaluations" fill="oklch(0.75 0.12 85)" radius={[6, 6, 0, 0]} />
@@ -772,7 +763,7 @@ function GPMonthlyComparisonSection({ isMobile }: { isMobile: boolean }) {
                     width={isMobile ? 28 : 35}
                   />
                   <Tooltip 
-                    contentStyle={document.documentElement.classList.contains('dark') ? CHART_TOOLTIP_DARK : CHART_TOOLTIP_LIGHT}
+                    contentStyle={CHART_TOOLTIP_LIGHT}
                     formatter={(value: number, name: string) => [typeof value === 'number' ? value.toFixed(1) : value, name]}
                   />
                   <Legend wrapperStyle={{ fontSize: isMobile ? '10px' : '11px', paddingTop: 8 }} />
@@ -958,7 +949,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                     <XAxis type="number" domain={[0, 22]} className="chart-tick" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis type="category" dataKey="name" width={isMobile ? 60 : 100} className="chart-tick" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                     <Tooltip
-                      contentStyle={document.documentElement.classList.contains('dark') ? CHART_TOOLTIP_DARK : CHART_TOOLTIP_LIGHT}
+                      contentStyle={CHART_TOOLTIP_LIGHT}
                       formatter={(value: number, name: string) => [value.toFixed(1), name === 'Total' ? 'Total Score' : name === 'Appearance' ? 'Appearance' : 'Performance']}
                       labelFormatter={(label) => {
                         const team = teamOverviewData.find(t => t.name === label);
@@ -1050,7 +1041,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                       tickLine={false} 
                     />
                     <Tooltip
-                      contentStyle={document.documentElement.classList.contains('dark') ? CHART_TOOLTIP_DARK : CHART_TOOLTIP_LIGHT}
+                      contentStyle={CHART_TOOLTIP_LIGHT}
                       formatter={(value: number, name: string) => [value.toFixed(1), name === 'avgTotalScore' ? 'Total' : name === 'avgAppearanceScore' ? 'Appearance' : 'Performance']}
                       labelFormatter={(label) => {
                         const gp = allGPs.find(g => g.name === label);
