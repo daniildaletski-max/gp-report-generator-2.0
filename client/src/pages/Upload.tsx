@@ -507,7 +507,7 @@ export default function UploadPage() {
             variant="ghost"
             size="sm"
             onClick={() => setShowKeyboardHints(prev => !prev)}
-            className="bg-white/5 border border-white/10 rounded-xl text-white/70 hover:text-white hover:bg-white/10"
+            className="bg-muted/50 border border-border rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted"
           >
             <Keyboard className="h-4 w-4 mr-1" />
             <span className="hidden sm:inline">Shortcuts</span>
@@ -517,7 +517,7 @@ export default function UploadPage() {
 
       {/* Keyboard Hints */}
       {showKeyboardHints && (
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+        <div className="p-4 rounded-2xl bg-muted/30 border border-border/50">
           <div className="flex flex-wrap gap-4 text-sm">
             {[
               { key: "Ctrl+V", desc: "Paste from clipboard" },
@@ -558,7 +558,7 @@ export default function UploadPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold counter-value">{stats.success}</p>
-                  <p className="text-xs text-white/40">Processed</p>
+                  <p className="text-xs text-muted-foreground">Processed</p>
                 </div>
               </div>
             </div>
@@ -569,7 +569,7 @@ export default function UploadPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold counter-value">{stats.avgTime.toFixed(1)}s</p>
-                  <p className="text-xs text-white/40">Avg. Time</p>
+                  <p className="text-xs text-muted-foreground">Avg. Time</p>
                 </div>
               </div>
             </div>
@@ -582,7 +582,7 @@ export default function UploadPage() {
                     </div>
                     <div>
                       <p className="text-2xl font-bold counter-value">{(stats as any).avgScore.toFixed(1)}</p>
-                      <p className="text-xs text-white/40">Avg. Score</p>
+                      <p className="text-xs text-muted-foreground">Avg. Score</p>
                     </div>
                   </div>
                 </div>
@@ -593,7 +593,7 @@ export default function UploadPage() {
                     </div>
                     <div>
                       <p className="text-2xl font-bold counter-value">{(stats as any).newGPs}</p>
-                      <p className="text-xs text-white/40">New GPs</p>
+                      <p className="text-xs text-muted-foreground">New GPs</p>
                     </div>
                   </div>
                 </div>
@@ -608,7 +608,7 @@ export default function UploadPage() {
                     </div>
                     <div>
                       <p className="text-2xl font-bold text-green-400 counter-value">+{(stats as any).positive}</p>
-                      <p className="text-xs text-white/40">Positive</p>
+                      <p className="text-xs text-muted-foreground">Positive</p>
                     </div>
                   </div>
                 </div>
@@ -619,7 +619,7 @@ export default function UploadPage() {
                     </div>
                     <div>
                       <p className="text-2xl font-bold text-red-400 counter-value">-{(stats as any).negative}</p>
-                      <p className="text-xs text-white/40">Negative</p>
+                      <p className="text-xs text-muted-foreground">Negative</p>
                     </div>
                   </div>
                 </div>
@@ -690,10 +690,10 @@ export default function UploadPage() {
                       <UploadIcon className={`h-10 w-10 transition-colors ${isDragging ? "text-[#d4af37]" : "text-[#d4af37]/70"}`} />
                     </div>
                     <div>
-                      <p className="font-semibold text-xl text-white/90">
+                      <p className="font-semibold text-xl text-foreground">
                         {isDragging ? "Drop files here!" : "Drop screenshots or click to upload"}
                       </p>
-                      <p className="text-sm text-white/40 mt-2">
+                      <p className="text-sm text-muted-foreground mt-2">
                         PNG, JPG, WEBP • Multiple files • Paste with Ctrl+V
                       </p>
                     </div>
@@ -803,8 +803,8 @@ export default function UploadPage() {
                             >
                               {file.status === "uploading" && (
                                 <div className="text-center">
-                                  <Loader2 className="h-10 w-10 text-white animate-spin mx-auto" />
-                                  <p className="text-white text-sm mt-2 font-medium">{file.progress}%</p>
+                                  <Loader2 className="h-10 w-10 text-foreground animate-spin mx-auto" />
+                                  <p className="text-foreground text-sm mt-2 font-medium">{file.progress}%</p>
                                 </div>
                               )}
                               {file.status === "success" && (
@@ -830,7 +830,7 @@ export default function UploadPage() {
                               )}
                               {file.status === "pending" && (
                                 <div className="p-3 glass-strong rounded-full">
-                                  <UploadIcon className="h-8 w-8 text-white/80" />
+                                  <UploadIcon className="h-8 w-8 text-muted-foreground" />
                                 </div>
                               )}
                             </div>
@@ -875,7 +875,7 @@ export default function UploadPage() {
                                 e.stopPropagation();
                                 removeFile(file.id);
                               }}
-                              className="absolute top-2 right-2 p-2 rounded-full glass-strong text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/50"
+                              className="absolute top-2 right-2 p-2 rounded-full glass-strong text-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/50"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -1085,7 +1085,7 @@ export default function UploadPage() {
                     <p className="empty-state-description">
                       Upload and process screenshots to see extracted data
                     </p>
-                    <p className="text-xs mt-4 text-white/30">
+                    <p className="text-xs mt-4 text-muted-foreground/50">
                       Tip: Press Ctrl+V to paste from clipboard
                     </p>
                   </div>

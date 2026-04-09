@@ -70,7 +70,7 @@ export default function DashboardLayout({
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-6">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#d4af37] to-[#b8860b] flex items-center justify-center shadow-lg shadow-[#d4af37]/20">
-              <span className="text-black text-xl font-bold">GP</span>
+              <span className="text-white text-xl font-bold">GP</span>
             </div>
             <h1 className="text-2xl font-semibold tracking-tight text-center text-foreground">
               Sign in to continue
@@ -84,7 +84,7 @@ export default function DashboardLayout({
               window.location.href = getLoginUrl();
             }}
             size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all bg-gradient-to-r from-[#d4af37] to-[#b8860b] hover:from-[#e6c84b] hover:to-[#d4af37] text-black font-semibold"
+            className="w-full shadow-lg hover:shadow-xl transition-all bg-gradient-to-r from-[#d4af37] to-[#b8860b] hover:from-[#e6c84b] hover:to-[#d4af37] text-white font-semibold"
           >
             Sign in
           </Button>
@@ -205,7 +205,7 @@ function DashboardLayoutContent({
               {!isCollapsed ? (
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#d4af37] to-[#b8860b] flex items-center justify-center shadow-lg shadow-[#d4af37]/15">
-                    <span className="text-black text-xs font-bold">GP</span>
+                    <span className="text-white text-xs font-bold">GP</span>
                   </div>
                   <span className="font-semibold tracking-tight truncate text-foreground/90">
                     Reports
@@ -285,7 +285,7 @@ function DashboardLayoutContent({
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}
-              className="flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-[#8b0000]/15 transition-all duration-200 w-full text-left group-data-[collapsible=icon]:justify-center text-red-400 hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-red-500/10 transition-all duration-200 w-full text-left group-data-[collapsible=icon]:justify-center text-red-500/70 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Sign out"
             >
               <LogOut className={`h-4 w-4 shrink-0 ${isLoggingOut ? 'animate-spin' : ''}`} />

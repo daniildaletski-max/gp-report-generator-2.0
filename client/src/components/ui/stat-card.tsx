@@ -30,8 +30,8 @@ const colorMap: Record<string, {
   green: {
     card: "border-emerald-500/20 hover:border-emerald-500/35",
     iconBg: "bg-gradient-to-br from-emerald-500/25 to-green-500/12 border border-emerald-500/25 shadow-sm",
-    iconText: "text-emerald-400",
-    valueText: "text-emerald-300",
+    iconText: "text-emerald-500",
+    valueText: "text-emerald-600 dark:text-emerald-300",
     glow: "hover:shadow-[0_8px_24px_rgba(16,185,129,0.12)]",
     accentLine: "from-emerald-400/60 via-emerald-400/30 to-transparent",
   },
@@ -46,8 +46,8 @@ const colorMap: Record<string, {
   red: {
     card: "border-red-500/20 hover:border-red-500/35",
     iconBg: "bg-gradient-to-br from-red-500/25 to-rose-500/12 border border-red-500/25 shadow-sm",
-    iconText: "text-red-400",
-    valueText: "text-red-300",
+    iconText: "text-red-500",
+    valueText: "text-red-600 dark:text-red-300",
     glow: "hover:shadow-[0_8px_24px_rgba(239,68,68,0.12)]",
     accentLine: "from-red-400/60 via-red-400/30 to-transparent",
   },
@@ -67,7 +67,7 @@ export function StatCard({ icon: Icon, value, label, color = "violet", suffix, c
   return (
     <div
       className={cn(
-        "group relative rounded-2xl border bg-white/[0.04] backdrop-blur-xl p-4 sm:p-5 transition-all duration-300 hover:translate-y-[-2px] hover:shadow-lg overflow-hidden",
+        "group relative rounded-2xl border bg-card/80 backdrop-blur-xl p-4 sm:p-5 transition-all duration-300 hover:translate-y-[-2px] hover:shadow-lg overflow-hidden",
         colors.card,
         colors.glow,
         className
@@ -85,9 +85,9 @@ export function StatCard({ icon: Icon, value, label, color = "violet", suffix, c
         <p className={cn("text-2xl sm:text-3xl font-bold tracking-tight", colors.valueText)}>
           {value}
         </p>
-        {suffix && <span className="text-sm text-white/40 font-medium">{suffix}</span>}
+        {suffix && <span className="text-sm text-muted-foreground font-medium">{suffix}</span>}
       </div>
-      <p className="text-xs sm:text-sm font-medium text-white/50 mt-1.5">{label}</p>
+      <p className="text-xs sm:text-sm font-medium text-muted-foreground mt-1.5">{label}</p>
     </div>
   );
 }

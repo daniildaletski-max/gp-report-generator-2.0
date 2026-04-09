@@ -483,13 +483,13 @@ function AttendanceTableRow({
   return (
     <>
       <tr
-        className={`border-b border-white/5 transition-colors duration-200 ${
+        className={`border-b border-border/50 transition-colors duration-200 ${
           row.isDirty
             ? 'bg-[#d4af37]/5 border-l-2 border-l-[#d4af37]/40'
             : index % 2 === 0
             ? 'bg-transparent'
-            : 'bg-white/[0.02]'
-        } hover:bg-white/[0.04]`}
+            : 'bg-muted/30'
+        } hover:bg-muted/50`}
       >
         {/* GP Name */}
         <td className={`py-2.5 px-4 sticky left-0 z-10 ${
@@ -516,7 +516,7 @@ function AttendanceTableRow({
             <span className={`inline-flex items-center justify-center w-10 h-8 rounded-lg text-sm font-semibold ${
               row.mistakes > 0
                 ? 'bg-red-500/15 text-red-400 border border-red-500/20'
-                : 'bg-white/5 text-muted-foreground border border-white/5'
+                : 'bg-muted/50 text-muted-foreground border border-border/50'
             }`}>
               {row.mistakes}
             </span>
@@ -569,7 +569,7 @@ function AttendanceTableRow({
             className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
               row.remarks
                 ? 'bg-[#d4af37]/15 text-[#d4af37] border border-[#d4af37]/20 hover:bg-[#d4af37]/25'
-                : 'bg-white/5 text-muted-foreground border border-white/5 hover:bg-white/10'
+                : 'bg-muted/50 text-muted-foreground border border-border/50 hover:bg-muted'
             }`}
           >
             {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <MessageSquare className="h-3.5 w-3.5" />}
@@ -579,7 +579,7 @@ function AttendanceTableRow({
 
       {/* Expanded Remarks Row */}
       {isExpanded && (
-        <tr className={`border-b border-white/5 ${row.isDirty ? 'bg-[#d4af37]/5' : 'bg-white/[0.01]'}`}>
+        <tr className={`border-b border-border/50 ${row.isDirty ? 'bg-[#d4af37]/5' : 'bg-muted/20'}`}>
           <td colSpan={7} className="py-2 px-4">
             <div className="flex items-start gap-2 max-w-2xl">
               <MessageSquare className="h-4 w-4 text-[#d4af37] mt-2 shrink-0" />
