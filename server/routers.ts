@@ -3415,7 +3415,7 @@ Respond with a JSON object containing an array of ALL entries found:
         
         // Calculate totals
         const totals = data.reduce((acc, item) => ({
-          mistakes: acc.mistakes + (item.attendance?.mistakes ?? item.monthlyStats?.mistakes ?? 0),
+          mistakes: acc.mistakes + (item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0),
           extraShifts: acc.extraShifts + (item.attendance?.extraShifts ?? 0),
           lateToWork: acc.lateToWork + (item.attendance?.lateToWork ?? 0),
           missedDays: acc.missedDays + (item.attendance?.missedDays ?? 0),

@@ -88,20 +88,25 @@ export async function getAttendanceTrends(teamId: number, months: number = 6) {
       gpCount: teamGPs.length,
     };
 
+    // Use monthlyGpStats.mistakes as the primary source for mistake counts
+    // Build a set of GP IDs that have stats data
+    const gpMistakesFromStats = new Set<number>();
+    for (const stat of statsData) {
+      if (stat.stats?.gamePresenterId) {
+        gpMistakesFromStats.add(stat.stats.gamePresenterId);
+        totals.totalMistakes += stat.stats.mistakes ?? 0;
+      }
+    }
+
     for (const att of attendanceData) {
-      totals.totalMistakes += att.attendance?.mistakes ?? 0;
+      // Only use attendance.mistakes as fallback if no stats record exists for this GP
+      if (att.attendance?.gamePresenterId && !gpMistakesFromStats.has(att.attendance.gamePresenterId)) {
+        totals.totalMistakes += att.attendance?.mistakes ?? 0;
+      }
       totals.totalExtraShifts += att.attendance?.extraShifts ?? 0;
       totals.totalLateToWork += att.attendance?.lateToWork ?? 0;
       totals.totalMissedDays += att.attendance?.missedDays ?? 0;
       totals.totalSickLeaves += att.attendance?.sickLeaves ?? 0;
-    }
-
-    // Also add mistakes from monthly stats if no attendance record
-    for (const stat of statsData) {
-      const hasAttendance = attendanceData.some(a => a.attendance?.gamePresenterId === stat.stats?.gamePresenterId);
-      if (!hasAttendance && stat.stats?.mistakes) {
-        totals.totalMistakes += stat.stats.mistakes;
-      }
     }
 
     results.push(totals);

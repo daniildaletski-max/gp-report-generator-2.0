@@ -101,4 +101,41 @@ describe('Error Count Fix - Architecture Verification', () => {
       expect(fnBody).not.toContain('gpErrors');
     });
   });
+
+  describe('Attendance page prioritizes monthlyStats.mistakes', () => {
+    it('Attendance.tsx should use monthlyStats.mistakes first', async () => {
+      const fs = await import('fs');
+      const source = fs.readFileSync('./client/src/pages/Attendance.tsx', 'utf-8');
+      
+      // Should prioritize monthlyStats over attendance for mistakes
+      expect(source).toContain('item.monthlyStats?.mistakes ?? item.attendance?.mistakes');
+      // Should NOT have the wrong priority
+      expect(source).not.toContain('item.attendance?.mistakes ?? item.monthlyStats?.mistakes');
+    });
+
+    it('teamSummary in routers.ts should use monthlyStats.mistakes first', async () => {
+      const fs = await import('fs');
+      const source = fs.readFileSync('./server/routers.ts', 'utf-8');
+      
+      // The teamSummary totals should prioritize monthlyStats.mistakes
+      expect(source).toContain('item.monthlyStats?.mistakes ?? item.attendance?.mistakes');
+    });
+
+    it('attendance trends in db.ts should use monthlyGpStats as primary', async () => {
+      const fs = await import('fs');
+      const source = fs.readFileSync('./server/db.ts', 'utf-8');
+      
+      // Should contain the comment about using monthlyGpStats as primary
+      expect(source).toContain('Use monthlyGpStats.mistakes as the primary source');
+    });
+
+    it('googleSheetsService should prioritize monthlyStats.mistakes', async () => {
+      const fs = await import('fs');
+      const source = fs.readFileSync('./server/services/googleSheetsService.ts', 'utf-8');
+      
+      // Should have monthlyStats first in the attendance totals
+      expect(source).toContain('item.monthlyStats?.mistakes ?? item.attendance?.mistakes');
+      expect(source).not.toContain('item.attendance?.mistakes ?? item.monthlyStats?.mistakes');
+    });
+  });
 });

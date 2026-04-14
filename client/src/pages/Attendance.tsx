@@ -79,7 +79,7 @@ export default function AttendancePage() {
       setRows(attendanceData.items.map(item => ({
         gpId: item.gamePresenter.id,
         gpName: item.gamePresenter.name,
-        mistakes: item.attendance?.mistakes ?? item.monthlyStats?.mistakes ?? 0,
+        mistakes: item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0,
         extraShifts: item.attendance?.extraShifts ?? 0,
         lateToWork: item.attendance?.lateToWork ?? 0,
         missedDays: item.attendance?.missedDays ?? 0,
@@ -141,7 +141,7 @@ export default function AttendancePage() {
       setRows(attendanceData.items.map(item => ({
         gpId: item.gamePresenter.id,
         gpName: item.gamePresenter.name,
-        mistakes: item.attendance?.mistakes ?? item.monthlyStats?.mistakes ?? 0,
+        mistakes: item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0,
         extraShifts: item.attendance?.extraShifts ?? 0,
         lateToWork: item.attendance?.lateToWork ?? 0,
         missedDays: item.attendance?.missedDays ?? 0,

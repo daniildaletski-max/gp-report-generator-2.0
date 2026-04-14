@@ -390,7 +390,7 @@ function buildMonthlySheetRows(data: ReportData, monthName: string) {
   // Attendance totals
   if (attendanceData.length > 0) {
     const totals = attendanceData.reduce((acc, item) => ({
-      mistakes: acc.mistakes + (item.attendance?.mistakes ?? item.monthlyStats?.mistakes ?? 0),
+      mistakes: acc.mistakes + (item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0),
       extraShifts: acc.extraShifts + (item.attendance?.extraShifts ?? 0),
       lateToWork: acc.lateToWork + (item.attendance?.lateToWork ?? 0),
       missedDays: acc.missedDays + (item.attendance?.missedDays ?? 0),
