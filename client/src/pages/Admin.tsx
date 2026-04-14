@@ -1477,6 +1477,23 @@ function ErrorFilesTab({
   const [isUploading, setIsUploading] = useState(false);
   const [errorType, setErrorType] = useState<"playgon" | "mg">("playgon");
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [isRecalculating, setIsRecalculating] = useState(false);
+
+  const recalculateMutation = trpc.errorFile.recalculate.useMutation({
+    onSuccess: (data: any) => {
+      if (data.success) {
+        toast.success(`Recalculated: ${data.recalculated} GPs updated from ${data.filesProcessed} files`);
+        if (data.notFoundGPs?.length > 0) {
+          toast.warning(`GPs not found: ${data.notFoundGPs.join(', ')}`);
+        }
+      } else {
+        toast.warning(data.message || 'No files to recalculate');
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to recalculate');
+    },
+  });
 
   // Check if a file already exists for the selected month/year/type
   const existingFile = errorFiles.find(
@@ -1559,6 +1576,31 @@ function ErrorFilesTab({
           </div>
         </div>
         <div className="unified-card-body space-y-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isRecalculating}
+              onClick={async () => {
+                setIsRecalculating(true);
+                try {
+                  await recalculateMutation.mutateAsync({ month: selectedMonth, year: selectedYear });
+                } finally {
+                  setIsRecalculating(false);
+                }
+              }}
+            >
+              {isRecalculating ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Recalculate Error Counts
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Re-reads "Error Count Analysis" col E from stored files for {MONTHS[selectedMonth - 1]} {selectedYear}
+            </span>
+          </div>
           <div className="grid gap-4 md:grid-cols-4">
             <div className="space-y-2">
               <Label>Error Type</Label>

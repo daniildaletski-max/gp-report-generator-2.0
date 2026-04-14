@@ -89,12 +89,28 @@ export async function deleteGpErrorsByMonthYear(month: number, year: number, use
 export async function getErrorCountByGP(month: number, year: number, userId?: number) {
   const db = await getDb();
   if (!db) return [];
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0, 23, 59, 59);
-  const conditions: any[] = [gte(gpErrors.errorDate, startDate), lte(gpErrors.errorDate, endDate)];
-  if (userId) conditions.push(eq(gpErrors.userId, userId));
-  return await db.select({ gpName: gpErrors.gpName, errorCount: sql<number>`COUNT(${gpErrors.id})` })
-    .from(gpErrors).where(and(...conditions)).groupBy(gpErrors.gpName);
+  
+  // PRIMARY: Read from monthlyGpStats.mistakes which stores the correct count
+  // from "Error Count Analysis" sheet column E (excludes technical errors)
+  const conditions: any[] = [
+    eq(monthlyGpStats.month, month),
+    eq(monthlyGpStats.year, year),
+  ];
+  if (userId) conditions.push(eq(gamePresenters.userId, userId));
+  
+  const result = await db.select({
+    gpName: gamePresenters.name,
+    errorCount: monthlyGpStats.mistakes,
+  })
+  .from(monthlyGpStats)
+  .innerJoin(gamePresenters, eq(monthlyGpStats.gamePresenterId, gamePresenters.id))
+  .where(and(...conditions));
+  
+  // Filter out GPs with 0 mistakes to match previous behavior
+  return result.filter(r => (r.errorCount || 0) > 0).map(r => ({
+    gpName: r.gpName,
+    errorCount: r.errorCount || 0,
+  }));
 }
 
 export async function updateGPMistakesFromErrors(month: number, year: number): Promise<void> {

@@ -2197,6 +2197,118 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         }
         return { success: true };
       }),
+
+    // Recalculate error counts from stored Excel files
+    // Re-downloads and re-parses "Error Count Analysis" sheet column E
+    recalculate: protectedProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const ExcelJS = await import('exceljs');
+        
+        // Get all error files for this month/year belonging to the user
+        const allFiles = ctx.user.role === 'admin' 
+          ? await db.getAllErrorFiles()
+          : await db.getErrorFilesByUser(ctx.user.id);
+        
+        const monthFiles = allFiles.filter(f => f.month === input.month && f.year === input.year);
+        
+        if (monthFiles.length === 0) {
+          return { success: false, message: 'No error files found for this month/year', recalculated: 0 };
+        }
+
+        const gpErrorCounts: Record<string, number> = {};
+        let filesProcessed = 0;
+
+        const getCellValue = (cell: any): string | null => {
+          if (!cell || cell.value === null || cell.value === undefined) return null;
+          if (typeof cell.value === 'object' && 'result' in cell.value) return String(cell.value.result);
+          return String(cell.value).trim();
+        };
+        const getNumericValue = (cell: any): number => {
+          if (!cell || cell.value === null || cell.value === undefined) return 0;
+          const val = typeof cell.value === 'object' && 'result' in cell.value ? cell.value.result : cell.value;
+          const num = Number(val);
+          return isNaN(num) ? 0 : num;
+        };
+        const isValidGpName = (name: string | null): boolean => {
+          if (!name || name.length < 2 || name.length > 100) return false;
+          return /^[A-Za-z\u00C0-\u024F\s'-]+$/.test(name);
+        };
+
+        for (const file of monthFiles) {
+          if (!file.fileUrl) continue;
+          
+          try {
+            // Download file from S3
+            const response = await fetch(file.fileUrl);
+            if (!response.ok) {
+              log.warn(`Failed to download error file ${file.id}: ${response.status}`);
+              continue;
+            }
+            const buffer = Buffer.from(await response.arrayBuffer());
+            
+            const workbook = new ExcelJS.default.Workbook();
+            await workbook.xlsx.load(buffer);
+            
+            // PRIMARY: "Error Count Analysis" sheet column E
+            const errorCountAnalysisSheet = workbook.getWorksheet('Error Count Analysis');
+            if (errorCountAnalysisSheet) {
+              errorCountAnalysisSheet.eachRow((row: any, rowNumber: number) => {
+                if (rowNumber < 2) return;
+                const gpName = getCellValue(row.getCell(2));
+                const errorCount = getNumericValue(row.getCell(5));
+                if (!isValidGpName(gpName)) return;
+                // Accumulate (don't overwrite) in case multiple files have same GP
+                gpErrorCounts[gpName!] = (gpErrorCounts[gpName!] || 0) + errorCount;
+              });
+              filesProcessed++;
+            } else {
+              // Fallback: "Error Count" sheet column D
+              const errorCountSheet = workbook.getWorksheet('Error Count');
+              if (errorCountSheet) {
+                errorCountSheet.eachRow((row: any, rowNumber: number) => {
+                  if (rowNumber < 2) return;
+                  const gpName = getCellValue(row.getCell(2));
+                  const errorCount = getNumericValue(row.getCell(4));
+                  if (!isValidGpName(gpName)) return;
+                  gpErrorCounts[gpName!] = (gpErrorCounts[gpName!] || 0) + errorCount;
+                });
+                filesProcessed++;
+              }
+            }
+          } catch (err) {
+            log.error(`Error re-parsing file ${file.id}`, err instanceof Error ? err : new Error(String(err)));
+          }
+        }
+
+        // Update monthlyGpStats.mistakes with recalculated counts
+        const updatedGPs: string[] = [];
+        const notFoundGPs: string[] = [];
+        
+        for (const [gpName, count] of Object.entries(gpErrorCounts)) {
+          const updated = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, ctx.user.id);
+          if (updated) {
+            updatedGPs.push(gpName);
+          } else {
+            notFoundGPs.push(gpName);
+          }
+        }
+
+        log.info(`Recalculated error counts for ${input.month}/${input.year}: ${updatedGPs.length} GPs updated, ${notFoundGPs.length} not found`);
+
+        return {
+          success: true,
+          filesProcessed,
+          totalFiles: monthFiles.length,
+          gpErrorCounts,
+          updatedGPs,
+          notFoundGPs,
+          recalculated: updatedGPs.length,
+        };
+      }),
   }),
 
   // GP Access Token management
