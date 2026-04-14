@@ -2009,11 +2009,11 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         // This is the authoritative source for error counts
         const errorCountAnalysisSheet = workbook.getWorksheet('Error Count Analysis');
         if (errorCountAnalysisSheet) {
-          log.info(' Using "Error Count Analysis" sheet (column E) as primary error count source (excludes technical errors)');
+          log.info(' Using "Error Count Analysis" sheet (column C=name, column E=errors) as primary error count source (excludes technical errors)');
           errorCountAnalysisSheet.eachRow((row, rowNumber) => {
             if (rowNumber < 2) return; // Skip header
             
-            const gpName = getCellValue(row.getCell(2)); // Column B - GP Name
+            const gpName = getCellValue(row.getCell(3)); // Column C - Employee Name (NOT column B which is Work load)
             const errorCount = getNumericValue(row.getCell(5)); // Column E - Error count excluding technical errors
             
             if (!isValidGpName(gpName)) return;
@@ -2258,7 +2258,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
             if (errorCountAnalysisSheet) {
               errorCountAnalysisSheet.eachRow((row: any, rowNumber: number) => {
                 if (rowNumber < 2) return;
-                const gpName = getCellValue(row.getCell(2));
+                const gpName = getCellValue(row.getCell(3)); // Column C - Employee Name
                 const errorCount = getNumericValue(row.getCell(5));
                 if (!isValidGpName(gpName)) return;
                 // Accumulate (don't overwrite) in case multiple files have same GP

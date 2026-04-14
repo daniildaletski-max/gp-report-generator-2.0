@@ -48,7 +48,7 @@ describe('Error Count Fix - Architecture Verification', () => {
   });
 
   describe('Error Count Analysis sheet is primary source', () => {
-    it('upload mutation should use Error Count Analysis sheet column E', async () => {
+    it('upload mutation should use Error Count Analysis sheet column C for name, column E for count', async () => {
       const fs = await import('fs');
       const routerSource = fs.readFileSync('./server/routers.ts', 'utf-8');
       
@@ -56,6 +56,8 @@ describe('Error Count Fix - Architecture Verification', () => {
       expect(routerSource).toContain("Error Count Analysis");
       expect(routerSource).toContain("column E");
       expect(routerSource).toContain("excludes technical errors");
+      // Column C (cell 3) for GP name, NOT column B (cell 2)
+      expect(routerSource).toContain('getCell(3)); // Column C - Employee Name');
     });
 
     it('recalculate endpoint should exist and use Error Count Analysis', async () => {
