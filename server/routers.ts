@@ -2005,21 +2005,54 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           return /^[A-Za-z\u00C0-\u024F\s'-]+$/.test(name) && name.length < 100;
         };
 
-        // First, try to parse detailed errors from "Errors" sheet (individual error records)
+        // PRIMARY SOURCE: "Error Count Analysis" sheet - column E has error counts EXCLUDING technical errors
+        // This is the authoritative source for error counts
+        const errorCountAnalysisSheet = workbook.getWorksheet('Error Count Analysis');
+        if (errorCountAnalysisSheet) {
+          log.info(' Using "Error Count Analysis" sheet (column E) as primary error count source (excludes technical errors)');
+          errorCountAnalysisSheet.eachRow((row, rowNumber) => {
+            if (rowNumber < 2) return; // Skip header
+            
+            const gpName = getCellValue(row.getCell(2)); // Column B - GP Name
+            const errorCount = getNumericValue(row.getCell(5)); // Column E - Error count excluding technical errors
+            
+            if (!isValidGpName(gpName)) return;
+            
+            gpErrorCounts[gpName!] = errorCount;
+            totalErrorsCount += errorCount;
+          });
+        } else {
+          // Fallback: try "Error Count" sheet (column D) if "Error Count Analysis" doesn't exist
+          const errorCountSheet = workbook.getWorksheet('Error Count');
+          if (errorCountSheet) {
+            log.info(' Fallback: Using "Error Count" sheet (column D) - "Error Count Analysis" sheet not found');
+            errorCountSheet.eachRow((row, rowNumber) => {
+              if (rowNumber < 2) return; // Skip header
+              
+              const gpName = getCellValue(row.getCell(2)); // Column B
+              const errorCount = getNumericValue(row.getCell(4)); // Column D
+              
+              if (!isValidGpName(gpName)) return;
+              
+              gpErrorCounts[gpName!] = errorCount;
+              totalErrorsCount += errorCount;
+            });
+          }
+        }
+
+        // SECONDARY: Parse "Errors" sheet for error DETAILS only (descriptions, codes, dates)
+        // These details are stored for reference but do NOT affect the error count
         const errorsSheet = workbook.getWorksheet('Errors');
         if (errorsSheet) {
-          // Based on actual file structure:
-          // Row 2 is the header row with: Nr(A), GP Name(B), GP Alias(C), Date(D), Timestamp(E), Table ID(F), 
-          // Shoe ID(G), SystemRound ID(H), Error code(I), Game Type(J), Error description(K), Solution(L), etc.
-          let headerRow = 2; // Header is in row 2
-          let gpNameCol = 2; // Column B - GP Name
-          let dateCol = 4;   // Column D - Date
-          let descCol = 11;  // Column K - Error description
-          let codeCol = 9;   // Column I - Error code
-          let gameTypeCol = 10; // Column J - Game Type
-          let tableIdCol = 6;  // Column F - Table ID
+          let headerRow = 2;
+          let gpNameCol = 2;
+          let dateCol = 4;
+          let descCol = 11;
+          let codeCol = 9;
+          let gameTypeCol = 10;
+          let tableIdCol = 6;
           
-          // Check first few rows for headers to auto-detect if structure is different
+          // Auto-detect column positions from headers
           for (let r = 1; r <= 3; r++) {
             const row = errorsSheet.getRow(r);
             row.eachCell((cell, colNumber) => {
@@ -2035,34 +2068,29 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           
           log.debug(` Detected columns - Header row: ${headerRow}, GP Name: ${gpNameCol}, Date: ${dateCol}, Description: ${descCol}, Code: ${codeCol}, Game Type: ${gameTypeCol}, Table ID: ${tableIdCol}`);
           
-          // Parse error records starting after header
+          // Parse error records for DETAILS only (not for counting)
           errorsSheet.eachRow((row, rowNumber) => {
             if (rowNumber <= headerRow) return;
             
             const gpName = getCellValue(row.getCell(gpNameCol));
             if (!isValidGpName(gpName)) return;
             
-            // Extract error details
             const errorDetail: { date?: Date; description?: string; errorCode?: string; gameType?: string; tableId?: string } = {};
             
             const dateCell = row.getCell(dateCol);
             if (dateCell.value instanceof Date) {
               errorDetail.date = dateCell.value;
             } else if (typeof dateCell.value === 'number') {
-              // Excel serial date
               errorDetail.date = new Date((dateCell.value - 25569) * 86400 * 1000);
             } else if (typeof dateCell.value === 'string') {
-              // Parse string date like '01.01.2026' or '2026-01-01'
               const dateStr = dateCell.value.trim();
               if (dateStr.includes('.')) {
-                // DD.MM.YYYY format
                 const parts = dateStr.split('.');
                 if (parts.length === 3) {
                   const [day, month, year] = parts.map(p => parseInt(p, 10));
                   errorDetail.date = new Date(year, month - 1, day);
                 }
               } else if (dateStr.includes('-')) {
-                // YYYY-MM-DD format
                 errorDetail.date = new Date(dateStr);
               }
             }
@@ -2072,30 +2100,9 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
             errorDetail.gameType = getCellValue(row.getCell(gameTypeCol)) || undefined;
             errorDetail.tableId = getCellValue(row.getCell(tableIdCol)) || undefined;
             
-            // Add to counts and details
-            gpErrorCounts[gpName!] = (gpErrorCounts[gpName!] || 0) + 1;
+            // Store details only - do NOT increment gpErrorCounts here
             if (!gpErrorDetails[gpName!]) gpErrorDetails[gpName!] = [];
             gpErrorDetails[gpName!].push(errorDetail);
-            totalErrorsCount++;
-          });
-        }
-
-        // Also check "Error Count" sheet for summary counts (may have different/additional GPs)
-        const errorCountSheet = workbook.getWorksheet('Error Count');
-        if (errorCountSheet) {
-          errorCountSheet.eachRow((row, rowNumber) => {
-            if (rowNumber < 2) return; // Skip header
-            
-            const gpName = getCellValue(row.getCell(2)); // Column B
-            const errorCount = getNumericValue(row.getCell(4)); // Column D
-            
-            if (!isValidGpName(gpName)) return;
-            
-            // If we didn't get details from Errors sheet, use count from Error Count sheet
-            if (!gpErrorCounts[gpName!] || gpErrorCounts[gpName!] === 0) {
-              gpErrorCounts[gpName!] = errorCount;
-              totalErrorsCount += errorCount;
-            }
           });
         }
 
