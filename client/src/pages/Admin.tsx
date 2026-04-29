@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
 
-const ADMIN_TABS = ["overview", "invitations", "users", "teams", "stats", "access", "errors"] as const;
+const ADMIN_TABS = ["overview", "invitations", "users", "teams", "stats", "access", "errors", "persona"] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
 const FM_TABS = ["stats", "access"] as const;
@@ -179,7 +179,7 @@ function FullAdminPanel() {
       </div>
 
       <Tabs value={activeTab} onValueChange={v => setActiveTab(v as AdminTab)} className="space-y-4">
-        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-7 h-auto">
+        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-8 h-auto">
           <TabsTrigger value="overview" className="flex items-center justify-center gap-2 py-2">
             <BarChart3 className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Overview</span>
@@ -207,6 +207,10 @@ function FullAdminPanel() {
           <TabsTrigger value="errors" className="flex items-center justify-center gap-2 py-2">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Errors</span>
+          </TabsTrigger>
+          <TabsTrigger value="persona" className="flex items-center justify-center gap-2 py-2">
+            <RefreshCw className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Persona</span>
           </TabsTrigger>
         </TabsList>
 
@@ -246,6 +250,15 @@ function FullAdminPanel() {
         <ErrorFilesTab 
           errorFiles={errorFiles || []}
           refetchFiles={refetchFiles}
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+          setSelectedMonth={setSelectedMonth}
+          setSelectedYear={setSelectedYear}
+        />
+
+        {/* Persona Sync Tab */}
+        <PersonaSyncTab
+          teams={teams || []}
           selectedMonth={selectedMonth}
           selectedYear={selectedYear}
           setSelectedMonth={setSelectedMonth}
@@ -3671,5 +3684,305 @@ function SystemHealthMonitor() {
         )}
       </div>
     </div>
+  );
+}
+
+// ============================================
+// Persona Sync Tab Component
+// ============================================
+function PersonaSyncTab({
+  teams,
+  selectedMonth,
+  selectedYear,
+  setSelectedMonth,
+  setSelectedYear,
+}: {
+  teams: { id: number; teamName: string; floorManagerName: string }[];
+  selectedMonth: number;
+  selectedYear: number;
+  setSelectedMonth: (m: number) => void;
+  setSelectedYear: (y: number) => void;
+}) {
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
+  const [syncLog, setSyncLog] = useState<string[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [projectIdInput, setProjectIdInput] = useState<string>("");
+
+  const { data: teamsWithProjects, refetch: refetchTeamProjects } = trpc.personaSync.getTeamsWithProjectIds.useQuery();
+
+  const syncMutation = trpc.personaSync.syncTeam.useMutation({
+    onSuccess: (data) => {
+      const log = [
+        `✅ Sync completed for ${MONTHS[selectedMonth - 1]} ${selectedYear}`,
+        `📊 Total Persona workers: ${data.totalPersonaWorkers}`,
+        `✅ Matched & updated: ${data.matched}`,
+        `⚠️ Unmatched: ${data.unmatched}`,
+        ``,
+        `Match details:`,
+        ...data.matchDetails.map(d =>
+          d.matched
+            ? `  ✅ ${d.personaName} → ${d.gpName}`
+            : `  ❌ ${d.personaName} (no match found)`
+        ),
+      ];
+      setSyncLog(log);
+      setIsSyncing(false);
+      toast.success(`Synced ${data.matched} GPs from Persona`);
+    },
+    onError: (err) => {
+      setSyncLog([`❌ Sync failed: ${err.message}`]);
+      setIsSyncing(false);
+      toast.error(`Persona sync failed: ${err.message}`);
+    },
+  });
+
+  const setProjectIdMutation = trpc.personaSync.setProjectId.useMutation({
+    onSuccess: () => {
+      toast.success("Persona Project ID saved");
+      refetchTeamProjects();
+    },
+    onError: (err) => {
+      toast.error(`Failed to save: ${err.message}`);
+    },
+  });
+
+  const handleSync = () => {
+    if (!selectedTeamId) {
+      toast.error("Please select a team");
+      return;
+    }
+    setIsSyncing(true);
+    setSyncLog([`🔄 Syncing from Persona for ${MONTHS[selectedMonth - 1]} ${selectedYear}...`]);
+    syncMutation.mutate({ teamId: selectedTeamId, month: selectedMonth, year: selectedYear });
+  };
+
+  const handleSaveProjectId = () => {
+    if (!selectedTeamId) {
+      toast.error("Please select a team");
+      return;
+    }
+    const pid = projectIdInput.trim() === "" ? null : parseInt(projectIdInput.trim());
+    if (projectIdInput.trim() !== "" && isNaN(pid as number)) {
+      toast.error("Invalid Project ID — must be a number");
+      return;
+    }
+    setProjectIdMutation.mutate({ teamId: selectedTeamId, personaProjectId: pid });
+  };
+
+  const selectedTeamProject = teamsWithProjects?.find(t => t.id === selectedTeamId);
+
+  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+
+  return (
+    <TabsContent value="persona" className="space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="icon-box p-3">
+          <RefreshCw className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold">Persona HR Sync</h2>
+          <p className="text-sm text-muted-foreground">
+            Automatically import sick leaves, missed days, and extra shifts from Persona schedule
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Configuration Card */}
+        <Card className="border border-border">
+          <CardHeader>
+            <CardTitle className="text-base">Sync Configuration</CardTitle>
+            <CardDescription>Select team, month, and year to sync</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Team selector */}
+            <div className="space-y-2">
+              <Label>Team</Label>
+              <Select
+                value={selectedTeamId?.toString() ?? ""}
+                onValueChange={v => {
+                  const id = parseInt(v);
+                  setSelectedTeamId(id);
+                  const proj = teamsWithProjects?.find(t => t.id === id);
+                  setProjectIdInput(proj?.personaProjectId?.toString() ?? "");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a team..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {teams.map(t => (
+                    <SelectItem key={t.id} value={t.id.toString()}>
+                      {t.teamName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Month selector */}
+            <div className="space-y-2">
+              <Label>Month</Label>
+              <Select value={selectedMonth.toString()} onValueChange={v => setSelectedMonth(parseInt(v))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTHS.map((m, i) => (
+                    <SelectItem key={i + 1} value={(i + 1).toString()}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Year selector */}
+            <div className="space-y-2">
+              <Label>Year</Label>
+              <Select value={selectedYear.toString()} onValueChange={v => setSelectedYear(parseInt(v))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map(y => (
+                    <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Persona Project ID */}
+            <div className="space-y-2">
+              <Label>Persona Project ID</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="e.g. 4728"
+                  value={projectIdInput}
+                  onChange={e => setProjectIdInput(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveProjectId}
+                  disabled={!selectedTeamId || setProjectIdMutation.isPending}
+                >
+                  {setProjectIdMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                </Button>
+              </div>
+              {selectedTeamProject?.personaProjectId && (
+                <p className="text-xs text-muted-foreground">
+                  Current: Project ID {selectedTeamProject.personaProjectId}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Leave empty to sync all projects visible to your account
+              </p>
+            </div>
+
+            <Button
+              className="w-full"
+              onClick={handleSync}
+              disabled={!selectedTeamId || isSyncing}
+            >
+              {isSyncing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Syncing from Persona...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Sync Attendance from Persona
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Teams Project IDs Overview */}
+        <Card className="border border-border">
+          <CardHeader>
+            <CardTitle className="text-base">Teams & Project IDs</CardTitle>
+            <CardDescription>Persona project ID assigned to each team</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {teamsWithProjects && teamsWithProjects.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Team</TableHead>
+                    <TableHead>Persona Project ID</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {teamsWithProjects.map(t => (
+                    <TableRow key={t.id}>
+                      <TableCell className="font-medium">{t.teamName}</TableCell>
+                      <TableCell>
+                        {t.personaProjectId ? (
+                          <Badge variant="outline">{t.personaProjectId}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Not set</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">No teams found</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sync Log */}
+      {syncLog.length > 0 && (
+        <Card className="border border-border">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Sync Log
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-muted/30 rounded-lg p-4 font-mono text-sm space-y-1 max-h-64 overflow-y-auto">
+              {syncLog.map((line, i) => (
+                <div key={i} className={
+                  line.startsWith("✅") ? "text-green-400" :
+                  line.startsWith("❌") ? "text-red-400" :
+                  line.startsWith("⚠️") ? "text-amber-400" :
+                  line.startsWith("📊") ? "text-blue-400" :
+                  line.startsWith("🔄") ? "text-muted-foreground animate-pulse" :
+                  "text-foreground"
+                }>
+                  {line || "\u00A0"}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Info Card */}
+      <Card className="border border-amber-500/20 bg-amber-500/5">
+        <CardContent className="pt-4">
+          <div className="flex gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-amber-400">How Persona Sync Works</p>
+              <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                <li>Logs into Persona HR system using stored credentials</li>
+                <li>Reads the schedule for the selected month and project</li>
+                <li>Matches workers by name to GPs in the selected team</li>
+                <li>Updates sick leaves, missed days, and extra shifts in the database</li>
+                <li>Sync may take 30–60 seconds while Persona loads</li>
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </TabsContent>
   );
 }

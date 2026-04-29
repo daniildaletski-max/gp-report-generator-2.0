@@ -27,6 +27,7 @@ export const fmTeams = mysqlTable("fm_teams", {
   teamName: varchar("teamName", { length: 255 }).notNull(),
   floorManagerName: varchar("floorManagerName", { length: 255 }).notNull(),
   userId: int("userId"), // Owner of this team - for user data isolation
+  personaProjectId: int("personaProjectId"), // Persona schedule project ID for auto-sync
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
