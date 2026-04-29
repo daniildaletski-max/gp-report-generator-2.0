@@ -8,6 +8,14 @@ vi.mock('./db', () => ({
   getErrorFilesByUser: vi.fn(),
 }));
 
+// Routers were split out into server/routers/<domain>.ts modules. These
+// source-grep tests now scan the concatenation of all router modules
+// instead of the (now barrel-only) server/routers.ts.
+function readAllRouterSource(fs: typeof import('fs')): string {
+  const files = fs.readdirSync('./server/routers').filter(f => f.endsWith('.ts'));
+  return files.map(f => fs.readFileSync(`./server/routers/${f}`, 'utf-8')).join('\n');
+}
+
 describe('Error Count Fix - Architecture Verification', () => {
   
   describe('getErrorCountByGP reads from monthlyGpStats', () => {
@@ -34,7 +42,7 @@ describe('Error Count Fix - Architecture Verification', () => {
   describe('Error Count Analysis sheet is primary source', () => {
     it('upload mutation should use Error Count Analysis sheet column C for name, column E for count', async () => {
       const fs = await import('fs');
-      const routerSource = fs.readFileSync('./server/routers.ts', 'utf-8');
+      const routerSource = readAllRouterSource(fs);
       
       // Verify the upload mutation uses "Error Count Analysis" as primary source
       expect(routerSource).toContain("Error Count Analysis");
@@ -46,7 +54,7 @@ describe('Error Count Fix - Architecture Verification', () => {
 
     it('recalculate endpoint should exist and use Error Count Analysis', async () => {
       const fs = await import('fs');
-      const routerSource = fs.readFileSync('./server/routers.ts', 'utf-8');
+      const routerSource = readAllRouterSource(fs);
       
       // Verify recalculate endpoint exists
       expect(routerSource).toContain('recalculate: protectedProcedure');
@@ -101,7 +109,7 @@ describe('Error Count Fix - Architecture Verification', () => {
 
     it('teamSummary in routers.ts should use monthlyStats.mistakes first', async () => {
       const fs = await import('fs');
-      const source = fs.readFileSync('./server/routers.ts', 'utf-8');
+      const source = readAllRouterSource(fs);
       
       // The teamSummary totals should prioritize monthlyStats.mistakes
       expect(source).toContain('item.monthlyStats?.mistakes ?? item.attendance?.mistakes');

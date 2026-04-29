@@ -242,28 +242,36 @@ describe('data isolation - db functions accept userId parameter', () => {
   });
 });
 
+// Routers were split out into server/routers/<domain>.ts modules. These
+// source-grep tests now scan the concatenation of all router modules
+// instead of the (now barrel-only) server/routers.ts.
+function readAllRouterSource(fs: typeof import('fs')): string {
+  const files = fs.readdirSync('./server/routers').filter(f => f.endsWith('.ts'));
+  return files.map(f => fs.readFileSync(`./server/routers/${f}`, 'utf-8')).join('\n');
+}
+
 describe('data isolation - router source code verification', () => {
   it('should pass userId to getErrorCountByGP in routers', async () => {
     const fs = await import('fs');
-    const source = fs.readFileSync('./server/routers.ts', 'utf-8');
+    const source = readAllRouterSource(fs);
     expect(source).toContain('db.getErrorCountByGP(input.reportMonth, input.reportYear, ctx.user.id)');
   });
 
   it('should pass userId to deleteGpErrorsByMonthYear in routers', async () => {
     const fs = await import('fs');
-    const source = fs.readFileSync('./server/routers.ts', 'utf-8');
+    const source = readAllRouterSource(fs);
     expect(source).toContain('db.deleteGpErrorsByMonthYear(input.month, input.year, ctx.user.id');
   });
 
   it('should pass userId to updateGPMistakesDirectly in routers', async () => {
     const fs = await import('fs');
-    const source = fs.readFileSync('./server/routers.ts', 'utf-8');
+    const source = readAllRouterSource(fs);
     expect(source).toContain('db.updateGPMistakesDirectly(gpName, count, input.month, input.year, ctx.user.id)');
   });
 
   it('should set userId on gpError records when creating them', async () => {
     const fs = await import('fs');
-    const source = fs.readFileSync('./server/routers.ts', 'utf-8');
+    const source = readAllRouterSource(fs);
     // Count occurrences of userId: ctx.user.id in createGpError calls
     const matches = source.match(/userId: ctx\.user\.id, \/\/ Data isolation/g);
     expect(matches).not.toBeNull();
@@ -272,7 +280,9 @@ describe('data isolation - router source code verification', () => {
 
   it('should set userId on errorFile records when creating them', async () => {
     const fs = await import('fs');
-    const source = fs.readFileSync('./server/routers.ts', 'utf-8');
-    expect(source).toContain('userId: ctx.user.id, // Data isolation\n        });');
+    const source = readAllRouterSource(fs);
+    // Match the data-isolation comment immediately followed by the close
+    // of the createErrorFile values object (any whitespace before `});`).
+    expect(source).toMatch(/userId: ctx\.user\.id, \/\/ Data isolation\n\s*\}\);/);
   });
 });
