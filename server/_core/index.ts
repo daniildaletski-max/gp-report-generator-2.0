@@ -45,17 +45,17 @@ function rateLimiter(opts: { windowMs: number; max: number; keyPrefix?: string }
   };
 }
 
-// Clean up expired rate limit entries every 5 minutes
-setInterval(() => {
+// Clean up expired rate limit entries every 5 minutes.
+// Held in a handle so graceful shutdown can clear it and let the event loop exit.
+const rateLimitCleanupTimer = setInterval(() => {
   const now = Date.now();
-  const keys = Array.from(rateLimitStore.keys());
-  for (const key of keys) {
-    const value = rateLimitStore.get(key);
-    if (value && now > value.resetTime) {
+  rateLimitStore.forEach((value, key) => {
+    if (now > value.resetTime) {
       rateLimitStore.delete(key);
     }
-  }
+  });
 }, 5 * 60 * 1000);
+rateLimitCleanupTimer.unref();
 
 // Request logger replaced by requestTracingMiddleware (services/requestTracing.ts)
 
@@ -179,6 +179,7 @@ async function startServer() {
   // Graceful shutdown
   const shutdown = (signal: string) => {
     log.info(`[${signal}] Shutting down gracefully...`);
+    clearInterval(rateLimitCleanupTimer);
     cache.clear();
     server.close(() => {
       log.info("Server closed.");

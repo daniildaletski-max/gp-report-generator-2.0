@@ -76,12 +76,29 @@ export async function createGpError(data: InsertGpError): Promise<GpError> {
   return newError[0];
 }
 
-export async function deleteGpErrorsByMonthYear(month: number, year: number, userId?: number): Promise<void> {
+export async function deleteGpErrorsByMonthYear(
+  month: number,
+  year: number,
+  userId?: number,
+  errorFileId?: number,
+): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0, 23, 59, 59);
-  const conditions: any[] = [gte(gpErrors.errorDate, startDate), lte(gpErrors.errorDate, endDate)];
+
+  const conditions: any[] = [];
+
+  // When the caller knows the originating file, scope deletion to that file
+  // so a "playgon" reupload doesn't wipe out "mg" errors for the same month
+  // (cross-type deletion bug, fixed in commit 42035e0).
+  if (errorFileId) {
+    conditions.push(eq(gpErrors.errorFileId, errorFileId));
+  } else {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+    conditions.push(gte(gpErrors.errorDate, startDate));
+    conditions.push(lte(gpErrors.errorDate, endDate));
+  }
+
   if (userId) conditions.push(eq(gpErrors.userId, userId));
   await db.delete(gpErrors).where(and(...conditions));
 }

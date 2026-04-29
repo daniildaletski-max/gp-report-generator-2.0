@@ -11,24 +11,8 @@ vi.mock('./db', () => ({
 describe('Error Count Fix - Architecture Verification', () => {
   
   describe('getErrorCountByGP reads from monthlyGpStats', () => {
-    it('should NOT use COUNT(gpErrors) - verify source code', async () => {
-      const fs = await import('fs');
-      
-      // Check db.ts
-      const dbSource = fs.readFileSync('./server/db.ts', 'utf-8');
-      const dbFnMatch = dbSource.match(/export async function getErrorCountByGP[\s\S]*?^}/m);
-      expect(dbFnMatch).toBeTruthy();
-      const dbFnBody = dbFnMatch![0];
-      
-      // Should NOT contain COUNT(gpErrors)
-      expect(dbFnBody).not.toContain('COUNT(${gpErrors.id})');
-      expect(dbFnBody).not.toContain('COUNT(${gpErrors');
-      
-      // Should contain monthlyGpStats.mistakes
-      expect(dbFnBody).toContain('monthlyGpStats.mistakes');
-      expect(dbFnBody).toContain('monthlyGpStats');
-      expect(dbFnBody).toContain('gamePresenters');
-    });
+    // Note: server/db.ts is now a barrel re-exporting from ./db/. The
+    // implementation lives in server/db/errors.ts (next test).
 
     it('should NOT use COUNT(gpErrors) in db/errors.ts', async () => {
       const fs = await import('fs');
@@ -123,10 +107,10 @@ describe('Error Count Fix - Architecture Verification', () => {
       expect(source).toContain('item.monthlyStats?.mistakes ?? item.attendance?.mistakes');
     });
 
-    it('attendance trends in db.ts should use monthlyGpStats as primary', async () => {
+    it('attendance trends should use monthlyGpStats as primary (db/attendance.ts)', async () => {
       const fs = await import('fs');
-      const source = fs.readFileSync('./server/db.ts', 'utf-8');
-      
+      const source = fs.readFileSync('./server/db/attendance.ts', 'utf-8');
+
       // Should contain the comment about using monthlyGpStats as primary
       expect(source).toContain('Use monthlyGpStats.mistakes as the primary source');
     });
