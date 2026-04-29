@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { GPDetailDrawer } from "@/components/GPDetailDrawer";
 import {
   CalendarCheck, Save, Loader2, Users, AlertTriangle,
   Clock, TrendingUp, TrendingDown, Minus, RotateCcw,
@@ -53,6 +54,7 @@ export default function AttendancePage() {
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [expandedRemarks, setExpandedRemarks] = useState<Set<number>>(new Set());
+  const [drawerGpId, setDrawerGpId] = useState<number | null>(null);
 
   // When the user has unsaved edits and tries to switch team/month/year,
   // queue the pending change and confirm first instead of silently
@@ -460,6 +462,7 @@ export default function AttendancePage() {
                     isExpanded={expandedRemarks.has(row.gpId)}
                     onToggleRemarks={() => toggleRemarks(row.gpId)}
                     onUpdateField={updateField}
+                    onOpenProfile={setDrawerGpId}
                   />
                 ))}
                 {/* Totals Row */}
@@ -545,6 +548,12 @@ export default function AttendancePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <GPDetailDrawer
+        gpId={drawerGpId}
+        open={drawerGpId !== null}
+        onOpenChange={(open) => { if (!open) setDrawerGpId(null); }}
+      />
     </div>
   );
 }
@@ -558,12 +567,14 @@ function AttendanceTableRow({
   isExpanded,
   onToggleRemarks,
   onUpdateField,
+  onOpenProfile,
 }: {
   row: AttendanceRow;
   index: number;
   isExpanded: boolean;
   onToggleRemarks: () => void;
   onUpdateField: (gpId: number, field: keyof AttendanceRow, value: number | string) => void;
+  onOpenProfile: (gpId: number) => void;
 }) {
   return (
     <>
@@ -586,9 +597,13 @@ function AttendanceTableRow({
                 {row.gpName.charAt(0)}
               </span>
             </div>
-            <span className="font-medium text-sm text-foreground truncate max-w-[120px]">
+            <button
+              type="button"
+              onClick={() => onOpenProfile(row.gpId)}
+              className="font-medium text-sm text-foreground hover:text-primary hover:underline truncate max-w-[120px] text-left"
+            >
               {row.gpName}
-            </span>
+            </button>
             {row.isDirty && (
               <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse-slow shrink-0" />
             )}
