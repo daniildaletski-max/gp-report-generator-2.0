@@ -16,6 +16,7 @@ import XLSXChart from "xlsx-chart";
 import { generateReportWorkbook } from "./services/excelService";
 import { createLogger } from "./services/logger";
 import { exportToGoogleSheets, isGoogleSheetsAvailable } from "./services/googleSheetsService";
+import { cache, CacheKeys, CacheTTL } from "./services/cache";
 
 const log = createLogger("Router");
 
@@ -1123,22 +1124,35 @@ export const appRouter = router({
       }).optional())
       .query(async ({ ctx, input }) => {
         const teamId = input?.teamId;
-        // User-based data isolation: each user sees only their own stats
+        const month = input?.month ?? new Date().getMonth() + 1;
+        const year = input?.year ?? new Date().getFullYear();
+
+        // User-based data isolation: each user sees only their own stats.
+        // Cache key includes role + user/team scope so admins and tenants
+        // never share entries.
         if (ctx.user.role !== 'admin') {
-          // For non-admin users, getDashboardStatsByUser already filters by userId
-          // If teamId is provided, we need to also filter by team
           if (teamId) {
-            // Verify team belongs to user
             const team = await db.getFmTeamById(teamId);
             if (!team || team.userId !== ctx.user.id) {
               throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
             }
-            return await db.getDashboardStats(input?.month, input?.year, teamId);
+            return cache.getOrSet(
+              CacheKeys.dashboardStats(month, year, teamId),
+              () => db.getDashboardStats(input?.month, input?.year, teamId),
+              CacheTTL.DASHBOARD_STATS,
+            );
           }
-          return await db.getDashboardStatsByUser(input?.month, input?.year, ctx.user.id);
+          return cache.getOrSet(
+            CacheKeys.dashboardStatsByUser(month, year, ctx.user.id),
+            () => db.getDashboardStatsByUser(input?.month, input?.year, ctx.user.id),
+            CacheTTL.DASHBOARD_STATS,
+          );
         }
-        // Admin sees all, optionally filtered by team
-        return await db.getDashboardStats(input?.month, input?.year, teamId);
+        return cache.getOrSet(
+          CacheKeys.dashboardStats(month, year, teamId),
+          () => db.getDashboardStats(input?.month, input?.year, teamId),
+          CacheTTL.DASHBOARD_STATS,
+        );
       }),
 
     // Monthly trend data for comparative analytics
@@ -1150,10 +1164,12 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const months = input?.months || 6;
         const teamId = input?.teamId;
-        if (ctx.user.role !== 'admin') {
-          return await db.getMonthlyTrendData(months, teamId, ctx.user.id);
-        }
-        return await db.getMonthlyTrendData(months, teamId);
+        const userScope = ctx.user.role !== 'admin' ? ctx.user.id : undefined;
+        return cache.getOrSet(
+          CacheKeys.monthlyTrend(months, teamId, userScope),
+          () => db.getMonthlyTrendData(months, teamId, userScope),
+          CacheTTL.MONTHLY_TREND,
+        );
       }),
 
     // Cross-team GP comparison
@@ -1163,16 +1179,25 @@ export const appRouter = router({
       }).optional())
       .query(async ({ ctx, input }) => {
         const teamIds = input?.teamIds;
-        if (ctx.user.role !== 'admin') {
-          return await db.getTeamComparisonData(ctx.user.id, teamIds);
+        // Cache only the parameter-less variant; teamId arrays vary too much
+        // for a stable key and the underlying query is cheap with filters.
+        if (teamIds && teamIds.length > 0) {
+          return db.getTeamComparisonData(ctx.user.id, teamIds);
         }
-        // Admin sees all teams - need a userId, use owner
-        return await db.getTeamComparisonData(ctx.user.id, teamIds);
+        return cache.getOrSet(
+          CacheKeys.teamComparison(ctx.user.id),
+          () => db.getTeamComparisonData(ctx.user.id, teamIds),
+          CacheTTL.TEAM_COMPARISON,
+        );
       }),
 
     // Admin dashboard with system-wide stats
     adminStats: adminProcedure.query(async () => {
-      return await db.getAdminDashboardStats();
+      return cache.getOrSet(
+        CacheKeys.adminStats(),
+        () => db.getAdminDashboardStats(),
+        CacheTTL.ADMIN_STATS,
+      );
     }),
 
     // Server health check (admin-only, calls /api/health internally)
@@ -2249,9 +2274,12 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
               continue;
             }
             const buffer = Buffer.from(await response.arrayBuffer());
-            
+
             const workbook = new ExcelJS.default.Workbook();
-            await workbook.xlsx.load(buffer);
+            // Cast: Node 22+ types Buffer.from(arrayBuffer) as Buffer<ArrayBuffer>,
+            // but ExcelJS's xlsx.load() declares the legacy Buffer type. Structurally
+            // compatible at runtime; same cast pattern used at line 1973.
+            await workbook.xlsx.load(buffer as any);
             
             // PRIMARY: "Error Count Analysis" sheet column E
             const errorCountAnalysisSheet = workbook.getWorksheet('Error Count Analysis');
