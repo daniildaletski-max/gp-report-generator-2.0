@@ -2,6 +2,7 @@ import { router, publicProcedure, protectedProcedure, adminProcedure } from "../
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
+import { getBonusForGp } from "../services/bonusService";
 
 export const gamePresenterRouter = router({
   // List all GPs (admin) or user's GPs (non-admin)
@@ -369,5 +370,115 @@ export const gamePresenterRouter = router({
         })
       );
       return gpHistories;
+    }),
+
+  /**
+   * Aggregate profile for one GP — everything needed by the GP Detail
+   * drawer in a single round-trip:
+   *   - identity (name, team, attitude/mistakes for current month)
+   *   - 6-month performance trend (from getGpMonthlyHistory)
+   *   - 6-month bonus history (level + payout per month)
+   *   - last 10 evaluations
+   *   - last N errors and attitude entries from the last `monthsBack` months
+   */
+  profile: protectedProcedure
+    .input(z.object({
+      gpId: z.number().positive(),
+      monthsBack: z.number().int().min(1).max(12).default(6),
+    }))
+    .query(async ({ ctx, input }) => {
+      const gp = await db.getGamePresenterById(input.gpId);
+      if (!gp) throw new TRPCError({ code: "NOT_FOUND", message: "GP not found" });
+      // Ownership check for non-admin
+      if (ctx.user.role !== "admin" && gp.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+
+      const team = gp.teamId ? await db.getFmTeamById(gp.teamId) : null;
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+
+      // The N most-recent (month, year) tuples, oldest-first to match
+      // getGpMonthlyHistory's ordering.
+      const months: Array<{ month: number; year: number }> = [];
+      for (let i = input.monthsBack - 1; i >= 0; i--) {
+        const d = new Date(currentYear, currentMonth - 1 - i, 1);
+        months.push({ month: d.getMonth() + 1, year: d.getFullYear() });
+      }
+
+      const [
+        currentStats,
+        currentAttendance,
+        trend,
+        bonusHistory,
+        recentEvaluations,
+        errorsByMonth,
+        attitudeByMonth,
+      ] = await Promise.all([
+        db.getMonthlyGpStats(gp.id, currentMonth, currentYear),
+        db.getOrCreateAttendance(gp.id, currentMonth, currentYear),
+        db.getGpMonthlyHistory(gp.id, input.monthsBack),
+        Promise.all(months.map(async ({ month, year }) => {
+          const r = await getBonusForGp(gp.id, month, year);
+          return r ? {
+            month, year,
+            label: `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][month-1]} ${year}`,
+            bonusLevel: r.bonusLevel,
+            bonusAmount: r.bonusAmount,
+            achievedGGs: r.achievedGGs,
+            totalGames: r.totalGames,
+            errorCount: r.errorCount,
+            hoursWorked: r.hoursWorked,
+          } : null;
+        })),
+        // 10 most recent evaluations across all time
+        db.getEvaluationsByGP(gp.id).then(rows => rows.slice(0, 10)),
+        // Last N months of error screenshots
+        Promise.all(months.map(({ month, year }) => db.getErrorScreenshotsForGP(gp.id, month, year))),
+        Promise.all(months.map(({ month, year }) => db.getAttitudeScreenshotsForGP(gp.id, month, year))),
+      ]);
+
+      // Flatten + sort + limit to 15 most recent each
+      const recentErrors = errorsByMonth.flat()
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 15);
+      const recentAttitude = attitudeByMonth.flat()
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 15);
+
+      return {
+        gp: {
+          id: gp.id,
+          name: gp.name,
+          teamId: gp.teamId,
+          teamName: team?.teamName ?? null,
+          floorManagerName: team?.floorManagerName ?? null,
+          createdAt: gp.createdAt,
+        },
+        currentMonth: {
+          month: currentMonth,
+          year: currentYear,
+          evalCount: recentEvaluations.filter(e => {
+            if (!e.evaluationDate) return false;
+            const d = new Date(e.evaluationDate);
+            return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
+          }).length,
+          totalGames: currentStats?.totalGames ?? 0,
+          mistakes: currentStats?.mistakes ?? 0,
+          attitude: currentStats?.attitude ?? null,
+          attendance: {
+            extraShifts: currentAttendance.extraShifts ?? 0,
+            lateToWork: currentAttendance.lateToWork ?? 0,
+            missedDays: currentAttendance.missedDays ?? 0,
+            sickLeaves: currentAttendance.sickLeaves ?? 0,
+          },
+        },
+        trend,
+        bonusHistory: bonusHistory.filter((b): b is NonNullable<typeof b> => b !== null),
+        recentEvaluations,
+        recentErrors,
+        recentAttitude,
+      };
     }),
 });

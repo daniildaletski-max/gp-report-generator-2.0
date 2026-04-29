@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString, urlNumber } from "@/hooks/useUrlState";
+import { GPDetailDrawer } from "@/components/GPDetailDrawer";
 import EvaluationDetailView from "@/components/EvaluationDetailView";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -60,6 +61,7 @@ export default function EvaluationsPage() {
   
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [drawerGpId, setDrawerGpId] = useState<number | null>(null);
   
   // Search and filter state — persisted in the URL.
   const [searchQuery, setSearchQuery] = useUrlState("q", "", urlString.parse, urlString.serialize);
@@ -717,7 +719,17 @@ export default function EvaluationsPage() {
                           />
                         </TableCell>
                         <TableCell className="font-medium">
-                          {gamePresenter?.name || "Unknown GP"}
+                          {gamePresenter?.id ? (
+                            <button
+                              type="button"
+                              onClick={() => setDrawerGpId(gamePresenter.id)}
+                              className="text-foreground hover:text-primary hover:underline transition-colors text-left"
+                            >
+                              {gamePresenter.name}
+                            </button>
+                          ) : (
+                            gamePresenter?.name || "Unknown GP"
+                          )}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {evaluation.evaluationDate 
@@ -1183,6 +1195,12 @@ export default function EvaluationsPage() {
           onOpenChange={(open) => !open && setViewingEval(null)}
         />
       )}
+
+      <GPDetailDrawer
+        gpId={drawerGpId}
+        open={drawerGpId !== null}
+        onOpenChange={(open) => { if (!open) setDrawerGpId(null); }}
+      />
     </div>
   );
 }

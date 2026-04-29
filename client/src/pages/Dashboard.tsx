@@ -9,6 +9,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { GlassCard } from "@/components/ui/glass-card";
 import { useLocation } from "wouter";
 import { useState, useMemo } from "react";
+import { GPDetailDrawer } from "@/components/GPDetailDrawer";
 import { useUrlState, urlNumber } from "@/hooks/useUrlState";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from "recharts";
 import { useIsMobile } from "@/hooks/useMobile";
@@ -91,6 +92,7 @@ export default function Dashboard() {
   );
   const [, setLocation] = useLocation();
   const isMobile = useIsMobile();
+  const [drawerGpId, setDrawerGpId] = useState<number | null>(null);
 
   const { data: teams } = trpc.fmTeam.list.useQuery();
   
@@ -109,6 +111,7 @@ export default function Dashboard() {
 
   const gpStats = (stats as { gpStats?: GPStat[] })?.gpStats || [];
   const chartData = useMemo(() => gpStats.map((gp: GPStat) => ({
+    gpId: gp.gpId,
     name: gp.gpName ? (gp.gpName.split(' ').length > 1 ? `${gp.gpName.split(' ')[0]} ${gp.gpName.split(' ').slice(-1)[0][0]}.` : gp.gpName) : "Unknown",
     fullName: gp.gpName,
     totalScore: Number(gp.avgTotal),
@@ -396,7 +399,12 @@ export default function Dashboard() {
             {topPerformers.length > 0 ? (
               <div className="space-y-2">
                 {topPerformers.map((gp, idx) => (
-                  <div key={gp.name} className="flex items-center gap-3 p-3 rounded-xl bg-card/50 border border-border hover:border-primary/20 transition-all">
+                  <button
+                    key={gp.name}
+                    type="button"
+                    onClick={() => setDrawerGpId(gp.gpId)}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl bg-card/50 border border-border hover:border-primary/40 hover:bg-primary/5 transition-all text-left"
+                  >
                     <div className={`flex items-center justify-center h-8 w-8 rounded-lg text-xs font-bold ${
                       idx === 0 ? 'bg-primary/15 text-primary border border-primary/30' :
                       idx === 1 ? 'bg-primary/10 text-primary/80 border border-primary/20' :
@@ -414,7 +422,7 @@ export default function Dashboard() {
                       </p>
                       <p className="text-[10px] text-muted-foreground">/22</p>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (
@@ -443,7 +451,12 @@ export default function Dashboard() {
             {lowPerformers.length > 0 ? (
               <div className="space-y-2">
                 {lowPerformers.map((gp) => (
-                  <div key={gp.name} className="flex items-center gap-3 p-3 rounded-xl bg-rose-500/5 border border-rose-500/10 hover:border-rose-500/20 transition-all">
+                  <button
+                    key={gp.name}
+                    type="button"
+                    onClick={() => setDrawerGpId(gp.gpId)}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl bg-rose-500/5 border border-rose-500/10 hover:border-rose-500/30 hover:bg-rose-500/10 transition-all text-left"
+                  >
                     <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-rose-500/10 border border-rose-500/20">
                       <AlertTriangle className="h-3.5 w-3.5 text-rose-500" />
                     </div>
@@ -455,7 +468,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <p className="text-lg font-bold text-rose-500">{gp.totalScore.toFixed(1)}</p>
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (
@@ -479,6 +492,12 @@ export default function Dashboard() {
 
       {/* Trend Section */}
       <TrendSection isMobile={isMobile} selectedTeamId={selectedTeamId} selectedTeamName={selectedTeamName} teams={teams} />
+
+      <GPDetailDrawer
+        gpId={drawerGpId}
+        open={drawerGpId !== null}
+        onOpenChange={(open) => { if (!open) setDrawerGpId(null); }}
+      />
     </div>
   );
 }

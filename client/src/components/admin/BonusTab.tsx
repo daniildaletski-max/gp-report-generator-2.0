@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { MONTH_NAMES } from "@shared/const";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../../../server/routers";
+import { GPDetailDrawer } from "@/components/GPDetailDrawer";
 
 type BonusReport = inferRouterOutputs<AppRouter>["bonus"]["list"][number];
 
@@ -42,6 +43,7 @@ export function BonusTab({
   const [filterTeamId, setFilterTeamId] = useTeamFilter(fixedTeamId);
 
   const teamId = fixedTeamId ?? filterTeamId;
+  const [drawerGpId, setDrawerGpId] = useState<number | null>(null);
 
   const { data: bonuses, isLoading } = trpc.bonus.list.useQuery({
     month: selectedMonth,
@@ -74,6 +76,7 @@ export function BonusTab({
   }, [bonuses]);
 
   return (
+    <>
     <TabsContent value="bonus" className="space-y-4">
       {/* Filter bar */}
       <Card>
@@ -149,7 +152,7 @@ export function BonusTab({
             </div>
           ) : (
             <div className="space-y-2">
-              {sorted.map(b => <BonusRow key={b.gpId} bonus={b} />)}
+              {sorted.map(b => <BonusRow key={b.gpId} bonus={b} onOpenProfile={setDrawerGpId} />)}
             </div>
           )}
         </CardContent>
@@ -176,6 +179,12 @@ export function BonusTab({
         </CardContent>
       </Card>
     </TabsContent>
+    <GPDetailDrawer
+      gpId={drawerGpId}
+      open={drawerGpId !== null}
+      onOpenChange={(open) => { if (!open) setDrawerGpId(null); }}
+    />
+    </>
   );
 }
 
@@ -205,7 +214,7 @@ function SummaryStat({
   );
 }
 
-function BonusRow({ bonus: b }: { bonus: BonusReport }) {
+function BonusRow({ bonus: b, onOpenProfile }: { bonus: BonusReport; onOpenProfile: (gpId: number) => void }) {
   const tone =
     b.bonusLevel === "level2" ? "border-amber-200 bg-amber-50/50" :
     b.bonusLevel === "level1" ? "border-primary/20 bg-primary/5" :
@@ -219,7 +228,13 @@ function BonusRow({ bonus: b }: { bonus: BonusReport }) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex-1 min-w-[180px]">
           <div className="flex items-center gap-2">
-            <p className="font-semibold text-foreground">{b.gpName}</p>
+            <button
+              type="button"
+              onClick={() => onOpenProfile(b.gpId)}
+              className="font-semibold text-foreground hover:text-primary hover:underline text-left"
+            >
+              {b.gpName}
+            </button>
             <Badge variant="outline" className="text-[10px]">{levelLabel}</Badge>
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
