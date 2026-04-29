@@ -5,6 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { 
   Upload as UploadIcon, 
@@ -495,7 +505,23 @@ function AttitudeResultCard({ file, onRemove, onRetry }: { file: FileWithPreview
 export default function UploadPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<UploadType>("evaluations");
-  const [files, setFiles] = useState<FileWithPreview[]>([]);
+  // Files are scoped per tab so switching between Evaluations / Attitude
+  // doesn't silently throw away an in-progress batch.
+  const [filesByTab, setFilesByTab] = useState<Record<UploadType, FileWithPreview[]>>({
+    evaluations: [],
+    attitude: [],
+  });
+  const files = filesByTab[activeTab];
+  const setFiles = useCallback(
+    (updater: FileWithPreview[] | ((prev: FileWithPreview[]) => FileWithPreview[])) => {
+      setFilesByTab(prev => ({
+        ...prev,
+        [activeTab]: typeof updater === "function" ? updater(prev[activeTab]) : updater,
+      }));
+    },
+    [activeTab],
+  );
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [overallProgress, setOverallProgress] = useState(0);
@@ -562,10 +588,7 @@ export default function UploadPage() {
     }
   }, [files]);
 
-  // Clear files when switching tabs
-  useEffect(() => {
-    setFiles([]);
-  }, [activeTab]);
+  // Files are kept in `filesByTab`; switching tabs preserves both batches.
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -745,6 +768,18 @@ export default function UploadPage() {
   const clearAll = () => {
     files.forEach(f => URL.revokeObjectURL(f.preview));
     setFiles([]);
+    setShowClearConfirm(false);
+  };
+
+  const requestClearAll = () => {
+    // Skip the confirmation if everything has already been processed and saved —
+    // there's nothing to lose.
+    const hasUnfinished = files.some(f => f.status === "pending" || f.status === "uploading" || f.status === "error");
+    if (!hasUnfinished) {
+      clearAll();
+      return;
+    }
+    setShowClearConfirm(true);
   };
 
   const retryFailed = () => {
@@ -907,7 +942,7 @@ export default function UploadPage() {
                 Retry failed
               </Button>
             )}
-            <Button variant="ghost" size="sm" onClick={clearAll} className="text-xs h-8 text-muted-foreground hover:text-red-600">
+            <Button variant="ghost" size="sm" onClick={requestClearAll} className="text-xs h-8 text-muted-foreground hover:text-red-600">
               <Trash2 className="h-3 w-3 mr-1" />
               Clear all
             </Button>
@@ -955,6 +990,34 @@ export default function UploadPage() {
           </p>
         </div>
       )}
+
+      <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear {files.length} file{files.length !== 1 ? "s" : ""}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const pending = files.filter(f => f.status === "pending" || f.status === "uploading").length;
+                const failed = files.filter(f => f.status === "error").length;
+                const parts: string[] = [];
+                if (pending > 0) parts.push(`${pending} not yet processed`);
+                if (failed > 0) parts.push(`${failed} failed (still retryable)`);
+                const detail = parts.length > 0 ? ` ${parts.join(" and ")} will be lost.` : "";
+                return `This removes everything from the list.${detail} This action can't be undone.`;
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep files</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={clearAll}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Clear all
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

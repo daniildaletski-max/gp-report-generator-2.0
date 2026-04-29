@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
+import { useUrlState, urlString, urlNumber } from "@/hooks/useUrlState";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,11 +42,41 @@ export default function ReportsPage() {
   const [showNewReport, setShowNewReport] = useState(false);
   const [viewingReport, setViewingReport] = useState<any>(null);
   
-  // Filters
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterYear, setFilterYear] = useState<number | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [filterTeam, setFilterTeam] = useState<string>("all");
+  // Filters — persisted to URL so refreshing and sharing keep them.
+  const [searchQuery, setSearchQuery] = useUrlState("q", "", urlString.parse, urlString.serialize);
+  const [filterYear, setFilterYear] = useUrlState<number | null>(
+    "year",
+    null,
+    raw => urlNumber.parse(raw),
+    urlNumber.serialize,
+  );
+  const [filterStatus, setFilterStatus] = useUrlState(
+    "status",
+    "all",
+    urlString.parse,
+    v => (v === "all" ? null : v),
+  );
+  const [filterTeam, setFilterTeam] = useUrlState(
+    "team",
+    "all",
+    urlString.parse,
+    v => (v === "all" ? null : v),
+  );
+
+  // Search input ref so `/` can focus it from anywhere on the page.
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/") return;
+      const target = e.target as HTMLElement | null;
+      // Don't intercept when the user is already typing in a field.
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      e.preventDefault();
+      searchInputRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   
   const [formData, setFormData] = useState(() => ({
     teamId: 0,
@@ -658,7 +689,8 @@ export default function ReportsPage() {
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by team or FM name..."
+                ref={searchInputRef}
+                placeholder="Search by team or FM name… (press / to focus)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
