@@ -12,6 +12,7 @@ import { initScheduledReports } from "../scheduledReports";
 import { createLogger } from "../services/logger";
 import { requestTracingMiddleware, requestValidation } from "../services/requestTracing";
 import { cache } from "../services/cache";
+import { checkHealth as checkDbHealth } from "../db/connection";
 
 const log = createLogger("Server");
 
@@ -45,17 +46,17 @@ function rateLimiter(opts: { windowMs: number; max: number; keyPrefix?: string }
   };
 }
 
-// Clean up expired rate limit entries every 5 minutes
-setInterval(() => {
+// Clean up expired rate limit entries every 5 minutes.
+// Held in a handle so graceful shutdown can clear it and let the event loop exit.
+const rateLimitCleanupTimer = setInterval(() => {
   const now = Date.now();
-  const keys = Array.from(rateLimitStore.keys());
-  for (const key of keys) {
-    const value = rateLimitStore.get(key);
-    if (value && now > value.resetTime) {
+  rateLimitStore.forEach((value, key) => {
+    if (now > value.resetTime) {
       rateLimitStore.delete(key);
     }
-  }
+  });
 }, 5 * 60 * 1000);
+rateLimitCleanupTimer.unref();
 
 // Request logger replaced by requestTracingMiddleware (services/requestTracing.ts)
 
@@ -65,7 +66,6 @@ setInterval(() => {
 function globalErrorHandler(err: Error, _req: Request, res: Response, _next: NextFunction) {
   log.error(`Unhandled error: ${err.message}`, err);
 
-  const isProduction = process.env.NODE_ENV === "production";
   res.status(500).json({
     error: isProduction ? "Internal server error" : err.message,
     ...(isProduction ? {} : { stack: err.stack }),
@@ -75,11 +75,59 @@ function globalErrorHandler(err: Error, _req: Request, res: Response, _next: Nex
 // ============================
 // Security headers middleware
 // ============================
+const isProduction = process.env.NODE_ENV === "production";
+
+// Build a CSP that allows the SPA + Vite HMR in dev. In dev we relax
+// connect-src/script-src for the HMR websocket and inline runtime injections.
+// 'unsafe-inline' for styles is kept because Tailwind/Radix emit inline styles.
+function buildCsp(): string {
+  const directives: Record<string, string[]> = {
+    "default-src": ["'self'"],
+    "base-uri": ["'self'"],
+    "frame-ancestors": ["'none'"],
+    "form-action": ["'self'"],
+    "object-src": ["'none'"],
+    "img-src": ["'self'", "data:", "blob:", "https:"],
+    "font-src": ["'self'", "data:", "https:"],
+    "style-src": ["'self'", "'unsafe-inline'", "https:"],
+    "script-src": ["'self'"],
+    "connect-src": ["'self'", "https:"],
+    "worker-src": ["'self'", "blob:"],
+  };
+
+  if (!isProduction) {
+    // Vite injects inline scripts and uses a websocket for HMR
+    directives["script-src"].push("'unsafe-inline'", "'unsafe-eval'");
+    directives["connect-src"].push("ws:", "wss:");
+  }
+
+  return Object.entries(directives)
+    .map(([k, v]) => `${k} ${v.join(" ")}`)
+    .join("; ");
+}
+
+const CSP_HEADER = buildCsp();
+
 function securityHeaders(_req: Request, res: Response, next: NextFunction) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("X-XSS-Protection", "1; mode=block");
+  // X-XSS-Protection is deprecated and can introduce vulnerabilities in older
+  // browsers. Modern browsers honour CSP instead. Intentionally not set.
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Content-Security-Policy", CSP_HEADER);
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  );
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  if (isProduction) {
+    // Only emit HSTS over real HTTPS deployments; sending it over plain HTTP
+    // in dev breaks subsequent localhost requests in some browsers.
+    res.setHeader(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains",
+    );
+  }
   next();
 }
 
@@ -106,6 +154,10 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // Trust the first proxy hop so req.ip reflects the real client (X-Forwarded-For).
+  // Without this every rate-limit bucket collapses to the proxy's address.
+  app.set("trust proxy", 1);
+
   // Security headers
   app.use(securityHeaders);
 
@@ -128,13 +180,27 @@ async function startServer() {
   app.use("/api/trpc/attitudeScreenshot.upload", rateLimiter({ windowMs: 60_000, max: 30, keyPrefix: "upload" }));
   app.use("/api/trpc/errorFile.upload", rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "file-upload" }));
 
-  // Health check endpoint with cache stats
+  // Liveness check: cheap, never touches the DB.
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       nodeVersion: process.version,
+      cache: cache.getStats(),
+    });
+  });
+
+  // Readiness check: probes the database. Returns 503 if it can't be reached
+  // so load balancers / orchestrators stop routing traffic to this instance.
+  app.get("/api/health/ready", async (_req, res) => {
+    const dbHealth = await checkDbHealth();
+    const status = dbHealth.ok ? 200 : 503;
+    res.status(status).json({
+      status: dbHealth.ok ? "ready" : "not_ready",
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      database: dbHealth,
       cache: cache.getStats(),
     });
   });
@@ -177,17 +243,21 @@ async function startServer() {
   });
 
   // Graceful shutdown
-  const shutdown = (signal: string) => {
+  let isShuttingDown = false;
+  const shutdown = (signal: string, exitCode = 0) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
     log.info(`[${signal}] Shutting down gracefully...`);
+    clearInterval(rateLimitCleanupTimer);
     cache.clear();
     server.close(() => {
       log.info("Server closed.");
-      process.exit(0);
+      process.exit(exitCode);
     });
     setTimeout(() => {
       log.error("Forced shutdown after timeout");
       process.exit(1);
-    }, 10000);
+    }, 10000).unref();
   };
 
   process.on("SIGTERM", () => shutdown("SIGTERM"));
@@ -195,6 +265,15 @@ async function startServer() {
 
   process.on("unhandledRejection", (reason) => {
     log.error("Unhandled rejection", reason instanceof Error ? reason : new Error(String(reason)));
+  });
+
+  // An uncaughtException leaves the process in an undefined state; log loudly
+  // and tear down. The OS supervisor (systemd / k8s / pm2) is expected to
+  // restart us. Without this handler Node's default is to exit silently with
+  // status 1 after printing to stderr.
+  process.on("uncaughtException", (err) => {
+    log.error("Uncaught exception — initiating shutdown", err);
+    shutdown("uncaughtException", 1);
   });
 }
 

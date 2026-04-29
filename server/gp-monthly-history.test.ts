@@ -111,11 +111,11 @@ describe('GP Monthly History', () => {
 
   describe('monthlyHistory in getEvaluationsByToken response', () => {
     it('should include monthlyHistory field in GP portal data', async () => {
-      // This test verifies the router includes monthlyHistory
-      // We check the router code structure
+      // This test verifies the router includes monthlyHistory.
+      // The lookup lives in server/routers/gpAccess.ts since the router split.
       const fs = await import('fs');
-      const routerCode = fs.readFileSync('./server/routers.ts', 'utf-8');
-      
+      const routerCode = fs.readFileSync('./server/routers/gpAccess.ts', 'utf-8');
+
       // Verify monthlyHistory is included in the response
       expect(routerCode).toContain('getGpMonthlyHistory');
       expect(routerCode).toContain('monthlyHistory');

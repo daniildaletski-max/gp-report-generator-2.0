@@ -8,27 +8,19 @@ vi.mock('./db', () => ({
   getErrorFilesByUser: vi.fn(),
 }));
 
+// Routers were split out into server/routers/<domain>.ts modules. These
+// source-grep tests now scan the concatenation of all router modules
+// instead of the (now barrel-only) server/routers.ts.
+function readAllRouterSource(fs: typeof import('fs')): string {
+  const files = fs.readdirSync('./server/routers').filter(f => f.endsWith('.ts'));
+  return files.map(f => fs.readFileSync(`./server/routers/${f}`, 'utf-8')).join('\n');
+}
+
 describe('Error Count Fix - Architecture Verification', () => {
   
   describe('getErrorCountByGP reads from monthlyGpStats', () => {
-    it('should NOT use COUNT(gpErrors) - verify source code', async () => {
-      const fs = await import('fs');
-      
-      // Check db.ts
-      const dbSource = fs.readFileSync('./server/db.ts', 'utf-8');
-      const dbFnMatch = dbSource.match(/export async function getErrorCountByGP[\s\S]*?^}/m);
-      expect(dbFnMatch).toBeTruthy();
-      const dbFnBody = dbFnMatch![0];
-      
-      // Should NOT contain COUNT(gpErrors)
-      expect(dbFnBody).not.toContain('COUNT(${gpErrors.id})');
-      expect(dbFnBody).not.toContain('COUNT(${gpErrors');
-      
-      // Should contain monthlyGpStats.mistakes
-      expect(dbFnBody).toContain('monthlyGpStats.mistakes');
-      expect(dbFnBody).toContain('monthlyGpStats');
-      expect(dbFnBody).toContain('gamePresenters');
-    });
+    // Note: server/db.ts is now a barrel re-exporting from ./db/. The
+    // implementation lives in server/db/errors.ts (next test).
 
     it('should NOT use COUNT(gpErrors) in db/errors.ts', async () => {
       const fs = await import('fs');
@@ -50,7 +42,7 @@ describe('Error Count Fix - Architecture Verification', () => {
   describe('Error Count Analysis sheet is primary source', () => {
     it('upload mutation should use Error Count Analysis sheet column C for name, column E for count', async () => {
       const fs = await import('fs');
-      const routerSource = fs.readFileSync('./server/routers.ts', 'utf-8');
+      const routerSource = readAllRouterSource(fs);
       
       // Verify the upload mutation uses "Error Count Analysis" as primary source
       expect(routerSource).toContain("Error Count Analysis");
@@ -62,7 +54,7 @@ describe('Error Count Fix - Architecture Verification', () => {
 
     it('recalculate endpoint should exist and use Error Count Analysis', async () => {
       const fs = await import('fs');
-      const routerSource = fs.readFileSync('./server/routers.ts', 'utf-8');
+      const routerSource = readAllRouterSource(fs);
       
       // Verify recalculate endpoint exists
       expect(routerSource).toContain('recalculate: protectedProcedure');
@@ -117,16 +109,16 @@ describe('Error Count Fix - Architecture Verification', () => {
 
     it('teamSummary in routers.ts should use monthlyStats.mistakes first', async () => {
       const fs = await import('fs');
-      const source = fs.readFileSync('./server/routers.ts', 'utf-8');
+      const source = readAllRouterSource(fs);
       
       // The teamSummary totals should prioritize monthlyStats.mistakes
       expect(source).toContain('item.monthlyStats?.mistakes ?? item.attendance?.mistakes');
     });
 
-    it('attendance trends in db.ts should use monthlyGpStats as primary', async () => {
+    it('attendance trends should use monthlyGpStats as primary (db/attendance.ts)', async () => {
       const fs = await import('fs');
-      const source = fs.readFileSync('./server/db.ts', 'utf-8');
-      
+      const source = fs.readFileSync('./server/db/attendance.ts', 'utf-8');
+
       // Should contain the comment about using monthlyGpStats as primary
       expect(source).toContain('Use monthlyGpStats.mistakes as the primary source');
     });

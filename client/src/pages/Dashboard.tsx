@@ -9,6 +9,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { GlassCard } from "@/components/ui/glass-card";
 import { useLocation } from "wouter";
 import { useState, useMemo } from "react";
+import { useUrlState, urlNumber } from "@/hooks/useUrlState";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from "recharts";
 import { useIsMobile } from "@/hooks/useMobile";
 
@@ -66,9 +67,28 @@ const PIE_COLORS = ['oklch(0.75 0.12 85)', 'oklch(0.65 0.12 85)', 'oklch(0.70 0.
 
 export default function Dashboard() {
   const [currentDate] = useState(() => new Date());
-  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
-  const [selectedTeamId, setSelectedTeamId] = useState<number | undefined>(undefined);
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+  // Persist month/year/team in the URL so refresh keeps the view, and a
+  // copy-pasted link opens directly on the same period/team.
+  const [selectedMonth, setSelectedMonth] = useUrlState<number>(
+    "month",
+    currentMonth,
+    raw => urlNumber.parse(raw),
+    v => (v === currentMonth ? null : String(v)),
+  );
+  const [selectedYear, setSelectedYear] = useUrlState<number>(
+    "year",
+    currentYear,
+    raw => urlNumber.parse(raw),
+    v => (v === currentYear ? null : String(v)),
+  );
+  const [selectedTeamId, setSelectedTeamId] = useUrlState<number | undefined>(
+    "team",
+    undefined,
+    raw => urlNumber.parse(raw),
+    v => (v == null ? null : String(v)),
+  );
   const [, setLocation] = useLocation();
   const isMobile = useIsMobile();
 
