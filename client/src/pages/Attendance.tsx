@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import {
   CalendarCheck, Save, Loader2, Users, AlertTriangle,
   Clock, TrendingUp, TrendingDown, Minus, RotateCcw,
@@ -43,6 +54,16 @@ export default function AttendancePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [expandedRemarks, setExpandedRemarks] = useState<Set<number>>(new Set());
 
+  // When the user has unsaved edits and tries to switch team/month/year,
+  // queue the pending change and confirm first instead of silently
+  // overwriting their work via the data-refetch useEffect below.
+  const [pendingFilterChange, setPendingFilterChange] = useState<
+    | { kind: "team"; value: string }
+    | { kind: "month"; value: number }
+    | { kind: "year"; value: number }
+    | null
+  >(null);
+
   // Fetch teams
   const { data: teams, isLoading: teamsLoading } = trpc.fmTeam.list.useQuery();
 
@@ -73,22 +94,31 @@ export default function AttendancePage() {
     },
   });
 
-  // Populate rows from fetched data
+  // Avoid wiping user edits when the query just refetches in the background.
+  // Only repopulate rows when the underlying scope (team/month/year) changes
+  // or when we currently have nothing showing.
+  const lastLoadedScopeRef = useRef<string>("");
   useEffect(() => {
-    if (attendanceData?.items) {
-      setRows(attendanceData.items.map(item => ({
-        gpId: item.gamePresenter.id,
-        gpName: item.gamePresenter.name,
-        mistakes: item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0,
-        extraShifts: item.attendance?.extraShifts ?? 0,
-        lateToWork: item.attendance?.lateToWork ?? 0,
-        missedDays: item.attendance?.missedDays ?? 0,
-        sickLeaves: item.attendance?.sickLeaves ?? 0,
-        remarks: item.attendance?.remarks ?? "",
-        isDirty: false,
-      })));
-    }
-  }, [attendanceData]);
+    if (!attendanceData?.items) return;
+    const scope = `${teamId ?? "_"}:${selectedMonth}:${selectedYear}`;
+    const isFirstLoadForScope = lastLoadedScopeRef.current !== scope;
+    if (!isFirstLoadForScope && rows.some(r => r.isDirty)) return;
+    lastLoadedScopeRef.current = scope;
+    setRows(attendanceData.items.map(item => ({
+      gpId: item.gamePresenter.id,
+      gpName: item.gamePresenter.name,
+      mistakes: item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0,
+      extraShifts: item.attendance?.extraShifts ?? 0,
+      lateToWork: item.attendance?.lateToWork ?? 0,
+      missedDays: item.attendance?.missedDays ?? 0,
+      sickLeaves: item.attendance?.sickLeaves ?? 0,
+      remarks: item.attendance?.remarks ?? "",
+      isDirty: false,
+    })));
+  // rows is intentionally omitted — we only consider its dirty state via a
+  // ref-equivalent at read time. Including it would re-enter on every keystroke.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attendanceData, teamId, selectedMonth, selectedYear]);
 
   // Update a single field
   const updateField = useCallback((gpId: number, field: keyof AttendanceRow, value: number | string) => {
@@ -167,6 +197,33 @@ export default function AttendancePage() {
   const hasDirtyRows = rows.some(r => r.isDirty);
   const selectedTeam = teams?.find(t => t.id === teamId);
 
+  // Block accidental tab close / refresh while there are unsaved edits.
+  useUnsavedChangesGuard(hasDirtyRows);
+
+  const applyFilterChange = useCallback((change: NonNullable<typeof pendingFilterChange>) => {
+    if (change.kind === "team") setSelectedTeamId(change.value);
+    else if (change.kind === "month") setSelectedMonth(change.value);
+    else if (change.kind === "year") setSelectedYear(change.value);
+  }, []);
+
+  const requestFilterChange = useCallback(
+    (next: NonNullable<typeof pendingFilterChange>) => {
+      if (!hasDirtyRows) {
+        applyFilterChange(next);
+        return;
+      }
+      setPendingFilterChange(next);
+    },
+    [hasDirtyRows, applyFilterChange],
+  );
+
+  const confirmDiscardAndApply = useCallback(() => {
+    if (pendingFilterChange) {
+      applyFilterChange(pendingFilterChange);
+      setPendingFilterChange(null);
+    }
+  }, [pendingFilterChange, applyFilterChange]);
+
   // Year options
   const years = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -222,7 +279,7 @@ export default function AttendancePage() {
           {/* Team Selector */}
           <div className="flex-1 min-w-[200px]">
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Team</label>
-            <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+            <Select value={selectedTeamId} onValueChange={v => requestFilterChange({ kind: "team", value: v })}>
               <SelectTrigger className="glass-input h-10">
                 <SelectValue placeholder="Select team..." />
               </SelectTrigger>
@@ -239,7 +296,7 @@ export default function AttendancePage() {
           {/* Month Selector */}
           <div className="flex-1 min-w-[160px]">
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Month</label>
-            <Select value={String(selectedMonth)} onValueChange={v => setSelectedMonth(Number(v))}>
+            <Select value={String(selectedMonth)} onValueChange={v => requestFilterChange({ kind: "month", value: Number(v) })}>
               <SelectTrigger className="glass-input h-10">
                 <SelectValue />
               </SelectTrigger>
@@ -256,7 +313,7 @@ export default function AttendancePage() {
           {/* Year Selector */}
           <div className="w-[120px]">
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Year</label>
-            <Select value={String(selectedYear)} onValueChange={v => setSelectedYear(Number(v))}>
+            <Select value={String(selectedYear)} onValueChange={v => requestFilterChange({ kind: "year", value: Number(v) })}>
               <SelectTrigger className="glass-input h-10">
                 <SelectValue />
               </SelectTrigger>
@@ -460,6 +517,34 @@ export default function AttendancePage() {
           </Button>
         </div>
       )}
+
+      <AlertDialog
+        open={pendingFilterChange !== null}
+        onOpenChange={(open) => { if (!open) setPendingFilterChange(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard {rows.filter(r => r.isDirty).length} unsaved changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingFilterChange?.kind === "team"
+                ? "Switching team will discard your current edits."
+                : pendingFilterChange?.kind === "month"
+                  ? "Switching month will discard your current edits."
+                  : "Switching year will discard your current edits."}
+              {" "}Save first to keep them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Stay on this view</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDiscardAndApply}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Discard &amp; switch
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

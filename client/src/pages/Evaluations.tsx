@@ -43,8 +43,13 @@ export default function EvaluationsPage() {
     },
   });
   
-  // Active tab state
-  const [activeTab, setActiveTab] = useState<"evaluations" | "attitude">("evaluations");
+  // Active tab state — persisted in URL so a deep link or refresh stays on the tab.
+  const [activeTab, setActiveTab] = useUrlState<"evaluations" | "attitude">(
+    "tab",
+    "evaluations",
+    raw => (raw === "attitude" ? "attitude" : "evaluations"),
+    v => (v === "evaluations" ? null : v),
+  );
   
   const [editingEval, setEditingEval] = useState<any>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);

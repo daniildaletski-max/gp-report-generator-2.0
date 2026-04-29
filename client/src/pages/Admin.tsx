@@ -1,5 +1,12 @@
 import { useState, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { useUrlState, urlString } from "@/hooks/useUrlState";
+
+const ADMIN_TABS = ["overview", "invitations", "users", "teams", "stats", "access", "errors"] as const;
+type AdminTab = (typeof ADMIN_TABS)[number];
+
+const FM_TABS = ["stats", "access"] as const;
+type FmTab = (typeof FM_TABS)[number];
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,6 +55,12 @@ function FMRestrictedView() {
   const { user } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [activeTab, setActiveTab] = useUrlState<FmTab>(
+    "tab",
+    "stats",
+    raw => (FM_TABS.includes(raw as FmTab) ? (raw as FmTab) : "stats"),
+    v => (v === "stats" ? null : v),
+  );
 
   const { data: teams } = trpc.fmTeam.list.useQuery();
   const { data: gamePresenters, isLoading: gpsLoading, refetch: refetchGPs } = trpc.gamePresenter.list.useQuery();
@@ -70,7 +83,7 @@ function FMRestrictedView() {
         </Badge>
       </div>
 
-      <Tabs defaultValue="stats" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={v => setActiveTab(v as FmTab)} className="space-y-4">
         <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-2 h-auto">
           <TabsTrigger value="stats" className="flex items-center justify-center gap-2 py-2">
             <Star className="h-4 w-4 shrink-0" />
@@ -112,6 +125,12 @@ function FMRestrictedView() {
 function FullAdminPanel() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [activeTab, setActiveTab] = useUrlState<AdminTab>(
+    "tab",
+    "overview",
+    raw => (ADMIN_TABS.includes(raw as AdminTab) ? (raw as AdminTab) : "overview"),
+    v => (v === "overview" ? null : v),
+  );
 
   const { data: teams, isLoading: teamsLoading, refetch: refetchTeams } = trpc.fmTeam.list.useQuery();
   const { data: errorFiles, isLoading: filesLoading, refetch: refetchFiles } = trpc.errorFile.list.useQuery();
@@ -159,7 +178,7 @@ function FullAdminPanel() {
         </Badge>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={v => setActiveTab(v as AdminTab)} className="space-y-4">
         <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-7 h-auto">
           <TabsTrigger value="overview" className="flex items-center justify-center gap-2 py-2">
             <BarChart3 className="h-4 w-4 shrink-0" />
