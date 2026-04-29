@@ -26,6 +26,7 @@ import { attitudeScreenshotRouter } from "./routers/attitudeScreenshot";
 import { attendanceRouter } from "./routers/attendance";
 import { smartUploadRouter } from "./routers/smartUpload";
 import { personaSyncRouter } from "./routers/personaSync";
+import { bonusRouter } from "./routers/bonus";
 
 export const appRouter = router({
   system: systemRouter,
@@ -45,6 +46,7 @@ export const appRouter = router({
   attendance: attendanceRouter,
   smartUpload: smartUploadRouter,
   personaSync: personaSyncRouter,
+  bonus: bonusRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -208,6 +208,134 @@ function MonthSelector({ selectedMonth, selectedYear, onChange }: {
   );
 }
 
+const BONUS_EUR = new Intl.NumberFormat("en-EU", {
+  style: "currency",
+  currency: "EUR",
+  maximumFractionDigits: 0,
+});
+
+const BONUS_NUM = new Intl.NumberFormat("en-US");
+
+interface BonusStandingProps {
+  bonus: {
+    bonusLevel: "level1" | "level2" | "ineligible";
+    bonusAmount: number;
+    bonusRate: number;
+    achievedGGs: number;
+    minimumGGsRequired: number;
+    totalGames: number;
+    errorCount: number;
+    hoursWorked: number;
+    isEligible: boolean;
+    disqualifyingFactors: string[];
+    gapToNextLevel: { targetLevel: "level1" | "level2"; gapGGs: number; estimatedGamesNeeded: number } | null;
+  };
+}
+
+function BonusStandingCard({ bonus }: BonusStandingProps) {
+  const tone =
+    bonus.bonusLevel === "level2" ? "from-amber-50 to-yellow-50 border-amber-200" :
+    bonus.bonusLevel === "level1" ? "from-violet-50 to-fuchsia-50 border-violet-200" :
+    "from-slate-50 to-slate-100 border-slate-200";
+
+  const headerLabel =
+    bonus.bonusLevel === "level2" ? "Level 2 — €2.50/h" :
+    bonus.bonusLevel === "level1" ? "Level 1 — €1.50/h" :
+    "Not qualifying yet this month";
+
+  const HeaderIcon =
+    bonus.bonusLevel === "level2" ? Crown :
+    bonus.bonusLevel === "level1" ? Medal :
+    Target;
+
+  // Progress toward next level (or current level if ineligible).
+  const targetGGs = bonus.bonusLevel === "level2"
+    ? bonus.minimumGGsRequired
+    : (bonus.gapToNextLevel?.targetLevel === "level2" ? 5000 : 2500);
+  const progressPct = Math.min(100, Math.round((bonus.achievedGGs / Math.max(1, targetGGs)) * 100));
+
+  return (
+    <Card className={`bg-gradient-to-br ${tone} border shadow-sm`}>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-slate-800 text-base flex items-center gap-2">
+          <HeaderIcon className="h-5 w-5 text-amber-600" />
+          Bonus Standing — {MONTH_NAMES[new Date().getMonth()]}
+        </CardTitle>
+        <CardDescription className="text-slate-600 text-xs">{headerLabel}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-baseline gap-3 flex-wrap">
+          {bonus.isEligible ? (
+            <>
+              <span className="text-3xl sm:text-4xl font-bold text-slate-900">
+                {BONUS_EUR.format(bonus.bonusAmount)}
+              </span>
+              <span className="text-sm text-slate-500">
+                projected for {bonus.hoursWorked}h × €{bonus.bonusRate.toFixed(2)}/h
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="text-2xl font-semibold text-slate-700">No bonus yet</span>
+              {bonus.gapToNextLevel && (
+                <span className="text-sm text-slate-600">
+                  {BONUS_NUM.format(bonus.gapToNextLevel.gapGGs)} GGs short of{" "}
+                  {bonus.gapToNextLevel.targetLevel === "level2" ? "Level 2 (€2.50/h)" : "Level 1 (€1.50/h)"}
+                </span>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Progress bar to the next milestone */}
+        <div>
+          <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
+            <span>{BONUS_NUM.format(bonus.achievedGGs)} GGs</span>
+            <span>{BONUS_NUM.format(targetGGs)} for {bonus.bonusLevel === "level2" ? "Level 2" : bonus.gapToNextLevel?.targetLevel === "level2" ? "Level 2" : "Level 1"}</span>
+          </div>
+          <div className="h-2 bg-white/60 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${
+                bonus.bonusLevel === "level2" ? "bg-gradient-to-r from-amber-400 to-amber-500" :
+                bonus.bonusLevel === "level1" ? "bg-gradient-to-r from-violet-400 to-violet-500" :
+                "bg-gradient-to-r from-slate-300 to-slate-400"
+              }`}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Inputs — so the GP understands the math */}
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="p-2 rounded-lg bg-white/60 border border-white">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Games</p>
+            <p className="text-lg font-semibold text-slate-900">{BONUS_NUM.format(bonus.totalGames)}</p>
+          </div>
+          <div className="p-2 rounded-lg bg-white/60 border border-white">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Errors</p>
+            <p className="text-lg font-semibold text-slate-900">{bonus.errorCount}</p>
+            {bonus.errorCount > 0 && <p className="text-[10px] text-emerald-600">first one is free</p>}
+          </div>
+          <div className="p-2 rounded-lg bg-white/60 border border-white">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Hours</p>
+            <p className="text-lg font-semibold text-slate-900">{bonus.hoursWorked}</p>
+          </div>
+        </div>
+
+        {bonus.disqualifyingFactors.length > 0 && (
+          <div className="flex items-start gap-2 p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Bonus blocked</p>
+              <p className="text-rose-600 mt-0.5">{bonus.disqualifyingFactors.join(" · ")}</p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function GPPortal() {
   const { token } = useParams<{ token: string }>();
   const [expandedEvaluations, setExpandedEvaluations] = useState<Set<number>>(new Set());
@@ -222,6 +350,12 @@ export default function GPPortal() {
   const { data, isLoading, error, refetch, isFetching } = trpc.gpAccess.getEvaluationsByToken.useQuery(
     { token: token || "" },
     { enabled: !!token, refetchInterval: 30000, refetchOnWindowFocus: true }
+  );
+
+  // Fetch the GP's monthly bonus standing — eligible level, payout, gap to next level.
+  const { data: bonus } = trpc.bonus.forPortalToken.useQuery(
+    { token: token || "", month: now.getMonth() + 1, year: now.getFullYear() },
+    { enabled: !!token, refetchInterval: 60_000 },
   );
 
   const { data: monthDetails, isLoading: monthDetailsLoading } = trpc.gpAccess.getMonthDetails.useQuery(
@@ -379,6 +513,8 @@ export default function GPPortal() {
             />
           </div>
         </section>
+
+        {bonus && <BonusStandingCard bonus={bonus} />}
 
         {/* Monthly Stats & Achievements */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
