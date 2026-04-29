@@ -1,11 +1,12 @@
 import { useState, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
+import { BonusTab } from "@/components/admin/BonusTab";
 
-const ADMIN_TABS = ["overview", "invitations", "users", "teams", "stats", "access", "errors", "persona"] as const;
+const ADMIN_TABS = ["overview", "invitations", "users", "teams", "stats", "bonus", "access", "errors", "persona"] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
-const FM_TABS = ["stats", "access"] as const;
+const FM_TABS = ["stats", "bonus", "access"] as const;
 type FmTab = (typeof FM_TABS)[number];
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,10 +85,14 @@ function FMRestrictedView() {
       </div>
 
       <Tabs value={activeTab} onValueChange={v => setActiveTab(v as FmTab)} className="space-y-4">
-        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-2 h-auto">
+        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-3 h-auto">
           <TabsTrigger value="stats" className="flex items-center justify-center gap-2 py-2">
             <Star className="h-4 w-4 shrink-0" />
             <span>GP Stats</span>
+          </TabsTrigger>
+          <TabsTrigger value="bonus" className="flex items-center justify-center gap-2 py-2">
+            <Trophy className="h-4 w-4 shrink-0" />
+            <span>Bonuses</span>
           </TabsTrigger>
           <TabsTrigger value="access" className="flex items-center justify-center gap-2 py-2">
             <Link className="h-4 w-4 shrink-0" />
@@ -97,13 +102,25 @@ function FMRestrictedView() {
 
         {/* GP Stats Tab */}
         {team && (
-          <GPStatsTab 
-            teams={[team]} 
+          <GPStatsTab
+            teams={[team]}
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
             setSelectedMonth={setSelectedMonth}
             setSelectedYear={setSelectedYear}
             isFMView={true}
+          />
+        )}
+
+        {/* Bonus Tab — fixed to the FM's own team */}
+        {team && (
+          <BonusTab
+            teams={[team]}
+            selectedMonth={selectedMonth}
+            selectedYear={selectedYear}
+            setSelectedMonth={setSelectedMonth}
+            setSelectedYear={setSelectedYear}
+            fixedTeamId={team.id}
           />
         )}
 
@@ -179,7 +196,7 @@ function FullAdminPanel() {
       </div>
 
       <Tabs value={activeTab} onValueChange={v => setActiveTab(v as AdminTab)} className="space-y-4">
-        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-8 h-auto">
+        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-9 h-auto">
           <TabsTrigger value="overview" className="flex items-center justify-center gap-2 py-2">
             <BarChart3 className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Overview</span>
@@ -199,6 +216,10 @@ function FullAdminPanel() {
           <TabsTrigger value="stats" className="flex items-center justify-center gap-2 py-2">
             <Star className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">GP Stats</span>
+          </TabsTrigger>
+          <TabsTrigger value="bonus" className="flex items-center justify-center gap-2 py-2">
+            <Trophy className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Bonuses</span>
           </TabsTrigger>
           <TabsTrigger value="access" className="flex items-center justify-center gap-2 py-2">
             <Link className="h-4 w-4 shrink-0" />
@@ -227,13 +248,22 @@ function FullAdminPanel() {
         <TeamsManagementTab refetchTeams={refetchTeams} />
 
         {/* GP Stats Tab */}
-        <GPStatsTab 
-          teams={teams || []} 
+        <GPStatsTab
+          teams={teams || []}
           selectedMonth={selectedMonth}
           selectedYear={selectedYear}
           setSelectedMonth={setSelectedMonth}
           setSelectedYear={setSelectedYear}
           isFMView={false}
+        />
+
+        {/* Bonus Tab */}
+        <BonusTab
+          teams={teams || []}
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+          setSelectedMonth={setSelectedMonth}
+          setSelectedYear={setSelectedYear}
         />
 
         {/* GP Access Links Tab */}
