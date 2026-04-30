@@ -336,6 +336,60 @@ function BonusStandingCard({ bonus }: BonusStandingProps) {
   );
 }
 
+const PLAN_CATEGORY_TONE: Record<string, string> = {
+  appearance: "border-emerald-200 bg-emerald-50",
+  performance: "border-violet-200 bg-violet-50",
+  attitude: "border-pink-200 bg-pink-50",
+  attendance: "border-blue-200 bg-blue-50",
+  errors: "border-rose-200 bg-rose-50",
+  general: "border-slate-200 bg-slate-50",
+};
+
+function ActionPlanCard({ items }: { items: Array<{ id: number; title: string; description: string | null; category: string; priority: string; status: string; dueDate: Date | null; source: string }> }) {
+  const open = items.filter(i => i.status === "open");
+  const inProgress = items.filter(i => i.status === "in_progress");
+  return (
+    <Card className="bg-white border-slate-200 shadow-sm">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-slate-800 text-base flex items-center gap-2">
+          <Target className="h-4 w-4 text-violet-600" />
+          Your action plan
+        </CardTitle>
+        <CardDescription className="text-slate-600 text-xs">
+          {open.length} open, {inProgress.length} in progress — what your FM is asking you to focus on
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {[...inProgress, ...open].slice(0, 6).map(item => (
+          <div
+            key={item.id}
+            className={`border rounded-lg p-3 ${PLAN_CATEGORY_TONE[item.category] ?? "border-slate-200 bg-white"}`}
+          >
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <p className="text-sm font-semibold text-slate-800">{item.title}</p>
+              <div className="flex items-center gap-1 shrink-0">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600 capitalize">{item.category}</span>
+                {item.status === "in_progress" && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-700">In progress</span>
+                )}
+              </div>
+            </div>
+            {item.description && (
+              <p className="text-xs text-slate-600 leading-relaxed">{item.description}</p>
+            )}
+            {item.dueDate && (
+              <p className="text-[11px] text-slate-500 mt-1.5 inline-flex items-center gap-1">
+                <Calendar className="h-2.5 w-2.5" />
+                Due {new Date(item.dueDate).toLocaleDateString()}
+              </p>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function GPPortal() {
   const { token } = useParams<{ token: string }>();
   const [expandedEvaluations, setExpandedEvaluations] = useState<Set<number>>(new Set());
@@ -355,6 +409,12 @@ export default function GPPortal() {
   // Fetch the GP's monthly bonus standing — eligible level, payout, gap to next level.
   const { data: bonus } = trpc.bonus.forPortalToken.useQuery(
     { token: token || "", month: now.getMonth() + 1, year: now.getFullYear() },
+    { enabled: !!token, refetchInterval: 60_000 },
+  );
+
+  // Fetch coaching plan items — what the FM is asking the GP to work on.
+  const { data: planItems } = trpc.actionItems.listForPortalToken.useQuery(
+    { token: token || "" },
     { enabled: !!token, refetchInterval: 60_000 },
   );
 
@@ -515,6 +575,8 @@ export default function GPPortal() {
         </section>
 
         {bonus && <BonusStandingCard bonus={bonus} />}
+
+        {planItems && planItems.length > 0 && <ActionPlanCard items={planItems} />}
 
         {/* Monthly Stats & Achievements */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

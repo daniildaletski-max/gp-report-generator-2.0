@@ -2,11 +2,12 @@ import { useState, useCallback, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
 import { BonusTab } from "@/components/admin/BonusTab";
+import { ActionItemsBoardTab } from "@/components/admin/ActionItemsBoardTab";
 
-const ADMIN_TABS = ["overview", "invitations", "users", "teams", "stats", "bonus", "access", "errors", "persona"] as const;
+const ADMIN_TABS = ["overview", "invitations", "users", "teams", "stats", "bonus", "action-items", "access", "errors", "persona"] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
-const FM_TABS = ["stats", "bonus", "access"] as const;
+const FM_TABS = ["stats", "bonus", "action-items", "access"] as const;
 type FmTab = (typeof FM_TABS)[number];
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,7 +86,7 @@ function FMRestrictedView() {
       </div>
 
       <Tabs value={activeTab} onValueChange={v => setActiveTab(v as FmTab)} className="space-y-4">
-        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-3 h-auto">
+        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-4 h-auto">
           <TabsTrigger value="stats" className="flex items-center justify-center gap-2 py-2">
             <Star className="h-4 w-4 shrink-0" />
             <span>GP Stats</span>
@@ -93,6 +94,10 @@ function FMRestrictedView() {
           <TabsTrigger value="bonus" className="flex items-center justify-center gap-2 py-2">
             <Trophy className="h-4 w-4 shrink-0" />
             <span>Bonuses</span>
+          </TabsTrigger>
+          <TabsTrigger value="action-items" className="flex items-center justify-center gap-2 py-2">
+            <Target className="h-4 w-4 shrink-0" />
+            <span>Plans</span>
           </TabsTrigger>
           <TabsTrigger value="access" className="flex items-center justify-center gap-2 py-2">
             <Link className="h-4 w-4 shrink-0" />
@@ -123,6 +128,9 @@ function FMRestrictedView() {
             fixedTeamId={team.id}
           />
         )}
+
+        {/* Action Items board — also fixed to FM's team */}
+        {team && <ActionItemsBoardTab teams={[team]} fixedTeamId={team.id} />}
 
         {/* GP Access Links Tab */}
         <GPAccessLinksTab 
@@ -196,7 +204,7 @@ function FullAdminPanel() {
       </div>
 
       <Tabs value={activeTab} onValueChange={v => setActiveTab(v as AdminTab)} className="space-y-4">
-        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-9 h-auto">
+        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-10 h-auto">
           <TabsTrigger value="overview" className="flex items-center justify-center gap-2 py-2">
             <BarChart3 className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Overview</span>
@@ -220,6 +228,10 @@ function FullAdminPanel() {
           <TabsTrigger value="bonus" className="flex items-center justify-center gap-2 py-2">
             <Trophy className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Bonuses</span>
+          </TabsTrigger>
+          <TabsTrigger value="action-items" className="flex items-center justify-center gap-2 py-2">
+            <Target className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Plans</span>
           </TabsTrigger>
           <TabsTrigger value="access" className="flex items-center justify-center gap-2 py-2">
             <Link className="h-4 w-4 shrink-0" />
@@ -265,6 +277,9 @@ function FullAdminPanel() {
           setSelectedMonth={setSelectedMonth}
           setSelectedYear={setSelectedYear}
         />
+
+        {/* Action Items board */}
+        <ActionItemsBoardTab teams={teams || []} />
 
         {/* GP Access Links Tab */}
         <GPAccessLinksTab 
