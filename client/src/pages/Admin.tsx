@@ -1591,6 +1591,11 @@ function ErrorFilesTab({
     },
   });
 
+  // Drops gpErrors whose source errorFile no longer exists. Fixes the
+  // "GP portal shows N mistakes but Excel only has M" leak for tenants
+  // whose data accumulated orphans before the cascade-delete fix.
+  const pruneOrphansMutation = trpc.errorFile.pruneOrphans.useMutation();
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1667,6 +1672,28 @@ function ErrorFilesTab({
             <span className="text-xs text-muted-foreground">
               Re-reads "Error Count Analysis" col E from stored files for {MONTHS[selectedMonth - 1]} {selectedYear}
             </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const res = await pruneOrphansMutation.mutateAsync();
+                  if (res.removed > 0) {
+                    toast.success(`Removed ${res.removed} orphan error row${res.removed === 1 ? '' : 's'} from deleted files`);
+                    refetchFiles();
+                  } else {
+                    toast.info("No orphans found — error data is clean.");
+                  }
+                } catch (e: any) {
+                  toast.error(`Cleanup failed: ${e.message}`);
+                }
+              }}
+              disabled={pruneOrphansMutation.isPending}
+              title="Drop gpErrors whose source file was deleted (fixes ghost mistakes counted in GP portals)"
+            >
+              {pruneOrphansMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <AlertTriangle className="h-4 w-4 mr-2" />}
+              Clean orphan rows
+            </Button>
           </div>
           <div className="grid gap-4 md:grid-cols-4">
             <div className="space-y-2">

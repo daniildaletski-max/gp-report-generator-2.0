@@ -59,6 +59,11 @@ export async function getAllErrorFiles(): Promise<ErrorFile[]> {
 export async function deleteErrorFile(id: number): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  // Also delete every `gpErrors` row that pointed at this file, otherwise
+  // those rows become orphans (errorFileId references a no-longer-existent
+  // file) but keep counting in the GP portal's mistakes total. The user's
+  // report of "5 mistakes vs 2 in Excel" was driven by exactly this leak.
+  await db.delete(gpErrors).where(eq(gpErrors.errorFileId, id));
   await db.delete(errorFiles).where(eq(errorFiles.id, id));
 }
 
@@ -74,8 +79,45 @@ export async function deleteErrorFileByUser(id: number, userId: number): Promise
   const file = await db.select().from(errorFiles).where(eq(errorFiles.id, id)).limit(1);
   if (!file.length) throw new Error("Error file not found");
   if (file[0].uploadedById !== userId) throw new Error("Access denied: You can only delete your own error files");
+  // Cascade: drop gpErrors first so they don't survive as orphans (see
+  // matching comment in deleteErrorFile).
+  await db.delete(gpErrors).where(eq(gpErrors.errorFileId, id));
   await db.delete(errorFiles).where(eq(errorFiles.id, id));
   return true;
+}
+
+/**
+ * One-shot cleanup: drop every `gpErrors` row whose `errorFileId` no
+ * longer points to an existing `errorFiles` row. These are orphans
+ * left behind by an earlier version of `deleteErrorFile` that didn't
+ * cascade. Returns the count removed.
+ *
+ * Optional `userId` scope keeps the cleanup tenant-safe.
+ */
+export async function pruneOrphanGpErrors(userId?: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const conditions: any[] = [];
+  if (userId) conditions.push(eq(gpErrors.userId, userId));
+  const candidates = await db.select({
+    id: gpErrors.id,
+    errorFileId: gpErrors.errorFileId,
+  }).from(gpErrors).where(conditions.length ? and(...conditions) : undefined as any);
+  if (candidates.length === 0) return 0;
+  const fileIds = Array.from(new Set(candidates.map(c => c.errorFileId).filter((x): x is number => typeof x === "number")));
+  let liveIds = new Set<number>();
+  if (fileIds.length > 0) {
+    const live = await db.select({ id: errorFiles.id }).from(errorFiles);
+    liveIds = new Set(live.map(f => f.id));
+  }
+  const orphanIds = candidates.filter(c => !c.errorFileId || !liveIds.has(c.errorFileId)).map(c => c.id);
+  if (orphanIds.length === 0) return 0;
+  // Delete in batches of 500 so a giant orphan set doesn't blow up the IN clause.
+  for (let i = 0; i < orphanIds.length; i += 500) {
+    const batch = orphanIds.slice(i, i + 500);
+    await db.delete(gpErrors).where(sql`${gpErrors.id} IN (${sql.join(batch.map(id => sql`${id}`), sql`, `)})`);
+  }
+  return orphanIds.length;
 }
 
 // ============================================
