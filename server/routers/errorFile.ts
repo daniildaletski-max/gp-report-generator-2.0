@@ -383,4 +383,17 @@ export const errorFileRouter = router({
         recalculated: updatedGPs.length,
       };
     }),
+
+  /**
+   * Drop every `gpErrors` row whose `errorFileId` no longer points to
+   * an existing `errorFiles` row. Earlier versions of `deleteErrorFile`
+   * didn't cascade, so deleting an old monthly upload left its
+   * gpErrors as orphans that kept counting in GP portal mistake
+   * totals. This procedure cleans them up; admins see all orphans,
+   * non-admin FMs see only their own.
+   */
+  pruneOrphans: protectedProcedure.mutation(async ({ ctx }) => {
+    const removed = await db.pruneOrphanGpErrors(ctx.user.role === "admin" ? undefined : ctx.user.id);
+    return { removed };
+  }),
 });
