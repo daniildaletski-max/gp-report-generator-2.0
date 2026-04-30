@@ -7,6 +7,7 @@ import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
 import { PageTransition } from "./components/PageTransition";
+import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
 import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck } from "lucide-react";
@@ -55,10 +56,16 @@ function DashboardRoutes() {
     user?.role === "admin" ? adminSidebarItem : fmSidebarItem,
   ];
 
+  // Mobile-only bottom navigation. Mirrors the sidebar but renders only on
+  // small screens. We pad the main content's bottom edge inside the nav
+  // itself by giving the page-transition wrapper room for the bar.
+  const bottomNavItems = sidebarItems.slice(0, 5);
+
   return (
     <DashboardLayout sidebarItems={sidebarItems}>
       <PageTransition>
-        <Suspense fallback={<PageLoader />}>
+        <div className="pb-20 md:pb-0">
+          <Suspense fallback={<PageLoader />}>
           <Switch>
             <Route path="/dashboard">
               <RouteErrorBoundary fallbackTitle="Dashboard failed to load">
@@ -92,8 +99,10 @@ function DashboardRoutes() {
             </Route>
             <Route component={NotFound} />
           </Switch>
-        </Suspense>
+          </Suspense>
+        </div>
       </PageTransition>
+      <MobileBottomNav items={bottomNavItems} />
     </DashboardLayout>
   );
 }
