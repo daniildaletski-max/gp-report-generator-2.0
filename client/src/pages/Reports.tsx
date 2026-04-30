@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString, urlNumber } from "@/hooks/useUrlState";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
+import { ActiveFiltersBar } from "@/components/ActiveFiltersBar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -740,8 +741,96 @@ export default function ReportsPage() {
             )}
           </div>
 
+          {/* Active filter pills — show what's currently being filtered */}
+          {hasActiveFilters && (
+            <ActiveFiltersBar
+              pills={[
+                ...(searchQuery ? [{ key: "q", label: `"${searchQuery}"`, onRemove: () => setSearchQuery("") }] : []),
+                ...(filterYear ? [{ key: "year", label: `Year: ${filterYear}`, onRemove: () => setFilterYear(null) }] : []),
+                ...(filterStatus && filterStatus !== "all" ? [{ key: "status", label: `Status: ${filterStatus}`, onRemove: () => setFilterStatus("all") }] : []),
+                ...(filterTeam && filterTeam !== "all"
+                  ? [{
+                      key: "team",
+                      label: `Team: ${teams?.find(t => t.id === Number(filterTeam))?.teamName ?? filterTeam}`,
+                      onRemove: () => setFilterTeam("all"),
+                    }]
+                  : []),
+              ]}
+              onClearAll={clearFilters}
+            />
+          )}
+
           {filteredReports.length > 0 ? (
-            <div className="table-enhanced">
+            <>
+            {/* Mobile card grid (< md) */}
+            <div className="md:hidden space-y-2">
+              {filteredReports.map((item) => (
+                <div key={item.report.id} className="rounded-xl border border-border bg-card p-3">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-foreground truncate">{item.team?.teamName || "Unknown"}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{item.team?.floorManagerName || "—"}</p>
+                    </div>
+                    {getStatusBadge(item.report.status)}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                    <Badge variant="outline" className="text-[10px] py-0 h-5 px-1.5">
+                      {MONTHS[item.report.reportMonth - 1]} {item.report.reportYear}
+                    </Badge>
+                    <span>·</span>
+                    <span>{format(new Date(item.report.createdAt), "dd MMM yyyy")}</span>
+                  </div>
+                  <div className="flex items-center gap-1 flex-wrap pt-2 border-t border-border">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setViewingReport(item)}
+                    >
+                      <Eye className="h-3 w-3 mr-1" /> View
+                    </Button>
+                    {item.report.excelFileUrl ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => window.open(item.report.excelFileUrl!, "_blank")}
+                      >
+                        <Download className="h-3 w-3 mr-1" /> Excel
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => handleExport(item.report.id)}
+                        disabled={isExporting === item.report.id}
+                      >
+                        {isExporting === item.report.id ? (
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
+                          <FileSpreadsheet className="h-3 w-3 mr-1" />
+                        )}
+                        Export
+                      </Button>
+                    )}
+                    {item.report.googleSheetsUrl && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-green-600"
+                        onClick={() => window.open(item.report.googleSheetsUrl!, "_blank")}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" /> Sheet
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop table */}
+            <div className="table-enhanced hidden md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -895,6 +984,7 @@ export default function ReportsPage() {
                 </TableBody>
               </Table>
             </div>
+            </>
           ) : (
             <EmptyState
               icon={FileSpreadsheet}

@@ -24,29 +24,46 @@ export async function updateSyncLog(id: number, patch: Partial<PersonaSyncLog>):
   await db.update(personaSyncLogs).set(patch).where(eq(personaSyncLogs.id, id));
 }
 
+/**
+ * Read helpers swallow errors (e.g. table missing because migration hasn't
+ * been applied yet) and return an empty/null result. The UI degrades
+ * gracefully showing "Never synced" instead of crashing.
+ */
 export async function getLastSyncForTeam(teamId: number): Promise<PersonaSyncLog | null> {
   const db = await getDb();
   if (!db) return null;
-  const rows = await db.select().from(personaSyncLogs)
-    .where(eq(personaSyncLogs.teamId, teamId))
-    .orderBy(desc(personaSyncLogs.startedAt))
-    .limit(1);
-  return rows[0] ?? null;
+  try {
+    const rows = await db.select().from(personaSyncLogs)
+      .where(eq(personaSyncLogs.teamId, teamId))
+      .orderBy(desc(personaSyncLogs.startedAt))
+      .limit(1);
+    return rows[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getRecentSyncsForTeam(teamId: number, limit = 10): Promise<PersonaSyncLog[]> {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(personaSyncLogs)
-    .where(eq(personaSyncLogs.teamId, teamId))
-    .orderBy(desc(personaSyncLogs.startedAt))
-    .limit(limit);
+  try {
+    return await db.select().from(personaSyncLogs)
+      .where(eq(personaSyncLogs.teamId, teamId))
+      .orderBy(desc(personaSyncLogs.startedAt))
+      .limit(limit);
+  } catch {
+    return [];
+  }
 }
 
 export async function getAllRecentSyncs(limit = 50): Promise<PersonaSyncLog[]> {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(personaSyncLogs)
-    .orderBy(desc(personaSyncLogs.startedAt))
-    .limit(limit);
+  try {
+    return await db.select().from(personaSyncLogs)
+      .orderBy(desc(personaSyncLogs.startedAt))
+      .limit(limit);
+  } catch {
+    return [];
+  }
 }
