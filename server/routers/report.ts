@@ -570,6 +570,99 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       return { ...report };
     }),
 
+  /**
+   * "Generate reports for ALL my teams in one click."
+   *
+   * Loops every team the caller can see, runs a baseline report
+   * generation per team (auto-fill enabled, no manual text supplied),
+   * and pipes each through `generateExcelAndEmail` so every team's FM
+   * gets their report on email automatically. Returns a per-team
+   * outcome so the UI can display "5 succeeded, 1 failed".
+   *
+   * Sequential rather than parallel: each `generateExcelAndEmail` is
+   * IO-heavy (Excel build + S3 upload + Sheets export + email send),
+   * and running them in parallel against rate-limited services
+   * (Google Sheets / Resend) is asking for partial failures.
+   *
+   * Saves the FM ~30 minutes/month at small team counts and scales
+   * linearly from there.
+   */
+  generateAllForMonth: protectedProcedure
+    .input(z.object({
+      reportMonth: z.number().min(1).max(12),
+      reportYear: z.number().min(2020).max(2100),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const allTeams = await db.getAllFmTeams();
+      const teams = ctx.user.role === "admin"
+        ? allTeams
+        : allTeams.filter(t => t.userId === ctx.user.id);
+
+      const results: Array<{
+        teamId: number;
+        teamName: string;
+        status: "success" | "failed";
+        reportId?: number;
+        emailSent?: boolean;
+        error?: string;
+      }> = [];
+
+      for (const team of teams) {
+        try {
+          const report = await db.createReport({
+            teamId: team.id,
+            reportMonth: input.reportMonth,
+            reportYear: input.reportYear,
+            fmPerformance: null,
+            goalsThisMonth: null,
+            teamOverview: null,
+            additionalComments: null,
+            reportData: {},
+            status: "generated",
+            generatedById: ctx.user.id,
+          });
+          const result = await generateExcelAndEmail(ctx, report.id);
+          results.push({
+            teamId: team.id,
+            teamName: team.teamName,
+            status: "success",
+            reportId: report.id,
+            emailSent: result.emailSent,
+          });
+        } catch (e) {
+          log.error(`Bulk generate failed for team ${team.id}`, e instanceof Error ? e : new Error(String(e)));
+          results.push({
+            teamId: team.id,
+            teamName: team.teamName,
+            status: "failed",
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      const succeeded = results.filter(r => r.status === "success").length;
+      const failed = results.filter(r => r.status === "failed").length;
+      const emailsSent = results.filter(r => r.emailSent).length;
+
+      // One owner notification for the whole batch — better than spamming
+      // per-team in `generate`.
+      try {
+        await notifyOwner({
+          title: "Bulk monthly reports generated",
+          content: `Generated ${succeeded} of ${results.length} reports for ${MONTH_NAMES[input.reportMonth - 1]} ${input.reportYear}${failed > 0 ? ` (${failed} failed)` : ""}.`,
+        });
+      } catch {
+        /* notifications are best-effort */
+      }
+
+      return {
+        results,
+        totals: { teams: results.length, succeeded, failed, emailsSent },
+        month: input.reportMonth,
+        year: input.reportYear,
+      };
+    }),
+
   exportToExcel: protectedProcedure
     .input(z.object({
       reportId: z.number().positive(),

@@ -96,6 +96,25 @@ export default function ReportsPage() {
   const { data: teams } = trpc.fmTeam.list.useQuery();
   const generateMutation = trpc.report.generate.useMutation();
   const exportMutation = trpc.report.exportToExcel.useMutation();
+  // Bulk-generate for every team the user can see — one click ships
+  // every monthly report + email instead of looping per team manually.
+  const generateAllMutation = trpc.report.generateAllForMonth.useMutation({
+    onSuccess: (data) => {
+      const failedNames = data.results.filter(r => r.status === "failed").map(r => r.teamName);
+      if (data.totals.failed === 0) {
+        toast.success(`All ${data.totals.succeeded} reports generated · ${data.totals.emailsSent} email${data.totals.emailsSent === 1 ? '' : 's'} sent`);
+      } else {
+        toast.warning(`${data.totals.succeeded} succeeded, ${data.totals.failed} failed`, {
+          description: failedNames.length > 0 ? `Failed: ${failedNames.join(', ')}` : undefined,
+          duration: 12000,
+        });
+      }
+      utils.report.list.invalidate();
+    },
+    onError: (err) => {
+      toast.error(`Bulk generate failed: ${err.message}`);
+    },
+  });
   const googleSheetsExportMutation = trpc.report.exportToGoogleSheets.useMutation();
   const { data: googleSheetsStatus } = trpc.report.googleSheetsAvailable.useQuery();
   const [isExportingSheets, setIsExportingSheets] = useState<number | null>(null);
@@ -421,10 +440,31 @@ export default function ReportsPage() {
         subtitle="Generate and manage Team Monthly Overview reports"
         icon={FileSpreadsheet}
         actions={
-          <Button onClick={() => setShowNewReport(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Report
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const now = new Date();
+                if (!confirm(`Generate Team Monthly Overview reports for ALL teams for ${now.toLocaleString('en-US', { month: 'long', year: 'numeric' })}?\n\nEach team's report will be created and emailed to its FM.`)) return;
+                generateAllMutation.mutate({
+                  reportMonth: now.getMonth() + 1,
+                  reportYear: now.getFullYear(),
+                });
+              }}
+              disabled={generateAllMutation.isPending}
+              title="Generate + email reports for every team in one click"
+            >
+              {generateAllMutation.isPending ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating all…</>
+              ) : (
+                <><Sparkles className="mr-2 h-4 w-4" /> Generate ALL teams</>
+              )}
+            </Button>
+            <Button onClick={() => setShowNewReport(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Report
+            </Button>
+          </div>
         }
       />
       <Dialog open={showNewReport} onOpenChange={setShowNewReport}>
