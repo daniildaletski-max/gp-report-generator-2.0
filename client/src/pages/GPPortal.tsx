@@ -284,6 +284,8 @@ export default function GPPortal() {
   const errorDetails = monthDetails?.errorDetails || [];
   const attitudeDetails = monthDetails?.attitudeDetails || [];
   const technicalErrorsHidden = monthDetails?.technicalErrorsHidden ?? 0;
+  const hiddenTechnicalErrors = (monthDetails?.hiddenTechnicalErrors ?? []) as any[];
+  const [showHiddenTechnical, setShowHiddenTechnical] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 relative">
@@ -1025,12 +1027,48 @@ export default function GPPortal() {
                 </h3>
 
                 {technicalErrorsHidden > 0 && (
-                  <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 flex items-start gap-2">
-                    <Shield className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
-                    <span>
-                      <strong className="text-slate-700">{technicalErrorsHidden}</strong>{" "}
-                      technical {technicalErrorsHidden === 1 ? "error was" : "errors were"} logged this month but are not counted against you (TV / system / equipment issues).
-                    </span>
+                  <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={() => setShowHiddenTechnical(s => !s)}
+                      className="w-full px-3 py-2 text-xs text-slate-600 flex items-center justify-between gap-2 hover:bg-slate-100/60 transition-colors rounded-lg"
+                    >
+                      <span className="flex items-start gap-2 text-left">
+                        <Shield className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
+                        <span>
+                          <strong className="text-slate-700">{technicalErrorsHidden}</strong>{" "}
+                          technical {technicalErrorsHidden === 1 ? "error was" : "errors were"} logged this month but {technicalErrorsHidden === 1 ? "is" : "are"} not counted against you (TV / system / equipment issues).
+                          <span className="ml-1 text-amber-700 underline-offset-2 hover:underline">
+                            {showHiddenTechnical ? "Hide" : "View list"}
+                          </span>
+                        </span>
+                      </span>
+                      {showHiddenTechnical ? <ChevronUp className="h-3.5 w-3.5 text-slate-400 shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
+                    </button>
+                    {showHiddenTechnical && hiddenTechnicalErrors.length > 0 && (
+                      <div className="border-t border-slate-200 divide-y divide-slate-200">
+                        {hiddenTechnicalErrors.map((err: any, index: number) => (
+                          <div key={err.id || `hidden-${index}`} className="p-3 flex items-start gap-3">
+                            <div className="shrink-0 p-1.5 rounded-lg bg-slate-100 border border-slate-200">
+                              <Shield className="h-3.5 w-3.5 text-slate-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                {err.errorType && (
+                                  <Badge className="bg-slate-100 text-slate-600 border-slate-200 text-[10px]">{err.errorType}</Badge>
+                                )}
+                                {err.gameType && (
+                                  <Badge className="bg-slate-100 text-slate-500 border-slate-200 text-[10px]">{err.gameType}</Badge>
+                                )}
+                                <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">Filtered as technical</Badge>
+                              </div>
+                              <p className="text-xs text-slate-700">{err.errorDescription || "Technical issue"}</p>
+                              {err.tableId && <p className="text-[10px] text-slate-400 mt-0.5">Table: {err.tableId}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
