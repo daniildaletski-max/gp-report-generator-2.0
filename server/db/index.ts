@@ -129,3 +129,11 @@ export {
   createUploadBatch, updateUploadBatch,
   sanitizeString, sanitizeNumber, validateEmail, validateDateRange,
 } from "./uploads";
+
+// Action Items / Coaching Plans
+export {
+  createActionItem, getActionItemById, updateActionItem,
+  deleteActionItem, completeActionItem, listActionItems,
+  getActionItemStats, verifyActionItemOwnership,
+} from "./actionItems";
+export type { ActionItemWithGp } from "./actionItems";

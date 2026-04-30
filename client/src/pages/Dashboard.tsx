@@ -94,6 +94,11 @@ export default function Dashboard() {
   const isMobile = useIsMobile();
   const [drawerGpId, setDrawerGpId] = useState<number | null>(null);
 
+  // Aggregate action-item counts so the dashboard surfaces "X open, Y overdue".
+  const { data: actionItemStats } = trpc.actionItems.stats.useQuery({
+    teamId: selectedTeamId,
+  });
+
   const { data: teams } = trpc.fmTeam.list.useQuery();
   
   const { data: stats, isLoading } = trpc.dashboard.stats.useQuery({
@@ -257,6 +262,36 @@ export default function Dashboard() {
           </div>
         </div>
       </GlassCard>
+
+      {/* Action items widget — shows what's actually on the FM's plate */}
+      {actionItemStats && (actionItemStats.open > 0 || actionItemStats.inProgress > 0) && (
+        <GlassCard size="default">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-violet-500/5 border border-violet-500/20 flex items-center justify-center">
+                <Target className="h-4.5 w-4.5 text-violet-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Coaching plan</p>
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{actionItemStats.open}</span> open,
+                  <span className="font-semibold text-foreground"> {actionItemStats.inProgress}</span> in progress
+                  {actionItemStats.overdue > 0 && (
+                    <span className="text-rose-600 font-semibold"> · {actionItemStats.overdue} overdue</span>
+                  )}
+                  {actionItemStats.dueThisWeek > 0 && (
+                    <span className="text-amber-600 font-semibold"> · {actionItemStats.dueThisWeek} due this week</span>
+                  )}
+                </p>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setLocation("/admin?tab=action-items")} className="rounded-xl">
+              Open board
+              <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </GlassCard>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

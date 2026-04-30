@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import { MAX_TOTAL_SCORE, MAX_APPEARANCE_SCORE, MAX_GAME_PERFORMANCE_SCORE } from "@shared/const";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../../server/routers";
+import { ActionItemsPanel } from "./ActionItemsPanel";
 
 type Profile = inferRouterOutputs<AppRouter>["gamePresenter"]["profile"];
 
@@ -103,8 +104,9 @@ function ProfileContent({ data }: { data: Profile }) {
       </SheetHeader>
 
       <Tabs defaultValue="overview" className="flex-1 flex flex-col">
-        <TabsList className="mx-6 mt-4 grid grid-cols-5">
+        <TabsList className="mx-6 mt-4 grid grid-cols-6">
           <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+          <TabsTrigger value="plan" className="text-xs">Plan</TabsTrigger>
           <TabsTrigger value="evals" className="text-xs">
             Evals {recentEvaluations.length > 0 && <span className="ml-1 text-muted-foreground">({recentEvaluations.length})</span>}
           </TabsTrigger>
@@ -200,6 +202,10 @@ function ProfileContent({ data }: { data: Profile }) {
               Last evaluation: {format(new Date(lastEval.evaluationDate), "PPP")}
             </p>
           )}
+        </TabsContent>
+
+        <TabsContent value="plan" className="px-6 py-4 mt-0">
+          <ActionItemsPanel gpId={gp.id} gpName={gp.name} />
         </TabsContent>
 
         <TabsContent value="evals" className="px-6 py-4 mt-0">
