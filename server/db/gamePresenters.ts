@@ -62,15 +62,25 @@ export async function findBestMatchingGP(name: string, threshold: number = 0.7):
   const normalizedInput = normalizeName(name);
   let bestMatch: FuzzyMatchResult | null = null;
   for (const gp of allGPs) {
-    const normalizedGPName = normalizeName(gp.name);
-    if (normalizedGPName === normalizedInput) {
-      return { gamePresenter: gp, similarity: 1, isExactMatch: true };
-    }
-    const similarity = calculateSimilarity(normalizedInput, normalizedGPName);
-    const containsMatch = normalizedGPName.includes(normalizedInput) || normalizedInput.includes(normalizedGPName);
-    const adjustedSimilarity = containsMatch ? Math.max(similarity, 0.85) : similarity;
-    if (adjustedSimilarity >= threshold && (!bestMatch || adjustedSimilarity > bestMatch.similarity)) {
-      bestMatch = { gamePresenter: gp, similarity: adjustedSimilarity, isExactMatch: false };
+    // Try `realName` (legal name from HR/Persona) first when set, then
+    // fall back to `name` (dealer pseudonym). Without this, Persona's
+    // "Aleksandra Borovkova" was being fuzzy-matched against "Clover"
+    // and missing every GP. Both columns get the same scoring path.
+    const candidates: string[] = [];
+    if (gp.realName && gp.realName.trim()) candidates.push(gp.realName);
+    candidates.push(gp.name);
+
+    for (const candidate of candidates) {
+      const normalizedCandidate = normalizeName(candidate);
+      if (normalizedCandidate === normalizedInput) {
+        return { gamePresenter: gp, similarity: 1, isExactMatch: true };
+      }
+      const similarity = calculateSimilarity(normalizedInput, normalizedCandidate);
+      const containsMatch = normalizedCandidate.includes(normalizedInput) || normalizedInput.includes(normalizedCandidate);
+      const adjustedSimilarity = containsMatch ? Math.max(similarity, 0.85) : similarity;
+      if (adjustedSimilarity >= threshold && (!bestMatch || adjustedSimilarity > bestMatch.similarity)) {
+        bestMatch = { gamePresenter: gp, similarity: adjustedSimilarity, isExactMatch: false };
+      }
     }
   }
   return bestMatch;
@@ -122,12 +132,18 @@ export async function findBestMatchingGPByUser(name: string, threshold: number =
   const normalizedInput = normalizeName(name);
   let bestMatch: FuzzyMatchResult | null = null;
   for (const gp of allGPs) {
-    const normalizedGPName = normalizeName(gp.name);
-    const similarity = calculateSimilarity(normalizedInput, normalizedGPName);
-    const isExactMatch = normalizedInput === normalizedGPName;
-    if (isExactMatch) return { gamePresenter: gp, similarity: 1.0, isExactMatch: true };
-    if (similarity >= threshold && (!bestMatch || similarity > bestMatch.similarity)) {
-      bestMatch = { gamePresenter: gp, similarity, isExactMatch: false };
+    // Same realName-then-name fallback as the global matcher.
+    const candidates: string[] = [];
+    if (gp.realName && gp.realName.trim()) candidates.push(gp.realName);
+    candidates.push(gp.name);
+    for (const candidate of candidates) {
+      const normalizedCandidate = normalizeName(candidate);
+      const similarity = calculateSimilarity(normalizedInput, normalizedCandidate);
+      const isExactMatch = normalizedInput === normalizedCandidate;
+      if (isExactMatch) return { gamePresenter: gp, similarity: 1.0, isExactMatch: true };
+      if (similarity >= threshold && (!bestMatch || similarity > bestMatch.similarity)) {
+        bestMatch = { gamePresenter: gp, similarity, isExactMatch: false };
+      }
     }
   }
   return bestMatch;

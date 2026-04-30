@@ -1,7 +1,11 @@
 import { router, publicProcedure, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import * as db from "../db";
+import * as dbHelpers from "../db";
+import { getDb as getDbDirect } from "../db";
+import { gamePresenters } from "../../drizzle/schema";
 
 export const gamePresenterRouter = router({
   // List all GPs (admin) or user's GPs (non-admin)
@@ -463,5 +467,30 @@ export const gamePresenterRouter = router({
         recentErrors,
         recentAttitude,
       };
+    }),
+
+  /**
+   * Set the GP's real legal name — the one used by HR / Persona /
+   * payroll. The Persona scrape returns names like "Sofja Barchan"
+   * which the auto-matcher couldn't reconcile against dealer
+   * pseudonyms ("Cleo" etc.); once `realName` is set per GP, the
+   * matcher uses it first, fuzzy match score jumps from ~0% to ~100%.
+   * `realName: null | ""` clears the field.
+   */
+  setRealName: protectedProcedure
+    .input(z.object({ id: z.number(), realName: z.string().nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDbDirect();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      const existing = await dbHelpers.getGamePresenterById(input.id);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "GP not found" });
+      if (ctx.user.role !== "admin" && existing.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      const trimmed = input.realName?.trim() || null;
+      await db.update(gamePresenters)
+        .set({ realName: trimmed })
+        .where(eq(gamePresenters.id, input.id));
+      return { id: input.id, realName: trimmed };
     }),
 });
