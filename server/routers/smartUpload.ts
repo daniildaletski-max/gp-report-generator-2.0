@@ -4,6 +4,8 @@ import * as db from "../db";
 import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
 import { createLogger } from "../services/logger";
+import { extractEvaluationFromImage, parseEvaluationDate } from "./_shared";
+import { nanoid } from "nanoid";
 const log = createLogger("Router");
 
 export const smartUploadRouter = router({
@@ -25,36 +27,47 @@ export const smartUploadRouter = router({
       // First, detect the screenshot type using AI
       const detectionPrompt = `Analyze this screenshot and determine its type.
 
-This is from a casino game presenter evaluation system. Screenshots can be one of two types:
+This is from a casino game presenter evaluation system. Screenshots can be one of three types:
 
-1. **ATTITUDE** - Shows attitude/behavior entries with columns like:
+1. **EVALUATION** - A scored evaluation form for a Game Presenter with:
+ - Category scores like Hair, Makeup, Outfit, Posture (each /3 max)
+ - Dealing Style and Game Performance scores (each /5 max)
+ - Numeric values in "X/Y" format (e.g. "2/3", "4/5")
+ - Often a total score (e.g. "18/22")
+ - Comments under each category
+ - GP name + evaluator name + date in the header
+ - Looks like a structured rubric / scorecard, not a chronological list
+
+2. **ATTITUDE** - Shows attitude/behavior entries with columns like:
  - Date, Type (POSITIVE/NEGATIVE), Comment, Score
  - Contains behavioral feedback like "late to studio", "wearing headphones", "good attitude"
  - Usually has +1 or -1 scores
  - May have GP name in header
+ - Looks like a chronological list/table of feedback events
 
-2. **ERROR** - Shows game errors/incidents with:
+3. **ERROR** - Shows game errors/incidents with:
  - Error codes like SC_BAC, SC_RO, SC_BJ
  - Technical descriptions like "Interface error", "Ball falls out", "Card misread"
  - Game-related incidents (voided rounds, technical issues)
  - System error reports
 
 KEY INDICATORS:
+- If you see a structured scorecard with categories like Hair/Makeup/Outfit/Dealing Style → EVALUATION
 - If you see error codes (SC_XXX), technical terms, "System Void", "Interface error" → ERROR
-- If you see behavioral comments, attitude feedback, personal conduct issues → ATTITUDE
+- If you see chronological behavioral comments with +1/-1 scores → ATTITUDE
 
 Respond with JSON:
 {
-"screenshotType": "ATTITUDE" or "ERROR",
+"screenshotType": "EVALUATION" or "ATTITUDE" or "ERROR",
 "confidence": 0.0-1.0,
 "reason": "Brief explanation of why this type was detected"
 }`;
 
       const detectionResponse = await invokeLLM({
         messages: [
-          { role: 'system', content: 'You are an expert at classifying casino evaluation screenshots. Distinguish between attitude/behavior feedback and game error reports.' },
-          { 
-            role: 'user', 
+          { role: 'system', content: 'You are an expert at classifying casino evaluation screenshots. Distinguish between scored evaluations, attitude/behavior feedback, and game error reports.' },
+          {
+            role: 'user',
             content: [
               { type: 'text', text: detectionPrompt },
               { type: 'image_url', image_url: { url: `data:${contentType};base64,${input.imageBase64}` } }
@@ -69,7 +82,7 @@ Respond with JSON:
             schema: {
               type: 'object',
               properties: {
-                screenshotType: { type: 'string', enum: ['ATTITUDE', 'ERROR'] },
+                screenshotType: { type: 'string', enum: ['EVALUATION', 'ATTITUDE', 'ERROR'] },
                 confidence: { type: 'number' },
                 reason: { type: 'string' }
               },
@@ -80,7 +93,7 @@ Respond with JSON:
         }
       });
 
-      let detectedType = 'ATTITUDE';
+      let detectedType = 'EVALUATION';
       let detectionConfidence = 0.5;
       let detectionReason = 'Default';
       
@@ -89,7 +102,7 @@ Respond with JSON:
         const content = message?.content;
         if (content) {
           const detection = JSON.parse(typeof content === 'string' ? content : '{}');
-          detectedType = detection.screenshotType || 'ATTITUDE';
+          detectedType = detection.screenshotType || 'EVALUATION';
           detectionConfidence = detection.confidence || 0.5;
           detectionReason = detection.reason || '';
         }
@@ -98,6 +111,64 @@ Respond with JSON:
       }
 
       // Now process based on detected type
+      if (detectedType === 'EVALUATION') {
+        // Mirror evaluation.uploadAndExtract — extract the rubric, find or
+        // create the GP, persist a full Evaluation row.
+        const fileKey = `evaluations/${ctx.user.id}/${nanoid()}-${db.sanitizeString(input.filename, 100)}`;
+        const buffer = Buffer.from(input.imageBase64, 'base64');
+        const { url: imageUrl } = await storagePut(fileKey, buffer, contentType);
+
+        const extractedData = await extractEvaluationFromImage(imageUrl);
+        const gp = await db.findOrCreateGamePresenter(extractedData.presenterName, undefined, ctx.user.id);
+        const evalDate = parseEvaluationDate(extractedData.date);
+
+        const evaluation = await db.createEvaluation({
+          gamePresenterId: gp.id,
+          evaluatorName: extractedData.evaluatorName || null,
+          evaluationDate: evalDate,
+          game: extractedData.game || null,
+          totalScore: extractedData.totalScore || null,
+          hairScore: extractedData.hair?.score || null,
+          hairMaxScore: extractedData.hair?.maxScore || 3,
+          hairComment: extractedData.hair?.comment || null,
+          makeupScore: extractedData.makeup?.score || null,
+          makeupMaxScore: extractedData.makeup?.maxScore || 3,
+          makeupComment: extractedData.makeup?.comment || null,
+          outfitScore: extractedData.outfit?.score || null,
+          outfitMaxScore: extractedData.outfit?.maxScore || 3,
+          outfitComment: extractedData.outfit?.comment || null,
+          postureScore: extractedData.posture?.score || null,
+          postureMaxScore: extractedData.posture?.maxScore || 3,
+          postureComment: extractedData.posture?.comment || null,
+          dealingStyleScore: extractedData.dealingStyle?.score || null,
+          dealingStyleMaxScore: extractedData.dealingStyle?.maxScore || 5,
+          dealingStyleComment: extractedData.dealingStyle?.comment || null,
+          gamePerformanceScore: extractedData.gamePerformance?.score || null,
+          gamePerformanceMaxScore: extractedData.gamePerformance?.maxScore || 5,
+          gamePerformanceComment: extractedData.gamePerformance?.comment || null,
+          screenshotUrl: imageUrl,
+          screenshotKey: fileKey,
+          rawExtractedData: extractedData,
+          uploadedById: ctx.user.id,
+          userId: ctx.user.id,
+        });
+
+        return {
+          type: 'EVALUATION' as const,
+          detectedType,
+          detectionConfidence,
+          detectionReason,
+          screenshotUrl: imageUrl,
+          screenshotKey: fileKey,
+          extractedData,
+          gpName: gp.name,
+          gpMatched: true,
+          gamePresenterId: gp.id,
+          entriesCount: 1,
+          savedEntries: [evaluation],
+        };
+      }
+
       if (detectedType === 'ERROR') {
         // Process as error screenshot
         const imageBuffer = Buffer.from(input.imageBase64, 'base64');
@@ -234,7 +305,10 @@ Respond in JSON format:
           entriesCount: 1,
           savedEntries: [errorScreenshot],
         };
-      } else {
+      }
+
+      // Default: ATTITUDE
+      {
         // Process as attitude screenshot
         const imageBuffer = Buffer.from(input.imageBase64, 'base64');
         const fileKey = `attitude-screenshots/${year}/${month}/${Date.now()}-${input.filename}`;
