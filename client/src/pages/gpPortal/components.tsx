@@ -8,9 +8,10 @@
 import { useState } from "react";
 import {
   Star, Eye, Scissors, TrendingUp, TrendingDown, Info, ChevronLeft, ChevronRight,
-  Target, Calendar, Clock, AlertTriangle, ThumbsUp,
+  Target, Calendar, Clock, AlertTriangle, ThumbsUp, Flame, Crown, Sparkles,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MONTH_NAMES } from "../../../../shared/const";
@@ -19,10 +20,14 @@ import { MONTH_NAMES } from "../../../../shared/const";
 // Score card — large metric display with tooltip + status pill + progress bar
 // ============================================================================
 
-export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgColor, tooltip, delta }: {
+export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgColor, tooltip, delta, trend, sparkColor }: {
   score: number; maxScore: number; label: string; icon: typeof Star; accentColor: string; bgColor: string; tooltip?: string;
   /** Month-over-month delta vs previous month with data. `null` = hide chip. */
   delta?: number | null;
+  /** Sequence of monthly values for the inline sparkline. Empty = hide chart. */
+  trend?: Array<{ value: number }>;
+  /** Stroke colour for the sparkline. Defaults to amber. */
+  sparkColor?: string;
 }) {
   const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
   const [showTooltip, setShowTooltip] = useState(false);
@@ -86,6 +91,29 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
             style={{ width: `${percentage}%` }}
           />
         </div>
+        {trend && trend.length >= 2 && (
+          <div className="mt-3 h-10 -mx-1" aria-hidden>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trend} margin={{ top: 2, right: 2, left: 2, bottom: 0 }}>
+                <defs>
+                  <linearGradient id={`spark-${label}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={sparkColor || "#f59e0b"} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={sparkColor || "#f59e0b"} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  stroke={sparkColor || "#f59e0b"}
+                  strokeWidth={1.75}
+                  fill={`url(#spark-${label})`}
+                  isAnimationActive={false}
+                  dot={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -248,6 +276,109 @@ const PLAN_CATEGORY_TONE: Record<string, string> = {
   errors: "border-rose-200 bg-rose-50",
   general: "border-slate-200 bg-slate-50",
 };
+
+// ============================================================================
+// Streak chip — small gamification element shown next to the hero. Motivates
+// the GP by surfacing "N days clean" or "M consecutive evaluations without an
+// error". Single chip, no card chrome — meant to ride alongside other badges.
+// ============================================================================
+
+export function StreakChip({ days, label, tone = "amber" }: {
+  days: number;
+  label?: string;
+  tone?: "amber" | "emerald" | "violet";
+}) {
+  if (days <= 0) return null;
+  const palette =
+    tone === "emerald" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
+    tone === "violet" ? "bg-violet-50 border-violet-200 text-violet-700" :
+    "bg-amber-50 border-amber-200 text-amber-700";
+  const Icon = tone === "violet" ? Crown : Flame;
+  const text = label ?? `${days}-day streak`;
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border ${palette}`}>
+      <Icon className="h-3.5 w-3.5" />
+      {text}
+    </span>
+  );
+}
+
+// ============================================================================
+// Month header — large prominent header for the Month tab with prev/next
+// navigation, the month name in big type, and a one-line summary. Replaces
+// the cramped inline `MonthSelector` and gives the bug-fix-visible Month tab
+// the visual prominence the user complained was missing.
+// ============================================================================
+
+export function MonthTabHeader({ selectedMonth, selectedYear, onChange, evalCount, errorCount, attitudeScore }: {
+  selectedMonth: number; selectedYear: number;
+  onChange: (month: number, year: number) => void;
+  evalCount: number;
+  errorCount: number;
+  attitudeScore: number;
+}) {
+  const handlePrev = () => {
+    if (selectedMonth === 1) onChange(12, selectedYear - 1);
+    else onChange(selectedMonth - 1, selectedYear);
+  };
+  const handleNext = () => {
+    const now = new Date();
+    const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1;
+    const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear;
+    if (nextYear > now.getFullYear() || (nextYear === now.getFullYear() && nextMonth > now.getMonth() + 1)) return;
+    onChange(nextMonth, nextYear);
+  };
+  const now = new Date();
+  const isCurrentMonth = selectedMonth === now.getMonth() + 1 && selectedYear === now.getFullYear();
+  const monthLabel = MONTH_NAMES[selectedMonth - 1];
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 sm:p-6 shadow-sm">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handlePrev}
+            className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm"
+            aria-label="Previous month"
+          >
+            <ChevronLeft className="h-4 w-4 text-slate-600" />
+          </button>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Viewing</p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 leading-tight">
+              {monthLabel} <span className="text-slate-400 font-normal">{selectedYear}</span>
+            </h2>
+          </div>
+          <button
+            onClick={handleNext}
+            disabled={isCurrentMonth}
+            className={`p-2 rounded-lg border transition-colors shadow-sm ${
+              isCurrentMonth ? 'bg-slate-50 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 hover:bg-slate-50'
+            }`}
+            aria-label="Next month"
+          >
+            <ChevronRight className={`h-4 w-4 ${isCurrentMonth ? 'text-slate-300' : 'text-slate-600'}`} />
+          </button>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700">
+            <Eye className="h-3 w-3" /> {evalCount} eval{evalCount !== 1 ? 's' : ''}
+          </span>
+          <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${
+            errorCount > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          }`}>
+            <AlertTriangle className="h-3 w-3" /> {errorCount} mistake{errorCount !== 1 ? 's' : ''}
+          </span>
+          <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${
+            attitudeScore >= 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'
+          }`}>
+            <ThumbsUp className="h-3 w-3" /> {attitudeScore > 0 ? '+' : ''}{attitudeScore} attitude
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ============================================================================
 // At-a-glance strip — 4 micro-stats sitting below the hero, giving the GP an
