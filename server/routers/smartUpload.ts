@@ -5,6 +5,8 @@ import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
 import { createLogger } from "../services/logger";
 import { extractEvaluationFromImage, parseEvaluationDate } from "./_shared";
+import { parseAttitudeEntryDate } from "./attitudeScreenshot";
+import { parseIsoDateLocal } from "../db/_dateRange";
 import { nanoid } from "nanoid";
 const log = createLogger("Router");
 
@@ -268,10 +270,19 @@ Respond in JSON format:
           }
         }
 
+        // Derive month/year from the parsed errorDate so a screenshot
+        // uploaded in April that depicts a March incident is filed under
+        // March. Falls back to upload moment when no errorDate.
+        // `parseIsoDateLocal` keeps the day in local time so a 1-Mar-2026
+        // OCR string isn't shifted to Feb 28 on negative-offset servers.
+        const parsedErrorDate = parseIsoDateLocal(extractedData.errorDate);
+        const errorMonth = parsedErrorDate ? parsedErrorDate.getMonth() + 1 : month;
+        const errorYear = parsedErrorDate ? parsedErrorDate.getFullYear() : year;
+
         const errorScreenshot = await db.createErrorScreenshot({
           gamePresenterId,
           gpName: gpNameToUse || extractedData.gpName || 'Unknown',
-          errorDate: extractedData.errorDate ? new Date(extractedData.errorDate) : null,
+          errorDate: parsedErrorDate,
           errorType: extractedData.errorType || 'other',
           errorCategory: extractedData.errorCategory || '',
           errorDescription: extractedData.errorDescription || '',
@@ -281,14 +292,14 @@ Respond in JSON format:
           screenshotUrl,
           screenshotKey: fileKey,
           rawExtractedData: extractedData,
-          month,
-          year,
+          month: errorMonth,
+          year: errorYear,
           uploadedById: ctx.user.id,
           processedAt: new Date(),
         });
 
         if (gamePresenterId) {
-          await db.incrementGPMistakes(gamePresenterId, month, year);
+          await db.incrementGPMistakes(gamePresenterId, errorMonth, errorYear);
         }
 
         return {
@@ -427,18 +438,27 @@ Respond with a JSON object containing an array of ALL entries found:
 
         const savedEntries: any[] = [];
         const entries = extractedData.entries || [];
-        
+        // Bucket scores by (entryYear, entryMonth) so the monthly
+        // aggregate moves with the row rather than the upload moment —
+        // matches attitudeScreenshot.upload behaviour exactly.
+        const scoreByMonth = new Map<string, { month: number; year: number; total: number }>();
+
         for (const entry of entries) {
+          // Use the parsed entry date for both `evaluationDate` AND
+          // `month`/`year`, so an April-uploaded screenshot containing
+          // March entries is filed under March. Falls back to the
+          // upload moment when OCR returned nothing parseable.
+          const parsedDate = parseAttitudeEntryDate(entry.date);
+          const entryMonth = parsedDate ? parsedDate.getMonth() + 1 : month;
+          const entryYear = parsedDate ? parsedDate.getFullYear() : year;
+          const score = entry.score || (entry.type === 'POSITIVE' ? 1 : -1);
           const attitudeScreenshot = await db.createAttitudeScreenshot({
             gamePresenterId,
             evaluationId: null,
             gpName: gpNameToUse || 'Unknown',
-            evaluationDate: entry.date ? new Date(entry.date.replace(/^(\d+)\s+(\w+)\s+(\d+),?\s*(\d+:\d+)?$/, (_: string, d: string, m: string, y: string, t: string) => {
-              const months: Record<string, string> = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
-              return `${y}-${months[m] || '01'}-${d.padStart(2, '0')}${t ? 'T' + t : ''}`;
-            })) : null,
+            evaluationDate: parsedDate,
             attitudeType: entry.type?.toLowerCase() === 'positive' ? 'positive' : 'negative',
-            attitudeScore: entry.score || (entry.type === 'POSITIVE' ? 1 : -1),
+            attitudeScore: score,
             attitudeCategory: entry.type?.toLowerCase() === 'positive' ? 'positive' : 'negative',
             comment: entry.comment || '',
             description: entry.comment || '',
@@ -446,18 +466,22 @@ Respond with a JSON object containing an array of ALL entries found:
             screenshotUrl,
             screenshotKey: fileKey,
             rawExtractedData: entry,
-            month,
-            year,
+            month: entryMonth,
+            year: entryYear,
             uploadedById: ctx.user.id,
             processedAt: new Date(),
           });
           savedEntries.push(attitudeScreenshot);
+          const key = `${entryYear}-${entryMonth}`;
+          const bucket = scoreByMonth.get(key);
+          if (bucket) bucket.total += score;
+          else scoreByMonth.set(key, { month: entryMonth, year: entryYear, total: score });
         }
 
-        if (gamePresenterId && entries.length > 0) {
-          // Use cumulative +1/-1 system consistent with attitudeScreenshot.upload
-          const totalScore = entries.reduce((sum: number, e: any) => sum + (e.score || (e.type === 'POSITIVE' ? 1 : -1)), 0);
-          await db.updateGPAttitude(gamePresenterId, month, year, totalScore);
+        if (gamePresenterId) {
+          for (const { month: bm, year: by, total } of Array.from(scoreByMonth.values())) {
+            if (total !== 0) await db.updateGPAttitude(gamePresenterId, bm, by, total);
+          }
         }
 
         return {

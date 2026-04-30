@@ -132,18 +132,23 @@ export const gpAccessRouter = router({
 
       // Get error screenshots for selected month — filter out TV / technical
       // errors so the GP only sees errors actually attributable to them.
+      // Track the filtered count so the UI can explain a discrepancy
+      // (e.g. "FM uploaded 2 screenshots but only 1 counts toward you")
+      // rather than silently hiding them.
       const errorScreenshotsRaw = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
       const errorScreenshots = errorScreenshotsRaw.filter(e => !isTechnicalError({
         errorType: e.errorType,
         errorCategory: e.errorCategory,
         errorDescription: e.errorDescription,
       }));
+      const technicalErrorsHidden = errorScreenshotsRaw.length - errorScreenshots.length;
       const attitudeDetails = await db.getAttitudeScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
       const gpErrorsRaw = await db.getGpErrorsForPortal(accessToken.gamePresenterId, input.month, input.year);
       const gpErrors = gpErrorsRaw.filter(e => !isTechnicalError({
         errorCode: e.errorCode,
         errorDescription: e.errorDescription,
       }));
+      const technicalGpErrorsHidden = gpErrorsRaw.length - gpErrors.length;
 
       // Get evaluations for this specific month
       const allEvals = await db.getGpEvaluationsForPortal(accessToken.gamePresenterId);
@@ -196,6 +201,10 @@ export const gpAccessRouter = router({
           mistakes: reportedMistakes,
           totalGames: stats.totalGames,
         } : null,
+        // Number of technical/TV errors that the FM logged but that don't
+        // count toward this GP. Surfaced in the UI so the count never seems
+        // mysteriously off.
+        technicalErrorsHidden: technicalErrorsHidden + technicalGpErrorsHidden,
         evaluations: monthEvals,
         errorDetails,
         attitudeDetails: attitudeDetails.map(a => ({

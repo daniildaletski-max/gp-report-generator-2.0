@@ -3,267 +3,29 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { format } from "date-fns";
-import { 
-  Star, Calendar, Gamepad2, Eye, Sparkles, Scissors, Palette, Shirt, 
-  PersonStanding, Loader2, AlertCircle, TrendingUp, AlertTriangle, Trophy, 
-  Target, Gift, ThumbsUp, ThumbsDown, RefreshCw, ChevronDown, ChevronUp, BarChart3,
-  Clock, Award, Zap, TrendingDown, Flame, Crown, Medal, Gem, Heart, Shield,
-  Info, MessageSquare, FileText, ChevronLeft, ChevronRight
+import {
+  Star, Calendar, Gamepad2, Eye, Sparkles, Scissors, Palette, Shirt,
+  PersonStanding, AlertCircle, TrendingUp, AlertTriangle, Trophy,
+  Target, ThumbsUp, ThumbsDown, RefreshCw, ChevronDown, ChevronUp, BarChart3,
+  Clock, TrendingDown, Flame, Crown, Medal, Gem, Heart, Shield,
+  MessageSquare, FileText,
 } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
 import { useState, useEffect, useMemo } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { MAX_TOTAL_SCORE, MAX_APPEARANCE_SCORE, MAX_GAME_PERFORMANCE_SCORE, SCORE_CONFIG, MONTH_NAMES } from "../../../shared/const";
+import { useUrlState, urlString } from "@/hooks/useUrlState";
 
-// Score card component
-function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgColor, tooltip }: { 
-  score: number; maxScore: number; label: string; icon: typeof Star; accentColor: string; bgColor: string; tooltip?: string;
-}) {
-  const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
-  const [showTooltip, setShowTooltip] = useState(false);
-  
-  const getStatus = () => {
-    if (percentage >= 90) return { text: 'Excellent', color: 'text-emerald-600', badge: 'bg-emerald-50 border-emerald-200 text-emerald-700' };
-    if (percentage >= 80) return { text: 'Great', color: 'text-green-600', badge: 'bg-green-50 border-green-200 text-green-700' };
-    if (percentage >= 70) return { text: 'Good', color: 'text-amber-600', badge: 'bg-amber-50 border-amber-200 text-amber-700' };
-    return { text: 'Needs Work', color: 'text-red-600', badge: 'bg-red-50 border-red-200 text-red-700' };
-  };
-  const status = getStatus();
-  
-  return (
-    <div className={`relative overflow-hidden rounded-2xl ${bgColor} p-5 sm:p-6 border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 group hover:-translate-y-0.5`}>
-      <div className="relative z-10">
-        <div className="flex items-center justify-between mb-4">
-          <div className={`p-2.5 rounded-xl border ${accentColor}`}>
-            <Icon className="h-5 w-5" />
-          </div>
-          <div className="flex items-center gap-2">
-            {tooltip && (
-              <div className="relative">
-                <button 
-                  onClick={() => setShowTooltip(!showTooltip)}
-                  className="p-1 rounded-full hover:bg-slate-100 transition-colors"
-                >
-                  <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600" />
-                </button>
-                {showTooltip && (
-                  <div className="absolute right-0 top-7 z-50 w-48 p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 shadow-lg">
-                    {tooltip}
-                    <div className="absolute -top-1 right-3 w-2 h-2 bg-white border-l border-t border-slate-200 rotate-45" />
-                  </div>
-                )}
-              </div>
-            )}
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${status.badge}`}>{status.text}</span>
-          </div>
-        </div>
-        <div className="mb-3">
-          <div className="flex items-baseline gap-1">
-            <span className="text-3xl sm:text-4xl font-bold text-slate-900">{score.toFixed(1)}</span>
-            <span className="text-lg text-slate-400">/{maxScore}</span>
-          </div>
-          <p className="text-sm text-slate-500 mt-1">{label}</p>
-        </div>
-        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-1000 ease-out"
-            style={{ width: `${percentage}%` }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Achievement badge component
-function AchievementBadge({ icon: Icon, title, description, unlocked, color }: {
-  icon: typeof Star; title: string; description: string; unlocked: boolean; color: string;
-}) {
-  return (
-    <div className={`relative p-4 rounded-xl border transition-all duration-300 group ${
-      unlocked 
-        ? `${color} shadow-sm hover:shadow-md hover:scale-[1.02]` 
-        : 'bg-slate-50 border-slate-200 opacity-60 grayscale'
-    }`}>
-      <div className="flex items-center gap-3">
-        <div className={`p-2.5 rounded-xl transition-all ${unlocked ? 'bg-white/80 border border-slate-200' : 'bg-slate-100'}`}>
-          <Icon className={`h-5 w-5 ${unlocked ? 'text-slate-700' : 'text-slate-400'}`} />
-        </div>
-        <div>
-          <p className={`font-semibold text-sm ${unlocked ? 'text-slate-800' : 'text-slate-400'}`}>{title}</p>
-          <p className={`text-xs ${unlocked ? 'text-slate-500' : 'text-slate-400'}`}>{description}</p>
-        </div>
-      </div>
-      {unlocked && (
-        <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-sm">
-          <span className="text-[10px] text-white font-bold">✓</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Stat card
-function StatCard({ icon: Icon, value, label, color, trend }: {
-  icon: typeof Eye; value: string | number; label: string; color: string; trend?: number;
-}) {
-  return (
-    <div className={`relative ${color} rounded-2xl border border-slate-200 overflow-hidden group hover:shadow-md transition-all duration-300`}>
-      <div className="p-4 sm:p-5 relative">
-        <div className="flex items-center gap-3 sm:gap-4 relative">
-          <div className="bg-white/80 p-2.5 sm:p-3 rounded-xl shrink-0 shadow-sm border border-slate-200">
-            <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-slate-700" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-2xl sm:text-3xl font-bold text-slate-900">{value}</p>
-              {trend !== undefined && trend !== 0 && (
-                <div className={`flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full ${trend > 0 ? 'text-red-600 bg-red-50' : 'text-green-600 bg-green-50'}`}>
-                  {trend > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                  <span>{trend > 0 ? '+' : ''}{trend.toFixed(1)}</span>
-                </div>
-              )}
-            </div>
-            <p className="text-xs sm:text-sm text-slate-500 truncate">{label}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Labeled comment component for evaluation details
-function LabeledComment({ icon: Icon, label, comment, score, maxScore }: {
-  icon: typeof Scissors; label: string; comment: string | null; score: number | null; maxScore: number;
-}) {
-  if (!comment) return null;
-  return (
-    <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-2">
-          <Icon className="h-3.5 w-3.5 text-amber-600" />
-          <span className="text-xs font-medium text-slate-500">{label}</span>
-        </div>
-        {score !== null && (
-          <span className={`text-xs font-bold ${
-            (score / maxScore) >= 0.9 ? 'text-emerald-600' :
-            (score / maxScore) >= 0.7 ? 'text-amber-600' : 'text-red-600'
-          }`}>{score}/{maxScore}</span>
-        )}
-      </div>
-      <p className="text-sm text-slate-700 leading-relaxed">{comment}</p>
-    </div>
-  );
-}
-
-// Month selector for error/attitude history
-function MonthSelector({ selectedMonth, selectedYear, onChange }: {
-  selectedMonth: number; selectedYear: number;
-  onChange: (month: number, year: number) => void;
-}) {
-  const handlePrev = () => {
-    if (selectedMonth === 1) {
-      onChange(12, selectedYear - 1);
-    } else {
-      onChange(selectedMonth - 1, selectedYear);
-    }
-  };
-  const handleNext = () => {
-    const now = new Date();
-    const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1;
-    const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear;
-    if (nextYear > now.getFullYear() || (nextYear === now.getFullYear() && nextMonth > now.getMonth() + 1)) return;
-    onChange(nextMonth, nextYear);
-  };
-
-  const now = new Date();
-  const isCurrentMonth = selectedMonth === now.getMonth() + 1 && selectedYear === now.getFullYear();
-
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        onClick={handlePrev}
-        className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm"
-      >
-        <ChevronLeft className="h-4 w-4 text-slate-600" />
-      </button>
-      <div className="px-4 py-2 rounded-xl bg-white border border-slate-200 min-w-[160px] text-center shadow-sm">
-        <span className="text-sm font-medium text-slate-800">
-          {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
-        </span>
-      </div>
-      <button
-        onClick={handleNext}
-        disabled={isCurrentMonth}
-        className={`p-2 rounded-lg border transition-colors shadow-sm ${
-          isCurrentMonth 
-            ? 'bg-slate-50 border-slate-100 cursor-not-allowed' 
-            : 'bg-white border-slate-200 hover:bg-slate-50'
-        }`}
-      >
-        <ChevronRight className={`h-4 w-4 ${isCurrentMonth ? 'text-slate-300' : 'text-slate-600'}`} />
-      </button>
-    </div>
-  );
-}
-
-const PLAN_CATEGORY_TONE: Record<string, string> = {
-  appearance: "border-emerald-200 bg-emerald-50",
-  performance: "border-violet-200 bg-violet-50",
-  attitude: "border-pink-200 bg-pink-50",
-  attendance: "border-blue-200 bg-blue-50",
-  errors: "border-rose-200 bg-rose-50",
-  general: "border-slate-200 bg-slate-50",
-};
-
-function ActionPlanCard({ items }: { items: Array<{ id: number; title: string; description: string | null; category: string; priority: string; status: string; dueDate: Date | null; source: string }> }) {
-  const open = items.filter(i => i.status === "open");
-  const inProgress = items.filter(i => i.status === "in_progress");
-  return (
-    <Card className="bg-white border-slate-200 shadow-sm">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-slate-800 text-base flex items-center gap-2">
-          <Target className="h-4 w-4 text-violet-600" />
-          Your action plan
-        </CardTitle>
-        <CardDescription className="text-slate-600 text-xs">
-          {open.length} open, {inProgress.length} in progress — what your FM is asking you to focus on
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {[...inProgress, ...open].slice(0, 6).map(item => (
-          <div
-            key={item.id}
-            className={`border rounded-lg p-3 ${PLAN_CATEGORY_TONE[item.category] ?? "border-slate-200 bg-white"}`}
-          >
-            <div className="flex items-start justify-between gap-2 mb-1">
-              <p className="text-sm font-semibold text-slate-800">{item.title}</p>
-              <div className="flex items-center gap-1 shrink-0">
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600 capitalize">{item.category}</span>
-                {item.status === "in_progress" && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-700">In progress</span>
-                )}
-              </div>
-            </div>
-            {item.description && (
-              <p className="text-xs text-slate-600 leading-relaxed">{item.description}</p>
-            )}
-            {item.dueDate && (
-              <p className="text-[11px] text-slate-500 mt-1.5 inline-flex items-center gap-1">
-                <Calendar className="h-2.5 w-2.5" />
-                Due {new Date(item.dueDate).toLocaleDateString()}
-              </p>
-            )}
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
+import { useIsMobile } from "@/hooks/useMobile";
+import {
+  ScoreCard, AchievementBadge, StatCard, LabeledComment, MonthSelector, ActionPlanCard,
+  AtAGlanceStrip, GPPortalSkeleton,
+} from "./gpPortal/components";
 
 export default function GPPortal() {
   const { token } = useParams<{ token: string }>();
+  const isMobile = useIsMobile();
   const [expandedEvaluations, setExpandedEvaluations] = useState<Set<number>>(new Set());
   const [selectedEvalMonth, setSelectedEvalMonth] = useState<string>('all');
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
@@ -272,6 +34,15 @@ export default function GPPortal() {
   const now = new Date();
   const [detailMonth, setDetailMonth] = useState(now.getMonth() + 1);
   const [detailYear, setDetailYear] = useState(now.getFullYear());
+
+  // Persist active tab in URL so refresh / shared link drops the GP back where
+  // they were. `overview` is the safe fallback for old/short links.
+  const [activeTab, setActiveTab] = useUrlState<string>(
+    "tab",
+    "overview",
+    urlString.parse,
+    urlString.serialize,
+  );
   
   const { data, isLoading, error, refetch, isFetching } = trpc.gpAccess.getEvaluationsByToken.useQuery(
     { token: token || "" },
@@ -430,19 +201,7 @@ export default function GPPortal() {
     ];
   }, [data]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center relative z-10">
-          <div className="relative">
-            <div className="w-16 h-16 border-2 border-amber-200 rounded-full animate-spin border-t-amber-500" />
-            <Star className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-6 w-6 text-amber-500 animate-pulse" />
-          </div>
-          <p className="mt-4 text-slate-500 text-sm">Loading your performance data...</p>
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) return <GPPortalSkeleton />;
 
   if (error || !data) {
     return (
@@ -479,6 +238,7 @@ export default function GPPortal() {
 
   const errorDetails = monthDetails?.errorDetails || [];
   const attitudeDetails = monthDetails?.attitudeDetails || [];
+  const technicalErrorsHidden = monthDetails?.technicalErrorsHidden ?? 0;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 relative">
@@ -562,7 +322,19 @@ export default function GPPortal() {
           </section>
         )}
 
-        {/* Score Overview Cards */}
+        {/* At-a-glance strip — quick read of "where am I this month" */}
+        <AtAGlanceStrip
+          evalCount={totalEvals}
+          mistakes={data.monthlyStats?.current?.mistakes ?? 0}
+          attitude={data.monthlyStats?.current?.attitude ?? 0}
+          lastEvaluationDate={
+            recentEvaluations[0]?.evaluationDate
+              ? new Date(recentEvaluations[0].evaluationDate)
+              : null
+          }
+        />
+
+        {/* Score Overview Cards — with month-over-month delta chips per category */}
         <section>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
             <ScoreCard
@@ -573,24 +345,27 @@ export default function GPPortal() {
               bgColor="bg-white"
               accentColor="bg-amber-50 border-amber-200 text-amber-600"
               tooltip={`Total of Appearance (${MAX_APPEARANCE_SCORE}) + Game Performance (${MAX_GAME_PERFORMANCE_SCORE}) = ${MAX_TOTAL_SCORE} max`}
+              delta={improvement?.total}
             />
-            <ScoreCard 
-              score={avgAppearance} 
-              maxScore={MAX_APPEARANCE_SCORE} 
-              label="Appearance" 
+            <ScoreCard
+              score={avgAppearance}
+              maxScore={MAX_APPEARANCE_SCORE}
+              label="Appearance"
               icon={Sparkles}
               bgColor="bg-white"
               accentColor="bg-emerald-50 border-emerald-200 text-emerald-600"
               tooltip={`Hair (${SCORE_CONFIG.hair.max}) + Makeup (${SCORE_CONFIG.makeup.max}) + Outfit (${SCORE_CONFIG.outfit.max}) + Posture (${SCORE_CONFIG.posture.max}) = ${MAX_APPEARANCE_SCORE} max`}
+              delta={improvement?.appearance}
             />
-            <ScoreCard 
-              score={avgGamePerf} 
-              maxScore={MAX_GAME_PERFORMANCE_SCORE} 
-              label="Game Performance" 
+            <ScoreCard
+              score={avgGamePerf}
+              maxScore={MAX_GAME_PERFORMANCE_SCORE}
+              label="Game Performance"
               icon={Gamepad2}
               bgColor="bg-white"
               accentColor="bg-blue-50 border-blue-200 text-blue-600"
               tooltip={`Dealing Style (${SCORE_CONFIG.dealingStyle.max}) + Game Performance (${SCORE_CONFIG.gamePerformance.max}) = ${MAX_GAME_PERFORMANCE_SCORE} max`}
+              delta={improvement?.performance}
             />
           </div>
         </section>
@@ -652,92 +427,122 @@ export default function GPPortal() {
           </div>
         )}
 
-        {/* Monthly Stats & Achievements */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Quick Stats */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-800">
-              <Target className="h-5 w-5 text-amber-500" />
-              This Month's Stats
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
-              <StatCard 
-                icon={Eye} 
-                value={totalEvals} 
-                label="Total Evaluations" 
-                color="bg-amber-50"
-              />
-              <StatCard 
-                icon={AlertTriangle} 
-                value={data.monthlyStats?.current?.mistakes ?? 0} 
-                label="Mistakes" 
-                color="bg-red-50"
-                trend={data.monthlyStats?.previous ? 
-                  (data.monthlyStats.current?.mistakes ?? 0) - (data.monthlyStats.previous.mistakes ?? 0) : undefined}
-              />
-              <StatCard 
-                icon={ThumbsUp} 
-                value={data.monthlyStats?.current?.attitude ?? 0} 
-                label="Attitude Score" 
-                color="bg-green-50"
-              />
-              <StatCard 
-                icon={Gamepad2} 
-                value={data.monthlyStats?.current?.totalGames ?? 0} 
-                label="Total Games" 
-                color="bg-blue-50"
-              />
-            </div>
-          </div>
+        {/* Tabbed lower half — compacts ~2,000px of scroll into one tap so the
+            Monthly Details panel (where the date-filter bug fix is visible) is
+            never more than one click away. Active tab persists in `?tab=`. */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="bg-white border border-slate-200 shadow-sm h-auto p-1 grid grid-cols-4 w-full sm:w-auto sm:inline-grid">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="trend">Trend</TabsTrigger>
+            <TabsTrigger value="evaluations">Evaluations</TabsTrigger>
+            <TabsTrigger value="month">Month</TabsTrigger>
+          </TabsList>
 
-          {/* Recent Evaluations */}
-          <Card className="bg-white border-slate-200 shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-slate-800 text-base flex items-center gap-2">
-                <Clock className="h-4 w-4 text-amber-500" />
-                Recent Evaluations
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {recentEvaluations.length > 0 ? (
-                <div className="space-y-2.5">
-                  {recentEvaluations.slice(0, 4).map((eval_: any) => (
-                    <div key={eval_.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 rounded-full ${
-                          (eval_.totalScore || 0) >= 20 ? 'bg-green-500' :
-                          (eval_.totalScore || 0) >= 18 ? 'bg-yellow-500' :
-                          'bg-red-500'
-                        }`} />
-                        <div>
-                          <p className="text-sm font-medium text-slate-800">
-                            {eval_.game || 'Game Session'}
-                          </p>
-                          {eval_.evaluatorName && (
-                            <p className="text-xs text-slate-500">by {eval_.evaluatorName}</p>
-                          )}
+          <TabsContent value="overview" className="mt-6 space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Quick Stats */}
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-800">
+                  <Target className="h-5 w-5 text-amber-500" />
+                  This Month's Stats
+                </h2>
+                <div className="grid grid-cols-2 gap-3">
+                  <StatCard
+                    icon={Eye}
+                    value={totalEvals}
+                    label="Total Evaluations"
+                    color="bg-amber-50"
+                  />
+                  <StatCard
+                    icon={AlertTriangle}
+                    value={data.monthlyStats?.current?.mistakes ?? 0}
+                    label="Mistakes"
+                    color="bg-red-50"
+                    trend={data.monthlyStats?.previous ?
+                      (data.monthlyStats.current?.mistakes ?? 0) - (data.monthlyStats.previous.mistakes ?? 0) : undefined}
+                  />
+                  <StatCard
+                    icon={ThumbsUp}
+                    value={data.monthlyStats?.current?.attitude ?? 0}
+                    label="Attitude Score"
+                    color="bg-green-50"
+                  />
+                  <StatCard
+                    icon={Gamepad2}
+                    value={data.monthlyStats?.current?.totalGames ?? 0}
+                    label="Total Games"
+                    color="bg-blue-50"
+                  />
+                </div>
+              </div>
+
+              {/* Recent Evaluations */}
+              <Card className="bg-white border-slate-200 shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-slate-800 text-base flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-amber-500" />
+                    Recent Evaluations
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {recentEvaluations.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {recentEvaluations.slice(0, 4).map((eval_: any) => (
+                        <div key={eval_.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${
+                              (eval_.totalScore || 0) >= 20 ? 'bg-green-500' :
+                              (eval_.totalScore || 0) >= 18 ? 'bg-yellow-500' :
+                              'bg-red-500'
+                            }`} />
+                            <div>
+                              <p className="text-sm font-medium text-slate-800">
+                                {eval_.game || 'Game Session'}
+                              </p>
+                              {eval_.evaluatorName && (
+                                <p className="text-xs text-slate-500">by {eval_.evaluatorName}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-lg font-bold ${
+                              (eval_.totalScore || 0) >= 20 ? 'text-green-600' :
+                              (eval_.totalScore || 0) >= 18 ? 'text-amber-600' :
+                              'text-red-600'
+                            }`}>{eval_.totalScore}</span>
+                            <span className="text-xs text-slate-400">/{MAX_TOTAL_SCORE}</span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-lg font-bold ${
-                          (eval_.totalScore || 0) >= 20 ? 'text-green-600' :
-                          (eval_.totalScore || 0) >= 18 ? 'text-amber-600' :
-                          'text-red-600'
-                        }`}>{eval_.totalScore}</span>
-                        <span className="text-xs text-slate-400">/{MAX_TOTAL_SCORE}</span>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <Clock className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-slate-500 text-sm">No evaluations yet</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Clock className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-slate-500 text-sm">No evaluations yet</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Achievements moved into Overview */}
+            <section>
+              <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-slate-800">
+                <Trophy className="h-5 w-5 text-amber-500" />
+                Achievements
+                <Badge className="ml-2 bg-amber-50 text-amber-700 border-amber-200">
+                  {achievements.filter(a => a.unlocked).length}/{achievements.length}
+                </Badge>
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {achievements.map((a) => (
+                  <AchievementBadge key={a.title} {...a} />
+                ))}
+              </div>
+            </section>
+          </TabsContent>
+
+          <TabsContent value="trend" className="mt-6 space-y-6">
 
         {/* Score Trend Chart */}
         {data.monthlyHistory && data.monthlyHistory.length > 0 && (
@@ -753,7 +558,9 @@ export default function GPPortal() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-[280px] sm:h-[320px]">
+                {/* Cap chart at ~180px on phone so it never eats more than a
+                    third of the screen on small viewports. */}
+                <div style={{ height: isMobile ? 180 : 280 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data.monthlyHistory} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                       <defs>
@@ -881,22 +688,9 @@ export default function GPPortal() {
             </div>
           </section>
         )}
+          </TabsContent>
 
-        {/* Achievements */}
-        <section>
-          <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-slate-800">
-            <Trophy className="h-5 w-5 text-amber-500" />
-            Achievements
-            <Badge className="ml-2 bg-amber-50 text-amber-700 border-amber-200">
-              {achievements.filter(a => a.unlocked).length}/{achievements.length}
-            </Badge>
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {achievements.map((a) => (
-              <AchievementBadge key={a.title} {...a} />
-            ))}
-          </div>
-        </section>
+          <TabsContent value="evaluations" className="mt-6">
 
         {/* Evaluation History - Grouped by Month */}
         <section>
@@ -1159,8 +953,13 @@ export default function GPPortal() {
             </Card>
           )}
         </section>
+          </TabsContent>
 
-        {/* Error & Attitude Details */}
+          <TabsContent value="month" className="mt-6">
+
+        {/* Error & Attitude Details — this is where the date-filter bug
+            fix becomes visible: entries dated in another month should
+            never leak into the selected month again. */}
         {data.monthlyStats && (
           <section>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
@@ -1185,7 +984,17 @@ export default function GPPortal() {
                     <Badge className="ml-2 bg-red-50 text-red-700 border-red-200">{errorDetails.length}</Badge>
                   )}
                 </h3>
-                
+
+                {technicalErrorsHidden > 0 && (
+                  <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 flex items-start gap-2">
+                    <Shield className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
+                    <span>
+                      <strong className="text-slate-700">{technicalErrorsHidden}</strong>{" "}
+                      technical {technicalErrorsHidden === 1 ? "error was" : "errors were"} logged this month but are not counted against you (TV / system / equipment issues).
+                    </span>
+                  </div>
+                )}
+
                 {errorDetails.length > 0 ? (
                   <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
                     <CardContent className="p-0">
@@ -1367,12 +1176,18 @@ export default function GPPortal() {
             </div>
           </section>
         )}
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* Footer */}
       <footer className="border-t border-slate-200 py-6 mt-10 relative z-10 bg-white">
-        <div className="container text-center">
+        <div className="container text-center space-y-1">
           <p className="text-slate-400 text-sm">GP Performance Dashboard — Auto-refreshes every 30 seconds</p>
+          <p className="text-slate-400 text-xs">
+            <Shield className="h-3 w-3 inline-block mr-1 -mt-0.5" />
+            This data is private to you. Shared via secure link.
+          </p>
         </div>
       </footer>
     </div>

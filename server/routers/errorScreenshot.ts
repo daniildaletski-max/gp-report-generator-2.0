@@ -4,6 +4,7 @@ import * as db from "../db";
 import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
 import { createLogger } from "../services/logger";
+import { parseIsoDateLocal } from "../db/_dateRange";
 const log = createLogger("Router");
 
 export const errorScreenshotRouter = router({
@@ -126,11 +127,22 @@ Respond in JSON format:
         }
       }
 
+      // Derive month/year from the parsed errorDate so a screenshot
+      // uploaded in April that depicts a March incident is filed under
+      // March. Falls back to upload moment when no parseable errorDate.
+      // `parseIsoDateLocal` interprets the OCR'd `YYYY-MM-DD` value as
+      // local-day midnight rather than UTC — without that, a 1-Mar-2026
+      // entry parsed on a US server would shift to Feb 28 and land in
+      // the wrong monthly bucket.
+      const parsedErrorDate = parseIsoDateLocal(extractedData.errorDate);
+      const errorMonth = parsedErrorDate ? parsedErrorDate.getMonth() + 1 : month;
+      const errorYear = parsedErrorDate ? parsedErrorDate.getFullYear() : year;
+
       // Save to database
       const errorScreenshot = await db.createErrorScreenshot({
         gamePresenterId,
         gpName: gpNameToUse || extractedData.gpName || 'Unknown',
-        errorDate: extractedData.errorDate ? new Date(extractedData.errorDate) : null,
+        errorDate: parsedErrorDate,
         errorType: extractedData.errorType || 'other',
         errorCategory: extractedData.errorCategory || '',
         errorDescription: extractedData.errorDescription || '',
@@ -140,15 +152,15 @@ Respond in JSON format:
         screenshotUrl,
         screenshotKey: fileKey,
         rawExtractedData: extractedData,
-        month,
-        year,
+        month: errorMonth,
+        year: errorYear,
         uploadedById: ctx.user.id,
         processedAt: new Date(),
       });
 
       // Update monthly stats if GP was matched
       if (gamePresenterId) {
-        await db.incrementGPMistakes(gamePresenterId, month, year);
+        await db.incrementGPMistakes(gamePresenterId, errorMonth, errorYear);
       }
 
       return {

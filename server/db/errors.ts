@@ -1,7 +1,7 @@
 /**
  * Error Files, GP Errors, Error Screenshots Database Operations
  */
-import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
+import { eq, and, gte, lte, lt, desc, sql } from "drizzle-orm";
 import {
   errorFiles, InsertErrorFile, ErrorFile,
   gpErrors, InsertGpError, GpError,
@@ -12,6 +12,20 @@ import { getDb } from "./connection";
 import { getOrCreateMonthlyGpStats } from "./monthlyStats";
 import { getOrCreateAttendance, updateAttendance } from "./attendance";
 import { createLogger } from "../services/logger";
+import { monthRange } from "./_dateRange";
+
+/**
+ * Match rows whose `errorDate` falls in the given month — fall back to
+ * `createdAt` for legacy rows where `errorDate` was never parsed. Without
+ * this, a screenshot uploaded in April containing errors dated March
+ * leaks into April's filter (the row's stored `month`/`year` came from
+ * upload moment, not from the parsed `errorDate`).
+ */
+function errorScreenshotMonthFilter(month: number, year: number) {
+  const { start, endExclusive } = monthRange(month, year);
+  const effective = sql`COALESCE(${errorScreenshots.errorDate}, ${errorScreenshots.createdAt})`;
+  return and(gte(effective, start), lt(effective, endExclusive));
+}
 
 const log = createLogger("DB:Errors");
 
@@ -198,7 +212,7 @@ export async function createErrorScreenshot(data: InsertErrorScreenshot): Promis
 export async function getErrorScreenshots(month: number, year: number, gamePresenterId?: number): Promise<ErrorScreenshot[]> {
   const db = await getDb();
   if (!db) return [];
-  const conditions: any[] = [eq(errorScreenshots.month, month), eq(errorScreenshots.year, year)];
+  const conditions: any[] = [errorScreenshotMonthFilter(month, year)];
   if (gamePresenterId) conditions.push(eq(errorScreenshots.gamePresenterId, gamePresenterId));
   return await db.select().from(errorScreenshots).where(and(...conditions)).orderBy(desc(errorScreenshots.createdAt));
 }
@@ -207,7 +221,7 @@ export async function getErrorScreenshotsByGpId(gamePresenterId: number, month?:
   const db = await getDb();
   if (!db) return [];
   const conditions: any[] = [eq(errorScreenshots.gamePresenterId, gamePresenterId)];
-  if (month && year) { conditions.push(eq(errorScreenshots.month, month)); conditions.push(eq(errorScreenshots.year, year)); }
+  if (month && year) conditions.push(errorScreenshotMonthFilter(month, year));
   return await db.select().from(errorScreenshots).where(and(...conditions)).orderBy(desc(errorScreenshots.createdAt));
 }
 
@@ -221,7 +235,7 @@ export async function deleteErrorScreenshot(id: number): Promise<boolean> {
 export async function getErrorScreenshotStats(month: number, year: number) {
   const db = await getDb();
   if (!db) return { byType: [], bySeverity: [], byGp: [], total: 0 };
-  const baseConditions = [eq(errorScreenshots.month, month), eq(errorScreenshots.year, year)];
+  const baseConditions = [errorScreenshotMonthFilter(month, year)];
   const byType = await db.select({ errorType: errorScreenshots.errorType, count: sql<number>`COUNT(*)` }).from(errorScreenshots).where(and(...baseConditions)).groupBy(errorScreenshots.errorType);
   const bySeverity = await db.select({ severity: errorScreenshots.severity, count: sql<number>`COUNT(*)` }).from(errorScreenshots).where(and(...baseConditions)).groupBy(errorScreenshots.severity);
   const byGp = await db.select({ gpName: errorScreenshots.gpName, gamePresenterId: errorScreenshots.gamePresenterId, count: sql<number>`COUNT(*)` }).from(errorScreenshots).where(and(...baseConditions)).groupBy(errorScreenshots.gpName, errorScreenshots.gamePresenterId).orderBy(desc(sql`COUNT(*)`));
@@ -233,14 +247,14 @@ export async function getErrorScreenshotsForGP(gpId: number, month: number, year
   const db = await getDb();
   if (!db) return [];
   try {
-    return await db.select().from(errorScreenshots).where(and(eq(errorScreenshots.gamePresenterId, gpId), eq(errorScreenshots.month, month), eq(errorScreenshots.year, year))).orderBy(desc(errorScreenshots.createdAt));
+    return await db.select().from(errorScreenshots).where(and(eq(errorScreenshots.gamePresenterId, gpId), errorScreenshotMonthFilter(month, year))).orderBy(desc(errorScreenshots.createdAt));
   } catch (error) { log.error("Error getting error screenshots for GP", error instanceof Error ? error : undefined); return []; }
 }
 
 export async function getErrorScreenshotsByUser(month: number, year: number, userId: number, gamePresenterId?: number): Promise<ErrorScreenshot[]> {
   const db = await getDb();
   if (!db) return [];
-  const conditions: any[] = [eq(errorScreenshots.month, month), eq(errorScreenshots.year, year), eq(errorScreenshots.uploadedById, userId)];
+  const conditions: any[] = [errorScreenshotMonthFilter(month, year), eq(errorScreenshots.uploadedById, userId)];
   if (gamePresenterId) conditions.push(eq(errorScreenshots.gamePresenterId, gamePresenterId));
   return await db.select().from(errorScreenshots).where(and(...conditions)).orderBy(desc(errorScreenshots.createdAt));
 }
@@ -248,7 +262,7 @@ export async function getErrorScreenshotsByUser(month: number, year: number, use
 export async function getErrorScreenshotStatsByUser(month: number, year: number, userId: number) {
   const db = await getDb();
   if (!db) return { byType: [], bySeverity: [], total: 0 };
-  const baseConditions = [eq(errorScreenshots.month, month), eq(errorScreenshots.year, year), eq(errorScreenshots.uploadedById, userId)];
+  const baseConditions = [errorScreenshotMonthFilter(month, year), eq(errorScreenshots.uploadedById, userId)];
   const byType = await db.select({ errorType: errorScreenshots.errorType, count: sql<number>`COUNT(*)` }).from(errorScreenshots).where(and(...baseConditions)).groupBy(errorScreenshots.errorType);
   const bySeverity = await db.select({ severity: errorScreenshots.severity, count: sql<number>`COUNT(*)` }).from(errorScreenshots).where(and(...baseConditions)).groupBy(errorScreenshots.severity);
   const totalResult = await db.select({ count: sql<number>`COUNT(*)` }).from(errorScreenshots).where(and(...baseConditions));
