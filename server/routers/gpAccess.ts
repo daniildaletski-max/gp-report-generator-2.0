@@ -217,6 +217,33 @@ export const gpAccessRouter = router({
       // we re-apply the filter at display time so count == visible items.
       const reportedMistakes = errorDetails.length;
 
+      // When the count is zero, give the FM something actionable rather
+      // than a generic "no errors" message — list the latest uploaded
+      // Playgon/MG files for the month and show how many gpErrors rows
+      // exist for THIS GP across the month under any name. Lets them
+      // see at a glance whether the file isn't uploaded vs the file
+      // exists but the GP's name didn't match anything in it.
+      let diagnostics: {
+        gpName: string;
+        latestErrorFiles: Array<{ id: number; fileName: string; fileType: string; uploadedAt: Date | string | null }>;
+      } | null = null;
+      if (reportedMistakes === 0) {
+        const allFiles = await db.getAllErrorFiles();
+        const latestErrorFiles = allFiles
+          .filter(f => f.month === input.month && f.year === input.year)
+          .slice(0, 4)
+          .map(f => ({
+            id: f.id,
+            fileName: f.fileName,
+            fileType: f.fileType,
+            uploadedAt: f.createdAt,
+          }));
+        diagnostics = {
+          gpName: gp.name,
+          latestErrorFiles,
+        };
+      }
+
       // Build a "filtered/hidden technical errors" list so the UI can
       // optionally show them under a "Hidden / not counted against you"
       // expander. The user has been confused about why the headline says
@@ -261,6 +288,7 @@ export const gpAccessRouter = router({
         // mysteriously off.
         technicalErrorsHidden: technicalErrorsHidden + technicalGpErrorsHidden,
         hiddenTechnicalErrors,
+        diagnostics,
         evaluations: monthEvals,
         errorDetails,
         attitudeDetails: attitudeDetails.map(a => ({

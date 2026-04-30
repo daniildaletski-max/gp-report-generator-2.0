@@ -1142,7 +1142,40 @@ export default function GPPortal() {
                     <CardContent className="py-10 text-center">
                       <Shield className="h-10 w-10 text-green-400 mx-auto mb-3" />
                       <p className="text-slate-600 font-medium">No errors recorded for {MONTH_NAMES[detailMonth - 1]} {detailYear}</p>
-                      <p className="text-xs text-slate-400 mt-1">Great job keeping it clean!</p>
+                      {(() => {
+                        const diag: any = (monthDetails as any)?.diagnostics;
+                        if (!diag) {
+                          return <p className="text-xs text-slate-400 mt-1">Great job keeping it clean!</p>;
+                        }
+                        const files: any[] = diag.latestErrorFiles || [];
+                        return (
+                          <div className="mt-3 inline-block text-left max-w-md mx-auto rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+                            <p className="font-semibold text-slate-700">Why is this empty?</p>
+                            <p className="text-slate-600 mt-1">
+                              We searched for <strong>{diag.gpName}</strong> in this month's data.
+                            </p>
+                            {files.length === 0 ? (
+                              <p className="text-slate-600 mt-2">
+                                No Playgon / MG files have been uploaded for {MONTH_NAMES[detailMonth - 1]} {detailYear}. Ask your FM to upload one in <em>Admin → Errors</em>.
+                              </p>
+                            ) : (
+                              <>
+                                <p className="text-slate-600 mt-2">Files uploaded for this month:</p>
+                                <ul className="mt-1 list-disc list-inside space-y-0.5 text-slate-500">
+                                  {files.map((f) => (
+                                    <li key={f.id}>
+                                      <span className="font-mono">{f.fileType}</span>: {f.fileName}
+                                    </li>
+                                  ))}
+                                </ul>
+                                <p className="text-slate-600 mt-2">
+                                  If you expected to see errors here, the file may use a different spelling for your name. Ask your FM to verify the row in their Excel matches "<strong>{diag.gpName}</strong>".
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </CardContent>
                   </Card>
                 )}
