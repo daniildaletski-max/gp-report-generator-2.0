@@ -3,6 +3,7 @@ import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import net from "net";
+import { sql } from "drizzle-orm";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
@@ -12,7 +13,7 @@ import { initScheduledReports } from "../scheduledReports";
 import { createLogger } from "../services/logger";
 import { requestTracingMiddleware, requestValidation } from "../services/requestTracing";
 import { cache } from "../services/cache";
-import { checkHealth as checkDbHealth } from "../db/connection";
+import { checkHealth as checkDbHealth, getDb } from "../db/connection";
 
 const log = createLogger("Server");
 
@@ -150,6 +151,20 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+async function ensureRealNameColumn(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.execute(sql`ALTER TABLE \`game_presenters\` ADD COLUMN \`realName\` varchar(255) NULL`);
+    log.info("Schema repair: added `realName` column to game_presenters");
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    // MySQL: "Duplicate column name" → already there, this is the steady-state.
+    if (/Duplicate column|already exists/i.test(msg)) return;
+    throw e;
+  }
+}
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
@@ -240,6 +255,16 @@ async function startServer() {
     log.info(`Modules loaded: DB (13 domain modules), Services (5 modules), Routes (16 routers)`);
     // Initialize scheduled monthly report generation
     initScheduledReports();
+    // Idempotent schema repair for `game_presenters.realName`.
+    // Manus's deploy doesn't run drizzle migrations automatically, so
+    // when PR #38 added the column to schema.ts but the prod DB still
+    // lacked it, every `SELECT` against `game_presenters` failed with
+    // "Unknown column 'realName' in field list" — the admin page broke.
+    // We add the column at boot if it's missing; if it's already there
+    // MySQL throws "Duplicate column" which we swallow.
+    ensureRealNameColumn().catch(err => {
+      log.warn("realName boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
   });
 
   // Graceful shutdown
