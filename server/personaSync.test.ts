@@ -23,6 +23,14 @@ vi.mock("./services/personaScraper", () => ({
 // Mock db calls
 vi.mock("./db", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./db")>();
+  const matchingGp = {
+    id: 10,
+    name: "Test Worker",
+    teamId: 1,
+    userId: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
   return {
     ...actual,
     getFmTeamById: vi.fn().mockResolvedValue({
@@ -37,14 +45,27 @@ vi.mock("./db", async (importOriginal) => {
     getTeamWithGPs: vi.fn().mockResolvedValue({
       id: 1,
       teamName: "Team Nu",
-      gamePresenters: [
-        { id: 10, name: "Test Worker", teamId: 1, userId: 1, createdAt: new Date(), updatedAt: new Date() },
-      ],
+      gamePresenters: [matchingGp],
     }),
-    getOrCreateAttendance: vi.fn().mockResolvedValue({ id: 100, gpId: 10, month: 4, year: 2026 }),
+    getOrCreateAttendance: vi.fn().mockResolvedValue({
+      id: 100, gpId: 10, month: 4, year: 2026,
+      sickLeaves: 0, missedDays: 0, extraShifts: 0,
+    }),
     updateAttendance: vi.fn().mockResolvedValue(undefined),
     getFmTeamsByUser: vi.fn().mockResolvedValue([]),
     getAllFmTeams: vi.fn().mockResolvedValue([]),
+    findBestMatchingGP: vi.fn().mockResolvedValue({
+      gamePresenter: matchingGp, similarity: 1, isExactMatch: true,
+    }),
+    findBestMatchingGPByUser: vi.fn().mockResolvedValue({
+      gamePresenter: matchingGp, similarity: 1, isExactMatch: true,
+    }),
+    // Persona sync log mocks — new in this PR
+    createSyncLog: vi.fn().mockResolvedValue({ id: 1, teamId: 1, status: "failed" }),
+    updateSyncLog: vi.fn().mockResolvedValue(undefined),
+    getLastSyncForTeam: vi.fn().mockResolvedValue(null),
+    getRecentSyncsForTeam: vi.fn().mockResolvedValue([]),
+    updateFmTeam: vi.fn().mockResolvedValue(undefined),
   };
 });
 

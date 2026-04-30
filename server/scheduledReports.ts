@@ -222,12 +222,42 @@ IMPORTANT: Be specific with names and numbers from the data.`,
       log.error("Failed to auto-generate goalsThisMonth", e instanceof Error ? e : new Error(String(e)));
     }
 
+    // Auto-generate FM Performance — assesses how the FM led the team
+    // this month (was a separate manual field; now LLM-drafted).
+    let fmPerformance: string | null = null;
+    try {
+      const fmPerfResponse = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: `You are writing the "Floor Manager Performance" paragraph for a monthly casino operations report. The FM is reading this about themselves — be honest but constructive.
+
+Focus on:
+1. Whether the FM kept the team's overall scores stable / rising / falling vs. the previous period (use the data)
+2. How well attendance issues were addressed
+3. Whether errors / negative attitude trends got worse or better
+4. Specific GPs who improved or regressed under their watch
+
+Write 3-4 concise sentences. Cite specific numbers. No bullet points. No fluff.`,
+          },
+          {
+            role: "user",
+            content: `Team performance data for ${monthName} ${reportYear}:\n${dataContext}`,
+          },
+        ],
+      });
+      const fmContent = fmPerfResponse.choices[0]?.message?.content;
+      fmPerformance = typeof fmContent === "string" ? fmContent : null;
+    } catch (e) {
+      log.error("Failed to auto-generate fmPerformance", e instanceof Error ? e : new Error(String(e)));
+    }
+
     // Create the report
     const report = await db.createReport({
       teamId,
       reportMonth,
       reportYear,
-      fmPerformance: null,
+      fmPerformance,
       goalsThisMonth,
       teamOverview,
       additionalComments: "Auto-generated monthly report",
@@ -237,10 +267,14 @@ IMPORTANT: Be specific with names and numbers from the data.`,
       userId: user.id,
     });
 
-    // Generate Excel and send email
-    // We import the function dynamically to avoid circular deps
-    const { generateExcelAndEmailForScheduled } = await import("./scheduledExcelHelper");
-    await generateExcelAndEmailForScheduled(user, report.id);
+    // Generate Excel and send email — share the rich workbook builder
+    // with the on-demand path so scheduled reports also get the
+    // Coaching Plans + Bonus Summary sheets.
+    const { generateExcelAndEmail } = await import("./routers/_shared");
+    await generateExcelAndEmail(
+      { user: { id: user.id, role: user.role, email: user.email, name: user.name } },
+      report.id,
+    );
 
     log.info(`[ScheduledReports] Successfully generated report for ${team.teamName} - ${monthName} ${reportYear}`);
     return { reportId: report.id, teamName: team.teamName };
@@ -270,7 +304,38 @@ async function runMonthlyReportGeneration() {
   log.info(`\n========== [ScheduledReports] Starting monthly report generation for ${monthName} ${reportYear} ==========`);
 
   try {
-    // Get all users with teams
+    // Step 1: refresh Persona attendance for every team that has a
+    // personaProjectId configured. We do this before generating
+    // reports so the numbers in the report reflect the latest sick
+    // leaves / missed days. Failures here are non-fatal — the report
+    // generation runs anyway with whatever data was already in the DB.
+    const allTeamsForSync = await db.getAllFmTeams();
+    const teamsToSync = allTeamsForSync.filter(t => (t as any).personaProjectId);
+    if (teamsToSync.length > 0) {
+      log.info(`[ScheduledReports] Pre-sync: syncing Persona for ${teamsToSync.length} team(s)`);
+      const { runPersonaSyncForTeam } = await import("./routers/personaSync");
+      for (const team of teamsToSync) {
+        try {
+          const result = await runPersonaSyncForTeam({
+            teamId: team.id,
+            month: reportMonth,
+            year: reportYear,
+            triggeredById: null,
+            source: "scheduled",
+          });
+          log.info(`[ScheduledReports] Persona sync ${result.status} for team ${team.teamName}: matched=${result.matched}, unmatched=${result.unmatched}`);
+        } catch (e) {
+          log.error(
+            `[ScheduledReports] Persona sync failed for team ${team.teamName} — continuing with stale data`,
+            e instanceof Error ? e : new Error(String(e)),
+          );
+        }
+      }
+    } else {
+      log.info("[ScheduledReports] Pre-sync: no teams with personaProjectId, skipping");
+    }
+
+    // Step 2: generate reports per user/team
     const allUsers = await db.getAllUsers();
     let totalGenerated = 0;
     let totalSkipped = 0;

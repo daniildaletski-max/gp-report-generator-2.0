@@ -351,3 +351,29 @@ export const actionItems = mysqlTable("action_items", {
 export type ActionItem = typeof actionItems.$inferSelect;
 export type InsertActionItem = typeof actionItems.$inferInsert;
 
+/**
+ * Persona Sync Log
+ *
+ * Records every Persona scrape attempt — manual or scheduled — so
+ * admins can see when each team last got fresh attendance data and
+ * why a sync failed if it did.
+ */
+export const personaSyncLogs = mysqlTable("persona_sync_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  teamId: int("teamId").notNull(),
+  triggeredById: int("triggeredById"), // null when triggered by cron
+  source: mysqlEnum("source", ["manual", "scheduled"]).default("manual").notNull(),
+  month: int("month").notNull(),
+  year: int("year").notNull(),
+  status: mysqlEnum("status", ["success", "partial", "failed"]).notNull(),
+  totalWorkers: int("totalWorkers").default(0).notNull(),
+  matched: int("matched").default(0).notNull(),
+  unmatched: int("unmatched").default(0).notNull(),
+  errorMessage: text("errorMessage"),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+});
+
+export type PersonaSyncLog = typeof personaSyncLogs.$inferSelect;
+export type InsertPersonaSyncLog = typeof personaSyncLogs.$inferInsert;
+

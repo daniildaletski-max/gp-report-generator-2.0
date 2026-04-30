@@ -27,6 +27,8 @@ vi.mock("./db", () => ({
   getGamePresentersByTeam: vi.fn().mockResolvedValue([]),
   getAttitudeScreenshotsForGP: vi.fn().mockResolvedValue([]),
   createReport: vi.fn().mockResolvedValue({ id: 1 }),
+  // Used by the new pre-report Persona sync step
+  getAllFmTeams: vi.fn().mockResolvedValue([]),
 }));
 
 // Mock the LLM module
