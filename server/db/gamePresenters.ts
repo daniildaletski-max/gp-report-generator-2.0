@@ -45,6 +45,61 @@ function normalizeName(name: string): string {
     .replace(/[–—]/g, '-');
 }
 
+/**
+ * Token-based name similarity that ignores word order.
+ *
+ * Why: HR systems (Persona) routinely emit `Lastname Firstname`
+ * while we store `Firstname Lastname`. Pure Levenshtein on the
+ * full strings rates "Olha Kyrychenko" vs "Kyrychenko Olha" at
+ * roughly 0.5 — under the 0.7 default threshold — so every Persona
+ * sync ended up at 0/138 matched even though every name was actually
+ * present in our DB. Token comparison sidesteps the ordering problem.
+ *
+ * Strategy:
+ *   1. Lower-case + split on whitespace and hyphens.
+ *   2. Strip diacritics so "Köhler" matches "Kohler".
+ *   3. For each token in the shorter list, take the best Levenshtein
+ *      similarity against any token in the longer list.
+ *   4. Average those bests.
+ *
+ * Returns 1.0 when token sets are equal (any order); ~0.85+ when
+ * one part differs slightly (typo) and the other matches exactly.
+ */
+function stripDiacritics(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+function tokenize(name: string): string[] {
+  return stripDiacritics(name)
+    .toLowerCase()
+    .split(/[\s\-]+/)
+    .filter(t => t.length >= 2);
+}
+
+function tokenSimilarity(a: string, b: string): number {
+  const tokensA = tokenize(a);
+  const tokensB = tokenize(b);
+  if (tokensA.length === 0 || tokensB.length === 0) return 0;
+  // Identical token set (any order) → exact match.
+  const setA = new Set(tokensA);
+  const setB = new Set(tokensB);
+  if (setA.size === setB.size && Array.from(setA).every(t => setB.has(t))) return 1;
+
+  // Otherwise: average best-match similarity for each token in the
+  // SMALLER set against any token in the larger one.
+  const [shorter, longer] = tokensA.length <= tokensB.length ? [tokensA, tokensB] : [tokensB, tokensA];
+  let totalBest = 0;
+  for (const t of shorter) {
+    let best = 0;
+    for (const u of longer) {
+      const sim = u === t ? 1 : 1 - levenshteinDistance(t, u) / Math.max(t.length, u.length);
+      if (sim > best) best = sim;
+    }
+    totalBest += best;
+  }
+  return totalBest / shorter.length;
+}
+
 export interface FuzzyMatchResult {
   gamePresenter: GamePresenter;
   similarity: number;
@@ -62,10 +117,12 @@ export async function findBestMatchingGP(name: string, threshold: number = 0.7):
   const normalizedInput = normalizeName(name);
   let bestMatch: FuzzyMatchResult | null = null;
   for (const gp of allGPs) {
-    // Try `realName` (legal name from HR/Persona) first when set, then
-    // fall back to `name` (dealer pseudonym). Without this, Persona's
-    // "Aleksandra Borovkova" was being fuzzy-matched against "Clover"
-    // and missing every GP. Both columns get the same scoring path.
+    // Compare the input against both `realName` (HR / Persona legal
+    // name) when set and `name` (dealer-floor name). Whichever scores
+    // higher wins. Both go through the new token-based scorer that
+    // ignores word order — Persona returns "Lastname Firstname"
+    // while we usually have "Firstname Lastname", and pure Levenshtein
+    // on the full strings was bombing the comparison.
     const candidates: string[] = [];
     if (gp.realName && gp.realName.trim()) candidates.push(gp.realName);
     candidates.push(gp.name);
@@ -75,11 +132,16 @@ export async function findBestMatchingGP(name: string, threshold: number = 0.7):
       if (normalizedCandidate === normalizedInput) {
         return { gamePresenter: gp, similarity: 1, isExactMatch: true };
       }
-      const similarity = calculateSimilarity(normalizedInput, normalizedCandidate);
+      const fullStringSim = calculateSimilarity(normalizedInput, normalizedCandidate);
+      const tokenSim = tokenSimilarity(normalizedInput, normalizedCandidate);
       const containsMatch = normalizedCandidate.includes(normalizedInput) || normalizedInput.includes(normalizedCandidate);
-      const adjustedSimilarity = containsMatch ? Math.max(similarity, 0.85) : similarity;
-      if (adjustedSimilarity >= threshold && (!bestMatch || adjustedSimilarity > bestMatch.similarity)) {
-        bestMatch = { gamePresenter: gp, similarity: adjustedSimilarity, isExactMatch: false };
+      const similarity = Math.max(fullStringSim, tokenSim, containsMatch ? 0.85 : 0);
+      if (tokenSim >= 0.99) {
+        // Token sets equal → treat as exact match even if word order differs.
+        return { gamePresenter: gp, similarity: 1, isExactMatch: true };
+      }
+      if (similarity >= threshold && (!bestMatch || similarity > bestMatch.similarity)) {
+        bestMatch = { gamePresenter: gp, similarity, isExactMatch: false };
       }
     }
   }
@@ -132,15 +194,19 @@ export async function findBestMatchingGPByUser(name: string, threshold: number =
   const normalizedInput = normalizeName(name);
   let bestMatch: FuzzyMatchResult | null = null;
   for (const gp of allGPs) {
-    // Same realName-then-name fallback as the global matcher.
+    // Same realName-then-name fallback as the global matcher, with the
+    // token-based scorer added for word-order-independence.
     const candidates: string[] = [];
     if (gp.realName && gp.realName.trim()) candidates.push(gp.realName);
     candidates.push(gp.name);
     for (const candidate of candidates) {
       const normalizedCandidate = normalizeName(candidate);
-      const similarity = calculateSimilarity(normalizedInput, normalizedCandidate);
       const isExactMatch = normalizedInput === normalizedCandidate;
       if (isExactMatch) return { gamePresenter: gp, similarity: 1.0, isExactMatch: true };
+      const fullStringSim = calculateSimilarity(normalizedInput, normalizedCandidate);
+      const tokenSim = tokenSimilarity(normalizedInput, normalizedCandidate);
+      const similarity = Math.max(fullStringSim, tokenSim);
+      if (tokenSim >= 0.99) return { gamePresenter: gp, similarity: 1, isExactMatch: true };
       if (similarity >= threshold && (!bestMatch || similarity > bestMatch.similarity)) {
         bestMatch = { gamePresenter: gp, similarity, isExactMatch: false };
       }
