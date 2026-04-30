@@ -3,7 +3,8 @@
  * Logs into persona.fujitsu.ee and extracts attendance data (sick leaves, missed days, extra shifts)
  * for a given month/year and project ID.
  */
-import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteer, { Browser, Page } from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 import { existsSync } from 'node:fs';
 
 const PERSONA_URL = 'https://persona.fujitsu.ee/Persona/Avaleht/Login_EmbInt.aspx?ReturnUrl=%2fPersona';
@@ -29,23 +30,28 @@ export interface PersonaSyncResult {
 let browserInstance: Browser | null = null;
 
 /**
- * Locate a Chromium/Chrome binary, falling back to puppeteer's bundled
- * download. Returns `undefined` when no system path is found and
- * puppeteer should pick its own bundle.
+ * Resolve the Chromium executable path.
  *
- * History: production used to fail every Persona sync with "Browser
- * was not found at the configured executablePath (/usr/bin/chromium)"
- * because that path is the Debian apt path and the deploy image
- * doesn't ship it. We now use the full `puppeteer` package (vs
- * `puppeteer-core`) which ships its own Chromium, and an explicit
- * executablePath is only used when an operator wants to override.
+ * History:
+ *   v1 — hardcoded `/usr/bin/chromium`. Failed: Manus image has no apt chrome.
+ *   v2 — fallback list of system paths. Same failure.
+ *   v3 — `puppeteer` (full) bundled chromium download. The download succeeded
+ *        but the binary couldn't load `libglib-2.0.so.0` and friends — Manus's
+ *        minimal image lacks the GUI libs Chrome links against at runtime.
+ *   v4 (now) — `@sparticuz/chromium`: a self-contained Chromium build for
+ *        serverless / distroless Linux with all dependencies bundled. Same
+ *        package AWS Lambda uses; the standard fix for the
+ *        "libglib-2.0.so.0: cannot open shared object file" Puppeteer error.
+ *        An optional env-var override is preserved for laptops / bare-metal
+ *        servers that DO have a system chrome.
  *
  * Resolution order:
  *   1. PUPPETEER_EXECUTABLE_PATH / CHROMIUM_PATH (operator override)
  *   2. Common system paths
- *   3. undefined → puppeteer's bundled Chromium (the new safe default)
+ *   3. `chromium.executablePath()` from @sparticuz/chromium (the fallback
+ *      that actually works on the deploy image)
  */
-function resolveChromiumExecutable(): string | undefined {
+async function resolveChromiumExecutable(): Promise<string> {
   const fromEnv = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROMIUM_PATH;
   if (fromEnv && existsSync(fromEnv)) return fromEnv;
 
@@ -63,59 +69,29 @@ function resolveChromiumExecutable(): string | undefined {
   for (const path of candidates) {
     if (existsSync(path)) return path;
   }
-  return undefined;
-}
 
-/**
- * Lazy-install Chromium the first time Persona sync runs.
- *
- * History: an earlier attempt added `npx puppeteer browsers install
- * chrome` as a project `postinstall` hook so the binary would land
- * during `pnpm install`. That broke Manus's deploy pipeline — the
- * download blocked the install step and deploys never reached
- * "ready". We've moved the same call to runtime, behind the first
- * Persona sync attempt, so a slow/failing chromium download can never
- * keep the rest of the app from shipping.
- */
-let chromiumInstallPromise: Promise<void> | null = null;
-async function ensureChromiumInstalled(): Promise<void> {
-  if (resolveChromiumExecutable()) return; // system or env already provides one
-  if (chromiumInstallPromise) return chromiumInstallPromise;
-  chromiumInstallPromise = (async () => {
-    const { execFile } = await import('node:child_process');
-    const { promisify } = await import('node:util');
-    const run = promisify(execFile);
-    try {
-      await run('npx', ['--yes', 'puppeteer', 'browsers', 'install', 'chrome'], {
-        timeout: 5 * 60_000, // 5 minute cap
-      });
-    } catch (e) {
-      chromiumInstallPromise = null; // allow retry on next sync
-      throw new Error(
-        `Could not download Chromium for Persona sync: ${(e as Error).message}. Set PUPPETEER_EXECUTABLE_PATH to a system binary if outbound network is restricted.`,
-      );
-    }
-  })();
-  return chromiumInstallPromise;
+  // No env / system binary — use the bundled serverless build.
+  return await chromium.executablePath();
 }
 
 async function getBrowser(): Promise<Browser> {
   if (browserInstance && browserInstance.connected) {
     return browserInstance;
   }
-  await ensureChromiumInstalled();
-  const executablePath = resolveChromiumExecutable();
+  const executablePath = await resolveChromiumExecutable();
+  // `chromium.args` includes the flags @sparticuz/chromium recommends for
+  // running in a sandboxed/distroless container (font config, GL flags,
+  // shared-memory tuning). Merge them with our domain-specific flags.
   browserInstance = await puppeteer.launch({
-    // Pass executablePath only when we found one explicitly; otherwise let
-    // puppeteer find its bundled Chromium.
-    ...(executablePath ? { executablePath } : {}),
-    headless: true,
+    executablePath,
     args: [
+      ...chromium.args,
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
     ],
+    headless: true,
   });
   return browserInstance;
 }
