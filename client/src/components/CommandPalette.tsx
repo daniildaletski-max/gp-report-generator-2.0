@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/command";
 import {
   LayoutDashboard, FileSpreadsheet, FileCheck, Upload, CalendarCheck,
-  Shield, Users, Trophy, Target, BarChart3, AlertTriangle, RefreshCw,
+  Shield, Users, Target, BarChart3, AlertTriangle, RefreshCw,
   User, Sparkles,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -28,7 +28,6 @@ const NAV_ITEMS = [
 ];
 
 const ADMIN_QUICK_TABS = [
-  { label: "Bonuses", path: "/admin?tab=bonus", icon: Trophy },
   { label: "Coaching plans", path: "/admin?tab=action-items", icon: Target },
   { label: "GP stats", path: "/admin?tab=stats", icon: BarChart3 },
   { label: "Errors", path: "/admin?tab=errors", icon: AlertTriangle },

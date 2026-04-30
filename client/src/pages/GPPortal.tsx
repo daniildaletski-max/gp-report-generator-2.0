@@ -208,134 +208,6 @@ function MonthSelector({ selectedMonth, selectedYear, onChange }: {
   );
 }
 
-const BONUS_EUR = new Intl.NumberFormat("en-EU", {
-  style: "currency",
-  currency: "EUR",
-  maximumFractionDigits: 0,
-});
-
-const BONUS_NUM = new Intl.NumberFormat("en-US");
-
-interface BonusStandingProps {
-  bonus: {
-    bonusLevel: "level1" | "level2" | "ineligible";
-    bonusAmount: number;
-    bonusRate: number;
-    achievedGGs: number;
-    minimumGGsRequired: number;
-    totalGames: number;
-    errorCount: number;
-    hoursWorked: number;
-    isEligible: boolean;
-    disqualifyingFactors: string[];
-    gapToNextLevel: { targetLevel: "level1" | "level2"; gapGGs: number; estimatedGamesNeeded: number } | null;
-  };
-}
-
-function BonusStandingCard({ bonus }: BonusStandingProps) {
-  const tone =
-    bonus.bonusLevel === "level2" ? "from-amber-50 to-yellow-50 border-amber-200" :
-    bonus.bonusLevel === "level1" ? "from-violet-50 to-fuchsia-50 border-violet-200" :
-    "from-slate-50 to-slate-100 border-slate-200";
-
-  const headerLabel =
-    bonus.bonusLevel === "level2" ? "Level 2 — €2.50/h" :
-    bonus.bonusLevel === "level1" ? "Level 1 — €1.50/h" :
-    "Not qualifying yet this month";
-
-  const HeaderIcon =
-    bonus.bonusLevel === "level2" ? Crown :
-    bonus.bonusLevel === "level1" ? Medal :
-    Target;
-
-  // Progress toward next level (or current level if ineligible).
-  const targetGGs = bonus.bonusLevel === "level2"
-    ? bonus.minimumGGsRequired
-    : (bonus.gapToNextLevel?.targetLevel === "level2" ? 5000 : 2500);
-  const progressPct = Math.min(100, Math.round((bonus.achievedGGs / Math.max(1, targetGGs)) * 100));
-
-  return (
-    <Card className={`bg-gradient-to-br ${tone} border shadow-sm`}>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-slate-800 text-base flex items-center gap-2">
-          <HeaderIcon className="h-5 w-5 text-amber-600" />
-          Bonus Standing — {MONTH_NAMES[new Date().getMonth()]}
-        </CardTitle>
-        <CardDescription className="text-slate-600 text-xs">{headerLabel}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-baseline gap-3 flex-wrap">
-          {bonus.isEligible ? (
-            <>
-              <span className="text-3xl sm:text-4xl font-bold text-slate-900">
-                {BONUS_EUR.format(bonus.bonusAmount)}
-              </span>
-              <span className="text-sm text-slate-500">
-                projected for {bonus.hoursWorked}h × €{bonus.bonusRate.toFixed(2)}/h
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="text-2xl font-semibold text-slate-700">No bonus yet</span>
-              {bonus.gapToNextLevel && (
-                <span className="text-sm text-slate-600">
-                  {BONUS_NUM.format(bonus.gapToNextLevel.gapGGs)} GGs short of{" "}
-                  {bonus.gapToNextLevel.targetLevel === "level2" ? "Level 2 (€2.50/h)" : "Level 1 (€1.50/h)"}
-                </span>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Progress bar to the next milestone */}
-        <div>
-          <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
-            <span>{BONUS_NUM.format(bonus.achievedGGs)} GGs</span>
-            <span>{BONUS_NUM.format(targetGGs)} for {bonus.bonusLevel === "level2" ? "Level 2" : bonus.gapToNextLevel?.targetLevel === "level2" ? "Level 2" : "Level 1"}</span>
-          </div>
-          <div className="h-2 bg-white/60 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-700 ${
-                bonus.bonusLevel === "level2" ? "bg-gradient-to-r from-amber-400 to-amber-500" :
-                bonus.bonusLevel === "level1" ? "bg-gradient-to-r from-violet-400 to-violet-500" :
-                "bg-gradient-to-r from-slate-300 to-slate-400"
-              }`}
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Inputs — so the GP understands the math */}
-        <div className="grid grid-cols-3 gap-3 text-center">
-          <div className="p-2 rounded-lg bg-white/60 border border-white">
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Games</p>
-            <p className="text-lg font-semibold text-slate-900">{BONUS_NUM.format(bonus.totalGames)}</p>
-          </div>
-          <div className="p-2 rounded-lg bg-white/60 border border-white">
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Errors</p>
-            <p className="text-lg font-semibold text-slate-900">{bonus.errorCount}</p>
-            {bonus.errorCount > 0 && <p className="text-[10px] text-emerald-600">first one is free</p>}
-          </div>
-          <div className="p-2 rounded-lg bg-white/60 border border-white">
-            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Hours</p>
-            <p className="text-lg font-semibold text-slate-900">{bonus.hoursWorked}</p>
-          </div>
-        </div>
-
-        {bonus.disqualifyingFactors.length > 0 && (
-          <div className="flex items-start gap-2 p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700">
-            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium">Bonus blocked</p>
-              <p className="text-rose-600 mt-0.5">{bonus.disqualifyingFactors.join(" · ")}</p>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 const PLAN_CATEGORY_TONE: Record<string, string> = {
   appearance: "border-emerald-200 bg-emerald-50",
   performance: "border-violet-200 bg-violet-50",
@@ -406,12 +278,6 @@ export default function GPPortal() {
     { enabled: !!token, refetchInterval: 30000, refetchOnWindowFocus: true }
   );
 
-  // Fetch the GP's monthly bonus standing — eligible level, payout, gap to next level.
-  const { data: bonus } = trpc.bonus.forPortalToken.useQuery(
-    { token: token || "", month: now.getMonth() + 1, year: now.getFullYear() },
-    { enabled: !!token, refetchInterval: 60_000 },
-  );
-
   // Fetch coaching plan items — what the FM is asking the GP to work on.
   const { data: planItems } = trpc.actionItems.listForPortalToken.useQuery(
     { token: token || "" },
@@ -434,6 +300,87 @@ export default function GPPortal() {
       return newSet;
     });
   };
+
+  /**
+   * Month-over-month comparison: did the GP improve in each metric?
+   * Uses monthlyHistory which has 6 months oldest-first; compare last
+   * two months that actually have data.
+   */
+  const improvement = useMemo(() => {
+    if (!data?.monthlyHistory || data.monthlyHistory.length === 0) return null;
+    const withData = (data.monthlyHistory as any[]).filter(m => Number(m.evalCount || 0) > 0);
+    if (withData.length < 2) return null;
+    const last = withData[withData.length - 1];
+    const prev = withData[withData.length - 2];
+    const delta = (cur: number, p: number) => Number((cur - p).toFixed(1));
+    return {
+      total: delta(Number(last.avgTotal), Number(prev.avgTotal)),
+      appearance: delta(Number(last.avgAppearance), Number(prev.avgAppearance)),
+      performance: delta(Number(last.avgPerformance), Number(prev.avgPerformance)),
+      previousLabel: prev.label as string,
+    };
+  }, [data]);
+
+  /**
+   * Personal-best score (highest single evaluation total) from history.
+   * Privacy-friendly recognition: compares the GP only to themselves.
+   */
+  const personalBest = useMemo(() => {
+    if (!data?.evaluations || data.evaluations.length === 0) return null;
+    let best = 0;
+    for (const e of data.evaluations as any[]) {
+      const score = Number(e.totalScore || 0);
+      if (score > best) best = score;
+    }
+    return best > 0 ? best : null;
+  }, [data]);
+
+  /**
+   * Focus areas: which evaluation categories have the lowest average and
+   * could move the most. Returns the bottom-2 with one concrete tip each.
+   */
+  const focusAreas = useMemo(() => {
+    if (!data?.evaluations || data.evaluations.length === 0) return [];
+    const evs = data.evaluations as any[];
+    const totals = {
+      hair: 0, makeup: 0, outfit: 0, posture: 0,
+      dealingStyle: 0, gamePerformance: 0,
+    };
+    const counts = { hair: 0, makeup: 0, outfit: 0, posture: 0, dealingStyle: 0, gamePerformance: 0 };
+    for (const e of evs) {
+      if (e.hairScore != null) { totals.hair += Number(e.hairScore); counts.hair++; }
+      if (e.makeupScore != null) { totals.makeup += Number(e.makeupScore); counts.makeup++; }
+      if (e.outfitScore != null) { totals.outfit += Number(e.outfitScore); counts.outfit++; }
+      if (e.postureScore != null) { totals.posture += Number(e.postureScore); counts.posture++; }
+      if (e.dealingStyleScore != null) { totals.dealingStyle += Number(e.dealingStyleScore); counts.dealingStyle++; }
+      if (e.gamePerformanceScore != null) { totals.gamePerformance += Number(e.gamePerformanceScore); counts.gamePerformance++; }
+    }
+    type Cat = "hair" | "makeup" | "outfit" | "posture" | "dealingStyle" | "gamePerformance";
+    const meta: Record<Cat, { label: string; max: number; tip: string }> = {
+      hair: { label: "Hair", max: 3, tip: "Tidy ponytail or smooth styling holds up under studio lights." },
+      makeup: { label: "Makeup", max: 3, tip: "Refresh between shifts — even coverage reads better on camera." },
+      outfit: { label: "Outfit", max: 3, tip: "Check for wrinkles and ensure team uniform is fully buttoned." },
+      posture: { label: "Posture", max: 3, tip: "Shoulders back, weight even — sit/stand tall the full session." },
+      dealingStyle: { label: "Dealing Style", max: 5, tip: "Slow down on splits and pays — clear hand movements > speed." },
+      gamePerformance: { label: "Game Performance", max: 5, tip: "Announce results and outcomes clearly; engage with the chat." },
+    };
+    const cats: Cat[] = ["hair", "makeup", "outfit", "posture", "dealingStyle", "gamePerformance"];
+    const ranked = cats
+      .filter(c => counts[c] > 0)
+      .map(c => ({
+        key: c,
+        label: meta[c].label,
+        avg: totals[c] / counts[c],
+        max: meta[c].max,
+        pct: (totals[c] / counts[c]) / meta[c].max,
+        tip: meta[c].tip,
+      }))
+      .sort((a, b) => a.pct - b.pct)
+      .slice(0, 2);
+    // Only show as "focus" if scoring under 80% on average — otherwise
+    // there's nothing meaningful to coach.
+    return ranked.filter(r => r.pct < 0.8);
+  }, [data]);
 
   const achievements = useMemo(() => {
     if (!data) return [];
@@ -574,9 +521,97 @@ export default function GPPortal() {
           </div>
         </section>
 
-        {bonus && <BonusStandingCard bonus={bonus} />}
-
         {planItems && planItems.length > 0 && <ActionPlanCard items={planItems} />}
+
+        {/* Highlight cards: improvement, personal best, focus areas */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {improvement && (
+            <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-200 shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 rounded-xl bg-emerald-100 border border-emerald-200">
+                    {improvement.total >= 0 ? (
+                      <TrendingUp className="h-5 w-5 text-emerald-600" />
+                    ) : (
+                      <TrendingDown className="h-5 w-5 text-rose-600" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase tracking-wider">Vs {improvement.previousLabel}</p>
+                    <p className={`text-2xl font-bold ${improvement.total >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                      {improvement.total >= 0 ? "+" : ""}{improvement.total}
+                      <span className="text-sm text-slate-500 font-normal"> pts</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="text-xs text-slate-600 space-y-0.5">
+                  <p>
+                    Appearance{" "}
+                    <span className={improvement.appearance >= 0 ? "text-emerald-600 font-semibold" : "text-rose-600 font-semibold"}>
+                      {improvement.appearance >= 0 ? "+" : ""}{improvement.appearance}
+                    </span>
+                  </p>
+                  <p>
+                    Game performance{" "}
+                    <span className={improvement.performance >= 0 ? "text-emerald-600 font-semibold" : "text-rose-600 font-semibold"}>
+                      {improvement.performance >= 0 ? "+" : ""}{improvement.performance}
+                    </span>
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {personalBest !== null && (
+            <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200 shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="p-2 rounded-xl bg-amber-100 border border-amber-200">
+                    <Trophy className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase tracking-wider">Personal best</p>
+                    <p className="text-2xl font-bold text-amber-700">
+                      {personalBest}<span className="text-sm text-slate-500 font-normal">/{MAX_TOTAL_SCORE}</span>
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 mt-2">
+                  Your highest evaluation score so far. Keep stacking those wins.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {focusAreas.length > 0 && (
+            <Card className="bg-white border-violet-200 shadow-sm sm:col-span-2 lg:col-span-1">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-2 rounded-xl bg-violet-100 border border-violet-200">
+                    <Target className="h-5 w-5 text-violet-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase tracking-wider">Focus next</p>
+                    <p className="text-sm font-semibold text-slate-800">Where you can move the needle</p>
+                  </div>
+                </div>
+                <div className="space-y-2.5">
+                  {focusAreas.map(f => (
+                    <div key={f.key} className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-slate-800">{f.label}</span>
+                        <span className="text-xs text-slate-500">
+                          {f.avg.toFixed(1)}/{f.max}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-relaxed">{f.tip}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
 
         {/* Monthly Stats & Achievements */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -637,9 +672,11 @@ export default function GPPortal() {
                         }`} />
                         <div>
                           <p className="text-sm font-medium text-slate-800">
-                            {eval_.evaluationDate ? format(new Date(eval_.evaluationDate), "MMM d, yyyy") : "Unknown"}
+                            {eval_.game || 'Game Session'}
                           </p>
-                          <p className="text-xs text-slate-500">{eval_.game || 'Game Session'}</p>
+                          {eval_.evaluatorName && (
+                            <p className="text-xs text-slate-500">by {eval_.evaluatorName}</p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -803,75 +840,6 @@ export default function GPPortal() {
                 </div>
               ))}
             </div>
-          </section>
-        )}
-
-        {/* Bonus Status */}
-        {data.monthlyStats?.current && (
-          <section>
-            <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-slate-800">
-              <Gift className="h-5 w-5 text-pink-500" />
-              Bonus Status
-            </h2>
-            
-            <Card className={`overflow-hidden shadow-sm ${
-              data.monthlyStats.current.bonus.eligible 
-                ? 'bg-gradient-to-br from-green-50 via-emerald-50 to-amber-50 border-green-200' 
-                : 'bg-white border-slate-200'
-            }`}>
-              <CardContent className="p-6 sm:p-8">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-4 rounded-2xl ${data.monthlyStats.current.bonus.eligible ? 'bg-green-100' : 'bg-slate-100'}`}>
-                        <Award className={`h-10 w-10 ${data.monthlyStats.current.bonus.eligible ? 'text-green-600' : 'text-slate-400'}`} />
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold text-slate-900">
-                          {data.monthlyStats.current.bonus.eligible 
-                            ? `Level ${data.monthlyStats.current.bonus.level} Bonus!` 
-                            : 'Not Yet Eligible'}
-                        </h3>
-                        <p className="text-slate-500 text-sm">{data.monthlyStats.current.bonus.reason}</p>
-                      </div>
-                    </div>
-                    {data.monthlyStats.current.bonus.eligible && data.monthlyStats.current.bonus.rate && (
-                      <div className="p-4 bg-white rounded-xl border border-green-200">
-                        <p className="text-sm text-slate-500">Bonus Rate</p>
-                        <p className="text-3xl font-bold text-green-600">+€{data.monthlyStats.current.bonus.rate.toFixed(2)}/hr</p>
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-3">
-                    <div className="p-4 bg-white rounded-xl border border-slate-200">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm text-slate-500">Good Games (GGs)</span>
-                        <span className="text-2xl font-bold text-amber-600">{data.monthlyStats.current.bonus.ggs?.toLocaleString()}</span>
-                      </div>
-                      <Progress 
-                        value={Math.min((data.monthlyStats.current.bonus.ggs / 5000) * 100, 100)} 
-                        className="h-2 bg-slate-100" 
-                      />
-                      <div className="flex justify-between mt-2 text-xs text-slate-400">
-                        <span>0</span>
-                        <span className="text-amber-600">2,500 (L1)</span>
-                        <span className="text-green-600">5,000 (L2)</span>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 bg-white rounded-xl border border-slate-200 text-center">
-                        <p className="text-xs text-slate-500">Total Games</p>
-                        <p className="text-xl font-bold text-slate-900">{(data.monthlyStats.current.totalGames || 0).toLocaleString()}</p>
-                      </div>
-                      <div className="p-3 bg-white rounded-xl border border-slate-200 text-center">
-                        <p className="text-xs text-slate-500">Mistakes</p>
-                        <p className="text-xl font-bold text-slate-900">{data.monthlyStats.current.mistakes || 0}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </section>
         )}
 
@@ -1054,9 +1022,11 @@ export default function GPPortal() {
                                       </div>
                                       <div>
                                         <p className="font-semibold text-slate-800">
-                                          {evaluation.evaluationDate ? format(new Date(evaluation.evaluationDate), "MMMM d, yyyy") : "Unknown Date"}
+                                          {evaluation.game || 'Game Session'}
                                         </p>
-                                        <p className="text-sm text-slate-500">{evaluation.game || 'Game Session'}</p>
+                                        {evaluation.evaluatorName && (
+                                          <p className="text-sm text-slate-500">Evaluator: {evaluation.evaluatorName}</p>
+                                        )}
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-3">

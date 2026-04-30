@@ -2,7 +2,6 @@ import { router, publicProcedure, protectedProcedure, adminProcedure } from "../
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
-import { getBonusForGp } from "../services/bonusService";
 
 export const gamePresenterRouter = router({
   // List all GPs (admin) or user's GPs (non-admin)
@@ -377,7 +376,6 @@ export const gamePresenterRouter = router({
    * drawer in a single round-trip:
    *   - identity (name, team, attitude/mistakes for current month)
    *   - 6-month performance trend (from getGpMonthlyHistory)
-   *   - 6-month bonus history (level + payout per month)
    *   - last 10 evaluations
    *   - last N errors and attitude entries from the last `monthsBack` months
    */
@@ -411,7 +409,6 @@ export const gamePresenterRouter = router({
         currentStats,
         currentAttendance,
         trend,
-        bonusHistory,
         recentEvaluations,
         errorsByMonth,
         attitudeByMonth,
@@ -419,19 +416,6 @@ export const gamePresenterRouter = router({
         db.getMonthlyGpStats(gp.id, currentMonth, currentYear),
         db.getOrCreateAttendance(gp.id, currentMonth, currentYear),
         db.getGpMonthlyHistory(gp.id, input.monthsBack),
-        Promise.all(months.map(async ({ month, year }) => {
-          const r = await getBonusForGp(gp.id, month, year);
-          return r ? {
-            month, year,
-            label: `${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][month-1]} ${year}`,
-            bonusLevel: r.bonusLevel,
-            bonusAmount: r.bonusAmount,
-            achievedGGs: r.achievedGGs,
-            totalGames: r.totalGames,
-            errorCount: r.errorCount,
-            hoursWorked: r.hoursWorked,
-          } : null;
-        })),
         // 10 most recent evaluations across all time
         db.getEvaluationsByGP(gp.id).then(rows => rows.slice(0, 10)),
         // Last N months of error screenshots
@@ -475,7 +459,6 @@ export const gamePresenterRouter = router({
           },
         },
         trend,
-        bonusHistory: bonusHistory.filter((b): b is NonNullable<typeof b> => b !== null),
         recentEvaluations,
         recentErrors,
         recentAttitude,

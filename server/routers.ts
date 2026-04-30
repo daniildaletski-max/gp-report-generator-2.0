@@ -26,7 +26,6 @@ import { attitudeScreenshotRouter } from "./routers/attitudeScreenshot";
 import { attendanceRouter } from "./routers/attendance";
 import { smartUploadRouter } from "./routers/smartUpload";
 import { personaSyncRouter } from "./routers/personaSync";
-import { bonusRouter } from "./routers/bonus";
 import { actionItemsRouter } from "./routers/actionItems";
 import { searchRouter } from "./routers/search";
 
@@ -48,7 +47,6 @@ export const appRouter = router({
   attendance: attendanceRouter,
   smartUpload: smartUploadRouter,
   personaSync: personaSyncRouter,
-  bonus: bonusRouter,
   actionItems: actionItemsRouter,
   search: searchRouter,
 });

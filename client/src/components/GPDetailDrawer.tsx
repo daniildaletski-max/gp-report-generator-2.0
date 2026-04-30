@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  User, Trophy, Coins, Target, AlertTriangle, ThumbsUp, ThumbsDown, FileCheck,
-  Calendar, TrendingUp, TrendingDown, Star, Clock, AlertCircle, Award, Minus,
+  User, Target, AlertTriangle, ThumbsUp, ThumbsDown, FileCheck,
+  Calendar, TrendingUp,
 } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { format } from "date-fns";
@@ -17,9 +17,6 @@ import type { AppRouter } from "../../../server/routers";
 import { ActionItemsPanel } from "./ActionItemsPanel";
 
 type Profile = inferRouterOutputs<AppRouter>["gamePresenter"]["profile"];
-
-const FORMATTER_EUR = new Intl.NumberFormat("en-EU", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
-const FORMATTER_NUM = new Intl.NumberFormat("en-US");
 
 interface GPDetailDrawerProps {
   gpId: number | null;
@@ -69,7 +66,7 @@ function ProfileSkeleton() {
 }
 
 function ProfileContent({ data }: { data: Profile }) {
-  const { gp, currentMonth, trend, bonusHistory, recentEvaluations, recentErrors, recentAttitude } = data;
+  const { gp, currentMonth, trend, recentEvaluations, recentErrors, recentAttitude } = data;
 
   const trendChartData = useMemo(() => trend.map(m => ({
     month: m.label,
@@ -78,8 +75,6 @@ function ProfileContent({ data }: { data: Profile }) {
     Performance: Number(m.avgPerformance) || 0,
   })), [trend]);
 
-  const totalBonusYTD = bonusHistory.reduce((sum, b) => sum + b.bonusAmount, 0);
-  const currentBonus = bonusHistory[bonusHistory.length - 1];
   const lastEval = recentEvaluations[0];
 
   return (
@@ -104,7 +99,7 @@ function ProfileContent({ data }: { data: Profile }) {
       </SheetHeader>
 
       <Tabs defaultValue="overview" className="flex-1 flex flex-col">
-        <TabsList className="mx-6 mt-4 grid grid-cols-6">
+        <TabsList className="mx-6 mt-4 grid grid-cols-5">
           <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
           <TabsTrigger value="plan" className="text-xs">Plan</TabsTrigger>
           <TabsTrigger value="evals" className="text-xs">
@@ -116,7 +111,6 @@ function ProfileContent({ data }: { data: Profile }) {
           <TabsTrigger value="attitude" className="text-xs">
             Attitude {recentAttitude.length > 0 && <span className="ml-1 text-muted-foreground">({recentAttitude.length})</span>}
           </TabsTrigger>
-          <TabsTrigger value="bonus" className="text-xs">Bonus</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="px-6 py-4 space-y-4 mt-0">
@@ -135,10 +129,10 @@ function ProfileContent({ data }: { data: Profile }) {
               accent={currentMonth.mistakes > 3 ? "rose" : "muted"}
             />
             <HeadlineCard
-              icon={<Coins className="h-4 w-4" />}
-              label="This month bonus"
-              value={currentBonus && currentBonus.bonusAmount > 0 ? FORMATTER_EUR.format(currentBonus.bonusAmount) : "—"}
-              accent={currentBonus?.bonusLevel === "level2" ? "amber" : currentBonus?.bonusLevel === "level1" ? "primary" : "muted"}
+              icon={<ThumbsUp className="h-4 w-4" />}
+              label="Attitude"
+              value={currentMonth.attitude !== null ? (currentMonth.attitude > 0 ? `+${currentMonth.attitude}` : String(currentMonth.attitude)) : "—"}
+              accent={(currentMonth.attitude ?? 0) >= 0 ? "primary" : "rose"}
             />
           </div>
 
@@ -182,21 +176,6 @@ function ProfileContent({ data }: { data: Profile }) {
             </CardContent>
           </Card>
 
-          {/* Year-to-date bonus */}
-          {totalBonusYTD > 0 && (
-            <Card>
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center">
-                  <Trophy className="h-5 w-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Total bonuses (last 6 months)</p>
-                  <p className="text-xl font-bold">{FORMATTER_EUR.format(totalBonusYTD)}</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {lastEval?.evaluationDate && (
             <p className="text-xs text-muted-foreground text-center">
               Last evaluation: {format(new Date(lastEval.evaluationDate), "PPP")}
@@ -234,16 +213,6 @@ function ProfileContent({ data }: { data: Profile }) {
           ) : (
             <div className="space-y-2">
               {recentAttitude.map(att => <AttitudeRow key={att.id} att={att} />)}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="bonus" className="px-6 py-4 mt-0">
-          {bonusHistory.length === 0 ? (
-            <EmptyState icon={<Coins className="h-8 w-8" />} text="No bonus history" />
-          ) : (
-            <div className="space-y-2">
-              {[...bonusHistory].reverse().map(b => <BonusHistoryRow key={`${b.year}-${b.month}`} bonus={b} />)}
             </div>
           )}
         </TabsContent>
@@ -334,35 +303,6 @@ function AttitudeRow({ att }: { att: Profile["recentAttitude"][number] }) {
         </span>
       </div>
       {att.comment && <p className="text-xs text-muted-foreground">{att.comment}</p>}
-    </div>
-  );
-}
-
-function BonusHistoryRow({ bonus: b }: { bonus: Profile["bonusHistory"][number] }) {
-  const tone =
-    b.bonusLevel === "level2" ? "border-amber-200 bg-amber-50/50" :
-    b.bonusLevel === "level1" ? "border-primary/20 bg-primary/5" :
-    "border-border bg-muted/30";
-  const levelLabel =
-    b.bonusLevel === "level2" ? "Level 2" :
-    b.bonusLevel === "level1" ? "Level 1" :
-    "Not qualifying";
-  return (
-    <div className={`rounded-lg border p-3 ${tone}`}>
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <p className="text-sm font-semibold">{b.label}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {FORMATTER_NUM.format(b.totalGames)} games · {b.errorCount} errors · {b.hoursWorked}h
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-base font-bold">
-            {b.bonusAmount > 0 ? FORMATTER_EUR.format(b.bonusAmount) : "—"}
-          </p>
-          <Badge variant="outline" className="text-[10px] mt-0.5">{levelLabel}</Badge>
-        </div>
-      </div>
     </div>
   );
 }
