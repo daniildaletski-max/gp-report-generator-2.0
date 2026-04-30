@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { MONTH_NAMES } from "../../../../shared/const";
 
 // ============================================================================
@@ -330,5 +331,57 @@ export function ActionPlanCard({ items }: { items: Array<{ id: number; title: st
         ))}
       </CardContent>
     </Card>
+  );
+}
+
+// ============================================================================
+// Skeleton — layout-matching placeholder shown while the portal data loads.
+// Replaces the spinner so the page reads as "preparing your view" rather than
+// "stuck loading", and avoids a layout shift when the real content lands.
+// ============================================================================
+
+export function GPPortalSkeleton() {
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <header className="border-b border-slate-200 bg-white/90 backdrop-blur-sm sticky top-0 z-10">
+        <div className="container py-4 sm:py-5 flex items-center justify-between">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Skeleton className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl" />
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+          </div>
+          <Skeleton className="h-8 w-8 rounded-md" />
+        </div>
+      </header>
+      <main className="container py-6 sm:py-8 space-y-8">
+        {/* Hero block */}
+        <Skeleton className="h-28 w-full rounded-2xl" />
+
+        {/* At-a-glance strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 rounded-xl" />
+          ))}
+        </div>
+
+        {/* 3 score cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-44 rounded-2xl" />
+          ))}
+        </div>
+
+        {/* Tab strip placeholder */}
+        <Skeleton className="h-10 w-full sm:w-96 rounded-lg" />
+
+        {/* Body content placeholder */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Skeleton className="h-56 rounded-xl" />
+          <Skeleton className="h-56 rounded-xl" />
+        </div>
+      </main>
+    </div>
   );
 }

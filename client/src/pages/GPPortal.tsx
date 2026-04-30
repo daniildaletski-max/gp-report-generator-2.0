@@ -17,13 +17,15 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { MAX_TOTAL_SCORE, MAX_APPEARANCE_SCORE, MAX_GAME_PERFORMANCE_SCORE, SCORE_CONFIG, MONTH_NAMES } from "../../../shared/const";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
 
+import { useIsMobile } from "@/hooks/useMobile";
 import {
   ScoreCard, AchievementBadge, StatCard, LabeledComment, MonthSelector, ActionPlanCard,
-  AtAGlanceStrip,
+  AtAGlanceStrip, GPPortalSkeleton,
 } from "./gpPortal/components";
 
 export default function GPPortal() {
   const { token } = useParams<{ token: string }>();
+  const isMobile = useIsMobile();
   const [expandedEvaluations, setExpandedEvaluations] = useState<Set<number>>(new Set());
   const [selectedEvalMonth, setSelectedEvalMonth] = useState<string>('all');
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
@@ -199,19 +201,7 @@ export default function GPPortal() {
     ];
   }, [data]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center relative z-10">
-          <div className="relative">
-            <div className="w-16 h-16 border-2 border-amber-200 rounded-full animate-spin border-t-amber-500" />
-            <Star className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-6 w-6 text-amber-500 animate-pulse" />
-          </div>
-          <p className="mt-4 text-slate-500 text-sm">Loading your performance data...</p>
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) return <GPPortalSkeleton />;
 
   if (error || !data) {
     return (
@@ -567,7 +557,9 @@ export default function GPPortal() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-[280px] sm:h-[320px]">
+                {/* Cap chart at ~180px on phone so it never eats more than a
+                    third of the screen on small viewports. */}
+                <div style={{ height: isMobile ? 180 : 280 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data.monthlyHistory} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                       <defs>
@@ -1179,8 +1171,12 @@ export default function GPPortal() {
 
       {/* Footer */}
       <footer className="border-t border-slate-200 py-6 mt-10 relative z-10 bg-white">
-        <div className="container text-center">
+        <div className="container text-center space-y-1">
           <p className="text-slate-400 text-sm">GP Performance Dashboard — Auto-refreshes every 30 seconds</p>
+          <p className="text-slate-400 text-xs">
+            <Shield className="h-3 w-3 inline-block mr-1 -mt-0.5" />
+            This data is private to you. Shared via secure link.
+          </p>
         </div>
       </footer>
     </div>
