@@ -127,6 +127,13 @@
       "when": 1777525637560,
       "tag": "0017_magenta_purple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1777612000000,
+      "tag": "0018_gp_real_name",
+      "breakpoints": true
     }
   ]
 }

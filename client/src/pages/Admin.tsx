@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
 import { ActionItemsBoardTab } from "@/components/admin/ActionItemsBoardTab";
@@ -1122,14 +1122,43 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
 }
 
 // GP Access Links Tab Component
-function GPAccessLinksTab({ 
-  gamePresenters, 
-  accessTokens, 
-  teams, 
+/**
+ * Inline editor for a GP's real (legal) name — used by the Persona
+ * matcher. Saves on blur or Enter; null/empty clears the column.
+ */
+function RealNameInput({ gpId, initialValue }: { gpId: number; initialValue: string }) {
+  const [value, setValue] = useState(initialValue ?? "");
+  const setRealName = trpc.gamePresenter.setRealName.useMutation({
+    onSuccess: () => toast.success("Real name saved"),
+    onError: (e) => toast.error(e.message || "Failed to save"),
+  });
+  useEffect(() => { setValue(initialValue ?? ""); }, [initialValue]);
+  const dirty = (value || "") !== (initialValue || "");
+  const commit = () => {
+    if (!dirty || setRealName.isPending) return;
+    setRealName.mutate({ id: gpId, realName: value.trim() === "" ? null : value });
+  };
+  return (
+    <Input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+      placeholder="e.g. Aleksandra Borovkova"
+      className="h-8 text-sm"
+      disabled={setRealName.isPending}
+    />
+  );
+}
+
+function GPAccessLinksTab({
+  gamePresenters,
+  accessTokens,
+  teams,
   refetchTokens,
   refetchGPs,
-  isLoading 
-}: { 
+  isLoading
+}: {
   gamePresenters: any[];
   accessTokens: any[];
   teams: any[];
@@ -1342,6 +1371,7 @@ function GPAccessLinksTab({
                         <TableHeader>
                           <TableRow>
                             <TableHead>Name</TableHead>
+                            <TableHead>Real name <span className="text-[10px] font-normal text-muted-foreground">(for Persona)</span></TableHead>
                             <TableHead>Team</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Access Link</TableHead>
@@ -1356,6 +1386,9 @@ function GPAccessLinksTab({
                             return (
                               <TableRow key={gp.id} className="table-row-enhanced">
                                 <TableCell className="font-medium">{gp.name}</TableCell>
+                                <TableCell>
+                                  <RealNameInput gpId={gp.id} initialValue={(gp as any).realName ?? ""} />
+                                </TableCell>
                                 <TableCell>
                                   <Select
                                     value={gp.teamId?.toString() || "0"}

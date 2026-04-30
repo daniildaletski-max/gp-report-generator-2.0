@@ -41,6 +41,15 @@ export type InsertFmTeam = typeof fmTeams.$inferInsert;
 export const gamePresenters = mysqlTable("game_presenters", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
+  /**
+   * The GP's real-life legal name as it appears in HR systems like
+   * Persona / payroll / shift schedules. The `name` column above is
+   * the dealer pseudonym used on the casino floor (e.g. "Clover"),
+   * which usually doesn't match what HR has on file ("Aleksandra
+   * Borovkova"). When set, Persona sync prefers this column for name
+   * matching, then falls back to fuzzy match on `name`.
+   */
+  realName: varchar("realName", { length: 255 }),
   teamId: int("teamId"),
   userId: int("userId"), // Owner of this GP record - for user data isolation
   createdAt: timestamp("createdAt").defaultNow().notNull(),
