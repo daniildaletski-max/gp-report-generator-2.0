@@ -253,22 +253,26 @@ export async function getGpErrorsForPortal(gpId: number, month: number, year: nu
     if (gp.length === 0) return [];
     const { start, endExclusive } = monthRange(month, year);
     const effective = sql`COALESCE(${gpErrors.errorDate}, ${gpErrors.createdAt})`;
-    // INNER JOIN to `errorFiles` so orphan rows (whose source file was
-    // deleted) are silently excluded — the dashboard count then always
-    // matches the live uploaded file, with no manual cleanup required.
     // Pull all candidates by month, then post-filter on a normalized
     // name so whitespace/case variations between the Excel parse and
     // the canonical GP name don't drop rows.
+    //
+    // Earlier this query used an INNER JOIN against `errorFiles` to
+    // hide orphans whose source file was deleted. That broke prod —
+    // for tenants where the foreign-key wasn't being populated (or
+    // wasn't matching due to schema timing), legitimate rows got
+    // filtered and the GP portal showed `0 mistakes` for everyone.
+    // We now read raw `gpErrors` and trust them. Cascade-delete in
+    // `deleteErrorFile` (PR #33) prevents new orphans; the rare
+    // pre-existing orphan is a much smaller problem than empty
+    // dashboards.
     const candidates = await db
-      .select({ gpError: gpErrors })
+      .select()
       .from(gpErrors)
-      .innerJoin(errorFiles, eq(gpErrors.errorFileId, errorFiles.id))
       .where(and(gte(effective, start), lt(effective, endExclusive)))
       .orderBy(desc(gpErrors.errorDate));
     const target = normalizeName(gp[0].name);
-    return candidates
-      .map(c => c.gpError)
-      .filter(row => normalizeName(row.gpName) === target);
+    return candidates.filter(row => normalizeName(row.gpName) === target);
   } catch (error) {
     log.error("Error getting GP errors for portal", error instanceof Error ? error : undefined);
     return [];

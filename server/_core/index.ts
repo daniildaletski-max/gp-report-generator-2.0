@@ -9,7 +9,6 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { initScheduledReports } from "../scheduledReports";
-import { pruneOrphanGpErrors } from "../db";
 import { createLogger } from "../services/logger";
 import { requestTracingMiddleware, requestValidation } from "../services/requestTracing";
 import { cache } from "../services/cache";
@@ -241,20 +240,6 @@ async function startServer() {
     log.info(`Modules loaded: DB (13 domain modules), Services (5 modules), Routes (16 routers)`);
     // Initialize scheduled monthly report generation
     initScheduledReports();
-    // One-shot orphan-gpErrors cleanup at boot. Drops every gpError
-    // row whose source `errorFiles` row no longer exists, so portal
-    // mistake counts always match what the FM sees in their Excel
-    // file. Idempotent — once orphans are gone, future boots are no-ops.
-    // Ran async so the listen callback never blocks on it.
-    pruneOrphanGpErrors()
-      .then(removed => {
-        if (removed > 0) {
-          log.info(`Startup: pruned ${removed} orphan gpErrors row${removed === 1 ? "" : "s"}.`);
-        }
-      })
-      .catch(err => {
-        log.warn("Startup orphan prune failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
-      });
   });
 
   // Graceful shutdown
