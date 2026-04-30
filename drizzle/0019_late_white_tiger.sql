@@ -1,0 +1,1 @@
+ALTER TABLE `game_presenters` ADD `realName` varchar(255);
