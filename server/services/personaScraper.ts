@@ -66,10 +66,44 @@ function resolveChromiumExecutable(): string | undefined {
   return undefined;
 }
 
+/**
+ * Lazy-install Chromium the first time Persona sync runs.
+ *
+ * History: an earlier attempt added `npx puppeteer browsers install
+ * chrome` as a project `postinstall` hook so the binary would land
+ * during `pnpm install`. That broke Manus's deploy pipeline — the
+ * download blocked the install step and deploys never reached
+ * "ready". We've moved the same call to runtime, behind the first
+ * Persona sync attempt, so a slow/failing chromium download can never
+ * keep the rest of the app from shipping.
+ */
+let chromiumInstallPromise: Promise<void> | null = null;
+async function ensureChromiumInstalled(): Promise<void> {
+  if (resolveChromiumExecutable()) return; // system or env already provides one
+  if (chromiumInstallPromise) return chromiumInstallPromise;
+  chromiumInstallPromise = (async () => {
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const run = promisify(execFile);
+    try {
+      await run('npx', ['--yes', 'puppeteer', 'browsers', 'install', 'chrome'], {
+        timeout: 5 * 60_000, // 5 minute cap
+      });
+    } catch (e) {
+      chromiumInstallPromise = null; // allow retry on next sync
+      throw new Error(
+        `Could not download Chromium for Persona sync: ${(e as Error).message}. Set PUPPETEER_EXECUTABLE_PATH to a system binary if outbound network is restricted.`,
+      );
+    }
+  })();
+  return chromiumInstallPromise;
+}
+
 async function getBrowser(): Promise<Browser> {
   if (browserInstance && browserInstance.connected) {
     return browserInstance;
   }
+  await ensureChromiumInstalled();
   const executablePath = resolveChromiumExecutable();
   browserInstance = await puppeteer.launch({
     // Pass executablePath only when we found one explicitly; otherwise let

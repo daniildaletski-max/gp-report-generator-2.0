@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "NODE_ENV=development nodemon --exec 'tsx server/_core/index.ts' --ext ts,tsx --watch server --watch drizzle --ignore '*.test.ts' --ignore '*.spec.ts'",
     "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
-    "postinstall": "node -e \"try{require('child_process').execSync('npx --yes puppeteer browsers install chrome',{stdio:'inherit'})}catch(e){console.warn('[postinstall] Chromium download skipped:', e.message)}\"",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
@@ -125,9 +124,6 @@
     },
     "ignoredBuiltDependencies": [
       "canvas"
-    ],
-    "onlyBuiltDependencies": [
-      "puppeteer"
     ]
   }
 }
