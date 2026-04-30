@@ -163,12 +163,16 @@ export const gpAccessRouter = router({
       }));
       const technicalErrorsHidden = errorScreenshotsRaw.length - errorScreenshots.length;
       const attitudeDetails = await db.getAttitudeScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
+      // Excel-imported errors (`gpErrors`) come from the Playgon/MG file
+      // the FM explicitly uploaded — every row in there is curated by a
+      // human, so we trust it. The auto-`isTechnicalError` filter was
+      // producing false negatives on real GP mistakes (silent drops the
+      // user kept calling out); show ALL excel rows and keep the
+      // classifier only for AI-detected screenshots, where mis-classification
+      // is the actual risk.
       const gpErrorsRaw = await db.getGpErrorsForPortal(accessToken.gamePresenterId, input.month, input.year);
-      const gpErrors = gpErrorsRaw.filter(e => !isTechnicalError({
-        errorCode: e.errorCode,
-        errorDescription: e.errorDescription,
-      }));
-      const technicalGpErrorsHidden = gpErrorsRaw.length - gpErrors.length;
+      const gpErrors = gpErrorsRaw;
+      const technicalGpErrorsHidden = 0;
 
       // Get evaluations for this specific month
       const allEvals = await db.getGpEvaluationsForPortal(accessToken.gamePresenterId);
@@ -218,45 +222,28 @@ export const gpAccessRouter = router({
       // expander. The user has been confused about why the headline says
       // 1 when the FM uploaded 2 — letting them see the filtered ones
       // makes it obvious which row was classified as technical.
-      const hiddenTechnicalErrors = [
-        ...errorScreenshotsRaw
-          .filter(e => isTechnicalError({
-            errorType: e.errorType,
-            errorCategory: e.errorCategory,
-            errorDescription: e.errorDescription,
-          }))
-          .map(e => ({
-            id: e.id,
-            source: 'screenshot' as const,
-            errorType: e.errorType,
-            errorDescription: e.errorDescription,
-            errorCategory: e.errorCategory,
-            severity: e.severity,
-            gameType: e.gameType,
-            tableId: e.tableId,
-            screenshotUrl: e.screenshotUrl,
-            errorDate: e.errorDate,
-            createdAt: e.createdAt,
-          })),
-        ...gpErrorsRaw
-          .filter(e => isTechnicalError({
-            errorCode: e.errorCode,
-            errorDescription: e.errorDescription,
-          }))
-          .map(e => ({
-            id: `excel-${e.id}`,
-            source: 'excel' as const,
-            errorType: e.errorCode || 'excel_error',
-            errorDescription: e.errorDescription,
-            errorCategory: null,
-            severity: 'medium' as const,
-            gameType: e.gameType,
-            tableId: e.tableId,
-            screenshotUrl: null,
-            errorDate: e.errorDate,
-            createdAt: e.createdAt,
-          })),
-      ];
+      // Only AI-detected screenshots can land in the "hidden technical"
+      // bucket now — Excel is fully trusted, so nothing from there is
+      // filtered. (See the comment above gpErrorsRaw.)
+      const hiddenTechnicalErrors = errorScreenshotsRaw
+        .filter(e => isTechnicalError({
+          errorType: e.errorType,
+          errorCategory: e.errorCategory,
+          errorDescription: e.errorDescription,
+        }))
+        .map(e => ({
+          id: e.id,
+          source: 'screenshot' as const,
+          errorType: e.errorType,
+          errorDescription: e.errorDescription,
+          errorCategory: e.errorCategory,
+          severity: e.severity,
+          gameType: e.gameType,
+          tableId: e.tableId,
+          screenshotUrl: e.screenshotUrl,
+          errorDate: e.errorDate,
+          createdAt: e.createdAt,
+        }));
 
       return {
         month: input.month,
@@ -339,12 +326,10 @@ export const gpAccessRouter = router({
       }));
       const attitudeDetails = await db.getAttitudeScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
 
-      // Also get GP errors from Excel file parsing
+      // Excel-imported errors are FM-curated; trust them and skip the
+      // auto-classifier (see matching comment in getMonthDetails).
       const gpErrorsRaw = await db.getGpErrorsForPortal(accessToken.gamePresenterId, currentMonth, currentYear);
-      const gpErrors = gpErrorsRaw.filter(e => !isTechnicalError({
-        errorCode: e.errorCode,
-        errorDescription: e.errorDescription,
-      }));
+      const gpErrors = gpErrorsRaw;
 
       // Combine error sources: screenshots and Excel-parsed errors
       const errorDetails = [
