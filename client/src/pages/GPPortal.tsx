@@ -382,6 +382,34 @@ export default function GPPortal() {
     return ranked.filter(r => r.pct < 0.8);
   }, [data]);
 
+  /**
+   * Performance tier — purely visual gamification, used in the hero
+   * banner and as a personal goal anchor. Bands match the same
+   * Excellent / Great / Good / Needs Work language used in the score
+   * cards so the GP sees one consistent vocabulary.
+   */
+  const tier = useMemo(() => {
+    if (!data || data.evaluations.length === 0) return null;
+    const totalEvals = data.evaluations.length;
+    const avg = totalEvals > 0
+      ? data.evaluations.reduce((s: number, e: any) => s + (e.totalScore || 0), 0) / totalEvals
+      : 0;
+    const pct = (avg / MAX_TOTAL_SCORE) * 100;
+    if (pct >= 90) return { name: "Elite", color: "from-amber-400 to-yellow-500", textColor: "text-amber-700", bg: "bg-amber-50", icon: Crown };
+    if (pct >= 80) return { name: "Pro", color: "from-emerald-400 to-emerald-500", textColor: "text-emerald-700", bg: "bg-emerald-50", icon: Trophy };
+    if (pct >= 70) return { name: "Solid", color: "from-blue-400 to-blue-500", textColor: "text-blue-700", bg: "bg-blue-50", icon: Medal };
+    if (pct >= 50) return { name: "Rising", color: "from-violet-400 to-violet-500", textColor: "text-violet-700", bg: "bg-violet-50", icon: TrendingUp };
+    return { name: "Building", color: "from-slate-400 to-slate-500", textColor: "text-slate-700", bg: "bg-slate-50", icon: Star };
+  }, [data]);
+
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 6) return "Hello";
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  }, []);
+
   const achievements = useMemo(() => {
     if (!data) return [];
     const totalEvals = data.evaluations.length;
@@ -487,14 +515,60 @@ export default function GPPortal() {
       </header>
 
       <main className="container py-6 sm:py-8 space-y-8 sm:space-y-10 relative z-10">
-        
+
+        {/* Hero banner — personalised greeting + performance tier */}
+        {tier && (
+          <section>
+            <Card className="overflow-hidden border-slate-200 shadow-sm bg-white">
+              <div className={`h-1.5 bg-gradient-to-r ${tier.color}`} />
+              <CardContent className="p-5 sm:p-6">
+                <div className="flex items-start sm:items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className={`shrink-0 h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-gradient-to-br ${tier.color} flex items-center justify-center shadow-sm`}>
+                      <tier.icon className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm text-slate-500">
+                        {greeting}, {data.gpName.split(" ")[0]}
+                      </p>
+                      <h2 className="text-xl sm:text-3xl font-bold text-slate-900 leading-tight tracking-tight truncate">
+                        You're a <span className={tier.textColor}>{tier.name}</span> presenter
+                      </h2>
+                      <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                        Average score{" "}
+                        <span className="font-semibold text-slate-700">
+                          {avgScore.toFixed(1)}
+                        </span>
+                        <span className="text-slate-400"> / {MAX_TOTAL_SCORE}</span>
+                        {" · "}
+                        {data.evaluations.length} evaluation{data.evaluations.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                  </div>
+                  {improvement && (
+                    <div className={`px-3 py-2 rounded-xl border ${improvement.total >= 0 ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">
+                        Vs {improvement.previousLabel}
+                      </p>
+                      <p className={`text-base sm:text-lg font-bold flex items-center gap-1 ${improvement.total >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                        {improvement.total >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                        {improvement.total >= 0 ? "+" : ""}{improvement.total} pts
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+        )}
+
         {/* Score Overview Cards */}
         <section>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
-            <ScoreCard 
-              score={avgScore} 
-              maxScore={MAX_TOTAL_SCORE} 
-              label="Overall Score" 
+            <ScoreCard
+              score={avgScore}
+              maxScore={MAX_TOTAL_SCORE}
+              label="Overall Score"
               icon={Star}
               bgColor="bg-white"
               accentColor="bg-amber-50 border-amber-200 text-amber-600"
@@ -523,95 +597,60 @@ export default function GPPortal() {
 
         {planItems && planItems.length > 0 && <ActionPlanCard items={planItems} />}
 
-        {/* Highlight cards: improvement, personal best, focus areas */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {improvement && (
-            <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-200 shadow-sm">
-              <CardContent className="p-5">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 rounded-xl bg-emerald-100 border border-emerald-200">
-                    {improvement.total >= 0 ? (
-                      <TrendingUp className="h-5 w-5 text-emerald-600" />
-                    ) : (
-                      <TrendingDown className="h-5 w-5 text-rose-600" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">Vs {improvement.previousLabel}</p>
-                    <p className={`text-2xl font-bold ${improvement.total >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                      {improvement.total >= 0 ? "+" : ""}{improvement.total}
-                      <span className="text-sm text-slate-500 font-normal"> pts</span>
-                    </p>
-                  </div>
-                </div>
-                <div className="text-xs text-slate-600 space-y-0.5">
-                  <p>
-                    Appearance{" "}
-                    <span className={improvement.appearance >= 0 ? "text-emerald-600 font-semibold" : "text-rose-600 font-semibold"}>
-                      {improvement.appearance >= 0 ? "+" : ""}{improvement.appearance}
-                    </span>
-                  </p>
-                  <p>
-                    Game performance{" "}
-                    <span className={improvement.performance >= 0 ? "text-emerald-600 font-semibold" : "text-rose-600 font-semibold"}>
-                      {improvement.performance >= 0 ? "+" : ""}{improvement.performance}
-                    </span>
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {personalBest !== null && (
-            <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200 shadow-sm">
-              <CardContent className="p-5">
-                <div className="flex items-center gap-3 mb-1">
-                  <div className="p-2 rounded-xl bg-amber-100 border border-amber-200">
-                    <Trophy className="h-5 w-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">Personal best</p>
-                    <p className="text-2xl font-bold text-amber-700">
-                      {personalBest}<span className="text-sm text-slate-500 font-normal">/{MAX_TOTAL_SCORE}</span>
-                    </p>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-600 mt-2">
-                  Your highest evaluation score so far. Keep stacking those wins.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {focusAreas.length > 0 && (
-            <Card className="bg-white border-violet-200 shadow-sm sm:col-span-2 lg:col-span-1">
-              <CardContent className="p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="p-2 rounded-xl bg-violet-100 border border-violet-200">
-                    <Target className="h-5 w-5 text-violet-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider">Focus next</p>
-                    <p className="text-sm font-semibold text-slate-800">Where you can move the needle</p>
-                  </div>
-                </div>
-                <div className="space-y-2.5">
-                  {focusAreas.map(f => (
-                    <div key={f.key} className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-slate-800">{f.label}</span>
-                        <span className="text-xs text-slate-500">
-                          {f.avg.toFixed(1)}/{f.max}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-600 leading-relaxed">{f.tip}</p>
+        {/* Personal best + focus areas */}
+        {(personalBest !== null || focusAreas.length > 0) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {personalBest !== null && (
+              <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200 shadow-sm">
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="p-2 rounded-xl bg-amber-100 border border-amber-200">
+                      <Trophy className="h-5 w-5 text-amber-600" />
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase tracking-wider">Personal best</p>
+                      <p className="text-2xl font-bold text-amber-700">
+                        {personalBest}<span className="text-sm text-slate-500 font-normal">/{MAX_TOTAL_SCORE}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-2">
+                    Your highest evaluation score so far. Keep stacking those wins.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {focusAreas.length > 0 && (
+              <Card className="bg-white border-violet-200 shadow-sm">
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-2 rounded-xl bg-violet-100 border border-violet-200">
+                      <Target className="h-5 w-5 text-violet-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 uppercase tracking-wider">Focus next</p>
+                      <p className="text-sm font-semibold text-slate-800">Where you can move the needle</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2.5">
+                    {focusAreas.map(f => (
+                      <div key={f.key} className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-slate-800">{f.label}</span>
+                          <span className="text-xs text-slate-500">
+                            {f.avg.toFixed(1)}/{f.max}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-relaxed">{f.tip}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
 
         {/* Monthly Stats & Achievements */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

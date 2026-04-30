@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/PageHeader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -864,17 +865,17 @@ export default function UploadPage() {
 
   return (
     <div className="space-y-5 p-4 md:p-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Upload Screenshots</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {activeTab === "evaluations" 
-              ? "Upload evaluation screenshots — AI extracts scores automatically" 
-              : "Upload attitude screenshots for selected GP"}
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Upload Screenshots"
+        subtitle={
+          activeTab === "auto"
+            ? "Drop any screenshot — AI detects the type and routes it"
+            : activeTab === "evaluations"
+              ? "Upload evaluation screenshots — AI extracts scores automatically"
+              : "Upload attitude screenshots for the selected GP"
+        }
+        icon={CloudUpload}
+      />
 
       {/* Tab Switcher */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as UploadType)}>
