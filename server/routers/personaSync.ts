@@ -10,6 +10,11 @@
  *     see when each team last got fresh data and why a sync failed
  *   - exposes `previewSync` and `lastSync` so the UI can show what
  *     would change before actually applying it
+ *
+ * Sync-log writes are best-effort: if the persona_sync_logs table
+ * is missing (e.g. migration not yet applied) or the insert errors
+ * for any reason, we log it and continue. Logging failures must never
+ * block the actual scrape/match/update.
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -19,6 +24,22 @@ import { syncPersonaAttendance } from "../services/personaScraper";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("PersonaSync");
+
+/**
+ * Wrap a sync-log DB write in a try/catch — failures here (e.g. table
+ * missing because the migration wasn't applied yet) must NEVER stop
+ * the actual sync from running.
+ */
+async function tryLog<T>(op: () => Promise<T>, label: string): Promise<T | null> {
+  try {
+    return await op();
+  } catch (err) {
+    log.warn(`${label} (non-fatal — sync continues)`, {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
 
 interface MatchDetail {
   gpId: number | null;
@@ -53,19 +74,25 @@ export async function runPersonaSyncForTeam(opts: {
   if (!team) throw new Error("Team not found");
 
   // Open a sync-log row early so even a hard failure leaves a trace.
+  // Best-effort: if the persona_sync_logs table is missing or the insert
+  // fails for any reason, we keep going — the sync itself must not be
+  // blocked by a logging failure.
   const logRow = opts.dryRun
     ? null
-    : await db.createSyncLog({
-        teamId: opts.teamId,
-        triggeredById: opts.triggeredById,
-        source: opts.source,
-        month: opts.month,
-        year: opts.year,
-        status: "failed", // updated below on success
-        totalWorkers: 0,
-        matched: 0,
-        unmatched: 0,
-      });
+    : await tryLog(
+        () => db.createSyncLog({
+          teamId: opts.teamId,
+          triggeredById: opts.triggeredById,
+          source: opts.source,
+          month: opts.month,
+          year: opts.year,
+          status: "failed", // updated below on success
+          totalWorkers: 0,
+          matched: 0,
+          unmatched: 0,
+        }),
+        "createSyncLog failed",
+      );
 
   try {
     const projectId = (team as any).personaProjectId as number | null;
@@ -73,11 +100,14 @@ export async function runPersonaSyncForTeam(opts: {
 
     if (!result.success) {
       if (logRow) {
-        await db.updateSyncLog(logRow.id, {
-          status: "failed",
-          errorMessage: result.error || "Persona scrape returned success=false",
-          completedAt: new Date(),
-        });
+        await tryLog(
+          () => db.updateSyncLog(logRow.id, {
+            status: "failed",
+            errorMessage: result.error || "Persona scrape returned success=false",
+            completedAt: new Date(),
+          }),
+          "updateSyncLog (failure path) failed",
+        );
       }
       return {
         matched: 0,
@@ -155,13 +185,16 @@ export async function runPersonaSyncForTeam(opts: {
     const status: "success" | "partial" | "failed" = unmatched > 0 ? "partial" : "success";
 
     if (logRow) {
-      await db.updateSyncLog(logRow.id, {
-        status,
-        totalWorkers: result.workers.length,
-        matched,
-        unmatched,
-        completedAt: new Date(),
-      });
+      await tryLog(
+        () => db.updateSyncLog(logRow.id, {
+          status,
+          totalWorkers: result.workers.length,
+          matched,
+          unmatched,
+          completedAt: new Date(),
+        }),
+        "updateSyncLog (success path) failed",
+      );
     }
 
     return {
@@ -175,11 +208,14 @@ export async function runPersonaSyncForTeam(opts: {
     const errMessage = error instanceof Error ? error.message : String(error);
     log.error("Persona sync failed", error instanceof Error ? error : new Error(errMessage), { teamId: opts.teamId });
     if (logRow) {
-      await db.updateSyncLog(logRow.id, {
-        status: "failed",
-        errorMessage: errMessage,
-        completedAt: new Date(),
-      });
+      await tryLog(
+        () => db.updateSyncLog(logRow.id, {
+          status: "failed",
+          errorMessage: errMessage,
+          completedAt: new Date(),
+        }),
+        "updateSyncLog (catch path) failed",
+      );
     }
     throw error;
   }

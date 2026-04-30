@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString, urlNumber } from "@/hooks/useUrlState";
 import { GPDetailDrawer } from "@/components/GPDetailDrawer";
+import { ActiveFiltersBar } from "@/components/ActiveFiltersBar";
 import EvaluationDetailView from "@/components/EvaluationDetailView";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -432,7 +433,7 @@ export default function EvaluationsPage() {
             View and manage evaluation data
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2">
           {/* Bulk Actions */}
           {selectedIds.size > 0 && (
@@ -682,9 +683,100 @@ export default function EvaluationsPage() {
             )}
           </div>
 
-          {/* Evaluations Table */}
+          {hasActiveFilters && (
+            <ActiveFiltersBar
+              pills={[
+                ...(searchQuery ? [{ key: "q", label: `"${searchQuery}"`, onRemove: () => setSearchQuery("") }] : []),
+                ...(filterMonth !== null ? [{ key: "month", label: `Month: ${MONTHS[filterMonth - 1]}`, onRemove: () => setFilterMonth(null) }] : []),
+                ...(filterYear !== null ? [{ key: "year", label: `Year: ${filterYear}`, onRemove: () => setFilterYear(null) }] : []),
+                ...(filterGP && filterGP !== "all"
+                  ? [{ key: "gp", label: `GP: ${uniqueGPs.find(g => String(g.id) === filterGP)?.name ?? filterGP}`, onRemove: () => setFilterGP("all") }]
+                  : []),
+                ...(filterTeam && filterTeam !== "all"
+                  ? [{
+                      key: "team",
+                      label: `Team: ${teams?.find(t => t.id === Number(filterTeam))?.teamName ?? filterTeam}`,
+                      onRemove: () => setFilterTeam("all"),
+                    }]
+                  : []),
+              ]}
+              onClearAll={clearFilters}
+            />
+          )}
+
+          {/* Evaluations — table on desktop, cards on mobile */}
           {filteredEvaluations.length > 0 ? (
-            <div className="table-enhanced">
+            <>
+            {/* Mobile card grid (< md) */}
+            <div className="md:hidden space-y-2">
+              {filteredEvaluations.map(({ evaluation, gamePresenter }) => {
+                const appearanceScore = (evaluation.hairScore || 0) + (evaluation.makeupScore || 0) +
+                                       (evaluation.outfitScore || 0) + (evaluation.postureScore || 0);
+                const performanceScore = (evaluation.dealingStyleScore || 0) + (evaluation.gamePerformanceScore || 0);
+                const total = evaluation.totalScore || 0;
+                const tone = total >= 20
+                  ? "border-emerald-200 bg-emerald-50/30"
+                  : total >= 16
+                    ? "border-primary/15 bg-primary/5"
+                    : "border-rose-200 bg-rose-50/30";
+                return (
+                  <div key={evaluation.id} className={`rounded-xl border p-3 ${tone}`}>
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        checked={selectedIds.has(evaluation.id)}
+                        onCheckedChange={() => toggleSelect(evaluation.id)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <button
+                            type="button"
+                            onClick={() => gamePresenter?.id && setDrawerGpId(gamePresenter.id)}
+                            className="font-semibold text-foreground text-sm truncate hover:text-primary hover:underline text-left"
+                          >
+                            {gamePresenter?.name || "Unknown GP"}
+                          </button>
+                          <span className={`text-base font-bold shrink-0 ${total >= 20 ? "text-emerald-600" : total >= 16 ? "text-primary" : "text-rose-600"}`}>
+                            {total}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                          <span>{evaluation.evaluationDate ? format(new Date(evaluation.evaluationDate), "dd MMM yyyy") : "—"}</span>
+                          {evaluation.game && (
+                            <Badge variant="outline" className="text-[9px] py-0 h-4 px-1.5">{evaluation.game}</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1.5 text-[11px]">
+                          <span className="text-muted-foreground">App <span className="font-semibold text-foreground">{appearanceScore}</span><span className="text-muted-foreground">/12</span></span>
+                          <span className="text-muted-foreground">Perf <span className="font-semibold text-foreground">{performanceScore}</span><span className="text-muted-foreground">/10</span></span>
+                        </div>
+                        <div className="flex items-center gap-1 mt-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setViewingEval({ evaluation, gamePresenter })}
+                          >
+                            <Eye className="h-3 w-3 mr-1" /> View
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => handleEdit(evaluation)}
+                          >
+                            <Pencil className="h-3 w-3 mr-1" /> Edit
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop table (md and up) */}
+            <div className="table-enhanced hidden md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -804,6 +896,7 @@ export default function EvaluationsPage() {
                 </TableBody>
               </Table>
             </div>
+            </>
           ) : (
             <div className="empty-state">
               <div className="empty-state-icon">
@@ -813,7 +906,7 @@ export default function EvaluationsPage() {
                 {hasActiveFilters ? "No matching evaluations" : "No evaluations yet"}
               </h3>
               <p className="empty-state-description">
-                {hasActiveFilters 
+                {hasActiveFilters
                   ? "Try adjusting your filters or search query"
                   : "Upload evaluation screenshots to get started"}
               </p>

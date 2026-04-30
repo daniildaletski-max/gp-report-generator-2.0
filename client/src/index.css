@@ -682,6 +682,16 @@
     border-collapse: separate;
     border-spacing: 0;
   }
+  /* Sticky thead — keeps column labels visible while scrolling long tables.
+     The table is rendered inside a wrapping div that scrolls; the thead
+     sticks to that wrapper's top. */
+  .table-enhanced thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--color-card, #fff);
+    box-shadow: 0 1px 0 var(--color-border, #e5e5e3);
+  }
   .table-enhanced thead th {
     padding: 0.75rem 1rem;
     font-size: 0.75rem;
@@ -691,6 +701,7 @@
     color: #6b7280;
     border-bottom: 1px solid #e5e5e3;
     text-align: left;
+    background: var(--color-card, #fff);
   }
   .table-enhanced tbody td {
     padding: 0.875rem 1rem;
