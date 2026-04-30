@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString, urlNumber } from "@/hooks/useUrlState";
+import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -413,21 +415,19 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="page-header">
-          <h1 className="page-title">Reports</h1>
-          <p className="page-subtitle">Generate and manage Team Monthly Overview reports</p>
-        </div>
-        
-        <Dialog open={showNewReport} onOpenChange={setShowNewReport}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Report
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <PageHeader
+        title="Reports"
+        subtitle="Generate and manage Team Monthly Overview reports"
+        icon={FileSpreadsheet}
+        actions={
+          <Button onClick={() => setShowNewReport(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Report
+          </Button>
+        }
+      />
+      <Dialog open={showNewReport} onOpenChange={setShowNewReport}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Generate Team Monthly Overview</DialogTitle>
               <DialogDescription>
@@ -629,7 +629,6 @@ export default function ReportsPage() {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-stagger">
@@ -897,29 +896,27 @@ export default function ReportsPage() {
               </Table>
             </div>
           ) : (
-            <div className="empty-state">
-              <div className="empty-state-icon">
-                <FileSpreadsheet className="h-8 w-8" />
-              </div>
-              <h3 className="empty-state-title">
-                {hasActiveFilters ? "No matching reports" : "No reports yet"}
-              </h3>
-              <p className="empty-state-description">
-                {hasActiveFilters 
-                  ? "Try adjusting your filters"
-                  : "Generate your first Team Monthly Overview report"}
-              </p>
-              {hasActiveFilters ? (
-                <Button variant="outline" onClick={clearFilters} className="mt-4">
-                  Clear Filters
-                </Button>
-              ) : (
-                <Button onClick={() => setShowNewReport(true)} className="mt-4">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Report
-                </Button>
-              )}
-            </div>
+            <EmptyState
+              icon={FileSpreadsheet}
+              title={hasActiveFilters ? "No matching reports" : "No reports yet"}
+              description={
+                hasActiveFilters
+                  ? "Try adjusting your filters or clearing them to see all reports."
+                  : "Generate your first Team Monthly Overview report to get started."
+              }
+              action={
+                hasActiveFilters ? (
+                  <Button variant="outline" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                ) : (
+                  <Button onClick={() => setShowNewReport(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create report
+                  </Button>
+                )
+              }
+            />
           )}
         </div>
       </div>
