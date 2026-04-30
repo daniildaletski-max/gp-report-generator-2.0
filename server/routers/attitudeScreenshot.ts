@@ -12,23 +12,39 @@ const log = createLogger("Router");
  * missing or doesn't match the expected layout — callers should
  * fall back to the upload moment in that case.
  *
+ * Uses the local-time `Date` constructor (not ISO string parse) so a
+ * date-only entry like "1 Mar 2026" stays March 1 in any timezone.
+ * Parsing `"2026-03-01"` via `new Date()` would interpret it as UTC
+ * midnight and shift the day backward in negative offsets — driving
+ * `month`/`year` to the wrong month for first-of-month entries.
+ *
  * Exported so smartUpload's ATTITUDE branch can reuse the same
  * parser and stay consistent with this router's behaviour.
  */
 const ATTITUDE_DATE_RE = /^(\d+)\s+(\w+)\s+(\d+),?\s*(\d+:\d+)?$/;
-const MONTH_NAME_TO_NUM: Record<string, string> = {
-  Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
-  Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
+const MONTH_NAME_TO_IDX: Record<string, number> = {
+  Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+  Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
 };
 export function parseAttitudeEntryDate(raw: unknown): Date | null {
   if (typeof raw !== "string" || raw.trim() === "") return null;
   const m = raw.match(ATTITUDE_DATE_RE);
   if (!m) return null;
-  const [, d, monName, y, t] = m;
-  const monNum = MONTH_NAME_TO_NUM[monName];
-  if (!monNum) return null;
-  const isoLike = `${y}-${monNum}-${d.padStart(2, "0")}${t ? `T${t}` : ""}`;
-  const parsed = new Date(isoLike);
+  const [, dStr, monName, yStr, t] = m;
+  const monthIdx = MONTH_NAME_TO_IDX[monName];
+  if (monthIdx === undefined) return null;
+  const day = Number(dStr);
+  const year = Number(yStr);
+  if (!Number.isFinite(day) || !Number.isFinite(year)) return null;
+  let hour = 0;
+  let minute = 0;
+  if (t) {
+    const [hStr, mStr] = t.split(":");
+    hour = Number(hStr);
+    minute = Number(mStr);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  }
+  const parsed = new Date(year, monthIdx, day, hour, minute, 0, 0);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
@@ -178,18 +194,25 @@ Respond with a JSON object containing an array of ALL entries found:
       // when the OCR returned no parseable date.
       const savedEntries: any[] = [];
       const entries = extractedData.entries || [];
+      // Bucket scores by (entryYear, entryMonth) so the monthly aggregate
+      // moves with the row rather than the upload moment. Mixing March
+      // and April entries in one screenshot would otherwise put per-row
+      // detail under the right month but increment the summary in the
+      // wrong one.
+      const scoreByMonth = new Map<string, { month: number; year: number; total: number }>();
 
       for (const entry of entries) {
         const parsedDate = parseAttitudeEntryDate(entry.date);
         const entryMonth = parsedDate ? parsedDate.getMonth() + 1 : month;
         const entryYear = parsedDate ? parsedDate.getFullYear() : year;
+        const score = entry.score || (entry.type === 'POSITIVE' ? 1 : -1);
         const attitudeScreenshot = await db.createAttitudeScreenshot({
           gamePresenterId,
           evaluationId: null,
           gpName: gpNameToUse || 'Unknown',
           evaluationDate: parsedDate,
           attitudeType: entry.type?.toLowerCase() === 'positive' ? 'positive' : 'negative',
-          attitudeScore: entry.score || (entry.type === 'POSITIVE' ? 1 : -1),
+          attitudeScore: score,
           attitudeCategory: entry.type?.toLowerCase() === 'positive' ? 'positive' : 'negative',
           comment: entry.comment || '',
           description: entry.comment || '',
@@ -203,14 +226,17 @@ Respond with a JSON object containing an array of ALL entries found:
           processedAt: new Date(),
         });
         savedEntries.push(attitudeScreenshot);
+        const key = `${entryYear}-${entryMonth}`;
+        const bucket = scoreByMonth.get(key);
+        if (bucket) bucket.total += score;
+        else scoreByMonth.set(key, { month: entryMonth, year: entryYear, total: score });
       }
 
-      // Update monthly stats if GP was matched - cumulative +1/-1 system
-      if (gamePresenterId && entries.length > 0) {
-        // Sum all attitude scores from entries (+1 for positive, -1 for negative)
-        const totalScore = entries.reduce((sum: number, e: any) => sum + (e.score || 0), 0);
-        // Add cumulative score to GP's monthly attitude
-        await db.updateGPAttitude(gamePresenterId, month, year, totalScore);
+      // Update monthly stats per (year, month) bucket — see comment above.
+      if (gamePresenterId) {
+        for (const { month: bm, year: by, total } of Array.from(scoreByMonth.values())) {
+          if (total !== 0) await db.updateGPAttitude(gamePresenterId, bm, by, total);
+        }
       }
 
       return {

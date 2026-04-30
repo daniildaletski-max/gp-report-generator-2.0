@@ -6,6 +6,7 @@ import { storagePut } from "../storage";
 import { createLogger } from "../services/logger";
 import { extractEvaluationFromImage, parseEvaluationDate } from "./_shared";
 import { parseAttitudeEntryDate } from "./attitudeScreenshot";
+import { parseIsoDateLocal } from "../db/_dateRange";
 import { nanoid } from "nanoid";
 const log = createLogger("Router");
 
@@ -272,18 +273,16 @@ Respond in JSON format:
         // Derive month/year from the parsed errorDate so a screenshot
         // uploaded in April that depicts a March incident is filed under
         // March. Falls back to upload moment when no errorDate.
-        const parsedErrorDate = extractedData.errorDate ? new Date(extractedData.errorDate) : null;
-        const errorMonth = parsedErrorDate && !Number.isNaN(parsedErrorDate.getTime())
-          ? parsedErrorDate.getMonth() + 1
-          : month;
-        const errorYear = parsedErrorDate && !Number.isNaN(parsedErrorDate.getTime())
-          ? parsedErrorDate.getFullYear()
-          : year;
+        // `parseIsoDateLocal` keeps the day in local time so a 1-Mar-2026
+        // OCR string isn't shifted to Feb 28 on negative-offset servers.
+        const parsedErrorDate = parseIsoDateLocal(extractedData.errorDate);
+        const errorMonth = parsedErrorDate ? parsedErrorDate.getMonth() + 1 : month;
+        const errorYear = parsedErrorDate ? parsedErrorDate.getFullYear() : year;
 
         const errorScreenshot = await db.createErrorScreenshot({
           gamePresenterId,
           gpName: gpNameToUse || extractedData.gpName || 'Unknown',
-          errorDate: parsedErrorDate && !Number.isNaN(parsedErrorDate.getTime()) ? parsedErrorDate : null,
+          errorDate: parsedErrorDate,
           errorType: extractedData.errorType || 'other',
           errorCategory: extractedData.errorCategory || '',
           errorDescription: extractedData.errorDescription || '',
@@ -439,6 +438,10 @@ Respond with a JSON object containing an array of ALL entries found:
 
         const savedEntries: any[] = [];
         const entries = extractedData.entries || [];
+        // Bucket scores by (entryYear, entryMonth) so the monthly
+        // aggregate moves with the row rather than the upload moment —
+        // matches attitudeScreenshot.upload behaviour exactly.
+        const scoreByMonth = new Map<string, { month: number; year: number; total: number }>();
 
         for (const entry of entries) {
           // Use the parsed entry date for both `evaluationDate` AND
@@ -448,13 +451,14 @@ Respond with a JSON object containing an array of ALL entries found:
           const parsedDate = parseAttitudeEntryDate(entry.date);
           const entryMonth = parsedDate ? parsedDate.getMonth() + 1 : month;
           const entryYear = parsedDate ? parsedDate.getFullYear() : year;
+          const score = entry.score || (entry.type === 'POSITIVE' ? 1 : -1);
           const attitudeScreenshot = await db.createAttitudeScreenshot({
             gamePresenterId,
             evaluationId: null,
             gpName: gpNameToUse || 'Unknown',
             evaluationDate: parsedDate,
             attitudeType: entry.type?.toLowerCase() === 'positive' ? 'positive' : 'negative',
-            attitudeScore: entry.score || (entry.type === 'POSITIVE' ? 1 : -1),
+            attitudeScore: score,
             attitudeCategory: entry.type?.toLowerCase() === 'positive' ? 'positive' : 'negative',
             comment: entry.comment || '',
             description: entry.comment || '',
@@ -468,12 +472,16 @@ Respond with a JSON object containing an array of ALL entries found:
             processedAt: new Date(),
           });
           savedEntries.push(attitudeScreenshot);
+          const key = `${entryYear}-${entryMonth}`;
+          const bucket = scoreByMonth.get(key);
+          if (bucket) bucket.total += score;
+          else scoreByMonth.set(key, { month: entryMonth, year: entryYear, total: score });
         }
 
-        if (gamePresenterId && entries.length > 0) {
-          // Use cumulative +1/-1 system consistent with attitudeScreenshot.upload
-          const totalScore = entries.reduce((sum: number, e: any) => sum + (e.score || (e.type === 'POSITIVE' ? 1 : -1)), 0);
-          await db.updateGPAttitude(gamePresenterId, month, year, totalScore);
+        if (gamePresenterId) {
+          for (const { month: bm, year: by, total } of Array.from(scoreByMonth.values())) {
+            if (total !== 0) await db.updateGPAttitude(gamePresenterId, bm, by, total);
+          }
         }
 
         return {

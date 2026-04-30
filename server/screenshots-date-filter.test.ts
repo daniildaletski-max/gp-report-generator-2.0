@@ -20,7 +20,7 @@
  * the smoke test plan; we don't have an in-memory MySQL harness here.
  */
 import { describe, it, expect } from "vitest";
-import { monthRange } from "./db/_dateRange";
+import { monthRange, parseIsoDateLocal } from "./db/_dateRange";
 import { parseAttitudeEntryDate } from "./routers/attitudeScreenshot";
 
 describe("monthRange", () => {
@@ -125,6 +125,18 @@ describe("parseAttitudeEntryDate", () => {
     expect(d!.getDate()).toBe(3);
   });
 
+  it("first-of-month date-only entry stays in that month (no UTC day-shift)", () => {
+    // Codex review #22: `new Date("2026-03-01")` was being read as UTC
+    // midnight, which on a US server means Feb 28 local — so a March 1
+    // entry got filed under February. Local-time constructor avoids
+    // that drift.
+    const d = parseAttitudeEntryDate("1 Mar 2026");
+    expect(d).not.toBeNull();
+    expect(d!.getMonth()).toBe(2); // March
+    expect(d!.getDate()).toBe(1);
+    expect(d!.getFullYear()).toBe(2026);
+  });
+
   it("month boundary: 31 Mar 2026, 23:59 stays March, NOT April", () => {
     // Without time component this parser drops to midnight of that
     // day, which still belongs to March. We only test the "stays in
@@ -156,5 +168,42 @@ describe("regression: screenshot bug", () => {
     const marchWindow = monthRange(3, 2026);
     expect(parsed!.getTime()).toBeGreaterThanOrEqual(marchWindow.start.getTime());
     expect(parsed!.getTime()).toBeLessThan(marchWindow.endExclusive.getTime());
+  });
+});
+
+describe("parseIsoDateLocal", () => {
+  // Used by smartUpload + errorScreenshot for the OCR'd `errorDate` field
+  // which arrives as YYYY-MM-DD. The bug Codex flagged: `new Date("2026-03-01")`
+  // is parsed as UTC and shifts to Feb 28 in negative offsets, so an April-1
+  // incident could land in March (or vice-versa).
+  it("parses YYYY-MM-DD as local-day midnight, not UTC", () => {
+    const d = parseIsoDateLocal("2026-03-01");
+    expect(d).not.toBeNull();
+    expect(d!.getFullYear()).toBe(2026);
+    expect(d!.getMonth()).toBe(2);
+    expect(d!.getDate()).toBe(1);
+    expect(d!.getHours()).toBe(0);
+  });
+
+  it("returns null for missing or empty input", () => {
+    expect(parseIsoDateLocal(undefined)).toBeNull();
+    expect(parseIsoDateLocal(null)).toBeNull();
+    expect(parseIsoDateLocal("")).toBeNull();
+    expect(parseIsoDateLocal("   ")).toBeNull();
+  });
+
+  it("returns null for non-ISO formats", () => {
+    expect(parseIsoDateLocal("2026/03/01")).toBeNull();
+    expect(parseIsoDateLocal("Mar 1 2026")).toBeNull();
+    expect(parseIsoDateLocal("2026-3-1")).toBeNull(); // strict — needs zero-padding
+    expect(parseIsoDateLocal("2026-13-01")).toBeNull(); // out-of-range month
+    expect(parseIsoDateLocal("2026-03-32")).toBeNull(); // out-of-range day
+  });
+
+  it("derived month/year matches the local calendar day", () => {
+    const d = parseIsoDateLocal("2026-04-01");
+    expect(d).not.toBeNull();
+    expect(d!.getMonth() + 1).toBe(4); // April, not March
+    expect(d!.getDate()).toBe(1);
   });
 });
