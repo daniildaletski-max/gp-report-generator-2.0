@@ -3,7 +3,7 @@
  * Logs into persona.fujitsu.ee and extracts attendance data (sick leaves, missed days, extra shifts)
  * for a given month/year and project ID.
  */
-import puppeteer, { Browser, Page } from 'puppeteer-core';
+import puppeteer, { Browser, Page } from 'puppeteer';
 import { existsSync } from 'node:fs';
 
 const PERSONA_URL = 'https://persona.fujitsu.ee/Persona/Avaleht/Login_EmbInt.aspx?ReturnUrl=%2fPersona';
@@ -29,22 +29,23 @@ export interface PersonaSyncResult {
 let browserInstance: Browser | null = null;
 
 /**
- * Locate a Chromium/Chrome binary at runtime.
+ * Locate a Chromium/Chrome binary, falling back to puppeteer's bundled
+ * download. Returns `undefined` when no system path is found and
+ * puppeteer should pick its own bundle.
  *
- * The previous implementation hard-coded `/usr/bin/chromium`, which is the
- * Debian/Ubuntu apt package path. Production was deployed onto an image
- * that does not ship that package, so every Persona sync failed with
- * "Browser was not found at the configured executablePath".
+ * History: production used to fail every Persona sync with "Browser
+ * was not found at the configured executablePath (/usr/bin/chromium)"
+ * because that path is the Debian apt path and the deploy image
+ * doesn't ship it. We now use the full `puppeteer` package (vs
+ * `puppeteer-core`) which ships its own Chromium, and an explicit
+ * executablePath is only used when an operator wants to override.
  *
  * Resolution order:
- *   1. PUPPETEER_EXECUTABLE_PATH env var (operator override)
- *   2. CHROMIUM_PATH env var (legacy compatibility)
- *   3. Common system paths across Debian/Alpine/macOS/Nix
- *
- * Throws a clear, actionable error when nothing usable is found, instead of
- * letting puppeteer surface its generic message.
+ *   1. PUPPETEER_EXECUTABLE_PATH / CHROMIUM_PATH (operator override)
+ *   2. Common system paths
+ *   3. undefined → puppeteer's bundled Chromium (the new safe default)
  */
-function resolveChromiumExecutable(): string {
+function resolveChromiumExecutable(): string | undefined {
   const fromEnv = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROMIUM_PATH;
   if (fromEnv && existsSync(fromEnv)) return fromEnv;
 
@@ -62,9 +63,7 @@ function resolveChromiumExecutable(): string {
   for (const path of candidates) {
     if (existsSync(path)) return path;
   }
-  throw new Error(
-    'No Chromium/Chrome binary found. Set PUPPETEER_EXECUTABLE_PATH to a valid path, or install one of: chromium, chromium-browser, google-chrome.',
-  );
+  return undefined;
 }
 
 async function getBrowser(): Promise<Browser> {
@@ -73,7 +72,9 @@ async function getBrowser(): Promise<Browser> {
   }
   const executablePath = resolveChromiumExecutable();
   browserInstance = await puppeteer.launch({
-    executablePath,
+    // Pass executablePath only when we found one explicitly; otherwise let
+    // puppeteer find its bundled Chromium.
+    ...(executablePath ? { executablePath } : {}),
     headless: true,
     args: [
       '--no-sandbox',

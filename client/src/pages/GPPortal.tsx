@@ -19,8 +19,8 @@ import { useUrlState, urlString } from "@/hooks/useUrlState";
 
 import { useIsMobile } from "@/hooks/useMobile";
 import {
-  ScoreCard, AchievementBadge, StatCard, LabeledComment, MonthSelector, ActionPlanCard,
-  AtAGlanceStrip, GPPortalSkeleton,
+  ScoreCard, AchievementBadge, StatCard, LabeledComment, ActionPlanCard,
+  AtAGlanceStrip, GPPortalSkeleton, StreakChip, MonthTabHeader,
 } from "./gpPortal/components";
 
 export default function GPPortal() {
@@ -181,6 +181,41 @@ export default function GPPortal() {
     return "Good evening";
   }, []);
 
+  /**
+   * Sparkline-ready trend arrays for each score card. Slices the last
+   * 6 monthly history points and zero-fills months with no evaluations
+   * so the line still has a continuous shape.
+   */
+  const scoreTrends = useMemo(() => {
+    const empty = { total: [], appearance: [], performance: [] };
+    if (!data?.monthlyHistory || data.monthlyHistory.length < 2) return empty;
+    const slice = (data.monthlyHistory as any[]).slice(-6);
+    return {
+      total: slice.map(m => ({ value: Number(m.avgTotal) || 0 })),
+      appearance: slice.map(m => ({ value: Number(m.avgAppearance) || 0 })),
+      performance: slice.map(m => ({ value: Number(m.avgPerformance) || 0 })),
+    };
+  }, [data]);
+
+  /**
+   * "N evaluations clean" — consecutive most-recent evaluations with
+   * zero docked points (i.e. perfect MAX_TOTAL_SCORE). Chooses the
+   * streak metric that gives the GP something to actively protect.
+   * Returns 0 when there's no current streak.
+   */
+  const cleanStreak = useMemo(() => {
+    if (!data?.evaluations || data.evaluations.length === 0) return 0;
+    const sorted = [...data.evaluations].sort((a: any, b: any) =>
+      new Date(b.evaluationDate || 0).getTime() - new Date(a.evaluationDate || 0).getTime()
+    );
+    let streak = 0;
+    for (const e of sorted as any[]) {
+      if ((e.totalScore || 0) >= MAX_TOTAL_SCORE) streak += 1;
+      else break;
+    }
+    return streak;
+  }, [data]);
+
   const achievements = useMemo(() => {
     if (!data) return [];
     const totalEvals = data.evaluations.length;
@@ -305,17 +340,26 @@ export default function GPPortal() {
                       </p>
                     </div>
                   </div>
-                  {improvement && (
-                    <div className={`px-3 py-2 rounded-xl border ${improvement.total >= 0 ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
-                      <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">
-                        Vs {improvement.previousLabel}
-                      </p>
-                      <p className={`text-base sm:text-lg font-bold flex items-center gap-1 ${improvement.total >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                        {improvement.total >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                        {improvement.total >= 0 ? "+" : ""}{improvement.total} pts
-                      </p>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {cleanStreak >= 2 && (
+                      <StreakChip
+                        days={cleanStreak}
+                        label={`${cleanStreak} perfect in a row`}
+                        tone={cleanStreak >= 5 ? "violet" : "amber"}
+                      />
+                    )}
+                    {improvement && (
+                      <div className={`px-3 py-2 rounded-xl border ${improvement.total >= 0 ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">
+                          Vs {improvement.previousLabel}
+                        </p>
+                        <p className={`text-base sm:text-lg font-bold flex items-center gap-1 ${improvement.total >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                          {improvement.total >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                          {improvement.total >= 0 ? "+" : ""}{improvement.total} pts
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -346,6 +390,8 @@ export default function GPPortal() {
               accentColor="bg-amber-50 border-amber-200 text-amber-600"
               tooltip={`Total of Appearance (${MAX_APPEARANCE_SCORE}) + Game Performance (${MAX_GAME_PERFORMANCE_SCORE}) = ${MAX_TOTAL_SCORE} max`}
               delta={improvement?.total}
+              trend={scoreTrends.total}
+              sparkColor="#f59e0b"
             />
             <ScoreCard
               score={avgAppearance}
@@ -356,6 +402,8 @@ export default function GPPortal() {
               accentColor="bg-emerald-50 border-emerald-200 text-emerald-600"
               tooltip={`Hair (${SCORE_CONFIG.hair.max}) + Makeup (${SCORE_CONFIG.makeup.max}) + Outfit (${SCORE_CONFIG.outfit.max}) + Posture (${SCORE_CONFIG.posture.max}) = ${MAX_APPEARANCE_SCORE} max`}
               delta={improvement?.appearance}
+              trend={scoreTrends.appearance}
+              sparkColor="#10b981"
             />
             <ScoreCard
               score={avgGamePerf}
@@ -366,6 +414,8 @@ export default function GPPortal() {
               accentColor="bg-blue-50 border-blue-200 text-blue-600"
               tooltip={`Dealing Style (${SCORE_CONFIG.dealingStyle.max}) + Game Performance (${SCORE_CONFIG.gamePerformance.max}) = ${MAX_GAME_PERFORMANCE_SCORE} max`}
               delta={improvement?.performance}
+              trend={scoreTrends.performance}
+              sparkColor="#3b82f6"
             />
           </div>
         </section>
@@ -961,18 +1011,15 @@ export default function GPPortal() {
             fix becomes visible: entries dated in another month should
             never leak into the selected month again. */}
         {data.monthlyStats && (
-          <section>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-              <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2 text-slate-800">
-                <FileText className="h-5 w-5 text-amber-500" />
-                Monthly Details
-              </h2>
-              <MonthSelector 
-                selectedMonth={detailMonth} 
-                selectedYear={detailYear} 
-                onChange={(m, y) => { setDetailMonth(m); setDetailYear(y); }}
-              />
-            </div>
+          <section className="space-y-5">
+            <MonthTabHeader
+              selectedMonth={detailMonth}
+              selectedYear={detailYear}
+              onChange={(m, y) => { setDetailMonth(m); setDetailYear(y); }}
+              evalCount={(monthDetails?.evaluations || []).length}
+              errorCount={errorDetails.length}
+              attitudeScore={attitudeDetails.reduce((s: number, a: any) => s + (a.attitudeScore || 0), 0)}
+            />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Error Details */}

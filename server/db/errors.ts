@@ -185,16 +185,50 @@ export async function updateGPMistakesDirectly(gpName: string, mistakesCount: nu
   return true;
 }
 
+/**
+ * Pull every Excel-imported error for a GP in a given month.
+ *
+ * Two leak vectors that this function used to suffer from:
+ *
+ *   1. Exact `gpName` equality. Excel files routinely come with subtle
+ *      whitespace differences (double space, trailing space, mixed case)
+ *      relative to the canonical name in `gamePresenters`. Olha's
+ *      Playgon row was being dropped because the Excel said
+ *      "Olha Kyrychenko" while the DB stored "Olha  Kyrychenko".
+ *      Normalize both sides before comparing.
+ *
+ *   2. Strict `errorDate BETWEEN startDate AND endDate`. Rows where the
+ *      OCR/parser couldn't recover a date (NULL `errorDate`) were
+ *      silently filtered out, even though we know the row belongs to
+ *      this `errorFile`'s month/year. Use `COALESCE(errorDate, createdAt)`
+ *      so legacy / partially-parsed rows still surface.
+ */
 export async function getGpErrorsForPortal(gpId: number, month: number, year: number): Promise<GpError[]> {
   const db = await getDb();
   if (!db) return [];
   try {
     const gp = await db.select().from(gamePresenters).where(eq(gamePresenters.id, gpId)).limit(1);
     if (gp.length === 0) return [];
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0, 23, 59, 59);
-    return await db.select().from(gpErrors).where(and(eq(gpErrors.gpName, gp[0].name), gte(gpErrors.errorDate, startDate), lte(gpErrors.errorDate, endDate))).orderBy(desc(gpErrors.errorDate));
-  } catch (error) { log.error("Error getting GP errors for portal", error instanceof Error ? error : undefined); return []; }
+    const { start, endExclusive } = monthRange(month, year);
+    const effective = sql`COALESCE(${gpErrors.errorDate}, ${gpErrors.createdAt})`;
+    // Pull all candidates by month, then post-filter on a normalized
+    // name so whitespace/case variations between the Excel parse and
+    // the canonical GP name don't drop rows.
+    const candidates = await db
+      .select()
+      .from(gpErrors)
+      .where(and(gte(effective, start), lt(effective, endExclusive)))
+      .orderBy(desc(gpErrors.errorDate));
+    const target = normalizeName(gp[0].name);
+    return candidates.filter(row => normalizeName(row.gpName) === target);
+  } catch (error) {
+    log.error("Error getting GP errors for portal", error instanceof Error ? error : undefined);
+    return [];
+  }
+}
+
+function normalizeName(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 // ============================================
