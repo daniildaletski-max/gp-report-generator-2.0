@@ -17,9 +17,6 @@ const log = createLogger("Router");
  * Parsing `"2026-03-01"` via `new Date()` would interpret it as UTC
  * midnight and shift the day backward in negative offsets — driving
  * `month`/`year` to the wrong month for first-of-month entries.
- *
- * Exported so smartUpload's ATTITUDE branch can reuse the same
- * parser and stay consistent with this router's behaviour.
  */
 const ATTITUDE_DATE_RE = /^(\d+)\s+(\w+)\s+(\d+),?\s*(\d+:\d+)?$/;
 const MONTH_NAME_TO_IDX: Record<string, number> = {

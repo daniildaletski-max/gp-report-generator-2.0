@@ -135,16 +135,12 @@ export async function runPersonaSyncForTeam(opts: {
     const userId = team.userId ?? undefined;
 
     for (const worker of result.workers) {
-      // Skip workers with no recorded attendance changes — we don't
-      // want to overwrite manually-edited rows with zeros.
-      if (worker.sickLeaves === 0 && worker.missedDays === 0 && worker.extraShifts === 0) {
-        continue;
-      }
-
       // Use the same fuzzy matcher the rest of the app uses.
       // Threshold 0.7 mirrors what evaluation upload uses.
+      // NOTE: findBestMatchingGPByUser signature is (name, threshold, userId)
+      // — keep the argument order in sync with that.
       const match = userId
-        ? await db.findBestMatchingGPByUser(worker.name, userId, 0.7)
+        ? await db.findBestMatchingGPByUser(worker.name, 0.7, userId)
         : await db.findBestMatchingGP(worker.name, 0.7);
 
       // For diagnostic logging: when the strict 0.7 match fails OR
@@ -156,7 +152,7 @@ export async function runPersonaSyncForTeam(opts: {
       // genuinely isn't a GP.
       const closestForDebug = !match || match.gamePresenter.teamId !== opts.teamId
         ? (userId
-          ? await db.findBestMatchingGPByUser(worker.name, userId, 0)
+          ? await db.findBestMatchingGPByUser(worker.name, 0, userId)
           : await db.findBestMatchingGP(worker.name, 0))
         : null;
 
