@@ -1549,10 +1549,30 @@ function ErrorFilesTab({
 
   const uploadMutation = trpc.errorFile.upload.useMutation({
     onSuccess: (data: any) => {
-      if (data.replacedFileId) {
-        toast.success(`Error file replaced (previous file #${data.replacedFileId} removed)`);
+      // Surface a detailed parsing breakdown so the FM knows exactly
+      // what landed in the system vs what got dropped — previously just
+      // a generic "uploaded" toast, which made it hard to tell when
+      // names didn't match across the file and the GP roster.
+      const parsedCount = data.parsedErrors ?? 0;
+      const updatedCount = (data.updatedGPs?.length) ?? 0;
+      const notFoundCount = (data.notFoundGPs?.length) ?? 0;
+      const recordsCreated = data.createdErrorRecords ?? 0;
+
+      const parts: string[] = [];
+      parts.push(`${parsedCount} error${parsedCount === 1 ? '' : 's'} parsed from file`);
+      if (recordsCreated) parts.push(`${recordsCreated} record${recordsCreated === 1 ? '' : 's'} created`);
+      if (updatedCount) parts.push(`${updatedCount} GP${updatedCount === 1 ? '' : 's'} matched`);
+      const headline = data.replacedFileId
+        ? `Replaced previous file — ${parts.join(' · ')}`
+        : `Upload complete — ${parts.join(' · ')}`;
+
+      if (notFoundCount > 0) {
+        toast.warning(headline, {
+          description: `Unmatched names (${notFoundCount}): ${data.notFoundGPs.slice(0, 6).join(', ')}${data.notFoundGPs.length > 6 ? `, +${data.notFoundGPs.length - 6} more` : ''}. Add them in Game Presenters or fix the spelling, then click "Recalculate".`,
+          duration: 12000,
+        });
       } else {
-        toast.success("Error file uploaded");
+        toast.success(headline);
       }
       refetchFiles();
     },
@@ -3771,6 +3791,36 @@ function PersonaSyncTab({
     },
   });
 
+  // Bulk sync — runs every team the FM can see, sequentially. Saves the
+  // FM having to re-pick every team each month.
+  const syncAllMutation = trpc.personaSync.syncAllTeams.useMutation({
+    onSuccess: (data) => {
+      const log: string[] = [
+        `✅ Synced ${data.totals.teams} team${data.totals.teams === 1 ? '' : 's'} — ${MONTHS[selectedMonth - 1]} ${selectedYear}`,
+        `   Matched: ${data.totals.matched}, Unmatched: ${data.totals.unmatched}, Failed: ${data.totals.failed}`,
+        ``,
+        ...data.results.map(r =>
+          r.status === "failed"
+            ? `❌ ${r.teamName} — ${r.error || 'sync failed'}`
+            : `✅ ${r.teamName} — ${r.matched} matched / ${r.unmatched} unmatched`,
+        ),
+      ];
+      setSyncLog(log);
+      setIsSyncing(false);
+      if (data.totals.failed === 0) {
+        toast.success(`All teams synced — ${data.totals.matched} GPs updated`);
+      } else {
+        toast.warning(`Synced with ${data.totals.failed} team${data.totals.failed === 1 ? '' : 's'} failed; see log`);
+      }
+      refetchTeamProjects();
+    },
+    onError: (err) => {
+      setSyncLog([`❌ Bulk sync failed: ${err.message}`]);
+      setIsSyncing(false);
+      toast.error(`Bulk sync failed: ${err.message}`);
+    },
+  });
+
   const handlePreview = () => {
     if (!selectedTeamId) {
       toast.error("Please select a team");
@@ -3938,6 +3988,23 @@ function PersonaSyncTab({
                 )}
               </Button>
             </div>
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => {
+                setIsSyncing(true);
+                setSyncLog([`🔄 Syncing all teams for ${MONTHS[selectedMonth - 1]} ${selectedYear}…`]);
+                syncAllMutation.mutate({ month: selectedMonth, year: selectedYear });
+              }}
+              disabled={isSyncing || syncAllMutation.isPending}
+              title="Run Persona sync sequentially for every team you can see"
+            >
+              {syncAllMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Syncing all teams…</>
+              ) : (
+                <><RefreshCw className="h-4 w-4 mr-2" /> Sync ALL teams</>
+              )}
+            </Button>
             <p className="text-xs text-muted-foreground">
               <strong>Preview</strong> shows what would change without saving.{" "}
               <strong>Sync</strong> writes to the database. Scheduled sync also runs on the 1st of each month before reports are generated.
