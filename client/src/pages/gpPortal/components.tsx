@@ -5,16 +5,165 @@
  * change in the move — just a code organisation step that lets the
  * orchestrator file shrink as new tabbed sections are added.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Star, Eye, Scissors, TrendingUp, TrendingDown, Info, ChevronLeft, ChevronRight,
-  Target, Calendar, Clock, AlertTriangle, ThumbsUp, Flame, Crown, Sparkles,
+  Target, Calendar, Clock, AlertTriangle, ThumbsUp, Flame, Crown, Sparkles, Zap,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MONTH_NAMES } from "../../../../shared/const";
+
+// ============================================================================
+// Performance Pulse hero — dramatic full-width hero block intended to replace
+// the existing thin tier banner. Surfaces the GP's status at a glance:
+//   - Large circular progress ring sized off the overall score
+//   - Animated counter that rolls up to the current value on mount
+//   - Tier name + icon centred inside the ring
+//   - Three insight chips (delta vs prev / streak / last evaluation)
+// One block, one visual moment — meant to feel substantially different
+// from the prior thin banner. No new dependencies.
+// ============================================================================
+
+function useCountUp(target: number, durationMs = 900): number {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    let frame: number;
+    const start = performance.now();
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - start) / durationMs);
+      const eased = 1 - Math.pow(1 - k, 3); // ease-out cubic
+      setVal(target * eased);
+      if (k < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, durationMs]);
+  return val;
+}
+
+export function PerformancePulseHero({
+  gpFirstName,
+  greeting,
+  avgScore,
+  maxScore,
+  evaluationsCount,
+  tierName,
+  tierAccent,
+  TierIcon,
+  delta,
+  deltaLabel,
+  cleanStreak,
+  lastEvaluationDate,
+}: {
+  gpFirstName: string;
+  greeting: string;
+  avgScore: number;
+  maxScore: number;
+  evaluationsCount: number;
+  tierName: string;
+  /** tailwind classes for the gradient ring stroke + glow halo */
+  tierAccent: string;
+  TierIcon: typeof Star;
+  delta: number | null;
+  deltaLabel: string | null;
+  cleanStreak: number;
+  lastEvaluationDate: Date | null;
+}) {
+  const animated = useCountUp(avgScore, 900);
+  const pct = maxScore > 0 ? Math.min(100, Math.max(0, (avgScore / maxScore) * 100)) : 0;
+  const radius = 86;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - pct / 100);
+
+  return (
+    <section className="relative overflow-hidden rounded-3xl border border-slate-200 shadow-md">
+      {/* Backdrop layer — ambient gradient + soft amber halo behind ring */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-amber-50" aria-hidden />
+      <div className={`absolute -top-24 -right-20 h-72 w-72 rounded-full blur-3xl opacity-40 bg-gradient-to-br ${tierAccent}`} aria-hidden />
+
+      <div className="relative grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 sm:gap-8 p-6 sm:p-8 items-center">
+        {/* Ring + tier badge */}
+        <div className="relative h-48 w-48 mx-auto md:mx-0 shrink-0">
+          <svg viewBox="0 0 200 200" className="h-full w-full -rotate-90">
+            <defs>
+              <linearGradient id="pulseRing" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#f59e0b" />
+                <stop offset="100%" stopColor="#f97316" />
+              </linearGradient>
+            </defs>
+            <circle cx="100" cy="100" r={radius} fill="none" stroke="#e2e8f0" strokeWidth="12" />
+            <circle
+              cx="100"
+              cy="100"
+              r={radius}
+              fill="none"
+              stroke="url(#pulseRing)"
+              strokeWidth="12"
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+              style={{ transition: "stroke-dashoffset 900ms cubic-bezier(0.16, 1, 0.3, 1)" }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <div className={`mb-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wide bg-gradient-to-br ${tierAccent} text-white shadow-sm`}>
+              <TierIcon className="h-3 w-3" />
+              {tierName}
+            </div>
+            <div className="text-5xl font-bold text-slate-900 tabular-nums leading-none">
+              {animated.toFixed(1)}
+            </div>
+            <div className="text-xs text-slate-400 mt-1">/ {maxScore}</div>
+          </div>
+        </div>
+
+        {/* Greeting + insight chips */}
+        <div className="space-y-3">
+          <div>
+            <p className="text-xs sm:text-sm text-slate-500 uppercase tracking-wider font-medium">{greeting}</p>
+            <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 leading-tight">
+              {gpFirstName}'s <span className="text-amber-600">performance pulse</span>
+            </h1>
+            <p className="text-sm text-slate-600 mt-1">
+              {evaluationsCount} evaluation{evaluationsCount !== 1 ? "s" : ""} on record · keep stacking the wins
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {delta !== null && (
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border ${
+                delta >= 0
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                  : "bg-rose-50 border-rose-200 text-rose-700"
+              }`}>
+                {delta >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                {delta >= 0 ? "+" : ""}{delta.toFixed(1)} pts {deltaLabel ? `vs ${deltaLabel}` : ""}
+              </span>
+            )}
+            {cleanStreak >= 2 && (
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border ${
+                cleanStreak >= 5
+                  ? "bg-violet-50 border-violet-200 text-violet-700"
+                  : "bg-amber-50 border-amber-200 text-amber-700"
+              }`}>
+                {cleanStreak >= 5 ? <Crown className="h-3.5 w-3.5" /> : <Flame className="h-3.5 w-3.5" />}
+                {cleanStreak} perfect in a row
+              </span>
+            )}
+            {lastEvaluationDate && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border bg-slate-50 border-slate-200 text-slate-700">
+                <Zap className="h-3.5 w-3.5" />
+                Last eval {formatDistanceToNow(lastEvaluationDate, { addSuffix: true })}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 // ============================================================================
 // Score card — large metric display with tooltip + status pill + progress bar

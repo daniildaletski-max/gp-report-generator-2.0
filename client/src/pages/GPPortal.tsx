@@ -20,7 +20,7 @@ import { useUrlState, urlString } from "@/hooks/useUrlState";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   ScoreCard, AchievementBadge, StatCard, LabeledComment, ActionPlanCard,
-  AtAGlanceStrip, GPPortalSkeleton, StreakChip, MonthTabHeader,
+  AtAGlanceStrip, GPPortalSkeleton, StreakChip, MonthTabHeader, PerformancePulseHero,
 } from "./gpPortal/components";
 
 export default function GPPortal() {
@@ -311,59 +311,29 @@ export default function GPPortal() {
 
       <main className="container py-6 sm:py-8 space-y-8 sm:space-y-10 relative z-10">
 
-        {/* Hero banner — personalised greeting + performance tier */}
+        {/* Performance Pulse hero — replaces the previous thin tier banner.
+            Big circular progress ring + animated score counter + tier badge
+            inside the ring + insight chips on the right. Sized so it never
+            sits below the fold on a phone. */}
         {tier && (
-          <section>
-            <Card className="overflow-hidden border-slate-200 shadow-sm bg-white">
-              <div className={`h-1.5 bg-gradient-to-r ${tier.color}`} />
-              <CardContent className="p-5 sm:p-6">
-                <div className="flex items-start sm:items-center justify-between gap-4 flex-wrap">
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className={`shrink-0 h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-gradient-to-br ${tier.color} flex items-center justify-center shadow-sm`}>
-                      <tier.icon className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs sm:text-sm text-slate-500">
-                        {greeting}, {data.gpName.split(" ")[0]}
-                      </p>
-                      <h2 className="text-xl sm:text-3xl font-bold text-slate-900 leading-tight tracking-tight truncate">
-                        You're a <span className={tier.textColor}>{tier.name}</span> presenter
-                      </h2>
-                      <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                        Average score{" "}
-                        <span className="font-semibold text-slate-700">
-                          {avgScore.toFixed(1)}
-                        </span>
-                        <span className="text-slate-400"> / {MAX_TOTAL_SCORE}</span>
-                        {" · "}
-                        {data.evaluations.length} evaluation{data.evaluations.length !== 1 ? "s" : ""}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {cleanStreak >= 2 && (
-                      <StreakChip
-                        days={cleanStreak}
-                        label={`${cleanStreak} perfect in a row`}
-                        tone={cleanStreak >= 5 ? "violet" : "amber"}
-                      />
-                    )}
-                    {improvement && (
-                      <div className={`px-3 py-2 rounded-xl border ${improvement.total >= 0 ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
-                        <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-0.5">
-                          Vs {improvement.previousLabel}
-                        </p>
-                        <p className={`text-base sm:text-lg font-bold flex items-center gap-1 ${improvement.total >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                          {improvement.total >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                          {improvement.total >= 0 ? "+" : ""}{improvement.total} pts
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </section>
+          <PerformancePulseHero
+            gpFirstName={data.gpName.split(" ")[0]}
+            greeting={greeting}
+            avgScore={avgScore}
+            maxScore={MAX_TOTAL_SCORE}
+            evaluationsCount={data.evaluations.length}
+            tierName={tier.name}
+            tierAccent={tier.color}
+            TierIcon={tier.icon}
+            delta={improvement?.total ?? null}
+            deltaLabel={improvement?.previousLabel ?? null}
+            cleanStreak={cleanStreak}
+            lastEvaluationDate={
+              recentEvaluations[0]?.evaluationDate
+                ? new Date(recentEvaluations[0].evaluationDate)
+                : null
+            }
+          />
         )}
 
         {/* At-a-glance strip — quick read of "where am I this month" */}
@@ -1234,6 +1204,10 @@ export default function GPPortal() {
           <p className="text-slate-400 text-xs">
             <Shield className="h-3 w-3 inline-block mr-1 -mt-0.5" />
             This data is private to you. Shared via secure link.
+          </p>
+          {/* Build identifier so we can confirm Manus picked up the latest deploy. */}
+          <p className="text-slate-300 text-[10px] font-mono pt-1">
+            build {__BUILD_SHA__} · {__BUILD_TIME__.slice(0, 16).replace("T", " ")}Z
           </p>
         </div>
       </footer>
