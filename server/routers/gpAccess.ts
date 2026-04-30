@@ -213,11 +213,59 @@ export const gpAccessRouter = router({
       // we re-apply the filter at display time so count == visible items.
       const reportedMistakes = errorDetails.length;
 
+      // Build a "filtered/hidden technical errors" list so the UI can
+      // optionally show them under a "Hidden / not counted against you"
+      // expander. The user has been confused about why the headline says
+      // 1 when the FM uploaded 2 — letting them see the filtered ones
+      // makes it obvious which row was classified as technical.
+      const hiddenTechnicalErrors = [
+        ...errorScreenshotsRaw
+          .filter(e => isTechnicalError({
+            errorType: e.errorType,
+            errorCategory: e.errorCategory,
+            errorDescription: e.errorDescription,
+          }))
+          .map(e => ({
+            id: e.id,
+            source: 'screenshot' as const,
+            errorType: e.errorType,
+            errorDescription: e.errorDescription,
+            errorCategory: e.errorCategory,
+            severity: e.severity,
+            gameType: e.gameType,
+            tableId: e.tableId,
+            screenshotUrl: e.screenshotUrl,
+            errorDate: e.errorDate,
+            createdAt: e.createdAt,
+          })),
+        ...gpErrorsRaw
+          .filter(e => isTechnicalError({
+            errorCode: e.errorCode,
+            errorDescription: e.errorDescription,
+          }))
+          .map(e => ({
+            id: `excel-${e.id}`,
+            source: 'excel' as const,
+            errorType: e.errorCode || 'excel_error',
+            errorDescription: e.errorDescription,
+            errorCategory: null,
+            severity: 'medium' as const,
+            gameType: e.gameType,
+            tableId: e.tableId,
+            screenshotUrl: null,
+            errorDate: e.errorDate,
+            createdAt: e.createdAt,
+          })),
+      ];
+
       return {
         month: input.month,
         year: input.year,
         stats: stats ? {
-          attitude: stats.attitude,
+          // Compute attitude from the actual row sum rather than the
+          // monthlyGpStats column — same reason as `mistakes`: the
+          // cached column drifts after entry-month re-bucketing.
+          attitude: attitudeDetails.reduce((s: number, a: any) => s + (a.attitudeScore || 0), 0),
           mistakes: reportedMistakes,
           totalGames: stats.totalGames,
         } : null,
@@ -225,6 +273,7 @@ export const gpAccessRouter = router({
         // count toward this GP. Surfaced in the UI so the count never seems
         // mysteriously off.
         technicalErrorsHidden: technicalErrorsHidden + technicalGpErrorsHidden,
+        hiddenTechnicalErrors,
         evaluations: monthEvals,
         errorDetails,
         attitudeDetails: attitudeDetails.map(a => ({
@@ -334,7 +383,11 @@ export const gpAccessRouter = router({
           current: currentMonthStats ? {
             month: currentMonth,
             year: currentYear,
-            attitude: currentMonthStats.attitude,
+            // Compute attitude from the actual row sum rather than the
+            // monthlyGpStats column. The column is a running total that
+            // can drift out of sync with the visible rows once the
+            // entry-month re-bucketing fix moves rows around.
+            attitude: attitudeDetails.reduce((s: number, a: any) => s + (a.attitudeScore || 0), 0),
             // Use filtered count so what the GP sees in the list matches the headline number
             mistakes: errorDetails.length,
             totalGames: currentMonthStats.totalGames,
