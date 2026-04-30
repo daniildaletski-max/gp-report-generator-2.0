@@ -21,6 +21,7 @@ import { useIsMobile } from "@/hooks/useMobile";
 import {
   ScoreCard, AchievementBadge, StatCard, LabeledComment, ActionPlanCard,
   AtAGlanceStrip, GPPortalSkeleton, StreakChip, MonthTabHeader, PerformancePulseHero,
+  AICoachCard,
 } from "./gpPortal/components";
 
 export default function GPPortal() {
@@ -59,6 +60,15 @@ export default function GPPortal() {
     { token: token || "", month: detailMonth, year: detailYear },
     { enabled: !!token && !!data }
   );
+
+  // AI Coach — server-side LLM-generated personalised summary cached
+  // per-day. We pull lazily once base data is loaded so the LLM round-trip
+  // doesn't compete with the first paint of the hero.
+  const coachInsights = trpc.gpAccess.getCoachInsights.useQuery(
+    { token: token || "" },
+    { enabled: !!token && !!data, refetchOnWindowFocus: false, staleTime: 5 * 60_000 },
+  );
+  const refreshCoach = () => coachInsights.refetch();
 
   useEffect(() => {
     if (data) setLastRefresh(new Date());
@@ -335,6 +345,18 @@ export default function GPPortal() {
             }
           />
         )}
+
+        {/* AI Coach — LLM-generated personalised summary based on the GP's
+            actual evaluations. Server caches per-day so we don't burn
+            credits on every 30s portal poll. */}
+        <AICoachCard
+          insights={coachInsights.data ?? null}
+          isLoading={coachInsights.isLoading}
+          isFetching={coachInsights.isFetching}
+          onRefresh={refreshCoach}
+          generatedAt={coachInsights.data?.generatedAt}
+          cached={coachInsights.data?.cached}
+        />
 
         {/* At-a-glance strip — quick read of "where am I this month" */}
         <AtAGlanceStrip
