@@ -238,6 +238,7 @@ export default function GPPortal() {
 
   const errorDetails = monthDetails?.errorDetails || [];
   const attitudeDetails = monthDetails?.attitudeDetails || [];
+  const technicalErrorsHidden = monthDetails?.technicalErrorsHidden ?? 0;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 relative">
@@ -983,7 +984,17 @@ export default function GPPortal() {
                     <Badge className="ml-2 bg-red-50 text-red-700 border-red-200">{errorDetails.length}</Badge>
                   )}
                 </h3>
-                
+
+                {technicalErrorsHidden > 0 && (
+                  <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 flex items-start gap-2">
+                    <Shield className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
+                    <span>
+                      <strong className="text-slate-700">{technicalErrorsHidden}</strong>{" "}
+                      technical {technicalErrorsHidden === 1 ? "error was" : "errors were"} logged this month but are not counted against you (TV / system / equipment issues).
+                    </span>
+                  </div>
+                )}
+
                 {errorDetails.length > 0 ? (
                   <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
                     <CardContent className="p-0">

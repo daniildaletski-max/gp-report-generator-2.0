@@ -4,6 +4,7 @@
  * for a given month/year and project ID.
  */
 import puppeteer, { Browser, Page } from 'puppeteer-core';
+import { existsSync } from 'node:fs';
 
 const PERSONA_URL = 'https://persona.fujitsu.ee/Persona/Avaleht/Login_EmbInt.aspx?ReturnUrl=%2fPersona';
 const SCHEDULE_ENTRY_URL = 'https://persona.fujitsu.ee/Persona/Pages/ErrorPages/ErrorPage.aspx';
@@ -27,12 +28,52 @@ export interface PersonaSyncResult {
 
 let browserInstance: Browser | null = null;
 
+/**
+ * Locate a Chromium/Chrome binary at runtime.
+ *
+ * The previous implementation hard-coded `/usr/bin/chromium`, which is the
+ * Debian/Ubuntu apt package path. Production was deployed onto an image
+ * that does not ship that package, so every Persona sync failed with
+ * "Browser was not found at the configured executablePath".
+ *
+ * Resolution order:
+ *   1. PUPPETEER_EXECUTABLE_PATH env var (operator override)
+ *   2. CHROMIUM_PATH env var (legacy compatibility)
+ *   3. Common system paths across Debian/Alpine/macOS/Nix
+ *
+ * Throws a clear, actionable error when nothing usable is found, instead of
+ * letting puppeteer surface its generic message.
+ */
+function resolveChromiumExecutable(): string {
+  const fromEnv = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROMIUM_PATH;
+  if (fromEnv && existsSync(fromEnv)) return fromEnv;
+
+  const candidates = [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/local/bin/chromium',
+    '/usr/local/bin/chrome',
+    '/snap/bin/chromium',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  ];
+  for (const path of candidates) {
+    if (existsSync(path)) return path;
+  }
+  throw new Error(
+    'No Chromium/Chrome binary found. Set PUPPETEER_EXECUTABLE_PATH to a valid path, or install one of: chromium, chromium-browser, google-chrome.',
+  );
+}
+
 async function getBrowser(): Promise<Browser> {
   if (browserInstance && browserInstance.connected) {
     return browserInstance;
   }
+  const executablePath = resolveChromiumExecutable();
   browserInstance = await puppeteer.launch({
-    executablePath: '/usr/bin/chromium',
+    executablePath,
     headless: true,
     args: [
       '--no-sandbox',
