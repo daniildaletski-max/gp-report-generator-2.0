@@ -1,10 +1,26 @@
 /**
  * Attitude Screenshots Database Operations
  */
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte, lt, sql } from "drizzle-orm";
 import { attitudeScreenshots, InsertAttitudeScreenshot, AttitudeScreenshot } from "../../drizzle/schema";
 import { getDb } from "./connection";
 import { createLogger } from "../services/logger";
+import { monthRange } from "./_dateRange";
+
+/**
+ * Filter expression that matches rows whose entry-time `evaluationDate`
+ * falls inside the given month — falling back to `createdAt` for legacy
+ * rows that have no parsed evaluationDate.
+ *
+ * Without this, a screenshot uploaded in April containing entries dated
+ * March leaks into April's filter (the row's stored `month`/`year` ints
+ * came from upload moment, not from entry date).
+ */
+function attitudeMonthFilter(month: number, year: number) {
+  const { start, endExclusive } = monthRange(month, year);
+  const effective = sql`COALESCE(${attitudeScreenshots.evaluationDate}, ${attitudeScreenshots.createdAt})`;
+  return and(gte(effective, start), lt(effective, endExclusive));
+}
 
 const log = createLogger("DB:Screenshots");
 
@@ -19,7 +35,7 @@ export async function createAttitudeScreenshot(data: InsertAttitudeScreenshot): 
 export async function getAttitudeScreenshots(month: number, year: number, gamePresenterId?: number): Promise<AttitudeScreenshot[]> {
   const db = await getDb();
   if (!db) return [];
-  const conditions: any[] = [eq(attitudeScreenshots.month, month), eq(attitudeScreenshots.year, year)];
+  const conditions: any[] = [attitudeMonthFilter(month, year)];
   if (gamePresenterId) conditions.push(eq(attitudeScreenshots.gamePresenterId, gamePresenterId));
   return await db.select().from(attitudeScreenshots).where(and(...conditions)).orderBy(desc(attitudeScreenshots.createdAt));
 }
@@ -28,7 +44,7 @@ export async function getAttitudeScreenshotsByGpId(gamePresenterId: number, mont
   const db = await getDb();
   if (!db) return [];
   const conditions: any[] = [eq(attitudeScreenshots.gamePresenterId, gamePresenterId)];
-  if (month && year) { conditions.push(eq(attitudeScreenshots.month, month)); conditions.push(eq(attitudeScreenshots.year, year)); }
+  if (month && year) conditions.push(attitudeMonthFilter(month, year));
   return await db.select().from(attitudeScreenshots).where(and(...conditions)).orderBy(desc(attitudeScreenshots.createdAt));
 }
 
@@ -43,7 +59,7 @@ export async function getAttitudeScreenshotsForGP(gpId: number, month: number, y
   const db = await getDb();
   if (!db) return [];
   try {
-    return await db.select().from(attitudeScreenshots).where(and(eq(attitudeScreenshots.gamePresenterId, gpId), eq(attitudeScreenshots.month, month), eq(attitudeScreenshots.year, year))).orderBy(desc(attitudeScreenshots.createdAt));
+    return await db.select().from(attitudeScreenshots).where(and(eq(attitudeScreenshots.gamePresenterId, gpId), attitudeMonthFilter(month, year))).orderBy(desc(attitudeScreenshots.createdAt));
   } catch (error) { log.error("Error getting attitude screenshots for GP", error instanceof Error ? error : undefined); return []; }
 }
 
@@ -52,8 +68,7 @@ export async function getAllAttitudeScreenshots(month?: number, year?: number, g
   if (!db) return [];
   try {
     const conditions: any[] = [];
-    if (month !== undefined) conditions.push(eq(attitudeScreenshots.month, month));
-    if (year !== undefined) conditions.push(eq(attitudeScreenshots.year, year));
+    if (month !== undefined && year !== undefined) conditions.push(attitudeMonthFilter(month, year));
     if (gamePresenterId !== undefined) conditions.push(eq(attitudeScreenshots.gamePresenterId, gamePresenterId));
     const query = db.select().from(attitudeScreenshots);
     if (conditions.length > 0) return await query.where(and(...conditions)).orderBy(desc(attitudeScreenshots.createdAt));
@@ -64,7 +79,7 @@ export async function getAllAttitudeScreenshots(month?: number, year?: number, g
 export async function getAttitudeScreenshotsByUser(month: number, year: number, userId: number, gamePresenterId?: number): Promise<AttitudeScreenshot[]> {
   const db = await getDb();
   if (!db) return [];
-  const conditions: any[] = [eq(attitudeScreenshots.month, month), eq(attitudeScreenshots.year, year), eq(attitudeScreenshots.uploadedById, userId)];
+  const conditions: any[] = [attitudeMonthFilter(month, year), eq(attitudeScreenshots.uploadedById, userId)];
   if (gamePresenterId) conditions.push(eq(attitudeScreenshots.gamePresenterId, gamePresenterId));
   return await db.select().from(attitudeScreenshots).where(and(...conditions)).orderBy(desc(attitudeScreenshots.createdAt));
 }
@@ -74,8 +89,7 @@ export async function getAllAttitudeScreenshotsByUser(userId: number, month?: nu
   if (!db) return [];
   try {
     const conditions: any[] = [eq(attitudeScreenshots.uploadedById, userId)];
-    if (month) conditions.push(eq(attitudeScreenshots.month, month));
-    if (year) conditions.push(eq(attitudeScreenshots.year, year));
+    if (month && year) conditions.push(attitudeMonthFilter(month, year));
     if (gamePresenterId) conditions.push(eq(attitudeScreenshots.gamePresenterId, gamePresenterId));
     return await db.select().from(attitudeScreenshots).where(and(...conditions)).orderBy(desc(attitudeScreenshots.createdAt));
   } catch (error) { log.error("Error getting attitude screenshots by user", error instanceof Error ? error : undefined); return []; }

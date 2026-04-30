@@ -6,6 +6,32 @@ import { storagePut } from "../storage";
 import { createLogger } from "../services/logger";
 const log = createLogger("Router");
 
+/**
+ * Parse an OCR'd attitude entry date like "3 Jan 2026, 21:00" or
+ * "3 Jan 2026" into a JS Date. Returns null when the string is
+ * missing or doesn't match the expected layout — callers should
+ * fall back to the upload moment in that case.
+ *
+ * Exported so smartUpload's ATTITUDE branch can reuse the same
+ * parser and stay consistent with this router's behaviour.
+ */
+const ATTITUDE_DATE_RE = /^(\d+)\s+(\w+)\s+(\d+),?\s*(\d+:\d+)?$/;
+const MONTH_NAME_TO_NUM: Record<string, string> = {
+  Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
+  Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
+};
+export function parseAttitudeEntryDate(raw: unknown): Date | null {
+  if (typeof raw !== "string" || raw.trim() === "") return null;
+  const m = raw.match(ATTITUDE_DATE_RE);
+  if (!m) return null;
+  const [, d, monName, y, t] = m;
+  const monNum = MONTH_NAME_TO_NUM[monName];
+  if (!monNum) return null;
+  const isoLike = `${y}-${monNum}-${d.padStart(2, "0")}${t ? `T${t}` : ""}`;
+  const parsed = new Date(isoLike);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export const attitudeScreenshotRouter = router({
   // Upload and analyze attitude screenshot
   upload: protectedProcedure
@@ -145,19 +171,23 @@ Respond with a JSON object containing an array of ALL entries found:
         }
       }
 
-      // Save each attitude entry to database
+      // Save each attitude entry to database. Each row gets its
+      // own month/year derived from the parsed `entry.date` so an
+      // April-uploaded screenshot containing March entries is filed
+      // under March, not April. Falls back to the upload moment only
+      // when the OCR returned no parseable date.
       const savedEntries: any[] = [];
       const entries = extractedData.entries || [];
-      
+
       for (const entry of entries) {
+        const parsedDate = parseAttitudeEntryDate(entry.date);
+        const entryMonth = parsedDate ? parsedDate.getMonth() + 1 : month;
+        const entryYear = parsedDate ? parsedDate.getFullYear() : year;
         const attitudeScreenshot = await db.createAttitudeScreenshot({
           gamePresenterId,
           evaluationId: null,
           gpName: gpNameToUse || 'Unknown',
-          evaluationDate: entry.date ? new Date(entry.date.replace(/^(\d+)\s+(\w+)\s+(\d+),?\s*(\d+:\d+)?$/, (_: string, d: string, m: string, y: string, t: string) => {
-            const months: Record<string, string> = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
-            return `${y}-${months[m] || '01'}-${d.padStart(2, '0')}${t ? 'T' + t : ''}`;
-          })) : null,
+          evaluationDate: parsedDate,
           attitudeType: entry.type?.toLowerCase() === 'positive' ? 'positive' : 'negative',
           attitudeScore: entry.score || (entry.type === 'POSITIVE' ? 1 : -1),
           attitudeCategory: entry.type?.toLowerCase() === 'positive' ? 'positive' : 'negative',
@@ -167,8 +197,8 @@ Respond with a JSON object containing an array of ALL entries found:
           screenshotUrl,
           screenshotKey: fileKey,
           rawExtractedData: entry,
-          month,
-          year,
+          month: entryMonth,
+          year: entryYear,
           uploadedById: ctx.user.id,
           processedAt: new Date(),
         });
