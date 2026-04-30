@@ -57,9 +57,19 @@ vi.mock("./db", async (importOriginal) => {
     findBestMatchingGP: vi.fn().mockResolvedValue({
       gamePresenter: matchingGp, similarity: 1, isExactMatch: true,
     }),
-    findBestMatchingGPByUser: vi.fn().mockResolvedValue({
-      gamePresenter: matchingGp, similarity: 1, isExactMatch: true,
-    }),
+    // Validate caller passes args in (name, threshold, userId) order — a
+    // previous bug swapped the last two so the threshold was the userId.
+    // We return a hit only when threshold is a sensible 0..1 number AND
+    // userId is a positive integer; otherwise return null so the test
+    // surfaces the regression as 0/138 matched.
+    findBestMatchingGPByUser: vi.fn().mockImplementation(
+      async (_name: string, threshold: number, userId: number) => {
+        const validThreshold = typeof threshold === "number" && threshold >= 0 && threshold <= 1;
+        const validUserId = Number.isInteger(userId) && userId > 0;
+        if (!validThreshold || !validUserId) return null;
+        return { gamePresenter: matchingGp, similarity: 1, isExactMatch: true };
+      },
+    ),
     // Persona sync log mocks — new in this PR
     createSyncLog: vi.fn().mockResolvedValue({ id: 1, teamId: 1, status: "failed" }),
     updateSyncLog: vi.fn().mockResolvedValue(undefined),
@@ -131,8 +141,12 @@ describe("personaSync router", () => {
       const caller = appRouter.createCaller(ctx);
       const result = await caller.personaSync.syncTeam({ teamId: 1, month: 4, year: 2026 });
       expect(result.success).toBe(true);
-      expect(typeof result.matched).toBe("number");
-      expect(typeof result.unmatched).toBe("number");
+      // The mock returns one worker who matches a real GP. If the matcher
+      // is called with swapped (name, userId, threshold) — the historical
+      // bug — the validating mock returns null and `matched` stays 0.
+      // Asserting matched===1 here keeps the regression locked.
+      expect(result.matched).toBe(1);
+      expect(result.unmatched).toBe(0);
       expect(Array.isArray(result.matchDetails)).toBe(true);
     });
 

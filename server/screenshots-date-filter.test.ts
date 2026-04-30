@@ -172,7 +172,7 @@ describe("regression: screenshot bug", () => {
 });
 
 describe("parseIsoDateLocal", () => {
-  // Used by smartUpload + errorScreenshot for the OCR'd `errorDate` field
+  // Used by errorScreenshot for the OCR'd `errorDate` field
   // which arrives as YYYY-MM-DD. The bug Codex flagged: `new Date("2026-03-01")`
   // is parsed as UTC and shifts to Feb 28 in negative offsets, so an April-1
   // incident could land in March (or vice-versa).

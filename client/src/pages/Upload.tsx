@@ -18,16 +18,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { 
-  Upload as UploadIcon, 
-  X, 
-  CheckCircle, 
-  AlertCircle, 
+  X,
+  CheckCircle,
+  AlertCircle,
   Loader2,
-  User,
   Calendar,
   Gamepad2,
   Star,
-  Sparkles,
   Link2,
   RotateCcw,
   Trash2,
@@ -41,8 +38,7 @@ import {
   ThumbsDown,
   CloudUpload,
   ImagePlus,
-  Scissors,
-  Clipboard
+  Clipboard,
 } from "lucide-react";
 
 // ============ TYPES ============
@@ -100,16 +96,13 @@ interface FileWithPreview {
   attitudeData?: AttitudeData;
   errorData?: ErrorData;
   matchInfo?: MatchInfo;
-  /** Set when uploaded via smart auto-detect — shows the user what AI decided */
-  detectedType?: "EVALUATION" | "ATTITUDE" | "ERROR";
-  detectionConfidence?: number;
   error?: string;
   progress?: number;
   processingTime?: number;
   expanded?: boolean;
 }
 
-type UploadType = "auto" | "evaluations" | "attitude";
+type UploadType = "evaluations" | "attitude";
 
 // ============ UTILITIES ============
 
@@ -274,13 +267,6 @@ function EvaluationResultCard({ file, onRemove, onRetry }: { file: FileWithPrevi
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-semibold text-foreground truncate">{data.presenterName}</p>
-            {file.detectedType && (
-              <Badge className="text-[10px] px-1.5 py-0 bg-violet-100 text-violet-700 border-violet-200 shrink-0">
-                <Sparkles className="h-2.5 w-2.5 mr-0.5" />
-                Auto: {file.detectedType.toLowerCase()}
-                {file.detectionConfidence !== undefined && ` · ${Math.round(file.detectionConfidence * 100)}%`}
-              </Badge>
-            )}
             {file.matchInfo?.isNewGP && (
               <Badge className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-200 shrink-0">New</Badge>
             )}
@@ -515,11 +501,10 @@ function AttitudeResultCard({ file, onRemove, onRetry }: { file: FileWithPreview
 
 export default function UploadPage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<UploadType>("auto");
+  const [activeTab, setActiveTab] = useState<UploadType>("evaluations");
   // Files are scoped per tab so switching between Evaluations / Attitude
   // doesn't silently throw away an in-progress batch.
   const [filesByTab, setFilesByTab] = useState<Record<UploadType, FileWithPreview[]>>({
-    auto: [],
     evaluations: [],
     attitude: [],
   });
@@ -545,7 +530,6 @@ export default function UploadPage() {
 
   const uploadEvaluationMutation = trpc.evaluation.uploadAndExtract.useMutation();
   const uploadAttitudeMutation = trpc.attitudeScreenshot.upload.useMutation();
-  const uploadSmartMutation = trpc.smartUpload.upload.useMutation();
 
   const generateId = () => Math.random().toString(36).substring(2, 9);
 
@@ -582,6 +566,10 @@ export default function UploadPage() {
 
       if (imageFiles.length > 0) {
         e.preventDefault();
+        if (activeTab === "attitude" && !selectedGpId) {
+          toast.error("Select a Game Presenter before pasting attitude screenshots");
+          return;
+        }
         toast.success(`Pasted ${imageFiles.length} image${imageFiles.length > 1 ? 's' : ''} from clipboard`);
         addFiles(imageFiles);
       }
@@ -589,7 +577,7 @@ export default function UploadPage() {
 
     document.addEventListener("paste", handlePaste);
     return () => document.removeEventListener("paste", handlePaste);
-  }, []);
+  }, [activeTab, selectedGpId]);
 
   // Auto-process pending files
   useEffect(() => {
@@ -697,67 +685,7 @@ export default function UploadPage() {
           
           let result: any;
 
-          if (activeTab === "auto") {
-            // Smart mode: server detects EVALUATION / ATTITUDE / ERROR and
-            // routes to the right handler. We surface the detected type in
-            // the result card so the user can verify.
-            result = await uploadSmartMutation.mutateAsync({
-              imageBase64: base64,
-              filename: pendingFile.file.name,
-              mimeType: 'image/jpeg',
-            });
-
-            setFiles((prev) => prev.map(f =>
-              f.id === fileId ? { ...f, progress: 80 } : f
-            ));
-
-            const processingTime = Date.now() - fileStartTime;
-
-            // Map smartUpload result into the existing FileWithPreview shape
-            // so the existing result-card renderers continue to work.
-            const detectedAs = result.detectedType as "EVALUATION" | "ATTITUDE" | "ERROR";
-            const matchInfo = result.gpMatched
-              ? {
-                  matchedName: result.gpName ?? "",
-                  similarity: 1,
-                  isExactMatch: true,
-                  isNewGP: false,
-                }
-              : undefined;
-
-            setFiles((prev) => prev.map(f => {
-              if (f.id !== fileId) return f;
-              const next: FileWithPreview = {
-                ...f,
-                status: "success" as const,
-                progress: 100,
-                processingTime,
-                matchInfo,
-                detectedType: detectedAs,
-                detectionConfidence: result.detectionConfidence,
-              };
-              if (detectedAs === "EVALUATION") {
-                next.extractedData = result.extractedData;
-              } else if (detectedAs === "ATTITUDE") {
-                next.attitudeData = {
-                  gpName: result.gpName,
-                  entries: result.extractedData?.entries ?? [],
-                  totalEntries: result.entriesCount ?? 0,
-                  totalNegative: result.extractedData?.totalNegative ?? 0,
-                  totalPositive: result.extractedData?.totalPositive ?? 0,
-                };
-              } else if (detectedAs === "ERROR") {
-                next.errorData = {
-                  presenterName: result.gpName ?? "Unknown",
-                  date: result.extractedData?.errorDate,
-                  errorType: result.extractedData?.errorType ?? "other",
-                  description: result.extractedData?.errorDescription ?? "",
-                  severity: result.extractedData?.severity ?? "medium",
-                };
-              }
-              return next;
-            }));
-          } else if (activeTab === "evaluations") {
+          if (activeTab === "evaluations") {
             result = await uploadEvaluationMutation.mutateAsync({
               imageBase64: base64,
               filename: pendingFile.file.name,
@@ -862,17 +790,16 @@ export default function UploadPage() {
   };
 
   const hasFiles = files.length > 0;
+  const attitudeBlocked = activeTab === "attitude" && !selectedGpId;
 
   return (
     <div className="space-y-5 p-4 md:p-6 max-w-4xl mx-auto">
       <PageHeader
         title="Upload Screenshots"
         subtitle={
-          activeTab === "auto"
-            ? "Drop any screenshot — AI detects the type and routes it"
-            : activeTab === "evaluations"
-              ? "Upload evaluation screenshots — AI extracts scores automatically"
-              : "Upload attitude screenshots for the selected GP"
+          activeTab === "evaluations"
+            ? "Upload evaluation screenshots — AI extracts scores automatically"
+            : "Upload attitude screenshots for the selected GP"
         }
         icon={CloudUpload}
       />
@@ -880,10 +807,6 @@ export default function UploadPage() {
       {/* Tab Switcher */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as UploadType)}>
         <TabsList className="bg-muted/50 border border-border rounded-xl p-1">
-          <TabsTrigger value="auto" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
-            <Sparkles className="h-4 w-4" />
-            Auto-detect
-          </TabsTrigger>
           <TabsTrigger value="evaluations" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm">
             <FileCheck className="h-4 w-4" />
             Evaluations
@@ -895,24 +818,12 @@ export default function UploadPage() {
         </TabsList>
       </Tabs>
 
-      {/* Auto-detect explainer */}
-      {activeTab === "auto" && (
-        <div className="p-3 rounded-xl border border-violet-200 bg-violet-50/50 flex items-start gap-3">
-          <Sparkles className="h-4 w-4 text-violet-600 shrink-0 mt-0.5" />
-          <div className="text-sm text-slate-700">
-            <p className="font-semibold text-violet-700">Drop any screenshot type</p>
-            <p className="text-xs text-slate-600 mt-0.5">
-              AI detects whether it's an evaluation, attitude entry, or error report and routes
-              it to the right place. Each file shows the detected type so you can verify.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* GP Selector for Attitude */}
       {activeTab === "attitude" && (
         <div className="p-4 rounded-xl border border-border bg-background">
-          <label className="text-sm font-medium text-foreground block mb-2">Select Game Presenter</label>
+          <label className="text-sm font-medium text-foreground block mb-2">
+            Select Game Presenter <span className="text-red-500">*</span>
+          </label>
           <select
             className="w-full rounded-lg px-3 py-2.5 border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
             value={selectedGpId || ""}
@@ -926,7 +837,7 @@ export default function UploadPage() {
           {!selectedGpId && (
             <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" />
-              Select a GP before uploading attitude screenshots
+              Attitude entries can only be registered against a selected presenter — pick one above to enable upload.
             </p>
           )}
         </div>
@@ -934,17 +845,23 @@ export default function UploadPage() {
 
       {/* Upload Zone */}
       <div
-        className={`relative rounded-xl border-2 border-dashed transition-all cursor-pointer ${
-          isDragging 
-            ? "border-primary bg-primary/5 scale-[1.01]" 
-            : hasFiles 
-              ? "border-border bg-muted/20 hover:border-primary/50 hover:bg-muted/30" 
-              : "border-border bg-muted/20 hover:border-primary/50 hover:bg-muted/30"
+        className={`relative rounded-xl border-2 border-dashed transition-all ${
+          attitudeBlocked
+            ? "border-border/60 bg-muted/10 cursor-not-allowed opacity-60"
+            : isDragging
+              ? "border-primary bg-primary/5 scale-[1.01] cursor-pointer"
+              : "border-border bg-muted/20 hover:border-primary/50 hover:bg-muted/30 cursor-pointer"
         } ${hasFiles ? "p-6" : "p-12"}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
+        onDragOver={attitudeBlocked ? undefined : handleDragOver}
+        onDragLeave={attitudeBlocked ? undefined : handleDragLeave}
+        onDrop={attitudeBlocked ? undefined : handleDrop}
+        onClick={() => {
+          if (attitudeBlocked) {
+            toast.error("Select a Game Presenter before uploading attitude screenshots");
+            return;
+          }
+          fileInputRef.current?.click();
+        }}
       >
         <input
           ref={fileInputRef}
@@ -1044,18 +961,13 @@ export default function UploadPage() {
       {/* Results List */}
       {hasFiles && (
         <div className="space-y-3">
-          {files.map((file) => {
-            // In Auto mode, route to the right card based on what AI detected.
-            const renderType: "evaluations" | "attitude" =
-              activeTab === "auto"
-                ? (file.detectedType === "ATTITUDE" ? "attitude" : "evaluations")
-                : activeTab;
-            return renderType === "evaluations" ? (
+          {files.map((file) =>
+            activeTab === "evaluations" ? (
               <EvaluationResultCard key={file.id} file={file} onRemove={removeFile} onRetry={retryFile} />
             ) : (
               <AttitudeResultCard key={file.id} file={file} onRemove={removeFile} onRetry={retryFile} />
-            );
-          })}
+            ),
+          )}
         </div>
       )}
 
