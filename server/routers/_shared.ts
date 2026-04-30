@@ -15,6 +15,7 @@ import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
 import { sendReportEmail } from "../_core/email";
 import { generateReportWorkbook } from "../services/excelService";
+import { exportToGoogleSheets, isGoogleSheetsAvailable } from "../services/googleSheetsService";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("Router");
@@ -107,15 +108,75 @@ export async function generateExcelAndEmail(
   const fileKey = `reports/${report.id}/${nanoid()}-TeamOverview_${teamName.replace(/\s+/g, '_')}_${monthName}${report.reportYear}.xlsx`;
   const { url: excelUrl } = await storagePut(fileKey, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
+  // Best-effort Google Sheets export — when service-account creds are
+  // configured the report is also pushed to Drive so the email can lead
+  // with a Sheets link the FM can edit and share. Failures don't block
+  // the Excel/email path.
+  let googleSheetsUrl: string | null = report.googleSheetsUrl || null;
+  if (isGoogleSheetsAvailable()) {
+    try {
+      const sheetsResult = await exportToGoogleSheets({
+        report: {
+          id: report.id,
+          teamId: report.teamId,
+          reportMonth: report.reportMonth,
+          reportYear: report.reportYear,
+          fmPerformance: report.fmPerformance,
+          goalsThisMonth: report.goalsThisMonth,
+          teamOverview: report.teamOverview,
+          additionalComments: report.additionalComments,
+        },
+        teamName,
+        fmName,
+        attendanceData: freshAttendance,
+        attitudeByGp,
+        gpEvaluationsData,
+        prevMonthEvaluations,
+      }, ctx.user.email || undefined);
+      googleSheetsUrl = sheetsResult.spreadsheetUrl;
+      log.info("Google Sheets export succeeded", { url: googleSheetsUrl });
+    } catch (e) {
+      log.warn("Google Sheets export failed; continuing with Excel only", { error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
   await db.updateReport(report.id, {
     excelFileUrl: excelUrl,
     excelFileKey: fileKey,
     status: "finalized",
+    ...(googleSheetsUrl ? { googleSheetsUrl } : {}),
   });
 
-  const shouldSendEmail = !report.excelFileUrl;
+  // Always send the email when a recipient is set. Earlier behaviour
+  // de-duped re-exports on `!report.excelFileUrl`, but the user wants
+  // the email every time they generate so they have a record in their
+  // inbox; cheap, resend handles dedup on its side.
   let emailSent = false;
-  if (ctx.user.email && shouldSendEmail) {
+  if (ctx.user.email) {
+    // Compute a quick stats summary for the email body — read-only,
+    // best-effort. If anything throws we still send the email without
+    // numbers rather than block delivery.
+    const summary = (() => {
+      try {
+        const totalEvals = gpEvaluationsData.reduce((s: number, gp: any) => s + (gp.evaluations?.length || 0), 0);
+        const totalScore = gpEvaluationsData.reduce((s: number, gp: any) => {
+          return s + (gp.evaluations?.reduce((ss: number, e: any) => ss + (e.totalScore || 0), 0) || 0);
+        }, 0);
+        const avgScore = totalEvals > 0 ? totalScore / totalEvals : null;
+        const totalMistakes = freshAttendance.reduce((s: number, a: any) => s + (a.mistakes || 0), 0);
+        const totalAttitude = Object.values(attitudeByGp).reduce((s: number, v: any) => s + (v.positive || 0) - (v.negative || 0), 0);
+        return {
+          gpCount: freshAttendance.length,
+          evaluations: totalEvals,
+          mistakes: totalMistakes,
+          attitude: totalAttitude,
+          avgScore,
+        };
+      } catch {
+        return undefined;
+      }
+    })();
+
     emailSent = await sendReportEmail({
       userEmail: ctx.user.email,
       userName: ctx.user.name || 'Floor Manager',
@@ -123,17 +184,18 @@ export async function generateExcelAndEmail(
       monthName,
       year: report.reportYear,
       excelUrl,
+      googleSheetsUrl,
+      summary,
     });
-    log.info("Email sent", { to: ctx.user.email, sent: emailSent });
-  } else if (!ctx.user.email) {
-    log.info("User has no email configured, skipping email notification");
+    log.info("Report email sent", { to: ctx.user.email, sent: emailSent, hasSheets: !!googleSheetsUrl });
   } else {
-    log.info("Existing Excel detected; skipping duplicate email.");
+    log.info("User has no email configured, skipping email notification");
   }
 
   return {
     success: true,
     excelUrl,
+    googleSheetsUrl,
     emailSent,
     emailAddress: ctx.user.email || null,
   };

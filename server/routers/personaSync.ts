@@ -338,4 +338,79 @@ export const personaSyncRouter = router({
         : null,
     }));
   }),
+
+  /**
+   * Sync every team the caller can see, sequentially, in one round-trip.
+   *
+   * The Persona admin UX previously forced the FM to:
+   *   1. Pick a team
+   *   2. Click Sync
+   *   3. Wait for it to finish
+   *   4. Repeat for the next team
+   * — with five teams that's five separate user actions per month. This
+   * procedure runs them all in one go and returns a per-team result so
+   * the UI can render a single "Sync All" button and show what
+   * succeeded/failed for each team in one place.
+   *
+   * Sequential rather than parallel because each Persona session is a
+   * stateful Puppeteer browser session; running them in parallel would
+   * fight over the single browser instance.
+   */
+  syncAllTeams: protectedProcedure
+    .input(z.object({ month: z.number().min(1).max(12), year: z.number().min(2020).max(2030) }))
+    .mutation(async ({ ctx, input }) => {
+      const allTeams = await db.getAllFmTeams();
+      const teams = ctx.user.role === "admin"
+        ? allTeams
+        : allTeams.filter(t => t.userId === ctx.user.id);
+
+      const results: Array<{
+        teamId: number;
+        teamName: string;
+        status: "success" | "partial" | "failed";
+        matched: number;
+        unmatched: number;
+        error?: string;
+      }> = [];
+
+      for (const team of teams) {
+        try {
+          const r = await runPersonaSyncForTeam({
+            teamId: team.id,
+            month: input.month,
+            year: input.year,
+            triggeredById: ctx.user.id,
+            source: "manual",
+          });
+          results.push({
+            teamId: team.id,
+            teamName: team.teamName,
+            status: r.status,
+            matched: r.matched,
+            unmatched: r.unmatched,
+            error: r.error,
+          });
+        } catch (e) {
+          results.push({
+            teamId: team.id,
+            teamName: team.teamName,
+            status: "failed",
+            matched: 0,
+            unmatched: 0,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      const totalMatched = results.reduce((s, r) => s + r.matched, 0);
+      const totalUnmatched = results.reduce((s, r) => s + r.unmatched, 0);
+      const failed = results.filter(r => r.status === "failed").length;
+
+      return {
+        results,
+        month: input.month,
+        year: input.year,
+        totals: { teams: results.length, matched: totalMatched, unmatched: totalUnmatched, failed },
+      };
+    }),
 });
