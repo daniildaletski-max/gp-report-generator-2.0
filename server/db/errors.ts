@@ -253,16 +253,22 @@ export async function getGpErrorsForPortal(gpId: number, month: number, year: nu
     if (gp.length === 0) return [];
     const { start, endExclusive } = monthRange(month, year);
     const effective = sql`COALESCE(${gpErrors.errorDate}, ${gpErrors.createdAt})`;
+    // INNER JOIN to `errorFiles` so orphan rows (whose source file was
+    // deleted) are silently excluded — the dashboard count then always
+    // matches the live uploaded file, with no manual cleanup required.
     // Pull all candidates by month, then post-filter on a normalized
     // name so whitespace/case variations between the Excel parse and
     // the canonical GP name don't drop rows.
     const candidates = await db
-      .select()
+      .select({ gpError: gpErrors })
       .from(gpErrors)
+      .innerJoin(errorFiles, eq(gpErrors.errorFileId, errorFiles.id))
       .where(and(gte(effective, start), lt(effective, endExclusive)))
       .orderBy(desc(gpErrors.errorDate));
     const target = normalizeName(gp[0].name);
-    return candidates.filter(row => normalizeName(row.gpName) === target);
+    return candidates
+      .map(c => c.gpError)
+      .filter(row => normalizeName(row.gpName) === target);
   } catch (error) {
     log.error("Error getting GP errors for portal", error instanceof Error ? error : undefined);
     return [];
