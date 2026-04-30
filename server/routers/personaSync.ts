@@ -48,6 +48,16 @@ interface MatchDetail {
   matched: boolean;
   similarity: number;
   changes: { sickLeaves?: { from: number; to: number }; missedDays?: { from: number; to: number }; extraShifts?: { from: number; to: number } };
+  /**
+   * Diagnostic info for unmatched rows so the admin can tell at a
+   * glance WHY each Persona worker didn't match: closest GP candidate
+   * (name + similarity) plus a one-word reason (`below-threshold` |
+   * `wrong-team` | `no-candidates`).
+   */
+  reason?: "below-threshold" | "wrong-team" | "no-candidates";
+  closestGpName?: string;
+  closestGpTeam?: number | null;
+  closestSimilarity?: number;
 }
 
 /**
@@ -137,6 +147,19 @@ export async function runPersonaSyncForTeam(opts: {
         ? await db.findBestMatchingGPByUser(worker.name, userId, 0.7)
         : await db.findBestMatchingGP(worker.name, 0.7);
 
+      // For diagnostic logging: when the strict 0.7 match fails OR
+      // matches the wrong team, ALSO compute the closest fuzzy match
+      // at threshold 0 across the full GP table. Lets the FM see "this
+      // Persona person is closest to GP X (62%)" instead of an opaque
+      // "no match found" — they can decide whether it's a spelling
+      // issue, a wrong-team Persona project, or a person who
+      // genuinely isn't a GP.
+      const closestForDebug = !match || match.gamePresenter.teamId !== opts.teamId
+        ? (userId
+          ? await db.findBestMatchingGPByUser(worker.name, userId, 0)
+          : await db.findBestMatchingGP(worker.name, 0))
+        : null;
+
       // Only accept matches whose GP belongs to *this* team — Persona
       // returns workers across the whole project, but we only want the
       // GPs that the FM owns.
@@ -171,6 +194,19 @@ export async function runPersonaSyncForTeam(opts: {
         });
       } else {
         unmatched++;
+        // Decide the reason for the failure so the FM gets actionable
+        // feedback, not just "no match found".
+        let reason: MatchDetail["reason"] = "no-candidates";
+        if (match && match.gamePresenter.teamId !== opts.teamId) {
+          // We DID find a strong match but it belongs to another team.
+          // Almost always means the Persona Project ID configured for
+          // this team is actually the project ID of a different team.
+          reason = "wrong-team";
+        } else if (closestForDebug) {
+          // We found a candidate but its similarity is below 0.7.
+          reason = "below-threshold";
+        }
+        const closest = match || closestForDebug;
         matchDetails.push({
           gpId: null,
           gpName: "",
@@ -178,6 +214,10 @@ export async function runPersonaSyncForTeam(opts: {
           matched: false,
           similarity: match?.similarity ?? 0,
           changes: {},
+          reason,
+          closestGpName: closest?.gamePresenter.name,
+          closestGpTeam: closest?.gamePresenter.teamId,
+          closestSimilarity: closest?.similarity,
         });
       }
     }

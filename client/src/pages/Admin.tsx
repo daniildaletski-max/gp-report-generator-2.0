@@ -3830,12 +3830,30 @@ function PersonaSyncTab({
         `⚠️ Unmatched: ${data.unmatched}`,
         ``,
         `Match details:`,
-        ...data.matchDetails.map(d =>
-          d.matched
-            ? `  ✅ ${d.personaName} → ${d.gpName}`
-            : `  ❌ ${d.personaName} (no match found)`
-        ),
+        ...data.matchDetails.map(d => {
+          if (d.matched) return `  ✅ ${d.personaName} → ${d.gpName}`;
+          // Unmatched: surface the closest candidate + reason so the
+          // user can decide whether it's a wrong-project, wrong-spelling,
+          // or genuinely-not-a-GP scenario.
+          const dd = d as any;
+          if (dd.reason === "wrong-team" && dd.closestGpName) {
+            return `  ❌ ${d.personaName} → closest "${dd.closestGpName}" but belongs to another team — likely wrong Persona Project ID`;
+          }
+          if (dd.reason === "below-threshold" && dd.closestGpName) {
+            return `  ❌ ${d.personaName} (closest: "${dd.closestGpName}", ${Math.round((dd.closestSimilarity ?? 0) * 100)}% — too different)`;
+          }
+          return `  ❌ ${d.personaName} (no match found — likely not a GP in your DB)`;
+        }),
       ];
+
+      // If everything failed, show a hint at the top of the log
+      if (data.matched === 0 && data.unmatched > 0) {
+        const wrongTeam = data.matchDetails.filter((d: any) => d.reason === "wrong-team").length;
+        const hint = wrongTeam > data.matchDetails.length / 2
+          ? `   ➜ Hint: ${wrongTeam} workers matched GPs in OTHER teams. The Persona Project ID set here is probably for a different team.`
+          : `   ➜ Hint: most names don't match anything close in your GP DB. Either this Persona project is unrelated, or your GPs are stored under different spellings.`;
+        log.splice(2, 0, hint);
+      }
       setSyncLog(log);
       setIsSyncing(false);
       toast.success(`Synced ${data.matched} GPs from Persona`);
