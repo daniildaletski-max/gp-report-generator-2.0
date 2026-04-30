@@ -10,6 +10,7 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { useLocation } from "wouter";
 import { useState, useMemo } from "react";
 import { GPDetailDrawer } from "@/components/GPDetailDrawer";
+import { PageHeader } from "@/components/PageHeader";
 import { useUrlState, urlNumber } from "@/hooks/useUrlState";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from "recharts";
 import { useIsMobile } from "@/hooks/useMobile";
@@ -180,13 +181,12 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground text-xs sm:text-sm mt-1">{selectedTeamName ? `${selectedTeamName} performance` : 'Team performance overview'}</p>
-        </div>
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+      <PageHeader
+        title="Dashboard"
+        subtitle={selectedTeamName ? `${selectedTeamName} performance` : 'Team performance overview'}
+        icon={BarChart3}
+        actions={
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <Select
             value={selectedTeamId?.toString() || "all"}
             onValueChange={(val) => setSelectedTeamId(val === "all" ? undefined : Number(val))}
@@ -226,7 +226,8 @@ export default function Dashboard() {
             </SelectContent>
           </Select>
         </div>
-      </div>
+        }
+      />
 
       {/* Progress Bar Card */}
       <GlassCard size="default">
