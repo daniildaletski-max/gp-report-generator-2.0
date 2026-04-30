@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, FileCheck, TrendingUp, FileSpreadsheet, AlertTriangle, Award, Target, Calendar, BarChart3, PieChart, ArrowRight, Upload } from "lucide-react";
+import { Users, FileCheck, TrendingUp, FileSpreadsheet, AlertTriangle, Award, Target, Calendar, BarChart3, PieChart, ArrowRight, Upload, Sparkles, RefreshCw, Clock, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { useState, useMemo } from "react";
 import { GPDetailDrawer } from "@/components/GPDetailDrawer";
 import { PageHeader } from "@/components/PageHeader";
 import { useUrlState, urlNumber } from "@/hooks/useUrlState";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from "recharts";
 import { useIsMobile } from "@/hooks/useMobile";
 
@@ -68,6 +69,7 @@ function useChartTheme() {
 const PIE_COLORS = ['oklch(0.75 0.12 85)', 'oklch(0.65 0.12 85)', 'oklch(0.70 0.10 85)', '#6b7280'];
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [currentDate] = useState(() => new Date());
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
@@ -229,40 +231,98 @@ export default function Dashboard() {
         }
       />
 
-      {/* Progress Bar Card */}
-      <GlassCard size="default">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center">
-                <Target className="h-4.5 w-4.5 text-primary" />
-              </div>
-              <span className="font-medium text-muted-foreground text-sm sm:text-base">Evaluation Progress</span>
+      {/* Quick Actions Hero — primary FM workflows surfaced front-and-center
+          so the most common operations (upload screenshots, generate the
+          monthly report, sync Persona, work the action plan) are one tap
+          away from the dashboard. Includes a personalised greeting and the
+          live evaluation-progress bar so the FM lands here and immediately
+          knows what's pending. */}
+      <section className="relative overflow-hidden rounded-2xl border border-primary/15 shadow-md">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-amber-50" aria-hidden />
+        <div className="absolute -top-20 -right-16 h-56 w-56 rounded-full bg-gradient-to-br from-primary/20 to-amber-300/20 blur-3xl pointer-events-none" aria-hidden />
+        <div className="relative p-5 sm:p-6 space-y-4">
+          {/* Greeting + progress strip */}
+          <div className="flex items-start sm:items-center justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-wider font-semibold text-primary/80">
+                {(() => {
+                  const h = new Date().getHours();
+                  return h < 6 ? "Hello" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+                })()}{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
+              </p>
+              <h2 className="text-xl sm:text-2xl font-bold text-foreground leading-tight tracking-tight">
+                {selectedTeamName ? `${selectedTeamName} · ${MONTHS[selectedMonth - 1]} ${selectedYear}` : `${MONTHS[selectedMonth - 1]} ${selectedYear} overview`}
+              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                {evaluationProgress}% of GPs evaluated this month — {evaluatedGPs}/{totalGPs} done{pendingGPs > 0 ? `, ${pendingGPs} pending` : ""}.
+              </p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="w-32 sm:w-48">
-                <Progress value={evaluationProgress} className="h-2 bg-muted" />
+            <div className="w-full sm:w-64 shrink-0">
+              <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
+                <span className="font-semibold">Evaluation progress</span>
+                <span className="font-bold text-primary">{evaluationProgress}%</span>
               </div>
-              <span className="font-bold text-primary text-sm sm:text-base">{evaluationProgress}%</span>
-              <span className="text-muted-foreground text-xs sm:text-sm hidden sm:inline">({evaluatedGPs}/{totalGPs} GPs)</span>
+              <Progress value={evaluationProgress} className="h-2 bg-muted" />
             </div>
-            {pendingGPs > 0 && (
-              <Badge variant="violet" size="sm">{pendingGPs} pending</Badge>
-            )}
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setLocation('/upload')} className="border-border text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl">
-              <Upload className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Upload</span>
-            </Button>
-            <Button size="sm" onClick={() => setLocation('/reports')} className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/80 hover:to-primary text-white rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300">
-              <span className="hidden sm:inline">Generate Report</span>
-              <span className="sm:hidden">Report</span>
-              <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
-            </Button>
+
+          {/* Action grid — 2x2 on mobile, 1x4 on tablet+ */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+            <button
+              onClick={() => setLocation('/upload')}
+              className="group flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-md transition-all text-left"
+            >
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-sm shrink-0">
+                <Upload className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground leading-tight">Upload screenshots</p>
+                <p className="text-xs text-muted-foreground truncate">AI auto-detects type</p>
+              </div>
+            </button>
+            <button
+              onClick={() => setLocation('/reports')}
+              className="group flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-emerald-300 hover:shadow-md transition-all text-left"
+            >
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-sm shrink-0">
+                <FileSpreadsheet className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground leading-tight">Generate report</p>
+                <p className="text-xs text-muted-foreground truncate">Monthly team overview</p>
+              </div>
+            </button>
+            <button
+              onClick={() => setLocation('/attendance')}
+              className="group flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-blue-300 hover:shadow-md transition-all text-left"
+            >
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shrink-0">
+                <RefreshCw className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground leading-tight">Sync Persona</p>
+                <p className="text-xs text-muted-foreground truncate">Pull HR attendance</p>
+              </div>
+            </button>
+            <button
+              onClick={() => setLocation('/admin?tab=action-items')}
+              className="group flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-violet-300 hover:shadow-md transition-all text-left"
+            >
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center shadow-sm shrink-0">
+                <Target className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground leading-tight">Action plan</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {actionItemStats && (actionItemStats.open + actionItemStats.inProgress) > 0
+                    ? `${actionItemStats.open + actionItemStats.inProgress} open`
+                    : "All caught up"}
+                </p>
+              </div>
+            </button>
           </div>
         </div>
-      </GlassCard>
+      </section>
 
       {/* Action items widget — shows what's actually on the FM's plate */}
       {actionItemStats && (actionItemStats.open > 0 || actionItemStats.inProgress > 0) && (
