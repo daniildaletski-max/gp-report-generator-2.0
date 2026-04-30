@@ -1624,6 +1624,12 @@ function ErrorFilesTab({
     },
   });
 
+  // Re-process: re-imports gpErrors from the stored .xlsx without
+  // requiring the FM to re-upload. Used when DB rows drift (e.g. an
+  // earlier deploy bug deleted them) but the file is still in S3.
+  const reprocessMutation = trpc.errorFile.reprocess.useMutation();
+  const [reprocessingId, setReprocessingId] = useState<number | null>(null);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1795,10 +1801,36 @@ function ErrorFilesTab({
                         {format(new Date(file.createdAt), "dd MMM yyyy HH:mm")}
                       </TableCell>
                       <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Re-process file (re-imports errors from the stored .xlsx without re-uploading)"
+                            disabled={reprocessingId === file.id}
+                            onClick={async () => {
+                              setReprocessingId(file.id);
+                              try {
+                                const res = await reprocessMutation.mutateAsync({ errorFileId: file.id });
+                                toast.success(`Re-processed: ${res.recordsCreated} error records · ${res.updatedGPs.length} GPs matched${res.notFoundGPs.length ? ` · ${res.notFoundGPs.length} unmatched` : ''}`);
+                                refetchFiles();
+                              } catch (e: any) {
+                                toast.error(e.message || "Re-process failed");
+                              } finally {
+                                setReprocessingId(null);
+                              }
+                            }}
+                          >
+                            {reprocessingId === file.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4" />
+                            )}
+                          </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive hover:text-destructive"
                               disabled={deletingId === file.id}
@@ -1828,6 +1860,7 @@ function ErrorFilesTab({
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

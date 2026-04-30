@@ -1,4 +1,5 @@
 import { router, publicProcedure, protectedProcedure, adminProcedure } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
 import { storagePut } from "../storage";
@@ -396,4 +397,164 @@ export const errorFileRouter = router({
     const removed = await db.pruneOrphanGpErrors(ctx.user.role === "admin" ? undefined : ctx.user.id);
     return { removed };
   }),
+
+  /**
+   * Re-import an existing errorFile from S3.
+   *
+   * Use case: data drift. An earlier deploy bug deleted the
+   * `gpErrors` rows for a month, but the source `.xlsx` is still in
+   * S3 (the FM doesn't have to re-upload). This procedure downloads
+   * that file, re-parses both the `Error Count Analysis` and `Errors`
+   * sheets, drops every gpErrors row tied to this errorFile, and
+   * re-creates them — so the GP Portal repopulates with correct
+   * mistake counts in one click.
+   */
+  reprocess: protectedProcedure
+    .input(z.object({ errorFileId: z.number().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const ExcelJS = await import('exceljs');
+
+      const allFiles = ctx.user.role === "admin"
+        ? await db.getAllErrorFiles()
+        : await db.getErrorFilesByUser(ctx.user.id);
+      const file = allFiles.find(f => f.id === input.errorFileId);
+      if (!file) throw new TRPCError({ code: "NOT_FOUND", message: "Error file not found or access denied" });
+      if (!file.fileUrl) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Error file has no source URL" });
+
+      // Download from S3
+      const response = await fetch(file.fileUrl);
+      if (!response.ok) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Failed to download error file: HTTP ${response.status}` });
+      }
+      const buffer = Buffer.from(await response.arrayBuffer());
+
+      const workbook = new ExcelJS.default.Workbook();
+      await workbook.xlsx.load(buffer as any);
+
+      // Same helper functions as `upload`
+      const getCellValue = (cell: any): string | null => {
+        if (!cell || cell.value === null || cell.value === undefined) return null;
+        if (typeof cell.value === 'object' && 'result' in cell.value) return String(cell.value.result);
+        return String(cell.value).trim();
+      };
+      const getNumericValue = (cell: any): number => {
+        if (!cell || cell.value === null || cell.value === undefined) return 0;
+        const val = typeof cell.value === 'object' && 'result' in cell.value ? cell.value.result : cell.value;
+        const num = Number(val);
+        return isNaN(num) ? 0 : num;
+      };
+      const isValidGpName = (name: string | null): boolean => {
+        if (!name || name.length < 2 || name.length > 100) return false;
+        return /^[A-Za-zÀ-ɏ\s'-]+$/.test(name);
+      };
+
+      const gpErrorCounts: Record<string, number> = {};
+      const gpErrorDetails: Record<string, Array<{ date?: Date; description?: string; errorCode?: string; gameType?: string; tableId?: string }>> = {};
+
+      const errorCountAnalysisSheet = workbook.getWorksheet("Error Count Analysis");
+      if (errorCountAnalysisSheet) {
+        errorCountAnalysisSheet.eachRow((row: any, rowNumber: number) => {
+          if (rowNumber < 2) return;
+          const gpName = getCellValue(row.getCell(3));
+          const errorCount = getNumericValue(row.getCell(5));
+          if (!isValidGpName(gpName)) return;
+          gpErrorCounts[gpName!] = errorCount;
+        });
+      }
+
+      const errorsSheet = workbook.getWorksheet("Errors");
+      if (errorsSheet) {
+        let headerRow = 2;
+        let gpNameCol = 2;
+        let dateCol = 4;
+        let descCol = 11;
+        let codeCol = 9;
+        let gameTypeCol = 10;
+        let tableIdCol = 6;
+        for (let r = 1; r <= 3; r++) {
+          const row = errorsSheet.getRow(r);
+          row.eachCell((cell: any, colNumber: number) => {
+            const val = getCellValue(cell)?.toLowerCase() || "";
+            if (val === "gp name" || (val.includes("gp") && val.includes("name"))) { gpNameCol = colNumber; headerRow = r; }
+            else if (val === "date") { dateCol = colNumber; }
+            else if (val === "error description" || val.includes("error description")) { descCol = colNumber; }
+            else if (val === "error code" || val.includes("error code")) { codeCol = colNumber; }
+            else if (val === "game type" || (val.includes("game") && val.includes("type"))) { gameTypeCol = colNumber; }
+            else if (val === "table id" || val.includes("table id")) { tableIdCol = colNumber; }
+          });
+        }
+        errorsSheet.eachRow((row: any, rowNumber: number) => {
+          if (rowNumber <= headerRow) return;
+          const gpName = getCellValue(row.getCell(gpNameCol));
+          if (!isValidGpName(gpName)) return;
+          const errorDetail: { date?: Date; description?: string; errorCode?: string; gameType?: string; tableId?: string } = {};
+          const dateCell = row.getCell(dateCol);
+          if (dateCell.value instanceof Date) errorDetail.date = dateCell.value;
+          else if (typeof dateCell.value === "number") errorDetail.date = new Date((dateCell.value - 25569) * 86400 * 1000);
+          else if (typeof dateCell.value === "string") {
+            const dateStr = dateCell.value.trim();
+            if (dateStr.includes(".")) {
+              const parts = dateStr.split(".");
+              if (parts.length === 3) {
+                const [day, month, year] = parts.map((p: string) => parseInt(p, 10));
+                errorDetail.date = new Date(year, month - 1, day);
+              }
+            } else if (dateStr.includes("-")) errorDetail.date = new Date(dateStr);
+          }
+          errorDetail.description = getCellValue(row.getCell(descCol)) || undefined;
+          errorDetail.errorCode = getCellValue(row.getCell(codeCol)) || undefined;
+          errorDetail.gameType = getCellValue(row.getCell(gameTypeCol)) || undefined;
+          errorDetail.tableId = getCellValue(row.getCell(tableIdCol)) || undefined;
+          if (!gpErrorDetails[gpName!]) gpErrorDetails[gpName!] = [];
+          gpErrorDetails[gpName!].push(errorDetail);
+        });
+      }
+
+      // Wipe existing gpErrors tied to this errorFile, then re-create.
+      await db.deleteGpErrorsByMonthYear(file.month, file.year, ctx.user.id, file.id);
+
+      const updatedGPs: string[] = [];
+      const notFoundGPs: string[] = [];
+      let recordsCreated = 0;
+      for (const [gpName, count] of Object.entries(gpErrorCounts)) {
+        const updated = await db.updateGPMistakesDirectly(gpName, count, file.month, file.year, ctx.user.id);
+        if (updated) updatedGPs.push(gpName); else notFoundGPs.push(gpName);
+
+        const details = gpErrorDetails[gpName] || [];
+        if (details.length > 0) {
+          for (const detail of details) {
+            await db.createGpError({
+              gpName,
+              errorFileId: file.id,
+              errorDate: detail.date || new Date(file.year, file.month - 1, 15),
+              errorDescription: detail.description,
+              errorCode: detail.errorCode,
+              gameType: detail.gameType,
+              tableId: detail.tableId,
+              userId: ctx.user.id,
+            });
+            recordsCreated++;
+          }
+        } else if (count > 0) {
+          await db.createGpError({
+            gpName,
+            errorFileId: file.id,
+            errorDate: new Date(file.year, file.month - 1, 15),
+            errorDescription: `${count} error(s) recorded`,
+            userId: ctx.user.id,
+          });
+          recordsCreated++;
+        }
+      }
+
+      log.info(`Reprocessed errorFile ${file.id}: ${recordsCreated} gpErrors recreated, ${updatedGPs.length} GPs matched, ${notFoundGPs.length} unmatched`);
+      return {
+        success: true,
+        fileId: file.id,
+        recordsCreated,
+        updatedGPs,
+        notFoundGPs,
+        totalErrorsCounted: Object.values(gpErrorCounts).reduce((s, n) => s + n, 0),
+      };
+    }),
 });
