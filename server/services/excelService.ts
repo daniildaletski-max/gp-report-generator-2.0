@@ -67,7 +67,6 @@ interface ReportData {
   prevMonthEvaluations: ChartDataPoint[];
   // Optional supplementary data — render extra sheets only when present.
   actionItems?: ActionItemSummary[];
-  bonusSummary?: BonusSummary[];
 }
 
 interface ActionItemSummary {
@@ -81,18 +80,6 @@ interface ActionItemSummary {
   dueDate: Date | string | null;
   createdAt: Date | string;
   completedAt: Date | string | null;
-}
-
-interface BonusSummary {
-  gpName: string;
-  bonusLevel: "level1" | "level2" | "ineligible";
-  bonusAmount: number;
-  bonusRate: number;
-  achievedGGs: number;
-  totalGames: number;
-  errorCount: number;
-  hoursWorked: number;
-  disqualifyingFactors: string[];
 }
 
 // ============================
@@ -1361,96 +1348,11 @@ function buildActionItemsSheet(workbook: ExcelJS.Workbook, items: ActionItemSumm
 }
 
 // ============================
-// Bonus Summary sheet
-// ============================
-
-function buildBonusSummarySheet(workbook: ExcelJS.Workbook, summary: BonusSummary[]): void {
-  const sheet = workbook.addWorksheet("Bonus Summary");
-
-  sheet.columns = [
-    { header: "GP", key: "gpName", width: 22 },
-    { header: "Level", key: "level", width: 14 },
-    { header: "Rate (€/h)", key: "rate", width: 11 },
-    { header: "Hours", key: "hours", width: 8 },
-    { header: "Bonus (€)", key: "amount", width: 11 },
-    { header: "GGs", key: "ggs", width: 10 },
-    { header: "Games", key: "games", width: 10 },
-    { header: "Errors", key: "errors", width: 8 },
-    { header: "Disqualifying factors", key: "factors", width: 40 },
-  ];
-
-  const header = sheet.getRow(1);
-  header.font = { bold: true, color: { argb: "FFFFFFFF" } };
-  header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD4A017" } };
-  header.alignment = { horizontal: "center", vertical: "middle" };
-  header.height = 22;
-
-  // Sort: highest payout first
-  const sorted = [...summary].sort((a, b) => b.bonusAmount - a.bonusAmount);
-
-  let totalPayout = 0;
-  let level1Count = 0;
-  let level2Count = 0;
-  let ineligibleCount = 0;
-
-  for (const b of sorted) {
-    sheet.addRow({
-      gpName: b.gpName,
-      level: b.bonusLevel === "level2" ? "Level 2" : b.bonusLevel === "level1" ? "Level 1" : "Not qualifying",
-      rate: b.bonusRate,
-      hours: b.hoursWorked,
-      amount: b.bonusAmount,
-      ggs: b.achievedGGs,
-      games: b.totalGames,
-      errors: b.errorCount,
-      factors: b.disqualifyingFactors.join("; ") || "—",
-    });
-    totalPayout += b.bonusAmount;
-    if (b.bonusLevel === "level2") level2Count++;
-    else if (b.bonusLevel === "level1") level1Count++;
-    else ineligibleCount++;
-  }
-
-  // Tinting per level
-  for (let r = 2; r <= sheet.rowCount; r++) {
-    const level = String(sheet.getCell(`B${r}`).value || "");
-    if (level === "Level 2") {
-      sheet.getCell(`B${r}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF2CC" } };
-    } else if (level === "Level 1") {
-      sheet.getCell(`B${r}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2EFDA" } };
-    } else {
-      sheet.getCell(`B${r}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF2F2F2" } };
-    }
-  }
-
-  // Number format for currency / counts
-  sheet.getColumn("rate").numFmt = "€#,##0.00";
-  sheet.getColumn("amount").numFmt = "€#,##0";
-  ["F", "G", "H"].forEach(col => { sheet.getColumn(col).numFmt = "#,##0"; });
-
-  // Totals row
-  const totalRow = sheet.addRow({});
-  sheet.addRow({
-    gpName: "TOTAL",
-    level: `${level2Count}× L2 / ${level1Count}× L1 / ${ineligibleCount}× —`,
-    rate: "",
-    hours: "",
-    amount: totalPayout,
-  });
-  const totalRowIdx = sheet.rowCount;
-  const tRow = sheet.getRow(totalRowIdx);
-  tRow.font = { bold: true };
-  tRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
-
-  sheet.views = [{ state: "frozen", ySplit: 1 }];
-}
-
-// ============================
 // Main Excel Generation
 // ============================
 
 export async function generateReportWorkbook(data: ReportData): Promise<Buffer> {
-  const { report, teamName, fmName, attendanceData, attitudeByGp, gpEvaluationsData, prevMonthEvaluations, actionItems, bonusSummary } = data;
+  const { report, teamName, fmName, attendanceData, attitudeByGp, gpEvaluationsData, prevMonthEvaluations, actionItems } = data;
   const monthName = MONTH_NAMES[report.reportMonth - 1];
 
   log.info("Generating Excel workbook v2.0", { reportId: report.id, teamName, month: monthName, gpCount: attendanceData.length });
@@ -1478,11 +1380,6 @@ export async function generateReportWorkbook(data: ReportData): Promise<Buffer> 
   // Sheet 5: Coaching Plans (optional — only if any items)
   if (actionItems && actionItems.length > 0) {
     buildActionItemsSheet(workbook, actionItems);
-  }
-
-  // Sheet 6: Bonus Summary (optional — only if any data)
-  if (bonusSummary && bonusSummary.length > 0) {
-    buildBonusSummarySheet(workbook, bonusSummary);
   }
 
   const buffer = await workbook.xlsx.writeBuffer();

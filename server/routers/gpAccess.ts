@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
 import { nanoid } from "nanoid";
+import { isTechnicalError } from "@shared/errorClassification";
 
 export const gpAccessRouter = router({
   // Generate a new access token for a GP
@@ -129,10 +130,20 @@ export const gpAccessRouter = router({
       // Get stats for selected month
       const stats = await db.getMonthlyGpStats(accessToken.gamePresenterId, input.month, input.year);
 
-      // Get error screenshots for selected month
-      const errorScreenshots = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
+      // Get error screenshots for selected month — filter out TV / technical
+      // errors so the GP only sees errors actually attributable to them.
+      const errorScreenshotsRaw = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
+      const errorScreenshots = errorScreenshotsRaw.filter(e => !isTechnicalError({
+        errorType: e.errorType,
+        errorCategory: e.errorCategory,
+        errorDescription: e.errorDescription,
+      }));
       const attitudeDetails = await db.getAttitudeScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
-      const gpErrors = await db.getGpErrorsForPortal(accessToken.gamePresenterId, input.month, input.year);
+      const gpErrorsRaw = await db.getGpErrorsForPortal(accessToken.gamePresenterId, input.month, input.year);
+      const gpErrors = gpErrorsRaw.filter(e => !isTechnicalError({
+        errorCode: e.errorCode,
+        errorDescription: e.errorDescription,
+      }));
 
       // Get evaluations for this specific month
       const allEvals = await db.getGpEvaluationsForPortal(accessToken.gamePresenterId);
@@ -171,12 +182,18 @@ export const gpAccessRouter = router({
         })),
       ];
 
+      // Show the count that matches what the GP actually sees in the list.
+      // The upstream `monthlyGpStats.mistakes` value already excludes most
+      // technical errors (it comes from "Error Count Analysis" col E), but
+      // we re-apply the filter at display time so count == visible items.
+      const reportedMistakes = errorDetails.length;
+
       return {
         month: input.month,
         year: input.year,
         stats: stats ? {
           attitude: stats.attitude,
-          mistakes: stats.mistakes,
+          mistakes: reportedMistakes,
           totalGames: stats.totalGames,
         } : null,
         evaluations: monthEvals,
@@ -229,40 +246,28 @@ export const gpAccessRouter = router({
       const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
       const prevMonthStats = await db.getMonthlyGpStats(accessToken.gamePresenterId, prevMonth, prevYear);
 
-      // Calculate bonus status based on GGs (Good Games)
-      // GGs = Total games / mistakes (first mistake is free)
-      const calculateBonusStatus = (stats: typeof currentMonthStats) => {
-        if (!stats) return { eligible: false, level: 0, ggs: 0, reason: 'No data available' };
-        
-        const totalGames = stats.totalGames || 0;
-        const mistakes = stats.mistakes || 0;
-        
-        // First mistake is free: 0 or 1 mistake = all games count
-        const effectiveMistakes = mistakes <= 1 ? 1 : mistakes;
-        const ggs = Math.floor(totalGames / effectiveMistakes);
-        
-        // Level 2: minimum 5,000 GGs → €2.50/hour
-        // Level 1: minimum 2,500 GGs → €1.50/hour
-        if (ggs >= 5000) {
-          return { eligible: true, level: 2, ggs, rate: 2.50, reason: 'Level 2 - Excellent performance!' };
-        } else if (ggs >= 2500) {
-          return { eligible: true, level: 1, ggs, rate: 1.50, reason: 'Level 1 - Good performance!' };
-        } else {
-          const needed = 2500 - ggs;
-          return { eligible: false, level: 0, ggs, rate: 0, reason: `Need ${needed} more GGs for Level 1` };
-        }
-      };
 
       // Get monthly history for trend charts (last 6 months)
       const monthlyHistory = await db.getGpMonthlyHistory(accessToken.gamePresenterId, 6);
 
-      // Get detailed error screenshots for current month
-      const errorScreenshots = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
+      // Get detailed error screenshots for current month — filter out TV /
+      // technical errors so the GP only sees errors actually attributable
+      // to them.
+      const errorScreenshotsRaw = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
+      const errorScreenshots = errorScreenshotsRaw.filter(e => !isTechnicalError({
+        errorType: e.errorType,
+        errorCategory: e.errorCategory,
+        errorDescription: e.errorDescription,
+      }));
       const attitudeDetails = await db.getAttitudeScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
-      
+
       // Also get GP errors from Excel file parsing
-      const gpErrors = await db.getGpErrorsForPortal(accessToken.gamePresenterId, currentMonth, currentYear);
-      
+      const gpErrorsRaw = await db.getGpErrorsForPortal(accessToken.gamePresenterId, currentMonth, currentYear);
+      const gpErrors = gpErrorsRaw.filter(e => !isTechnicalError({
+        errorCode: e.errorCode,
+        errorDescription: e.errorDescription,
+      }));
+
       // Combine error sources: screenshots and Excel-parsed errors
       const errorDetails = [
         ...errorScreenshots.map(e => ({
@@ -301,9 +306,9 @@ export const gpAccessRouter = router({
             month: currentMonth,
             year: currentYear,
             attitude: currentMonthStats.attitude,
-            mistakes: currentMonthStats.mistakes,
+            // Use filtered count so what the GP sees in the list matches the headline number
+            mistakes: errorDetails.length,
             totalGames: currentMonthStats.totalGames,
-            bonus: calculateBonusStatus(currentMonthStats),
           } : null,
           previous: prevMonthStats ? {
             month: prevMonth,
@@ -311,7 +316,6 @@ export const gpAccessRouter = router({
             attitude: prevMonthStats.attitude,
             mistakes: prevMonthStats.mistakes,
             totalGames: prevMonthStats.totalGames,
-            bonus: calculateBonusStatus(prevMonthStats),
           } : null,
         },
         errorDetails: errorDetails.map(e => ({
