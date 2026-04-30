@@ -4,6 +4,26 @@ import { z } from "zod";
 import * as db from "../db";
 import { nanoid } from "nanoid";
 import { isTechnicalError } from "@shared/errorClassification";
+import { invokeLLM } from "../_core/llm";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("gpAccess");
+
+/**
+ * In-memory daily cache for AI Coach insights, keyed by `${gpId}-YYYY-MM-DD`.
+ * Each GP gets at most one LLM round-trip per UTC day; the portal polls
+ * every 30s but the cached insights are returned for free in between.
+ * Restarts wipe it — that's intentional, the cache is a cost-saver, not
+ * authoritative storage.
+ */
+const insightsCache = new Map<string, { generatedAt: Date; insights: CoachInsights }>();
+
+interface CoachInsights {
+  headline: string;
+  strength: string;
+  focus: string;
+  motivation: string;
+}
 
 export const gpAccessRouter = router({
   // Generate a new access token for a GP
@@ -354,5 +374,120 @@ export const gpAccessRouter = router({
         })),
         monthlyHistory,
       };
+    }),
+
+  /**
+   * AI Coach insights — three short personalised lines for the hero card.
+   *
+   * Reads the GP's recent performance history (last 5 evaluations,
+   * current monthly stats, recent action items, recent attitude) and asks
+   * the LLM for a one-line headline + strength + focus + motivational
+   * closer. Cached per-GP per-UTC-day in-memory so the portal's 30s
+   * polling doesn't re-burn LLM credits.
+   *
+   * The prompt is intentionally narrow — three lines, plain casino-team
+   * vocabulary, no fluff — so output stays useful and short.
+   */
+  getCoachInsights: publicProcedure
+    .input(z.object({ token: z.string(), refresh: z.boolean().optional() }))
+    .query(async ({ input }) => {
+      const accessToken = await db.getGpAccessTokenByToken(input.token);
+      if (!accessToken) throw new TRPCError({ code: 'NOT_FOUND', message: 'Invalid or expired access link' });
+      const gp = await db.getGamePresenterById(accessToken.gamePresenterId);
+      if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
+
+      const today = new Date().toISOString().slice(0, 10);
+      const cacheKey = `${gp.id}-${today}`;
+      if (!input.refresh) {
+        const cached = insightsCache.get(cacheKey);
+        if (cached) return { ...cached.insights, cached: true, generatedAt: cached.generatedAt };
+      }
+
+      const evaluations = await db.getGpEvaluationsForPortal(gp.id);
+      const recent = (evaluations as any[])
+        .sort((a, b) => new Date(b.evaluationDate || 0).getTime() - new Date(a.evaluationDate || 0).getTime())
+        .slice(0, 5);
+
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+      const stats = await db.getMonthlyGpStats(gp.id, month, year);
+
+      const summary = {
+        gpName: gp.name,
+        evaluationsTotal: evaluations.length,
+        currentMonth: { mistakes: stats?.mistakes ?? 0, attitude: stats?.attitude ?? 0, totalGames: stats?.totalGames ?? 0 },
+        recentEvaluations: recent.map(e => ({
+          date: e.evaluationDate,
+          totalScore: e.totalScore,
+          appearance: e.appearanceScore,
+          gamePerformance: e.gamePerformanceTotalScore,
+          hairComment: e.hairComment ?? undefined,
+          makeupComment: e.makeupComment ?? undefined,
+          outfitComment: e.outfitComment ?? undefined,
+          postureComment: e.postureComment ?? undefined,
+          dealingStyleComment: e.dealingStyleComment ?? undefined,
+          gamePerformanceComment: e.gamePerformanceComment ?? undefined,
+          generalComment: e.generalComment ?? undefined,
+        })),
+      };
+
+      const prompt = `You are a kind, succinct casino game-presenter coach.
+You are speaking directly to ${gp.name}, a Game Presenter, on their personal performance dashboard.
+
+Here is their data (JSON):
+${JSON.stringify(summary, null, 2)}
+
+Write four short lines, second person ("you"), warm but professional, no emoji, no markdown:
+1. "headline" — a single 5-9 word sentence that captures momentum (e.g., "Strong April so far — keep stacking it.")
+2. "strength" — one sentence naming the strongest concrete thing they're doing well based on the actual evaluation data and comments. Be specific to a skill.
+3. "focus" — one sentence naming the single most useful thing to work on next, with a concrete action. Reference their actual scores/comments where possible.
+4. "motivation" — a one-sentence motivational closer tied to a real number from the data.
+
+Avoid generalities. If the data is sparse (under 3 evaluations), say so naturally.
+
+Respond as strict JSON with keys: headline, strength, focus, motivation.`;
+
+      try {
+        const llm = await invokeLLM({
+          messages: [
+            { role: 'system', content: 'You are a concise, encouraging game-presenter coach. You always return strict JSON.' },
+            { role: 'user', content: prompt },
+          ],
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'coach_insights',
+              strict: true,
+              schema: {
+                type: 'object',
+                properties: {
+                  headline: { type: 'string' },
+                  strength: { type: 'string' },
+                  focus: { type: 'string' },
+                  motivation: { type: 'string' },
+                },
+                required: ['headline', 'strength', 'focus', 'motivation'],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+        const content = llm?.choices?.[0]?.message?.content;
+        const parsed = JSON.parse(typeof content === 'string' ? content : '{}') as CoachInsights;
+        const generatedAt = new Date();
+        insightsCache.set(cacheKey, { generatedAt, insights: parsed });
+        return { ...parsed, cached: false, generatedAt };
+      } catch (e) {
+        log.error('AI Coach insights failed', e instanceof Error ? e : new Error(String(e)));
+        // Fail soft — return a static fallback so the UI doesn't go blank.
+        const fallback: CoachInsights = {
+          headline: `${evaluations.length} evaluation${evaluations.length === 1 ? '' : 's'} on record`,
+          strength: 'You have a track record to build on — keep showing up.',
+          focus: 'Open the Trend tab to see which category is moving most.',
+          motivation: 'One good shift at a time. You\'ve got this.',
+        };
+        return { ...fallback, cached: false, generatedAt: new Date() };
+      }
     }),
 });
