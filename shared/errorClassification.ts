@@ -9,13 +9,19 @@
  * Signals we look at, in order of confidence:
  *   1. `errorType === "technical_error"` from the smart-upload classifier
  *   2. `errorCategory === "technical"`
- *   3. `errorCode` starts with "TV" (TV-RO, TV-BJ, TV_BAC, TVRO, etc.)
- *      or matches other technical prefixes (SYS_, EQ_, INT_, TECH_)
- *   4. `errorDescription` is exactly "Technical error" or contains
- *      technical-only keywords ("interface error", "ball misread",
- *      "system void", "tv error", etc.)
+ *   3. `errorCode` starts with one of the unambiguously technical prefixes:
+ *      "TV", "SYS", "TECH". (Earlier versions also caught "EQ_" and "INT_"
+ *      but those were too aggressive — Playgon uses "INT_*" for some
+ *      genuine GP procedure codes, so we'd silently filter real mistakes.)
+ *   4. `errorDescription` is exactly "Technical error" or contains a
+ *      strong technical-only keyword (interface error, ball misread,
+ *      system void, tv error, etc.).
  *
  * Used by both server and client to keep classification consistent.
+ *
+ * If a row that's clearly a GP mistake gets misclassified by this helper,
+ * the portal's "View list" expander surfaces what was filtered so we can
+ * tighten the rule.
  */
 
 const TECHNICAL_KEYWORDS = [
@@ -65,10 +71,14 @@ interface ErrorClassificationInput {
 function codeIsTechnical(rawCode: string): boolean {
   const code = rawCode.trim().toUpperCase();
   if (code.length === 0) return false;
-  // TV with optional separator (digit, hyphen, underscore, period)
+  // TV with optional separator (digit, hyphen, underscore, period).
+  // Unambiguously a TV-room/interface code in our domain.
   if (/^TV([-_.]|\d|$)/.test(code)) return true;
-  // Other explicit technical prefixes
-  if (/^(SYS|SYSTEM|EQ|EQUIP|INT|INTERFACE|TECH|TECHNICAL)([-_.]|\d|$)/.test(code)) return true;
+  // SYS / TECH only — narrowed from an earlier list. EQ_ and INT_ were
+  // dropped because Playgon legitimately uses INT_* for some procedure
+  // codes that ARE counted against the GP, and we were silently filtering
+  // them out. SYSTEM and TECHNICAL are the spelled-out forms.
+  if (/^(SYS|SYSTEM|TECH|TECHNICAL)([-_.]|\d|$)/.test(code)) return true;
   return false;
 }
 

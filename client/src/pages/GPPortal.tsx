@@ -31,6 +31,12 @@ export default function GPPortal() {
   const [selectedEvalMonth, setSelectedEvalMonth] = useState<string>('all');
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  // Toggle for the "Hidden technical errors" expander on the Month tab.
+  // Declared at the top so React's hook order stays stable across the
+  // `if (isLoading) return …` early-return — the previous placement,
+  // after the early return, threw "Rendered more hooks than during
+  // the previous render" the moment the data finished loading.
+  const [showHiddenTechnical, setShowHiddenTechnical] = useState(false);
   
   const now = new Date();
   const [detailMonth, setDetailMonth] = useState(now.getMonth() + 1);
@@ -285,7 +291,6 @@ export default function GPPortal() {
   const attitudeDetails = monthDetails?.attitudeDetails || [];
   const technicalErrorsHidden = monthDetails?.technicalErrorsHidden ?? 0;
   const hiddenTechnicalErrors = (monthDetails?.hiddenTechnicalErrors ?? []) as any[];
-  const [showHiddenTechnical, setShowHiddenTechnical] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 relative">

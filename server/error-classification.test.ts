@@ -49,11 +49,15 @@ describe("isTechnicalError", () => {
     it("flags SYS_VOID", () => {
       expect(isTechnicalError({ errorCode: "SYS_VOID" })).toBe(true);
     });
-    it("flags EQ_FAULT", () => {
-      expect(isTechnicalError({ errorCode: "EQ_FAULT" })).toBe(true);
+    it("does NOT flag EQ_FAULT — too ambiguous, dropped from classifier", () => {
+      // Earlier versions caught EQ_* but it overlapped with legitimate
+      // "equipment-handled-by-GP" codes; the user reported genuine GP
+      // mistakes being silently filtered. Only TV/SYS/TECH are
+      // unambiguous enough now.
+      expect(isTechnicalError({ errorCode: "EQ_FAULT" })).toBe(false);
     });
-    it("flags INT_ERR", () => {
-      expect(isTechnicalError({ errorCode: "INT_ERR" })).toBe(true);
+    it("does NOT flag INT_ERR — Playgon uses INT_* for real GP codes too", () => {
+      expect(isTechnicalError({ errorCode: "INT_ERR" })).toBe(false);
     });
     it("flags TECH_VOID", () => {
       expect(isTechnicalError({ errorCode: "TECH_VOID" })).toBe(true);
