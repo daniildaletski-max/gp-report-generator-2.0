@@ -21,6 +21,7 @@ import {
 import { toast } from "sonner";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { GPDetailDrawer } from "@/components/GPDetailDrawer";
+import { PageHeader } from "@/components/PageHeader";
 import {
   CalendarCheck, Save, Loader2, Users, AlertTriangle,
   Clock, TrendingUp, TrendingDown, Minus, RotateCcw,
@@ -234,21 +235,12 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="page-header">
-          <h1 className="page-title flex items-center gap-3">
-            <div className="icon-container-gold">
-              <CalendarCheck className="h-5 w-5" />
-            </div>
-            Attendance Management
-          </h1>
-          <p className="page-subtitle mt-1">
-            Track extra shifts, late arrivals, missed days, and sick leaves for your team
-          </p>
-        </div>
-        {hasDirtyRows && (
-          <div className="flex items-center gap-2">
+      <PageHeader
+        title="Attendance"
+        subtitle="Track extra shifts, late arrivals, missed days, and sick leaves for your team"
+        icon={CalendarCheck}
+        actions={hasDirtyRows ? (
+          <>
             <Button
               variant="outline"
               size="sm"
@@ -271,9 +263,9 @@ export default function AttendancePage() {
               )}
               Save Changes ({rows.filter(r => r.isDirty).length})
             </Button>
-          </div>
-        )}
-      </div>
+          </>
+        ) : null}
+      />
 
       {/* Filters Row */}
       <div className="glass-card p-4">

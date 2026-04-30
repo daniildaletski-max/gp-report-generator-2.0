@@ -15,12 +15,13 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Search } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState, createContext, useContext, useCallback } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { toast } from "sonner";
+import { CommandPalette, useCommandPalette } from "./CommandPalette";
 
 type MenuItem = {
   icon: React.ComponentType<{ className?: string }>;
@@ -128,6 +129,8 @@ function DashboardLayoutContent({
   const menuItems = useContext(MenuItemsContext);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
+  const palette = useCommandPalette();
+  const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform);
 
   const handleLogout = useCallback(async () => {
     if (isLoggingOut) return;
@@ -214,6 +217,29 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
+            {/* Quick search trigger — opens Cmd+K palette */}
+            <div className="px-2 pt-2">
+              <button
+                type="button"
+                onClick={() => palette.setOpen(true)}
+                className={`w-full flex items-center gap-2 rounded-xl border border-border bg-muted/40 hover:bg-muted/70 transition-colors text-left text-sm text-muted-foreground hover:text-foreground ${
+                  isCollapsed ? "h-10 justify-center px-0" : "h-10 px-3"
+                }`}
+                aria-label="Open command palette"
+                title="Open command palette"
+              >
+                <Search className="h-4 w-4 shrink-0" />
+                {!isCollapsed && (
+                  <>
+                    <span className="flex-1 truncate">Search…</span>
+                    <kbd className="hidden md:inline-flex items-center gap-0.5 rounded border border-border bg-background text-[10px] font-medium text-muted-foreground px-1.5 py-0.5">
+                      {isMac ? "⌘" : "Ctrl"}<span>K</span>
+                    </kbd>
+                  </>
+                )}
+              </button>
+            </div>
+
             <SidebarMenu className="px-2 py-2">
               {menuItems.map(item => {
                 const isActive = location === item.path;
@@ -306,6 +332,13 @@ function DashboardLayoutContent({
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={() => palette.setOpen(true)}
+                className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground"
+                aria-label="Open search"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+              <button
                 onClick={handleLogout}
                 disabled={isLoggingOut}
                 className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-red-500/15 transition-colors text-red-400"
@@ -317,6 +350,8 @@ function DashboardLayoutContent({
         )}
         <main className="flex-1 p-4">{children}</main>
       </SidebarInset>
+
+      <CommandPalette open={palette.open} onOpenChange={palette.setOpen} />
     </>
   );
 }
