@@ -8,8 +8,9 @@
 import { useState } from "react";
 import {
   Star, Eye, Scissors, TrendingUp, TrendingDown, Info, ChevronLeft, ChevronRight,
-  Target, Calendar,
+  Target, Calendar, Clock, AlertTriangle, ThumbsUp,
 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MONTH_NAMES } from "../../../../shared/const";
 
@@ -17,8 +18,10 @@ import { MONTH_NAMES } from "../../../../shared/const";
 // Score card — large metric display with tooltip + status pill + progress bar
 // ============================================================================
 
-export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgColor, tooltip }: {
+export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgColor, tooltip, delta }: {
   score: number; maxScore: number; label: string; icon: typeof Star; accentColor: string; bgColor: string; tooltip?: string;
+  /** Month-over-month delta vs previous month with data. `null` = hide chip. */
+  delta?: number | null;
 }) {
   const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
   const [showTooltip, setShowTooltip] = useState(false);
@@ -30,6 +33,7 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
     return { text: 'Needs Work', color: 'text-red-600', badge: 'bg-red-50 border-red-200 text-red-700' };
   };
   const status = getStatus();
+  const showDelta = typeof delta === "number" && delta !== 0;
 
   return (
     <div className={`relative overflow-hidden rounded-2xl ${bgColor} p-5 sm:p-6 border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 group hover:-translate-y-0.5`}>
@@ -59,9 +63,19 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
           </div>
         </div>
         <div className="mb-3">
-          <div className="flex items-baseline gap-1">
+          <div className="flex items-baseline gap-1 flex-wrap">
             <span className="text-3xl sm:text-4xl font-bold text-slate-900">{score.toFixed(1)}</span>
             <span className="text-lg text-slate-400">/{maxScore}</span>
+            {showDelta && (
+              <span className={`ml-1 inline-flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full border ${
+                (delta as number) > 0
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                  : "bg-rose-50 border-rose-200 text-rose-700"
+              }`}>
+                {(delta as number) > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                {(delta as number) > 0 ? "+" : ""}{(delta as number).toFixed(1)}
+              </span>
+            )}
           </div>
           <p className="text-sm text-slate-500 mt-1">{label}</p>
         </div>
@@ -233,6 +247,46 @@ const PLAN_CATEGORY_TONE: Record<string, string> = {
   errors: "border-rose-200 bg-rose-50",
   general: "border-slate-200 bg-slate-50",
 };
+
+// ============================================================================
+// At-a-glance strip — 4 micro-stats sitting below the hero, giving the GP an
+// immediate read of "where am I this month" before they scroll. Includes a
+// recency tile ("Last evaluation X days ago") so the dashboard reads as live.
+// ============================================================================
+
+export function AtAGlanceStrip({
+  evalCount, mistakes, attitude, lastEvaluationDate,
+}: {
+  evalCount: number;
+  mistakes: number;
+  attitude: number;
+  lastEvaluationDate: Date | null;
+}) {
+  const recencyLabel = lastEvaluationDate
+    ? formatDistanceToNow(lastEvaluationDate, { addSuffix: true })
+    : "—";
+  const tiles: Array<{ icon: typeof Eye; label: string; value: string | number; tone: string }> = [
+    { icon: Eye, label: "Evaluations", value: evalCount, tone: "bg-amber-50 border-amber-200 text-amber-700" },
+    { icon: AlertTriangle, label: "Mistakes", value: mistakes, tone: "bg-red-50 border-red-200 text-red-700" },
+    { icon: ThumbsUp, label: "Attitude", value: attitude > 0 ? `+${attitude}` : `${attitude}`, tone: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+    { icon: Clock, label: "Last eval", value: recencyLabel, tone: "bg-slate-50 border-slate-200 text-slate-700" },
+  ];
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {tiles.map(t => (
+        <div key={t.label} className={`rounded-xl border p-3 sm:p-4 ${t.tone} flex items-center gap-3`}>
+          <div className="bg-white/80 p-2 rounded-lg border border-white/40 shrink-0">
+            <t.icon className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-wider opacity-70">{t.label}</p>
+            <p className="text-lg sm:text-xl font-bold truncate">{t.value}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function ActionPlanCard({ items }: { items: Array<{ id: number; title: string; description: string | null; category: string; priority: string; status: string; dueDate: Date | null; source: string }> }) {
   const open = items.filter(i => i.status === "open");

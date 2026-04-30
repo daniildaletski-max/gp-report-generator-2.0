@@ -3,21 +3,23 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { format } from "date-fns";
-import { 
-  Star, Calendar, Gamepad2, Eye, Sparkles, Scissors, Palette, Shirt, 
-  PersonStanding, Loader2, AlertCircle, TrendingUp, AlertTriangle, Trophy, 
-  Target, Gift, ThumbsUp, ThumbsDown, RefreshCw, ChevronDown, ChevronUp, BarChart3,
-  Clock, Award, Zap, TrendingDown, Flame, Crown, Medal, Gem, Heart, Shield,
-  Info, MessageSquare, FileText, ChevronLeft, ChevronRight
+import {
+  Star, Calendar, Gamepad2, Eye, Sparkles, Scissors, Palette, Shirt,
+  PersonStanding, AlertCircle, TrendingUp, AlertTriangle, Trophy,
+  Target, ThumbsUp, ThumbsDown, RefreshCw, ChevronDown, ChevronUp, BarChart3,
+  Clock, TrendingDown, Flame, Crown, Medal, Gem, Heart, Shield,
+  MessageSquare, FileText,
 } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
 import { useState, useEffect, useMemo } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { MAX_TOTAL_SCORE, MAX_APPEARANCE_SCORE, MAX_GAME_PERFORMANCE_SCORE, SCORE_CONFIG, MONTH_NAMES } from "../../../shared/const";
+import { useUrlState, urlString } from "@/hooks/useUrlState";
 
 import {
   ScoreCard, AchievementBadge, StatCard, LabeledComment, MonthSelector, ActionPlanCard,
+  AtAGlanceStrip,
 } from "./gpPortal/components";
 
 export default function GPPortal() {
@@ -30,6 +32,15 @@ export default function GPPortal() {
   const now = new Date();
   const [detailMonth, setDetailMonth] = useState(now.getMonth() + 1);
   const [detailYear, setDetailYear] = useState(now.getFullYear());
+
+  // Persist active tab in URL so refresh / shared link drops the GP back where
+  // they were. `overview` is the safe fallback for old/short links.
+  const [activeTab, setActiveTab] = useUrlState<string>(
+    "tab",
+    "overview",
+    urlString.parse,
+    urlString.serialize,
+  );
   
   const { data, isLoading, error, refetch, isFetching } = trpc.gpAccess.getEvaluationsByToken.useQuery(
     { token: token || "" },
@@ -320,7 +331,19 @@ export default function GPPortal() {
           </section>
         )}
 
-        {/* Score Overview Cards */}
+        {/* At-a-glance strip — quick read of "where am I this month" */}
+        <AtAGlanceStrip
+          evalCount={totalEvals}
+          mistakes={data.monthlyStats?.current?.mistakes ?? 0}
+          attitude={data.monthlyStats?.current?.attitude ?? 0}
+          lastEvaluationDate={
+            recentEvaluations[0]?.evaluationDate
+              ? new Date(recentEvaluations[0].evaluationDate)
+              : null
+          }
+        />
+
+        {/* Score Overview Cards — with month-over-month delta chips per category */}
         <section>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
             <ScoreCard
@@ -331,24 +354,27 @@ export default function GPPortal() {
               bgColor="bg-white"
               accentColor="bg-amber-50 border-amber-200 text-amber-600"
               tooltip={`Total of Appearance (${MAX_APPEARANCE_SCORE}) + Game Performance (${MAX_GAME_PERFORMANCE_SCORE}) = ${MAX_TOTAL_SCORE} max`}
+              delta={improvement?.total}
             />
-            <ScoreCard 
-              score={avgAppearance} 
-              maxScore={MAX_APPEARANCE_SCORE} 
-              label="Appearance" 
+            <ScoreCard
+              score={avgAppearance}
+              maxScore={MAX_APPEARANCE_SCORE}
+              label="Appearance"
               icon={Sparkles}
               bgColor="bg-white"
               accentColor="bg-emerald-50 border-emerald-200 text-emerald-600"
               tooltip={`Hair (${SCORE_CONFIG.hair.max}) + Makeup (${SCORE_CONFIG.makeup.max}) + Outfit (${SCORE_CONFIG.outfit.max}) + Posture (${SCORE_CONFIG.posture.max}) = ${MAX_APPEARANCE_SCORE} max`}
+              delta={improvement?.appearance}
             />
-            <ScoreCard 
-              score={avgGamePerf} 
-              maxScore={MAX_GAME_PERFORMANCE_SCORE} 
-              label="Game Performance" 
+            <ScoreCard
+              score={avgGamePerf}
+              maxScore={MAX_GAME_PERFORMANCE_SCORE}
+              label="Game Performance"
               icon={Gamepad2}
               bgColor="bg-white"
               accentColor="bg-blue-50 border-blue-200 text-blue-600"
               tooltip={`Dealing Style (${SCORE_CONFIG.dealingStyle.max}) + Game Performance (${SCORE_CONFIG.gamePerformance.max}) = ${MAX_GAME_PERFORMANCE_SCORE} max`}
+              delta={improvement?.performance}
             />
           </div>
         </section>
@@ -410,92 +436,122 @@ export default function GPPortal() {
           </div>
         )}
 
-        {/* Monthly Stats & Achievements */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Quick Stats */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-800">
-              <Target className="h-5 w-5 text-amber-500" />
-              This Month's Stats
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
-              <StatCard 
-                icon={Eye} 
-                value={totalEvals} 
-                label="Total Evaluations" 
-                color="bg-amber-50"
-              />
-              <StatCard 
-                icon={AlertTriangle} 
-                value={data.monthlyStats?.current?.mistakes ?? 0} 
-                label="Mistakes" 
-                color="bg-red-50"
-                trend={data.monthlyStats?.previous ? 
-                  (data.monthlyStats.current?.mistakes ?? 0) - (data.monthlyStats.previous.mistakes ?? 0) : undefined}
-              />
-              <StatCard 
-                icon={ThumbsUp} 
-                value={data.monthlyStats?.current?.attitude ?? 0} 
-                label="Attitude Score" 
-                color="bg-green-50"
-              />
-              <StatCard 
-                icon={Gamepad2} 
-                value={data.monthlyStats?.current?.totalGames ?? 0} 
-                label="Total Games" 
-                color="bg-blue-50"
-              />
-            </div>
-          </div>
+        {/* Tabbed lower half — compacts ~2,000px of scroll into one tap so the
+            Monthly Details panel (where the date-filter bug fix is visible) is
+            never more than one click away. Active tab persists in `?tab=`. */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="bg-white border border-slate-200 shadow-sm h-auto p-1 grid grid-cols-4 w-full sm:w-auto sm:inline-grid">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="trend">Trend</TabsTrigger>
+            <TabsTrigger value="evaluations">Evaluations</TabsTrigger>
+            <TabsTrigger value="month">Month</TabsTrigger>
+          </TabsList>
 
-          {/* Recent Evaluations */}
-          <Card className="bg-white border-slate-200 shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-slate-800 text-base flex items-center gap-2">
-                <Clock className="h-4 w-4 text-amber-500" />
-                Recent Evaluations
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {recentEvaluations.length > 0 ? (
-                <div className="space-y-2.5">
-                  {recentEvaluations.slice(0, 4).map((eval_: any) => (
-                    <div key={eval_.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 rounded-full ${
-                          (eval_.totalScore || 0) >= 20 ? 'bg-green-500' :
-                          (eval_.totalScore || 0) >= 18 ? 'bg-yellow-500' :
-                          'bg-red-500'
-                        }`} />
-                        <div>
-                          <p className="text-sm font-medium text-slate-800">
-                            {eval_.game || 'Game Session'}
-                          </p>
-                          {eval_.evaluatorName && (
-                            <p className="text-xs text-slate-500">by {eval_.evaluatorName}</p>
-                          )}
+          <TabsContent value="overview" className="mt-6 space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Quick Stats */}
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-800">
+                  <Target className="h-5 w-5 text-amber-500" />
+                  This Month's Stats
+                </h2>
+                <div className="grid grid-cols-2 gap-3">
+                  <StatCard
+                    icon={Eye}
+                    value={totalEvals}
+                    label="Total Evaluations"
+                    color="bg-amber-50"
+                  />
+                  <StatCard
+                    icon={AlertTriangle}
+                    value={data.monthlyStats?.current?.mistakes ?? 0}
+                    label="Mistakes"
+                    color="bg-red-50"
+                    trend={data.monthlyStats?.previous ?
+                      (data.monthlyStats.current?.mistakes ?? 0) - (data.monthlyStats.previous.mistakes ?? 0) : undefined}
+                  />
+                  <StatCard
+                    icon={ThumbsUp}
+                    value={data.monthlyStats?.current?.attitude ?? 0}
+                    label="Attitude Score"
+                    color="bg-green-50"
+                  />
+                  <StatCard
+                    icon={Gamepad2}
+                    value={data.monthlyStats?.current?.totalGames ?? 0}
+                    label="Total Games"
+                    color="bg-blue-50"
+                  />
+                </div>
+              </div>
+
+              {/* Recent Evaluations */}
+              <Card className="bg-white border-slate-200 shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-slate-800 text-base flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-amber-500" />
+                    Recent Evaluations
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {recentEvaluations.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {recentEvaluations.slice(0, 4).map((eval_: any) => (
+                        <div key={eval_.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${
+                              (eval_.totalScore || 0) >= 20 ? 'bg-green-500' :
+                              (eval_.totalScore || 0) >= 18 ? 'bg-yellow-500' :
+                              'bg-red-500'
+                            }`} />
+                            <div>
+                              <p className="text-sm font-medium text-slate-800">
+                                {eval_.game || 'Game Session'}
+                              </p>
+                              {eval_.evaluatorName && (
+                                <p className="text-xs text-slate-500">by {eval_.evaluatorName}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-lg font-bold ${
+                              (eval_.totalScore || 0) >= 20 ? 'text-green-600' :
+                              (eval_.totalScore || 0) >= 18 ? 'text-amber-600' :
+                              'text-red-600'
+                            }`}>{eval_.totalScore}</span>
+                            <span className="text-xs text-slate-400">/{MAX_TOTAL_SCORE}</span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-lg font-bold ${
-                          (eval_.totalScore || 0) >= 20 ? 'text-green-600' :
-                          (eval_.totalScore || 0) >= 18 ? 'text-amber-600' :
-                          'text-red-600'
-                        }`}>{eval_.totalScore}</span>
-                        <span className="text-xs text-slate-400">/{MAX_TOTAL_SCORE}</span>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <Clock className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-slate-500 text-sm">No evaluations yet</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Clock className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-slate-500 text-sm">No evaluations yet</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Achievements moved into Overview */}
+            <section>
+              <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-slate-800">
+                <Trophy className="h-5 w-5 text-amber-500" />
+                Achievements
+                <Badge className="ml-2 bg-amber-50 text-amber-700 border-amber-200">
+                  {achievements.filter(a => a.unlocked).length}/{achievements.length}
+                </Badge>
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {achievements.map((a) => (
+                  <AchievementBadge key={a.title} {...a} />
+                ))}
+              </div>
+            </section>
+          </TabsContent>
+
+          <TabsContent value="trend" className="mt-6 space-y-6">
 
         {/* Score Trend Chart */}
         {data.monthlyHistory && data.monthlyHistory.length > 0 && (
@@ -639,22 +695,9 @@ export default function GPPortal() {
             </div>
           </section>
         )}
+          </TabsContent>
 
-        {/* Achievements */}
-        <section>
-          <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-slate-800">
-            <Trophy className="h-5 w-5 text-amber-500" />
-            Achievements
-            <Badge className="ml-2 bg-amber-50 text-amber-700 border-amber-200">
-              {achievements.filter(a => a.unlocked).length}/{achievements.length}
-            </Badge>
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {achievements.map((a) => (
-              <AchievementBadge key={a.title} {...a} />
-            ))}
-          </div>
-        </section>
+          <TabsContent value="evaluations" className="mt-6">
 
         {/* Evaluation History - Grouped by Month */}
         <section>
@@ -917,8 +960,13 @@ export default function GPPortal() {
             </Card>
           )}
         </section>
+          </TabsContent>
 
-        {/* Error & Attitude Details */}
+          <TabsContent value="month" className="mt-6">
+
+        {/* Error & Attitude Details — this is where the date-filter bug
+            fix becomes visible: entries dated in another month should
+            never leak into the selected month again. */}
         {data.monthlyStats && (
           <section>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
@@ -1125,6 +1173,8 @@ export default function GPPortal() {
             </div>
           </section>
         )}
+          </TabsContent>
+        </Tabs>
       </main>
 
       {/* Footer */}
