@@ -137,3 +137,9 @@ export {
   getActionItemStats, verifyActionItemOwnership,
 } from "./actionItems";
 export type { ActionItemWithGp } from "./actionItems";
+
+// Persona Sync Logs
+export {
+  createSyncLog, updateSyncLog,
+  getLastSyncForTeam, getRecentSyncsForTeam, getAllRecentSyncs,
+} from "./personaSyncLogs";

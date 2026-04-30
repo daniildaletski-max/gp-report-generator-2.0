@@ -65,6 +65,34 @@ interface ReportData {
   attitudeByGp: AttitudeByGp;
   gpEvaluationsData: ChartDataPoint[];
   prevMonthEvaluations: ChartDataPoint[];
+  // Optional supplementary data — render extra sheets only when present.
+  actionItems?: ActionItemSummary[];
+  bonusSummary?: BonusSummary[];
+}
+
+interface ActionItemSummary {
+  gpName: string;
+  title: string;
+  description: string | null;
+  category: string;
+  priority: string;
+  status: string;
+  source: string;
+  dueDate: Date | string | null;
+  createdAt: Date | string;
+  completedAt: Date | string | null;
+}
+
+interface BonusSummary {
+  gpName: string;
+  bonusLevel: "level1" | "level2" | "ineligible";
+  bonusAmount: number;
+  bonusRate: number;
+  achievedGGs: number;
+  totalGames: number;
+  errorCount: number;
+  hoursWorked: number;
+  disqualifyingFactors: string[];
 }
 
 // ============================
@@ -1260,11 +1288,169 @@ async function embedChartImages(
 }
 
 // ============================
+// Action Items sheet
+// ============================
+
+function buildActionItemsSheet(workbook: ExcelJS.Workbook, items: ActionItemSummary[]): void {
+  const sheet = workbook.addWorksheet("Coaching Plans");
+
+  sheet.columns = [
+    { header: "GP", key: "gpName", width: 22 },
+    { header: "Title", key: "title", width: 38 },
+    { header: "Category", key: "category", width: 14 },
+    { header: "Priority", key: "priority", width: 10 },
+    { header: "Status", key: "status", width: 13 },
+    { header: "Source", key: "source", width: 11 },
+    { header: "Due", key: "dueDate", width: 13 },
+    { header: "Created", key: "createdAt", width: 13 },
+    { header: "Completed", key: "completedAt", width: 13 },
+    { header: "Description", key: "description", width: 50 },
+  ];
+
+  // Header styling
+  const header = sheet.getRow(1);
+  header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } };
+  header.alignment = { horizontal: "center", vertical: "middle" };
+  header.height = 22;
+
+  for (const item of items) {
+    sheet.addRow({
+      gpName: item.gpName,
+      title: item.title,
+      category: item.category,
+      priority: item.priority,
+      status: item.status,
+      source: item.source === "ai_insight" ? "AI suggestion" : "manual",
+      dueDate: item.dueDate ? new Date(item.dueDate) : null,
+      createdAt: new Date(item.createdAt),
+      completedAt: item.completedAt ? new Date(item.completedAt) : null,
+      description: item.description ?? "",
+    });
+  }
+
+  // Conditional cell tinting for priority + status
+  for (let r = 2; r <= sheet.rowCount; r++) {
+    const priority = String(sheet.getCell(`D${r}`).value || "");
+    const status = String(sheet.getCell(`E${r}`).value || "");
+
+    if (priority === "high") {
+      sheet.getCell(`D${r}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE0E0" } };
+    } else if (priority === "medium") {
+      sheet.getCell(`D${r}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF2CC" } };
+    }
+
+    if (status === "done") {
+      sheet.getRow(r).font = { italic: true, color: { argb: "FF7F7F7F" } };
+    } else if (status === "open") {
+      sheet.getCell(`E${r}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2EFDA" } };
+    } else if (status === "in_progress") {
+      sheet.getCell(`E${r}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF2CC" } };
+    }
+  }
+
+  // Format dates
+  ["G", "H", "I"].forEach(col => {
+    sheet.getColumn(col).numFmt = "yyyy-mm-dd";
+  });
+
+  // Wrap description column
+  sheet.getColumn("description").alignment = { wrapText: true, vertical: "top" };
+
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+}
+
+// ============================
+// Bonus Summary sheet
+// ============================
+
+function buildBonusSummarySheet(workbook: ExcelJS.Workbook, summary: BonusSummary[]): void {
+  const sheet = workbook.addWorksheet("Bonus Summary");
+
+  sheet.columns = [
+    { header: "GP", key: "gpName", width: 22 },
+    { header: "Level", key: "level", width: 14 },
+    { header: "Rate (€/h)", key: "rate", width: 11 },
+    { header: "Hours", key: "hours", width: 8 },
+    { header: "Bonus (€)", key: "amount", width: 11 },
+    { header: "GGs", key: "ggs", width: 10 },
+    { header: "Games", key: "games", width: 10 },
+    { header: "Errors", key: "errors", width: 8 },
+    { header: "Disqualifying factors", key: "factors", width: 40 },
+  ];
+
+  const header = sheet.getRow(1);
+  header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD4A017" } };
+  header.alignment = { horizontal: "center", vertical: "middle" };
+  header.height = 22;
+
+  // Sort: highest payout first
+  const sorted = [...summary].sort((a, b) => b.bonusAmount - a.bonusAmount);
+
+  let totalPayout = 0;
+  let level1Count = 0;
+  let level2Count = 0;
+  let ineligibleCount = 0;
+
+  for (const b of sorted) {
+    sheet.addRow({
+      gpName: b.gpName,
+      level: b.bonusLevel === "level2" ? "Level 2" : b.bonusLevel === "level1" ? "Level 1" : "Not qualifying",
+      rate: b.bonusRate,
+      hours: b.hoursWorked,
+      amount: b.bonusAmount,
+      ggs: b.achievedGGs,
+      games: b.totalGames,
+      errors: b.errorCount,
+      factors: b.disqualifyingFactors.join("; ") || "—",
+    });
+    totalPayout += b.bonusAmount;
+    if (b.bonusLevel === "level2") level2Count++;
+    else if (b.bonusLevel === "level1") level1Count++;
+    else ineligibleCount++;
+  }
+
+  // Tinting per level
+  for (let r = 2; r <= sheet.rowCount; r++) {
+    const level = String(sheet.getCell(`B${r}`).value || "");
+    if (level === "Level 2") {
+      sheet.getCell(`B${r}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF2CC" } };
+    } else if (level === "Level 1") {
+      sheet.getCell(`B${r}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2EFDA" } };
+    } else {
+      sheet.getCell(`B${r}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF2F2F2" } };
+    }
+  }
+
+  // Number format for currency / counts
+  sheet.getColumn("rate").numFmt = "€#,##0.00";
+  sheet.getColumn("amount").numFmt = "€#,##0";
+  ["F", "G", "H"].forEach(col => { sheet.getColumn(col).numFmt = "#,##0"; });
+
+  // Totals row
+  const totalRow = sheet.addRow({});
+  sheet.addRow({
+    gpName: "TOTAL",
+    level: `${level2Count}× L2 / ${level1Count}× L1 / ${ineligibleCount}× —`,
+    rate: "",
+    hours: "",
+    amount: totalPayout,
+  });
+  const totalRowIdx = sheet.rowCount;
+  const tRow = sheet.getRow(totalRowIdx);
+  tRow.font = { bold: true };
+  tRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFC000" } };
+
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+}
+
+// ============================
 // Main Excel Generation
 // ============================
 
 export async function generateReportWorkbook(data: ReportData): Promise<Buffer> {
-  const { report, teamName, fmName, attendanceData, attitudeByGp, gpEvaluationsData, prevMonthEvaluations } = data;
+  const { report, teamName, fmName, attendanceData, attitudeByGp, gpEvaluationsData, prevMonthEvaluations, actionItems, bonusSummary } = data;
   const monthName = MONTH_NAMES[report.reportMonth - 1];
 
   log.info("Generating Excel workbook v2.0", { reportId: report.id, teamName, month: monthName, gpCount: attendanceData.length });
@@ -1288,6 +1474,16 @@ export async function generateReportWorkbook(data: ReportData): Promise<Buffer> 
 
   // Sheet 4: Attitude Entries (optional)
   buildAttitudeSheet(workbook, attendanceData, attitudeByGp);
+
+  // Sheet 5: Coaching Plans (optional — only if any items)
+  if (actionItems && actionItems.length > 0) {
+    buildActionItemsSheet(workbook, actionItems);
+  }
+
+  // Sheet 6: Bonus Summary (optional — only if any data)
+  if (bonusSummary && bonusSummary.length > 0) {
+    buildBonusSummarySheet(workbook, bonusSummary);
+  }
 
   const buffer = await workbook.xlsx.writeBuffer();
   log.info("Workbook v2.0 generated successfully", { reportId: report.id, sheets: workbook.worksheets.length });

@@ -15,6 +15,7 @@ import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
 import { sendReportEmail } from "../_core/email";
 import { generateReportWorkbook } from "../services/excelService";
+import { getBonusesForTeam } from "../services/bonusService";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("Router");
@@ -62,6 +63,27 @@ export async function generateExcelAndEmail(
   const prevMonthEvaluations = await db.getGPEvaluationsForDataSheet(report.teamId, prevYear, prevMonth);
   log.info("Previous month evaluations", { prevMonth, prevYear, count: prevMonthEvaluations.length });
 
+  // Pull supplementary data so the workbook gets the new sheets:
+  //   - open + in-progress action items for the team
+  //   - bonus eligibility per GP for this month
+  // Both are best-effort — failures shouldn't block report generation.
+  let actionItemsForReport: Awaited<ReturnType<typeof db.listActionItems>> = [];
+  try {
+    actionItemsForReport = await db.listActionItems({
+      teamId: report.teamId,
+      includeAllStatuses: false,
+    });
+  } catch (e) {
+    log.warn("Failed to load action items for report", { error: e instanceof Error ? e.message : String(e) });
+  }
+
+  let bonusSummaryForReport: Awaited<ReturnType<typeof getBonusesForTeam>> = [];
+  try {
+    bonusSummaryForReport = await getBonusesForTeam(report.teamId, report.reportMonth, report.reportYear);
+  } catch (e) {
+    log.warn("Failed to load bonus summary for report", { error: e instanceof Error ? e.message : String(e) });
+  }
+
   const buffer = await generateReportWorkbook({
     report: {
       id: report.id,
@@ -79,6 +101,29 @@ export async function generateExcelAndEmail(
     attitudeByGp,
     gpEvaluationsData,
     prevMonthEvaluations,
+    actionItems: actionItemsForReport.map(it => ({
+      gpName: it.gamePresenter.name,
+      title: it.title,
+      description: it.description,
+      category: it.category,
+      priority: it.priority,
+      status: it.status,
+      source: it.source,
+      dueDate: it.dueDate,
+      createdAt: it.createdAt,
+      completedAt: it.completedAt,
+    })),
+    bonusSummary: bonusSummaryForReport.map(b => ({
+      gpName: b.gpName,
+      bonusLevel: b.bonusLevel,
+      bonusAmount: b.bonusAmount,
+      bonusRate: b.bonusRate,
+      achievedGGs: b.achievedGGs,
+      totalGames: b.totalGames,
+      errorCount: b.errorCount,
+      hoursWorked: b.hoursWorked,
+      disqualifyingFactors: b.disqualifyingFactors,
+    })),
   });
 
   const fileKey = `reports/${report.id}/${nanoid()}-TeamOverview_${teamName.replace(/\s+/g, '_')}_${monthName}${report.reportYear}.xlsx`;

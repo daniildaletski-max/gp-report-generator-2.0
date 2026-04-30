@@ -3752,8 +3752,18 @@ function PersonaSyncTab({
   const [syncLog, setSyncLog] = useState<string[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [projectIdInput, setProjectIdInput] = useState<string>("");
+  const [previewData, setPreviewData] = useState<any | null>(null);
 
   const { data: teamsWithProjects, refetch: refetchTeamProjects } = trpc.personaSync.getTeamsWithProjectIds.useQuery();
+
+  const previewMutation = trpc.personaSync.previewSync.useMutation({
+    onSuccess: (data) => {
+      setPreviewData(data);
+    },
+    onError: (err) => {
+      toast.error(`Preview failed: ${err.message}`);
+    },
+  });
 
   const syncMutation = trpc.personaSync.syncTeam.useMutation({
     onSuccess: (data) => {
@@ -3790,6 +3800,14 @@ function PersonaSyncTab({
       toast.error(`Failed to save: ${err.message}`);
     },
   });
+
+  const handlePreview = () => {
+    if (!selectedTeamId) {
+      toast.error("Please select a team");
+      return;
+    }
+    previewMutation.mutate({ teamId: selectedTeamId, month: selectedMonth, year: selectedYear });
+  };
 
   const handleSync = () => {
     if (!selectedTeamId) {
@@ -3925,23 +3943,35 @@ function PersonaSyncTab({
               </p>
             </div>
 
-            <Button
-              className="w-full"
-              onClick={handleSync}
-              disabled={!selectedTeamId || isSyncing}
-            >
-              {isSyncing ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Syncing from Persona...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Sync Attendance from Persona
-                </>
-              )}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={handlePreview}
+                disabled={!selectedTeamId || previewMutation.isPending || isSyncing}
+              >
+                {previewMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Previewing...</>
+                ) : (
+                  <><Eye className="h-4 w-4 mr-2" /> Preview</>
+                )}
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleSync}
+                disabled={!selectedTeamId || isSyncing}
+              >
+                {isSyncing ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Syncing...</>
+                ) : (
+                  <><RefreshCw className="h-4 w-4 mr-2" /> Sync now</>
+                )}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              <strong>Preview</strong> shows what would change without saving.{" "}
+              <strong>Sync</strong> writes to the database. Scheduled sync also runs on the 1st of each month before reports are generated.
+            </p>
           </CardContent>
         </Card>
 
@@ -3957,11 +3987,12 @@ function PersonaSyncTab({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Team</TableHead>
-                    <TableHead>Persona Project ID</TableHead>
+                    <TableHead>Project ID</TableHead>
+                    <TableHead>Last sync</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {teamsWithProjects.map(t => (
+                  {teamsWithProjects.map((t: any) => (
                     <TableRow key={t.id}>
                       <TableCell className="font-medium">{t.teamName}</TableCell>
                       <TableCell>
@@ -3969,6 +4000,29 @@ function PersonaSyncTab({
                           <Badge variant="outline">{t.personaProjectId}</Badge>
                         ) : (
                           <span className="text-muted-foreground text-sm">Not set</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {t.lastSync ? (
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className={`inline-block h-2 w-2 rounded-full ${
+                              t.lastSync.status === "success" ? "bg-emerald-500" :
+                              t.lastSync.status === "partial" ? "bg-amber-500" : "bg-rose-500"
+                            }`} />
+                            <span className="text-muted-foreground">
+                              {format(new Date(t.lastSync.startedAt), "MMM d, HH:mm")}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {t.lastSync.status === "failed"
+                                ? "(failed)"
+                                : `(${t.lastSync.matched}/${t.lastSync.matched + t.lastSync.unmatched})`}
+                            </span>
+                            {t.lastSync.source === "scheduled" && (
+                              <Badge variant="outline" className="text-[9px]">auto</Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Never</span>
                         )}
                       </TableCell>
                     </TableRow>
@@ -4020,14 +4074,97 @@ function PersonaSyncTab({
               <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
                 <li>Logs into Persona HR system using stored credentials</li>
                 <li>Reads the schedule for the selected month and project</li>
-                <li>Matches workers by name to GPs in the selected team</li>
-                <li>Updates sick leaves, missed days, and extra shifts in the database</li>
-                <li>Sync may take 30–60 seconds while Persona loads</li>
+                <li>Matches workers to GPs using fuzzy name matching (the same matcher used by upload extraction)</li>
+                <li><strong>Preview</strong> shows pending changes without saving; <strong>Sync</strong> writes them.</li>
+                <li>Auto-runs on the 1st of each month before scheduled reports are generated.</li>
+                <li>Every sync attempt is logged so admins can audit failures.</li>
               </ul>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Preview dialog — shows what would change before applying */}
+      <Dialog open={previewData !== null} onOpenChange={(v) => !v && setPreviewData(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Sync preview — {previewData?.month && MONTHS[previewData.month - 1]} {previewData?.year}</DialogTitle>
+            <DialogDescription>
+              Nothing has been saved yet. Review the matches and apply if they look correct.
+            </DialogDescription>
+          </DialogHeader>
+          {previewData && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="p-3 rounded-lg border border-border bg-muted/30">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total workers</p>
+                  <p className="text-lg font-bold">{previewData.totalPersonaWorkers}</p>
+                </div>
+                <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50">
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-700">Will match</p>
+                  <p className="text-lg font-bold text-emerald-700">{previewData.matched}</p>
+                </div>
+                <div className="p-3 rounded-lg border border-rose-200 bg-rose-50">
+                  <p className="text-[10px] uppercase tracking-wider text-rose-700">Won't match</p>
+                  <p className="text-lg font-bold text-rose-700">{previewData.unmatched}</p>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Match details</p>
+                {previewData.matchDetails.map((d: any, i: number) => (
+                  <div
+                    key={i}
+                    className={`p-2 rounded-lg border text-sm ${
+                      d.matched ? "border-emerald-200 bg-emerald-50/50" : "border-rose-200 bg-rose-50/50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground truncate">{d.personaName}</p>
+                        {d.matched && d.gpName && (
+                          <p className="text-xs text-muted-foreground">→ {d.gpName} ({Math.round(d.similarity * 100)}% match)</p>
+                        )}
+                        {!d.matched && (
+                          <p className="text-xs text-rose-600">No GP in this team matches</p>
+                        )}
+                      </div>
+                      {d.matched && Object.keys(d.changes).length > 0 && (
+                        <div className="text-right text-xs flex flex-col gap-0.5 shrink-0">
+                          {d.changes.sickLeaves && (
+                            <span>Sick: {d.changes.sickLeaves.from} → <strong>{d.changes.sickLeaves.to}</strong></span>
+                          )}
+                          {d.changes.missedDays && (
+                            <span>Missed: {d.changes.missedDays.from} → <strong>{d.changes.missedDays.to}</strong></span>
+                          )}
+                          {d.changes.extraShifts && (
+                            <span>Extra: {d.changes.extraShifts.from} → <strong>{d.changes.extraShifts.to}</strong></span>
+                          )}
+                        </div>
+                      )}
+                      {d.matched && Object.keys(d.changes).length === 0 && (
+                        <span className="text-[10px] text-muted-foreground italic">No change</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewData(null)}>Close</Button>
+            <Button
+              onClick={() => {
+                setPreviewData(null);
+                handleSync();
+              }}
+              disabled={!previewData || previewData.matched === 0}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Apply sync
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TabsContent>
   );
 }

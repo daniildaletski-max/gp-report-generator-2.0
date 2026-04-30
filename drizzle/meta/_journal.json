@@ -120,6 +120,13 @@
       "when": 1777524794303,
       "tag": "0016_nappy_darkstar",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1777525637560,
+      "tag": "0017_magenta_purple_man",
+      "breakpoints": true
     }
   ]
 }
