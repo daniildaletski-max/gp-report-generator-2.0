@@ -1446,13 +1446,41 @@ function DashboardHero({
   const firstLabel = trend[0]?.label;
   const lastLabel = trend[trend.length - 1]?.label;
 
+  // Headline value: when the SELECTED period has no evaluations, fall
+  // back to the most recent month with data — but ONLY months at or
+  // BEFORE the selected one. Searching the whole rolling 6-month
+  // window (current calendar - 5 to current) would show a FUTURE
+  // value when the user selects an older period, which is factually
+  // wrong as a "current" KPI.
+  //
+  // selectedIdx < 0 means the selected month isn't in the rolling
+  // window at all (e.g. Feb 2024 selected, trend covers Dec 2025+) —
+  // no fallback is meaningful in that case, render the "No data yet"
+  // empty state instead of an unrelated number.
+  let fallbackPoint: { idx: number; y: number } | null = null;
+  if (avgTeamScore <= 0 && selectedIdx >= 0) {
+    // Walk backwards from selectedIdx (or selectedIdx-1 if the
+    // selected month itself is the empty one) to find the most recent
+    // prior month with non-zero score.
+    for (let i = selectedIdx; i >= 0; i--) {
+      const y = scoreSeries[i]?.y ?? 0;
+      if (y > 0) { fallbackPoint = { idx: i, y }; break; }
+    }
+  }
+  const fallbackLabel = fallbackPoint ? trend[fallbackPoint.idx]?.label : null;
+  const displayValue =
+    avgTeamScore > 0 ? avgTeamScore.toFixed(1)
+    : fallbackPoint ? fallbackPoint.y.toFixed(1)
+    : null;
+  const isFallback = avgTeamScore <= 0 && !!fallbackPoint;
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3 sm:gap-4">
+    // items-start so the primary tile doesn't stretch to match the
+    // 3-tile right column — was leaving ~80-120px of dead space below
+    // the sparkline.
+    <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3 sm:gap-4 items-start">
       <SparkGradients />
-      {/* Primary tile — Avg Team Score. Tightened layout: number row,
-          delta pill, then a thin spark with a 1-line month-range
-          caption directly underneath. No more 60-px dead band of
-          empty card. */}
+      {/* Primary tile — Avg Team Score */}
       <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-5 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
         <div className="absolute -top-12 -right-12 h-48 w-48 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
         <div className="relative flex flex-col gap-4">
@@ -1460,14 +1488,25 @@ function DashboardHero({
             <div className="flex-1 min-w-0">
               <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Avg Team Score</p>
               <div className="flex items-baseline gap-3 mt-1.5 flex-wrap">
-                <span className="text-4xl sm:text-5xl font-bold tabular-nums text-foreground leading-none">
-                  {avgTeamScore > 0 ? avgTeamScore.toFixed(1) : "—"}
-                </span>
+                {displayValue ? (
+                  <span className="text-4xl sm:text-5xl font-bold tabular-nums text-foreground leading-none">
+                    {displayValue}
+                  </span>
+                ) : (
+                  // No data anywhere — render a calmer "no data yet" line
+                  // instead of the em-dash that visually clipped to a bar.
+                  <span className="text-2xl sm:text-3xl font-semibold text-muted-foreground/70 leading-none">No data yet</span>
+                )}
                 {hasComparablePrev && scoreDelta !== undefined && (
                   <DeltaPill delta={scoreDelta} pct={scoreDeltaPct} suffix="vs last month" />
                 )}
               </div>
-              {scoreYs.length >= 2 && (
+              {isFallback && fallbackLabel && (
+                <p className="text-[11px] text-amber-700 mt-1.5">
+                  Showing {fallbackLabel} — selected period has no evaluations yet
+                </p>
+              )}
+              {!isFallback && scoreYs.length >= 2 && (
                 <p className="text-[11px] text-muted-foreground mt-1.5">
                   Ranged {scoreMin.toFixed(1)}–{scoreMax.toFixed(1)} over the last 6 months
                 </p>
@@ -1480,9 +1519,10 @@ function DashboardHero({
           <div>
             <Sparkline
               points={scoreSeries}
-              color="oklch(0.65 0.13 75)"
+              color="oklch(0.62 0.16 75)"
               fillId="spark-primary-grad"
-              height={40}
+              height={64}
+              strokeWidth={1.75}
               labels={trend.map(t => t.label)}
               valueFormatter={v => v.toFixed(1)}
             />
@@ -1490,6 +1530,26 @@ function DashboardHero({
               <div className="flex items-center justify-between mt-1.5 text-[10px] text-muted-foreground/80 uppercase tracking-wider tabular-nums">
                 <span>{firstLabel}</span>
                 <span>{lastLabel}</span>
+              </div>
+            )}
+            {/* Inline mini-stats below the chart fill the remaining
+                vertical space with useful context — high / low / monthly
+                avg of the score series — instead of leaving a blank gap. */}
+            {scoreYs.length >= 2 && (
+              <div className="grid grid-cols-3 gap-2 mt-3">
+                <SparkStat label="High" value={scoreMax.toFixed(1)} tone="emerald" />
+                <SparkStat label="Low" value={scoreMin.toFixed(1)} tone="rose" />
+                {/* Label is dynamic so it stays honest: when sparse
+                    months exist, "Avg 4mo" is true; "6mo avg" was a
+                    misleading label because we filter scoreYs to y>0
+                    (averaging in zeros from empty months would drag
+                    the typical-score signal toward zero, which is
+                    NOT what we want — but the label needs to match). */}
+                <SparkStat
+                  label={scoreYs.length === trend.length ? "6mo avg" : `Avg ${scoreYs.length}mo`}
+                  value={(scoreYs.reduce((a, b) => a + b, 0) / scoreYs.length).toFixed(1)}
+                  tone="muted"
+                />
               </div>
             )}
           </div>
@@ -1761,16 +1821,35 @@ function SparkGradients() {
   return (
     <svg width="0" height="0" className="absolute" aria-hidden="true">
       <defs>
+        {/* Hero spark gradient — bumped from 0.35 to 0.55 so the area
+            actually reads as a filled shape on screens, not a barely-
+            visible tint. Mid-stop at 50% gives the gradient a softer,
+            more shaped look than a linear fade-to-transparent. */}
         <linearGradient id="spark-primary-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="oklch(0.65 0.13 75)" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="oklch(0.65 0.13 75)" stopOpacity="0" />
+          <stop offset="0%" stopColor="oklch(0.62 0.16 75)" stopOpacity="0.55" />
+          <stop offset="55%" stopColor="oklch(0.62 0.16 75)" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="oklch(0.62 0.16 75)" stopOpacity="0" />
         </linearGradient>
         <linearGradient id="spark-mini-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="oklch(0.65 0.13 75)" stopOpacity="0.25" />
-          <stop offset="100%" stopColor="oklch(0.65 0.13 75)" stopOpacity="0" />
+          <stop offset="0%" stopColor="oklch(0.62 0.16 75)" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="oklch(0.62 0.16 75)" stopOpacity="0" />
         </linearGradient>
       </defs>
     </svg>
+  );
+}
+
+/** Small stat tile rendered below the hero sparkline: High/Low/6mo avg. */
+function SparkStat({ label, value, tone }: { label: string; value: string; tone: "emerald" | "rose" | "muted" }) {
+  const cls =
+    tone === "emerald" ? "border-emerald-200 bg-emerald-50/60 text-emerald-700" :
+    tone === "rose" ? "border-rose-200 bg-rose-50/60 text-rose-700" :
+    "border-border bg-muted/30 text-foreground";
+  return (
+    <div className={`rounded-xl border p-2.5 ${cls}`}>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
+      <p className="text-base font-bold tabular-nums">{value}</p>
+    </div>
   );
 }
 
