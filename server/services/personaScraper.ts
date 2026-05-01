@@ -137,18 +137,45 @@ async function getBrowser(): Promise<Browser> {
   // `chromium.args` includes the flags @sparticuz/chromium recommends for
   // running in a sandboxed/distroless container (font config, GL flags,
   // shared-memory tuning). Merge them with our domain-specific flags.
-  browserInstance = await puppeteer.launch({
-    executablePath,
-    args: [
-      ...chromium.args,
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-    ],
-    headless: true,
-  });
-  return browserInstance;
+  //
+  // We pass `env: process.env` explicitly so the LD_LIBRARY_PATH that
+  // chromium.executablePath() set during extraction is captured at
+  // launch time. Default puppeteer behaviour does inherit env, but
+  // some serverless platforms strip env on child process spawn so an
+  // explicit pass-through avoids surprises.
+  try {
+    browserInstance = await puppeteer.launch({
+      executablePath,
+      args: [
+        ...chromium.args,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
+      env: { ...(process.env as Record<string, string>) },
+      headless: true,
+    });
+    return browserInstance;
+  } catch (err) {
+    // Translate cryptic shared-library errors into something the
+    // operator can actually act on. Manus / minimal Linux images
+    // don't ship libnspr4/libnss3/libgconf etc. that Chromium loads
+    // dynamically. Detect that signature and re-throw with a clear
+    // remediation message.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/shared libraries|cannot open shared object|libnspr|libnss/i.test(msg)) {
+      throw new Error(
+        `[chromium] Missing system shared libraries. Chromium binary launched but couldn't load its deps.\n\n` +
+        `Original error: ${msg}\n\n` +
+        `Fix on the deploy host (one of):\n` +
+        `  1. Install Chromium runtime libs:\n` +
+        `     apt-get install -y libnspr4 libnss3 libgconf-2-4 libxss1 libasound2 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libgtk-3-0 libxcomposite1 libxdamage1 libxrandr2 libxkbcommon0\n` +
+        `  2. OR set PUPPETEER_EXECUTABLE_PATH to a system Chromium with deps already installed.`,
+      );
+    }
+    throw err;
+  }
 }
 
 async function loginToPersona(page: Page, username: string, password: string): Promise<void> {
