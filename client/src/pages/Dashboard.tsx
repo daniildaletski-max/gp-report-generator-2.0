@@ -95,7 +95,15 @@ export default function Dashboard() {
   );
   const [, setLocation] = useLocation();
   const isMobile = useIsMobile();
-  const [drawerGpId, setDrawerGpId] = useState<number | null>(null);
+  // Persist the open GP-detail drawer in the URL (?gp=ID). Lets deep
+  // links / insight CTAs open a specific GP straight from a navigation
+  // event instead of needing extra programmatic state.
+  const [drawerGpId, setDrawerGpId] = useUrlState<number | null>(
+    "gp",
+    null,
+    raw => urlNumber.parse(raw),
+    v => (v == null ? null : String(v)),
+  );
 
   // Aggregate action-item counts so the dashboard surfaces "X open, Y overdue".
   const { data: actionItemStats } = trpc.actionItems.stats.useQuery({

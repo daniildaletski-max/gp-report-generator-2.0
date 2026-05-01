@@ -517,7 +517,12 @@ export async function computeDashboardInsights(opts: {
         severity: "alert",
         title: `${r.gpName} dropped ${Math.abs(r.delta).toFixed(1)} points`,
         description: `${monthNameLM} avg ${r.current.toFixed(1)}, down from ${r.prev.toFixed(1)} the month before. Worth a coaching check-in.`,
-        action: { label: "Open profile", href: `/admin?tab=stats&gpId=${r.gpId}` },
+        // Dashboard reads ?gp=ID and opens the GP-detail drawer — works
+        // for both admin and FM (the page is FM-reachable, the drawer
+        // already exists). The previous /admin?tab=stats&gpId=X link
+        // dropped users on a generic stats view because Admin only
+        // consumed the `tab` query param, ignoring `gpId`.
+        action: { label: "Open profile", href: `/dashboard?gp=${r.gpId}` },
         timestamp: lastMonthDate,
         metadata: { gpId: r.gpId, gpName: r.gpName, teamId: r.teamId ?? undefined, teamName: r.teamId ? teamNameById.get(r.teamId) : undefined },
       });
@@ -529,7 +534,7 @@ export async function computeDashboardInsights(opts: {
         severity: "celebration",
         title: `${im.gpName} improved ${im.delta.toFixed(1)} points`,
         description: `${monthNameLM} avg ${im.current.toFixed(1)}, up from ${im.prev.toFixed(1)}. Worth recognising.`,
-        action: { label: "Open profile", href: `/admin?tab=stats&gpId=${im.gpId}` },
+        action: { label: "Open profile", href: `/dashboard?gp=${im.gpId}` },
         timestamp: lastMonthDate,
         metadata: { gpId: im.gpId, gpName: im.gpName, teamId: im.teamId ?? undefined, teamName: im.teamId ? teamNameById.get(im.teamId) : undefined },
       });
@@ -763,8 +768,15 @@ export async function getDashboardActivityFeed(opts: {
     }
   } catch { /* skip */ }
 
-  // Recent error file uploads
+  // Recent error file uploads. Skipped entirely when a teamId filter
+  // is active: error_files has no teamId column so we'd otherwise show
+  // uploads from other teams next to team-scoped sync/report/evaluation
+  // rows — visually consistent feed > slightly emptier feed.
   try {
+    if (opts.teamId) {
+      // teamId filter is active and we can't constrain error_files to
+      // it, so don't show these rows in this view.
+    } else {
     const conds = opts.userId ? [eq(errorFiles.userId, opts.userId)] : [];
     const rows = await db
       .select({
@@ -786,6 +798,7 @@ export async function getDashboardActivityFeed(opts: {
         detail: r.fileType.toUpperCase(),
         href: errorFileHref,
       });
+    }
     }
   } catch { /* skip */ }
 
