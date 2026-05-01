@@ -155,7 +155,12 @@ export const dashboardRouter = router({
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
         }
       }
-      return await db.getDashboardActivityFeed({ limit, userId: userScope, teamId });
+      return await db.getDashboardActivityFeed({
+        limit,
+        userId: userScope,
+        teamId,
+        userRole: ctx.user.role,
+      });
     }),
 
   // Admin dashboard with system-wide stats

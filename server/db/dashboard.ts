@@ -629,9 +629,20 @@ export async function getDashboardActivityFeed(opts: {
   /** When set, scope every per-source query to this team so the feed
    *  matches the team selector at the top of the dashboard. */
   teamId?: number;
+  /** Used to gate admin-only link targets (persona/errors tabs) so
+   *  FMs don't get rows that send them to a screen they can't open. */
+  userRole?: string;
 }): Promise<ActivityItem[]> {
   const db = await getDb();
   if (!db) return [];
+
+  const isAdmin = opts.userRole === "admin";
+  // Sync rows link to the admin Persona tab (admin-only). For FMs we
+  // still surface the row — useful as a "this happened" notice — but
+  // omit the href so clicking does nothing (the row is rendered as a
+  // disabled button). Same logic for error_file → admin Errors tab.
+  const syncHref: string | undefined = isAdmin ? "/admin?tab=persona" : undefined;
+  const errorFileHref: string | undefined = isAdmin ? "/admin?tab=errors" : undefined;
 
   // Resolve which teamIds bound the query. Three cases:
   //   - explicit teamId given → use just that one (after ownership check)
@@ -690,7 +701,7 @@ export async function getDashboardActivityFeed(opts: {
         timestamp: r.startedAt,
         title: `${r.teamName} — Persona sync ${r.status}`,
         detail: r.status === "failed" ? "see admin log" : `${r.matched} matched, ${r.unmatched} unmatched`,
-        href: "/admin?tab=persona",
+        href: syncHref,
         status: r.status,
       });
     }
@@ -773,7 +784,7 @@ export async function getDashboardActivityFeed(opts: {
         timestamp: r.createdAt,
         title: `Error file uploaded: ${r.fileName}`,
         detail: r.fileType.toUpperCase(),
-        href: "/admin?tab=errors",
+        href: errorFileHref,
       });
     }
   } catch { /* skip */ }
