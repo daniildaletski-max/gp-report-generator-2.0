@@ -1425,36 +1425,62 @@ function DashboardHero({
 
   const evaluatedPct = totalGPs > 0 ? Math.round((evaluatedGPs / totalGPs) * 100) : 0;
 
+  // Range for the sparkline footer label — gives the line context
+  // ("ranges 17.4–22.1 across these 6 months") instead of just a
+  // floating curve. Only meaningful when the spark has data.
+  const scoreYs = scoreSeries.map(p => p.y).filter(y => y > 0);
+  const scoreMin = scoreYs.length > 0 ? Math.min(...scoreYs) : 0;
+  const scoreMax = scoreYs.length > 0 ? Math.max(...scoreYs) : 0;
+  const firstLabel = trend[0]?.label;
+  const lastLabel = trend[trend.length - 1]?.label;
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3 sm:gap-4">
-      {/* Primary tile — Avg Team Score */}
+      <SparkGradients />
+      {/* Primary tile — Avg Team Score. Tightened layout: number row,
+          delta pill, then a thin spark with a 1-line month-range
+          caption directly underneath. No more 60-px dead band of
+          empty card. */}
       <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-5 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
         <div className="absolute -top-12 -right-12 h-48 w-48 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
-        <div className="relative flex flex-col h-full justify-between gap-4 min-h-[160px]">
+        <div className="relative flex flex-col gap-4">
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Avg Team Score</p>
-              <div className="flex items-baseline gap-3 mt-2">
-                <span className="text-4xl sm:text-5xl font-bold tabular-nums text-foreground">
+              <div className="flex items-baseline gap-3 mt-1.5 flex-wrap">
+                <span className="text-4xl sm:text-5xl font-bold tabular-nums text-foreground leading-none">
                   {avgTeamScore > 0 ? avgTeamScore.toFixed(1) : "—"}
                 </span>
                 {hasComparablePrev && scoreDelta !== undefined && (
                   <DeltaPill delta={scoreDelta} pct={scoreDeltaPct} suffix="vs last month" />
                 )}
               </div>
+              {scoreYs.length >= 2 && (
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  Ranged {scoreMin.toFixed(1)}–{scoreMax.toFixed(1)} over the last 6 months
+                </p>
+              )}
             </div>
-            <div className="rounded-2xl bg-primary/10 border border-primary/20 p-3">
-              <TrendingUp className="h-5 w-5 text-primary" />
+            <div className="rounded-2xl bg-primary/10 border border-primary/20 p-2.5 shrink-0">
+              <TrendingUp className="h-4 w-4 text-primary" />
             </div>
           </div>
-          <Sparkline
-            points={scoreSeries}
-            color="oklch(0.65 0.13 75)"
-            fill="oklch(0.65 0.13 75 / 0.15)"
-            height={56}
-            labels={trend.map(t => t.label)}
-            valueFormatter={v => v.toFixed(1)}
-          />
+          <div>
+            <Sparkline
+              points={scoreSeries}
+              color="oklch(0.65 0.13 75)"
+              fillId="spark-primary-grad"
+              height={40}
+              labels={trend.map(t => t.label)}
+              valueFormatter={v => v.toFixed(1)}
+            />
+            {firstLabel && lastLabel && (
+              <div className="flex items-center justify-between mt-1.5 text-[10px] text-muted-foreground/80 uppercase tracking-wider tabular-nums">
+                <span>{firstLabel}</span>
+                <span>{lastLabel}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1544,8 +1570,9 @@ function MiniMetric({
             <Sparkline
               points={spark}
               color="oklch(0.65 0.13 75)"
-              fill="oklch(0.65 0.13 75 / 0.12)"
-              height={28}
+              fillId="spark-mini-grad"
+              height={24}
+              strokeWidth={1.1}
             />
           </div>
         )}
@@ -1559,54 +1586,110 @@ function MiniMetric({
  * stays cheap to render — the dashboard renders six of these in the
  * hero alone.
  */
+/**
+ * Catmull-Rom → cubic Bézier smoothing. Without this the line just
+ * connects the data points with straight segments; on a 6-month series
+ * with small variance that comes out as ugly jagged angles instead of
+ * an "organic" trend curve.
+ */
+function smoothPath(coords: { x: number; y: number }[]): string {
+  if (coords.length === 0) return "";
+  if (coords.length === 1) return `M ${coords[0].x} ${coords[0].y}`;
+  const out: string[] = [`M ${coords[0].x.toFixed(2)} ${coords[0].y.toFixed(2)}`];
+  const tension = 0.2; // 0 = straight, ~0.5 = wavy. 0.2 is gentle.
+  for (let i = 0; i < coords.length - 1; i++) {
+    const p0 = coords[i - 1] ?? coords[i];
+    const p1 = coords[i];
+    const p2 = coords[i + 1];
+    const p3 = coords[i + 2] ?? p2;
+    const cp1x = p1.x + (p2.x - p0.x) * tension;
+    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp2x = p2.x - (p3.x - p1.x) * tension;
+    const cp2y = p2.y - (p3.y - p1.y) * tension;
+    out.push(`C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`);
+  }
+  return out.join(" ");
+}
+
 function Sparkline({
   points,
   color,
-  fill,
-  height = 32,
+  fillId,
+  height = 28,
+  strokeWidth = 1.25,
   labels,
   valueFormatter,
 }: {
   points: { x: number; y: number }[];
   color: string;
-  fill?: string;
+  /** Optional id for an SVG <linearGradient> defined outside; we reference
+   *  via fill="url(#id)". Lets the parent pick a tasteful gradient (faded
+   *  at the bottom) instead of a solid color blob. */
+  fillId?: string;
   height?: number;
+  strokeWidth?: number;
   labels?: string[];
   valueFormatter?: (v: number) => string;
 }) {
   if (points.length < 2) {
     return <div className="text-[10px] text-muted-foreground/60 italic">need 2+ months for trend</div>;
   }
-  const w = 100;
+  // Use a wider viewBox so smoothing has resolution to work with
+  const w = 200;
   const h = height;
   const ys = points.map(p => p.y);
   const minY = Math.min(...ys);
   const maxY = Math.max(...ys);
   const range = maxY - minY || 1;
-  const padding = h * 0.15;
-  const usableH = h - padding * 2;
+  // Tight vertical padding — the line can almost touch top/bottom.
+  // Bigger padding leaves dead band that looks like wasted space.
+  const pad = 2;
+  const usableH = h - pad * 2;
   const xStep = w / (points.length - 1);
   const coords = points.map((p, i) => ({
     x: i * xStep,
-    y: padding + usableH - ((p.y - minY) / range) * usableH,
-    raw: p.y,
+    y: pad + usableH - ((p.y - minY) / range) * usableH,
   }));
-  const linePath = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x.toFixed(2)} ${c.y.toFixed(2)}`).join(" ");
-  const areaPath = `${linePath} L ${(w).toFixed(2)} ${h} L 0 ${h} Z`;
+
+  const linePath = smoothPath(coords);
+  // Area = line + drop straight to baseline + close. Use baseline
+  // slightly below the sparkline so the gradient has somewhere to fade.
+  const areaPath = `${linePath} L ${w.toFixed(2)} ${h} L 0 ${h} Z`;
   const lastPoint = coords[coords.length - 1];
 
   return (
     <svg
       viewBox={`0 0 ${w} ${h}`}
       preserveAspectRatio="none"
-      className="w-full"
+      className="w-full block"
       style={{ height }}
       role="img"
       aria-label={labels ? `Trend: ${labels.map((l, i) => `${l}: ${(valueFormatter ?? (v => v.toString()))(points[i].y)}`).join(", ")}` : "Trend sparkline"}
     >
-      {fill && <path d={areaPath} fill={fill} />}
-      <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={lastPoint.x} cy={lastPoint.y} r="2" fill={color} />
+      {fillId && <path d={areaPath} fill={`url(#${fillId})`} />}
+      <path d={linePath} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      <circle cx={lastPoint.x} cy={lastPoint.y} r="2.5" fill={color} stroke="white" strokeWidth="1" />
+    </svg>
+  );
+}
+
+/**
+ * Shared SVG <defs> mounted once at the top of the dashboard so all
+ * sparklines below can reference the same gradient ids.
+ */
+function SparkGradients() {
+  return (
+    <svg width="0" height="0" className="absolute" aria-hidden="true">
+      <defs>
+        <linearGradient id="spark-primary-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="oklch(0.65 0.13 75)" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="oklch(0.65 0.13 75)" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="spark-mini-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="oklch(0.65 0.13 75)" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="oklch(0.65 0.13 75)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
     </svg>
   );
 }
