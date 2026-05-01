@@ -3791,6 +3791,51 @@ function SystemHealthMonitor() {
 // ============================================
 // Persona Sync Tab Component
 // ============================================
+type MatchDetail = {
+  gpId: number | null;
+  gpName: string;
+  personaName: string;
+  matched: boolean;
+  similarity: number;
+  changes: {
+    sickLeaves?: { from: number; to: number };
+    missedDays?: { from: number; to: number };
+    extraShifts?: { from: number; to: number };
+  };
+  reason?: "below-threshold" | "wrong-team" | "no-candidates";
+  closestGpName?: string;
+  closestGpTeam?: number | null;
+  closestSimilarity?: number;
+};
+
+type TeamSyncResult = {
+  kind: "team";
+  month: number;
+  year: number;
+  teamName: string;
+  totalPersonaWorkers: number;
+  matched: number;
+  unmatched: number;
+  matchDetails: MatchDetail[];
+  status: "success" | "partial" | "failed";
+};
+
+type BulkSyncResult = {
+  kind: "bulk";
+  month: number;
+  year: number;
+  results: { teamId: number; teamName: string; status: "success" | "partial" | "failed"; matched: number; unmatched: number; error?: string }[];
+  totals: { teams: number; matched: number; unmatched: number; failed: number };
+};
+
+type SyncState =
+  | { phase: "idle" }
+  | { phase: "running"; label: string }
+  | { phase: "done"; result: TeamSyncResult | BulkSyncResult }
+  | { phase: "error"; message: string };
+
+type RowFilter = "all" | "matched" | "issues";
+
 function PersonaSyncTab({
   teams,
   selectedMonth,
@@ -3805,16 +3850,31 @@ function PersonaSyncTab({
   setSelectedYear: (y: number) => void;
 }) {
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
-  const [syncLog, setSyncLog] = useState<string[]>([]);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncState, setSyncState] = useState<SyncState>({ phase: "idle" });
   const [projectIdInput, setProjectIdInput] = useState<string>("");
-  const [previewData, setPreviewData] = useState<any | null>(null);
+  const [previewData, setPreviewData] = useState<TeamSyncResult | null>(null);
+  const [rowFilter, setRowFilter] = useState<RowFilter>("all");
+  const [rowSearch, setRowSearch] = useState<string>("");
+
+  const isSyncing = syncState.phase === "running";
 
   const { data: teamsWithProjects, refetch: refetchTeamProjects } = trpc.personaSync.getTeamsWithProjectIds.useQuery();
 
+  const teamNameById = (id: number | null) => teams.find(t => t.id === id)?.teamName ?? "";
+
   const previewMutation = trpc.personaSync.previewSync.useMutation({
     onSuccess: (data) => {
-      setPreviewData(data);
+      setPreviewData({
+        kind: "team",
+        month: data.month,
+        year: data.year,
+        teamName: teamNameById(selectedTeamId),
+        totalPersonaWorkers: data.totalPersonaWorkers,
+        matched: data.matched,
+        unmatched: data.unmatched,
+        matchDetails: data.matchDetails as MatchDetail[],
+        status: data.status,
+      });
     },
     onError: (err) => {
       toast.error(`Preview failed: ${err.message}`);
@@ -3823,44 +3883,24 @@ function PersonaSyncTab({
 
   const syncMutation = trpc.personaSync.syncTeam.useMutation({
     onSuccess: (data) => {
-      const log = [
-        `✅ Sync completed for ${MONTHS[selectedMonth - 1]} ${selectedYear}`,
-        `📊 Total Persona workers: ${data.totalPersonaWorkers}`,
-        `✅ Matched & updated: ${data.matched}`,
-        `⚠️ Unmatched: ${data.unmatched}`,
-        ``,
-        `Match details:`,
-        ...data.matchDetails.map(d => {
-          if (d.matched) return `  ✅ ${d.personaName} → ${d.gpName}`;
-          // Unmatched: surface the closest candidate + reason so the
-          // user can decide whether it's a wrong-project, wrong-spelling,
-          // or genuinely-not-a-GP scenario.
-          const dd = d as any;
-          if (dd.reason === "wrong-team" && dd.closestGpName) {
-            return `  ❌ ${d.personaName} → closest "${dd.closestGpName}" but belongs to another team — likely wrong Persona Project ID`;
-          }
-          if (dd.reason === "below-threshold" && dd.closestGpName) {
-            return `  ❌ ${d.personaName} (closest: "${dd.closestGpName}", ${Math.round((dd.closestSimilarity ?? 0) * 100)}% — too different)`;
-          }
-          return `  ❌ ${d.personaName} (no match found — likely not a GP in your DB)`;
-        }),
-      ];
-
-      // If everything failed, show a hint at the top of the log
-      if (data.matched === 0 && data.unmatched > 0) {
-        const wrongTeam = data.matchDetails.filter((d: any) => d.reason === "wrong-team").length;
-        const hint = wrongTeam > data.matchDetails.length / 2
-          ? `   ➜ Hint: ${wrongTeam} workers matched GPs in OTHER teams. The Persona Project ID set here is probably for a different team.`
-          : `   ➜ Hint: most names don't match anything close in your GP DB. Either this Persona project is unrelated, or your GPs are stored under different spellings.`;
-        log.splice(2, 0, hint);
-      }
-      setSyncLog(log);
-      setIsSyncing(false);
+      setSyncState({
+        phase: "done",
+        result: {
+          kind: "team",
+          month: selectedMonth,
+          year: selectedYear,
+          teamName: teamNameById(selectedTeamId),
+          totalPersonaWorkers: data.totalPersonaWorkers,
+          matched: data.matched,
+          unmatched: data.unmatched,
+          matchDetails: data.matchDetails as MatchDetail[],
+          status: data.status,
+        },
+      });
       toast.success(`Synced ${data.matched} GPs from Persona`);
     },
     onError: (err) => {
-      setSyncLog([`❌ Sync failed: ${err.message}`]);
-      setIsSyncing(false);
+      setSyncState({ phase: "error", message: err.message });
       toast.error(`Persona sync failed: ${err.message}`);
     },
   });
@@ -3879,18 +3919,16 @@ function PersonaSyncTab({
   // FM having to re-pick every team each month.
   const syncAllMutation = trpc.personaSync.syncAllTeams.useMutation({
     onSuccess: (data) => {
-      const log: string[] = [
-        `✅ Synced ${data.totals.teams} team${data.totals.teams === 1 ? '' : 's'} — ${MONTHS[selectedMonth - 1]} ${selectedYear}`,
-        `   Matched: ${data.totals.matched}, Unmatched: ${data.totals.unmatched}, Failed: ${data.totals.failed}`,
-        ``,
-        ...data.results.map(r =>
-          r.status === "failed"
-            ? `❌ ${r.teamName} — ${r.error || 'sync failed'}`
-            : `✅ ${r.teamName} — ${r.matched} matched / ${r.unmatched} unmatched`,
-        ),
-      ];
-      setSyncLog(log);
-      setIsSyncing(false);
+      setSyncState({
+        phase: "done",
+        result: {
+          kind: "bulk",
+          month: selectedMonth,
+          year: selectedYear,
+          results: data.results,
+          totals: data.totals,
+        },
+      });
       if (data.totals.failed === 0) {
         toast.success(`All teams synced — ${data.totals.matched} GPs updated`);
       } else {
@@ -3899,8 +3937,7 @@ function PersonaSyncTab({
       refetchTeamProjects();
     },
     onError: (err) => {
-      setSyncLog([`❌ Bulk sync failed: ${err.message}`]);
-      setIsSyncing(false);
+      setSyncState({ phase: "error", message: err.message });
       toast.error(`Bulk sync failed: ${err.message}`);
     },
   });
@@ -3918,8 +3955,9 @@ function PersonaSyncTab({
       toast.error("Please select a team");
       return;
     }
-    setIsSyncing(true);
-    setSyncLog([`🔄 Syncing from Persona for ${MONTHS[selectedMonth - 1]} ${selectedYear}...`]);
+    setSyncState({ phase: "running", label: `Syncing from Persona for ${MONTHS[selectedMonth - 1]} ${selectedYear}…` });
+    setRowFilter("all");
+    setRowSearch("");
     syncMutation.mutate({ teamId: selectedTeamId, month: selectedMonth, year: selectedYear });
   };
 
@@ -4076,8 +4114,9 @@ function PersonaSyncTab({
               variant="secondary"
               className="w-full"
               onClick={() => {
-                setIsSyncing(true);
-                setSyncLog([`🔄 Syncing all teams for ${MONTHS[selectedMonth - 1]} ${selectedYear}…`]);
+                setSyncState({ phase: "running", label: `Syncing all teams for ${MONTHS[selectedMonth - 1]} ${selectedYear}…` });
+                setRowFilter("all");
+                setRowSearch("");
                 syncAllMutation.mutate({ month: selectedMonth, year: selectedYear });
               }}
               disabled={isSyncing || syncAllMutation.isPending}
@@ -4157,32 +4196,16 @@ function PersonaSyncTab({
         </Card>
       </div>
 
-      {/* Sync Log */}
-      {syncLog.length > 0 && (
-        <Card className="border border-border">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Activity className="h-4 w-4" />
-              Sync Log
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-muted/30 rounded-lg p-4 font-mono text-sm space-y-1 max-h-64 overflow-y-auto">
-              {syncLog.map((line, i) => (
-                <div key={i} className={
-                  line.startsWith("✅") ? "text-green-400" :
-                  line.startsWith("❌") ? "text-red-400" :
-                  line.startsWith("⚠️") ? "text-amber-400" :
-                  line.startsWith("📊") ? "text-blue-400" :
-                  line.startsWith("🔄") ? "text-muted-foreground animate-pulse" :
-                  "text-foreground"
-                }>
-                  {line || "\u00A0"}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Sync Result */}
+      {syncState.phase !== "idle" && (
+        <SyncResultPanel
+          state={syncState}
+          rowFilter={rowFilter}
+          setRowFilter={setRowFilter}
+          rowSearch={rowSearch}
+          setRowSearch={setRowSearch}
+          onClear={() => setSyncState({ phase: "idle" })}
+        />
       )}
 
       {/* Info Card */}
@@ -4207,7 +4230,7 @@ function PersonaSyncTab({
 
       {/* Preview dialog — shows what would change before applying */}
       <Dialog open={previewData !== null} onOpenChange={(v) => !v && setPreviewData(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Sync preview — {previewData?.month && MONTHS[previewData.month - 1]} {previewData?.year}</DialogTitle>
             <DialogDescription>
@@ -4215,59 +4238,16 @@ function PersonaSyncTab({
             </DialogDescription>
           </DialogHeader>
           {previewData && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="p-3 rounded-lg border border-border bg-muted/30">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total workers</p>
-                  <p className="text-lg font-bold">{previewData.totalPersonaWorkers}</p>
-                </div>
-                <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50">
-                  <p className="text-[10px] uppercase tracking-wider text-emerald-700">Will match</p>
-                  <p className="text-lg font-bold text-emerald-700">{previewData.matched}</p>
-                </div>
-                <div className="p-3 rounded-lg border border-rose-200 bg-rose-50">
-                  <p className="text-[10px] uppercase tracking-wider text-rose-700">Won't match</p>
-                  <p className="text-lg font-bold text-rose-700">{previewData.unmatched}</p>
-                </div>
-              </div>
+            <div className="space-y-4">
+              <SyncSummaryGrid result={previewData} />
+              <SyncHintBanner result={previewData} />
               <div className="space-y-1.5">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Match details</p>
-                {previewData.matchDetails.map((d: any, i: number) => (
-                  <div
-                    key={i}
-                    className={`p-2 rounded-lg border text-sm ${
-                      d.matched ? "border-emerald-200 bg-emerald-50/50" : "border-rose-200 bg-rose-50/50"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground truncate">{d.personaName}</p>
-                        {d.matched && d.gpName && (
-                          <p className="text-xs text-muted-foreground">→ {d.gpName} ({Math.round(d.similarity * 100)}% match)</p>
-                        )}
-                        {!d.matched && (
-                          <p className="text-xs text-rose-600">No GP in this team matches</p>
-                        )}
-                      </div>
-                      {d.matched && Object.keys(d.changes).length > 0 && (
-                        <div className="text-right text-xs flex flex-col gap-0.5 shrink-0">
-                          {d.changes.sickLeaves && (
-                            <span>Sick: {d.changes.sickLeaves.from} → <strong>{d.changes.sickLeaves.to}</strong></span>
-                          )}
-                          {d.changes.missedDays && (
-                            <span>Missed: {d.changes.missedDays.from} → <strong>{d.changes.missedDays.to}</strong></span>
-                          )}
-                          {d.changes.extraShifts && (
-                            <span>Extra: {d.changes.extraShifts.from} → <strong>{d.changes.extraShifts.to}</strong></span>
-                          )}
-                        </div>
-                      )}
-                      {d.matched && Object.keys(d.changes).length === 0 && (
-                        <span className="text-[10px] text-muted-foreground italic">No change</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
+                  {previewData.matchDetails.map((d, i) => (
+                    <MatchRow key={i} detail={d} />
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -4287,5 +4267,333 @@ function PersonaSyncTab({
         </DialogContent>
       </Dialog>
     </TabsContent>
+  );
+}
+
+// ============================================
+// Persona Sync result — structured replacement for the old text log.
+// Lays out a status banner, summary cards, an actionable hint banner
+// for the common "wrong project ID" failure mode, and a filterable +
+// searchable list of MatchRows. Used by both the inline result panel
+// and the preview dialog so single/bulk modes stay consistent.
+// ============================================
+
+function SyncSummaryGrid({ result }: { result: TeamSyncResult }) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <SummaryCard
+        label="Total workers"
+        value={result.totalPersonaWorkers}
+        tone="muted"
+      />
+      <SummaryCard
+        label="Matched"
+        value={result.matched}
+        tone="emerald"
+      />
+      <SummaryCard
+        label="Unmatched"
+        value={result.unmatched}
+        tone="rose"
+      />
+    </div>
+  );
+}
+
+function SummaryCard({ label, value, tone }: { label: string; value: number; tone: "muted" | "emerald" | "rose" | "amber" }) {
+  const styles =
+    tone === "emerald"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : tone === "rose"
+        ? "border-rose-200 bg-rose-50 text-rose-700"
+        : tone === "amber"
+          ? "border-amber-200 bg-amber-50 text-amber-700"
+          : "border-border bg-muted/30 text-muted-foreground";
+  const valueColor =
+    tone === "emerald"
+      ? "text-emerald-700"
+      : tone === "rose"
+        ? "text-rose-700"
+        : tone === "amber"
+          ? "text-amber-700"
+          : "text-foreground";
+  return (
+    <div className={`p-3 rounded-lg border ${styles}`}>
+      <p className="text-[10px] uppercase tracking-wider">{label}</p>
+      <p className={`text-2xl font-bold ${valueColor}`}>{value}</p>
+    </div>
+  );
+}
+
+/**
+ * If most rows are wrong-team or no-candidates, show a one-line hint
+ * with the most likely fix. Empty fragment when there's nothing useful
+ * to surface so the panel stays compact on a clean run.
+ */
+function SyncHintBanner({ result }: { result: TeamSyncResult }) {
+  if (result.matched > 0 || result.unmatched === 0) return null;
+  const wrongTeam = result.matchDetails.filter(d => d.reason === "wrong-team").length;
+  const isWrongProject = wrongTeam > result.matchDetails.length / 2;
+  return (
+    <div className={`flex items-start gap-2 p-3 rounded-lg border text-sm ${
+      isWrongProject ? "border-amber-200 bg-amber-50 text-amber-800" : "border-rose-200 bg-rose-50 text-rose-800"
+    }`}>
+      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+      <span>
+        {isWrongProject
+          ? `${wrongTeam} workers matched GPs in OTHER teams — the Persona Project ID set here is probably for a different team.`
+          : "Most names didn't match anything close. Either this Persona project is unrelated to this team, or your GPs are stored under different spellings (use Real name to override)."}
+      </span>
+    </div>
+  );
+}
+
+function reasonLabel(reason?: MatchDetail["reason"]): string {
+  switch (reason) {
+    case "wrong-team":
+      return "wrong team";
+    case "below-threshold":
+      return "too different";
+    case "no-candidates":
+      return "no GP found";
+    default:
+      return "unmatched";
+  }
+}
+
+function reasonTone(reason?: MatchDetail["reason"]): "amber" | "rose" {
+  return reason === "wrong-team" || reason === "below-threshold" ? "amber" : "rose";
+}
+
+function MatchRow({ detail }: { detail: MatchDetail }) {
+  const d = detail;
+  const hasChanges = Object.keys(d.changes).length > 0;
+  if (d.matched) {
+    return (
+      <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/40">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-sm truncate text-foreground">{d.personaName}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              → {d.gpName}
+              <span className="text-emerald-700 font-medium"> · {Math.round(d.similarity * 100)}%</span>
+            </p>
+          </div>
+        </div>
+        {hasChanges ? (
+          <div className="text-right text-[11px] flex flex-col gap-0.5 shrink-0">
+            {d.changes.sickLeaves && (
+              <span><span className="text-muted-foreground">Sick</span> {d.changes.sickLeaves.from} → <strong>{d.changes.sickLeaves.to}</strong></span>
+            )}
+            {d.changes.missedDays && (
+              <span><span className="text-muted-foreground">Missed</span> {d.changes.missedDays.from} → <strong>{d.changes.missedDays.to}</strong></span>
+            )}
+            {d.changes.extraShifts && (
+              <span><span className="text-muted-foreground">Extra</span> {d.changes.extraShifts.from} → <strong>{d.changes.extraShifts.to}</strong></span>
+            )}
+          </div>
+        ) : (
+          <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">No change</Badge>
+        )}
+      </div>
+    );
+  }
+  const tone = reasonTone(d.reason);
+  const borderClass = tone === "amber" ? "border-amber-200 bg-amber-50/40" : "border-rose-200 bg-rose-50/40";
+  const badgeClass = tone === "amber" ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-rose-100 text-rose-800 border-rose-200";
+  return (
+    <div className={`flex items-start gap-2 p-2.5 rounded-lg border ${borderClass}`}>
+      <X className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-medium text-sm truncate text-foreground">{d.personaName}</p>
+          <Badge variant="outline" className={`text-[10px] ${badgeClass}`}>
+            {reasonLabel(d.reason)}
+          </Badge>
+          {d.closestSimilarity !== undefined && d.reason !== "no-candidates" && (
+            <span className="text-[10px] text-muted-foreground">{Math.round(d.closestSimilarity * 100)}%</span>
+          )}
+        </div>
+        {d.closestGpName && (
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+            Closest: <span className="font-medium text-foreground">{d.closestGpName}</span>
+            {d.reason === "wrong-team" && <span className="text-amber-700"> · in another team</span>}
+          </p>
+        )}
+        {!d.closestGpName && (
+          <p className="text-xs text-muted-foreground mt-0.5">No GP candidate found in your DB.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SyncResultPanel({
+  state,
+  rowFilter,
+  setRowFilter,
+  rowSearch,
+  setRowSearch,
+  onClear,
+}: {
+  state: SyncState;
+  rowFilter: RowFilter;
+  setRowFilter: (r: RowFilter) => void;
+  rowSearch: string;
+  setRowSearch: (s: string) => void;
+  onClear: () => void;
+}) {
+  if (state.phase === "idle") return null;
+
+  if (state.phase === "running") {
+    return (
+      <Card className="border border-border">
+        <CardContent className="py-6 flex items-center gap-3">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">{state.label}</span>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (state.phase === "error") {
+    return (
+      <Card className="border border-rose-200 bg-rose-50">
+        <CardContent className="py-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-rose-800">Sync failed</p>
+            <p className="text-xs text-rose-700 mt-0.5 whitespace-pre-wrap break-words">{state.message}</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClear} className="text-rose-700 hover:text-rose-800">
+            <X className="h-4 w-4" />
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const result = state.result;
+  if (result.kind === "bulk") {
+    return (
+      <Card className="border border-border">
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Bulk sync result — {MONTHS[result.month - 1]} {result.year}
+            </CardTitle>
+            <CardDescription>
+              {result.totals.teams} team{result.totals.teams === 1 ? "" : "s"} · {result.totals.matched} matched · {result.totals.unmatched} unmatched · {result.totals.failed} failed
+            </CardDescription>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClear} title="Clear">
+            <X className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Team</TableHead>
+                <TableHead className="text-right">Matched</TableHead>
+                <TableHead className="text-right">Unmatched</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {result.results.map((r) => (
+                <TableRow key={r.teamId}>
+                  <TableCell className="font-medium">{r.teamName}</TableCell>
+                  <TableCell className="text-right">{r.matched}</TableCell>
+                  <TableCell className="text-right">{r.unmatched}</TableCell>
+                  <TableCell>
+                    {r.status === "failed" ? (
+                      <span className="flex items-center gap-1 text-rose-700 text-xs">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        {r.error || "failed"}
+                      </span>
+                    ) : r.status === "partial" ? (
+                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200">Partial</Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200">Success</Badge>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Single-team result
+  const search = rowSearch.trim().toLowerCase();
+  const filtered = result.matchDetails.filter((d) => {
+    if (rowFilter === "matched" && !d.matched) return false;
+    if (rowFilter === "issues" && d.matched) return false;
+    if (search) {
+      const haystack = `${d.personaName} ${d.gpName ?? ""} ${d.closestGpName ?? ""}`.toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    return true;
+  });
+
+  return (
+    <Card className="border border-border">
+      <CardHeader className="flex-row items-start justify-between space-y-0 gap-3">
+        <div className="flex-1">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            Sync result — {result.teamName} · {MONTHS[result.month - 1]} {result.year}
+          </CardTitle>
+          <CardDescription>
+            {result.status === "success"
+              ? "All Persona workers matched."
+              : result.status === "partial"
+                ? "Some Persona workers couldn't be matched — see details below."
+                : "Sync ran but reported failure."}
+          </CardDescription>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onClear} title="Clear">
+          <X className="h-4 w-4" />
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <SyncSummaryGrid result={result} />
+        <SyncHintBanner result={result} />
+        {result.matchDetails.length > 0 && (
+          <>
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+              <Tabs value={rowFilter} onValueChange={(v) => setRowFilter(v as RowFilter)}>
+                <TabsList>
+                  <TabsTrigger value="all">All ({result.matchDetails.length})</TabsTrigger>
+                  <TabsTrigger value="matched">Matched ({result.matched})</TabsTrigger>
+                  <TabsTrigger value="issues">Issues ({result.unmatched})</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search names..."
+                  value={rowSearch}
+                  onChange={(e) => setRowSearch(e.target.value)}
+                  className="pl-8 h-9 text-sm"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5 max-h-[480px] overflow-y-auto pr-1">
+              {filtered.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No rows match this filter.</p>
+              ) : (
+                filtered.map((d, i) => <MatchRow key={i} detail={d} />)
+              )}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
