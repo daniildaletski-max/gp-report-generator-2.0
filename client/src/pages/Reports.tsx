@@ -711,6 +711,21 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {/* Coverage Matrix — at-a-glance month × team grid showing report
+          status. Replaces the need to scroll the long All Reports table
+          to answer "did Team X get a March report yet?". Click any cell
+          to view (filled) or generate (empty) that team's report for
+          that month. */}
+      <CoverageMatrix
+        reports={reports}
+        teams={teams}
+        onOpenReport={(report) => setViewingReport(report)}
+        onCreateForCell={(teamId, month, year) => {
+          setFormData(prev => ({ ...prev, teamId, reportMonth: month, reportYear: year }));
+          setShowNewReport(true);
+        }}
+      />
+
       <div className="unified-card">
         <div className="unified-card-header">
           <div className="flex items-center justify-between">
@@ -1184,5 +1199,181 @@ export default function ReportsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ============================================
+// Coverage Matrix — month × team grid that gives the FM an at-a-glance
+// answer to "which teams still need a report this month?". Replaces the
+// scrolling-the-list-and-counting workflow that used to be the only way
+// to see coverage.
+// ============================================
+
+type ReportListItem = {
+  report: { id: number; teamId: number | null; reportMonth: number; reportYear: number; status?: string | null; excelFileUrl?: string | null };
+  team: { id: number; teamName: string; floorManagerName?: string | null } | null;
+};
+
+function CoverageMatrix({
+  reports,
+  teams,
+  onOpenReport,
+  onCreateForCell,
+}: {
+  reports?: ReportListItem[];
+  teams?: { id: number; teamName: string; floorManagerName: string }[];
+  onOpenReport: (report: ReportListItem) => void;
+  onCreateForCell: (teamId: number, month: number, year: number) => void;
+}) {
+  // 6-month window: 5 prior months + current, oldest-left to newest-right
+  const months = useMemo(() => {
+    const now = new Date();
+    const out: { month: number; year: number; label: string }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      out.push({
+        month: d.getMonth() + 1,
+        year: d.getFullYear(),
+        label: d.toLocaleString("en-US", { month: "short", year: "2-digit" }),
+      });
+    }
+    return out;
+  }, []);
+
+  // Index: `${teamId}-${year}-${month}` → report
+  const reportIndex = useMemo(() => {
+    const idx = new Map<string, ReportListItem>();
+    for (const r of reports ?? []) {
+      if (r.report.teamId == null) continue;
+      idx.set(`${r.report.teamId}-${r.report.reportYear}-${r.report.reportMonth}`, r);
+    }
+    return idx;
+  }, [reports]);
+
+  const sortedTeams = useMemo(
+    () => (teams ? [...teams].sort((a, b) => a.teamName.localeCompare(b.teamName)) : []),
+    [teams],
+  );
+
+  // Coverage stats for the current month — tells the FM at the top of
+  // the page how many teams still need a report THIS month.
+  const currentMonth = months[months.length - 1];
+  const currentMonthCount = sortedTeams.reduce((n, t) => {
+    return reportIndex.has(`${t.id}-${currentMonth.year}-${currentMonth.month}`) ? n + 1 : n;
+  }, 0);
+  const totalTeams = sortedTeams.length;
+  const missingCount = totalTeams - currentMonthCount;
+
+  if (sortedTeams.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card className="border border-border">
+      <CardHeader className="pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-primary" />
+              Coverage matrix
+            </CardTitle>
+            <CardDescription>
+              {missingCount === 0
+                ? `All ${totalTeams} teams covered for ${MONTHS[currentMonth.month - 1]}`
+                : `${currentMonthCount} of ${totalTeams} teams covered for ${MONTHS[currentMonth.month - 1]} — ${missingCount} missing`}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />Finalized</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-400" />Draft</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full border border-border bg-muted/40" />Missing</span>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="overflow-x-auto">
+        <div className="inline-grid min-w-full" style={{ gridTemplateColumns: `minmax(160px, 1.5fr) repeat(${months.length}, minmax(72px, 1fr))` }}>
+          {/* Header row */}
+          <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground py-2 px-2 sticky left-0 bg-card border-b border-border">
+            Team
+          </div>
+          {months.map((m, i) => (
+            <div
+              key={`h-${i}`}
+              className={`text-[11px] font-medium uppercase tracking-wider text-center py-2 border-b border-border ${
+                i === months.length - 1 ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              {m.label}
+            </div>
+          ))}
+
+          {/* Data rows */}
+          {sortedTeams.map((team) => (
+            <CoverageRow
+              key={team.id}
+              team={team}
+              months={months}
+              reportIndex={reportIndex}
+              onOpenReport={onOpenReport}
+              onCreateForCell={onCreateForCell}
+            />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CoverageRow({
+  team,
+  months,
+  reportIndex,
+  onOpenReport,
+  onCreateForCell,
+}: {
+  team: { id: number; teamName: string; floorManagerName: string };
+  months: { month: number; year: number; label: string }[];
+  reportIndex: Map<string, ReportListItem>;
+  onOpenReport: (report: ReportListItem) => void;
+  onCreateForCell: (teamId: number, month: number, year: number) => void;
+}) {
+  return (
+    <>
+      <div className="py-2 px-2 sticky left-0 bg-card border-b border-border min-w-0">
+        <p className="text-sm font-medium truncate">{team.teamName}</p>
+        {team.floorManagerName && (
+          <p className="text-[11px] text-muted-foreground truncate">{team.floorManagerName}</p>
+        )}
+      </div>
+      {months.map((m, i) => {
+        const key = `${team.id}-${m.year}-${m.month}`;
+        const r = reportIndex.get(key);
+        const status = r?.report.status;
+        const isFinalized = status === "finalized";
+        const isDraft = !!r && !isFinalized;
+        const tooltip = r
+          ? `${MONTHS[m.month - 1]} ${m.year} — ${isFinalized ? "Finalized" : "Draft"} (click to open)`
+          : `${MONTHS[m.month - 1]} ${m.year} — no report yet (click to generate)`;
+        return (
+          <button
+            key={`${key}-cell`}
+            type="button"
+            title={tooltip}
+            onClick={() => (r ? onOpenReport(r) : onCreateForCell(team.id, m.month, m.year))}
+            className={`relative h-12 border-b border-border flex items-center justify-center transition-colors ${
+              isFinalized
+                ? "bg-emerald-50 hover:bg-emerald-100"
+                : isDraft
+                  ? "bg-amber-50 hover:bg-amber-100"
+                  : "bg-muted/20 hover:bg-muted/50"
+            }`}
+          >
+            {isFinalized && <CheckCircle className="h-4 w-4 text-emerald-600" />}
+            {isDraft && <FileSpreadsheet className="h-4 w-4 text-amber-600" />}
+            {!r && <Plus className="h-3.5 w-3.5 text-muted-foreground/50" />}
+          </button>
+        );
+      })}
+    </>
   );
 }
