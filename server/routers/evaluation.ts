@@ -63,6 +63,106 @@ export const evaluationRouter = router({
       };
     }),
 
+  /**
+   * Manual evaluation entry — no screenshot required. Replaces the
+   * "I have to upload a screenshot or it doesn't count" workflow with
+   * a direct form. The FM picks a GP, sets per-criterion scores and
+   * comments, the server computes appearance / gamePerformance / total
+   * automatically.
+   *
+   * Idempotent at the API level only — the FM is responsible for
+   * deciding whether they're double-entering. The Evaluations page
+   * surfaces the full list so duplicates are easy to spot.
+   */
+  create: protectedProcedure
+    .input(z.object({
+      gamePresenterId: z.number().positive(),
+      evaluatorName: z.string().max(255).optional(),
+      evaluationDate: z.date(),
+      game: z.string().max(100).optional(),
+      hairScore: z.number().min(0).max(3).optional(),
+      hairComment: z.string().max(1000).optional(),
+      makeupScore: z.number().min(0).max(3).optional(),
+      makeupComment: z.string().max(1000).optional(),
+      outfitScore: z.number().min(0).max(3).optional(),
+      outfitComment: z.string().max(1000).optional(),
+      postureScore: z.number().min(0).max(3).optional(),
+      postureComment: z.string().max(1000).optional(),
+      dealingStyleScore: z.number().min(0).max(5).optional(),
+      dealingStyleComment: z.string().max(1000).optional(),
+      gamePerformanceScore: z.number().min(0).max(5).optional(),
+      gamePerformanceComment: z.string().max(1000).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // GP ownership — non-admin can only attach evals to their GPs.
+      const gp = await db.getGamePresenterById(input.gamePresenterId);
+      if (!gp) throw new TRPCError({ code: "NOT_FOUND", message: "Game Presenter not found" });
+      if (ctx.user.role !== "admin" && gp.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied: cannot add evaluations to a GP you don't own" });
+      }
+
+      const {
+        gamePresenterId,
+        evaluatorName,
+        evaluationDate,
+        game,
+        hairScore, hairComment,
+        makeupScore, makeupComment,
+        outfitScore, outfitComment,
+        postureScore, postureComment,
+        dealingStyleScore, dealingStyleComment,
+        gamePerformanceScore, gamePerformanceComment,
+      } = input;
+
+      // Sanitize text fields and pull out clean inputs
+      const cleanComment = (s?: string) => s ? db.sanitizeString(s, 1000) : null;
+      const cleanName = (s?: string) => s ? db.sanitizeString(s, 255) : null;
+      const cleanGame = (s?: string) => s ? db.sanitizeString(s, 100) : null;
+
+      const evaluation = await db.createEvaluation({
+        gamePresenterId,
+        evaluatorName: cleanName(evaluatorName),
+        evaluationDate,
+        game: cleanGame(game),
+        totalScore: null, // recomputed by createEvaluation
+        hairScore: hairScore ?? null,
+        hairMaxScore: 3,
+        hairComment: cleanComment(hairComment),
+        makeupScore: makeupScore ?? null,
+        makeupMaxScore: 3,
+        makeupComment: cleanComment(makeupComment),
+        outfitScore: outfitScore ?? null,
+        outfitMaxScore: 3,
+        outfitComment: cleanComment(outfitComment),
+        postureScore: postureScore ?? null,
+        postureMaxScore: 3,
+        postureComment: cleanComment(postureComment),
+        dealingStyleScore: dealingStyleScore ?? null,
+        dealingStyleMaxScore: 5,
+        dealingStyleComment: cleanComment(dealingStyleComment),
+        gamePerformanceScore: gamePerformanceScore ?? null,
+        gamePerformanceMaxScore: 5,
+        gamePerformanceComment: cleanComment(gamePerformanceComment),
+        // Total score is computed by createEvaluation from the
+        // appearance + gamePerformance helpers; we provide null and
+        // recompute the manual sum here too so the API response
+        // contains a useful totalScore even if the helper changes.
+        rawExtractedData: { source: "manual", enteredAt: new Date().toISOString() } as any,
+        uploadedById: ctx.user.id,
+        userId: ctx.user.id,
+      });
+
+      // Backfill totalScore — createEvaluation sets appearance + game-
+      // performance derived scores, but leaves totalScore as the input
+      // (we passed null). Compute and update.
+      const total = (evaluation.appearanceScore ?? 0) + (evaluation.gamePerformanceTotalScore ?? 0);
+      if (total > 0) {
+        await db.updateEvaluation(evaluation.id, { totalScore: total });
+      }
+
+      return { success: true, evaluation: { ...evaluation, totalScore: total || evaluation.totalScore } };
+    }),
+
   list: protectedProcedure.query(async ({ ctx }) => {
     // User-based data isolation: each user sees only their own data
     if (ctx.user.role !== 'admin') {

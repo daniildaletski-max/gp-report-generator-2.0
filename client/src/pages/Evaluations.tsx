@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Eye, Pencil, Trash2, Image, Trash, Search, Filter, X, Download, CheckSquare, Square, FileSpreadsheet, Calendar, User, TrendingUp, ArrowUpDown, ChevronDown, MoreHorizontal, Heart, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Eye, Pencil, Trash2, Image, Trash, Search, Filter, X, Download, CheckSquare, Square, FileSpreadsheet, Calendar, User, TrendingUp, ArrowUpDown, ChevronDown, MoreHorizontal, Heart, ThumbsDown, ThumbsUp, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -63,6 +63,86 @@ export default function EvaluationsPage() {
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [drawerGpId, setDrawerGpId] = useState<number | null>(null);
+  // Manual "Add evaluation" dialog state
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState<AddEvalForm>(() => emptyAddEvalForm());
+  const { data: gpListAll } = trpc.gamePresenter.list.useQuery();
+
+  const createEvalMutation = trpc.evaluation.create.useMutation({
+    onSuccess: () => {
+      toast.success("Evaluation added");
+      utils.evaluation.list.invalidate();
+      setAddOpen(false);
+      setAddForm(emptyAddEvalForm());
+    },
+    onError: (err) => toast.error(`Could not add: ${err.message}`),
+  });
+
+  const handleSubmitAdd = () => {
+    if (!addForm.gamePresenterId) {
+      toast.error("Pick a GP first");
+      return;
+    }
+    if (!addForm.evaluationDate) {
+      toast.error("Pick a date");
+      return;
+    }
+    createEvalMutation.mutate({
+      gamePresenterId: addForm.gamePresenterId,
+      evaluationDate: new Date(addForm.evaluationDate),
+      evaluatorName: addForm.evaluatorName.trim() || undefined,
+      game: addForm.game.trim() || undefined,
+      hairScore: addForm.hairScore,
+      hairComment: addForm.hairComment.trim() || undefined,
+      makeupScore: addForm.makeupScore,
+      makeupComment: addForm.makeupComment.trim() || undefined,
+      outfitScore: addForm.outfitScore,
+      outfitComment: addForm.outfitComment.trim() || undefined,
+      postureScore: addForm.postureScore,
+      postureComment: addForm.postureComment.trim() || undefined,
+      dealingStyleScore: addForm.dealingStyleScore,
+      dealingStyleComment: addForm.dealingStyleComment.trim() || undefined,
+      gamePerformanceScore: addForm.gamePerformanceScore,
+      gamePerformanceComment: addForm.gamePerformanceComment.trim() || undefined,
+    });
+  };
+
+  const handleExportCsv = () => {
+    const rows = filteredEvaluations
+      .filter(e => selectedIds.has(e.evaluation.id))
+      .map(({ evaluation: e, gamePresenter }) => ({
+        gp: gamePresenter?.name ?? "",
+        date: e.evaluationDate ? new Date(e.evaluationDate).toISOString().slice(0, 10) : "",
+        evaluator: e.evaluatorName ?? "",
+        game: e.game ?? "",
+        total: e.totalScore ?? "",
+        hair: e.hairScore ?? "",
+        makeup: e.makeupScore ?? "",
+        outfit: e.outfitScore ?? "",
+        posture: e.postureScore ?? "",
+        dealing: e.dealingStyleScore ?? "",
+        gamePerf: e.gamePerformanceScore ?? "",
+      }));
+    if (rows.length === 0) {
+      toast.error("No rows selected to export");
+      return;
+    }
+    const headers = Object.keys(rows[0]);
+    const csv = [
+      headers.join(","),
+      ...rows.map(r => headers.map(h => csvEscape(String((r as any)[h] ?? ""))).join(",")),
+    ].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `evaluations-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${rows.length} evaluation${rows.length === 1 ? "" : "s"} to CSV`);
+  };
   
   // Search and filter state — persisted in the URL.
   const [searchQuery, setSearchQuery] = useUrlState("q", "", urlString.parse, urlString.serialize);
@@ -435,7 +515,19 @@ export default function EvaluationsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Add evaluation manually — without screenshot */}
+          <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            Add evaluation
+          </Button>
+
           {/* Bulk Actions */}
+          {selectedIds.size > 0 && (
+            <Button variant="outline" size="sm" onClick={handleExportCsv} className="gap-1.5">
+              <Download className="h-4 w-4" />
+              Export CSV ({selectedIds.size})
+            </Button>
+          )}
           {selectedIds.size > 0 && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -1293,6 +1385,187 @@ export default function EvaluationsPage() {
         gpId={drawerGpId}
         open={drawerGpId !== null}
         onOpenChange={(open) => { if (!open) setDrawerGpId(null); }}
+      />
+
+      {/* Manual Add Evaluation dialog — replaces "you must upload a
+          screenshot" flow. FM picks GP + date + scores + comments. */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add evaluation manually</DialogTitle>
+            <DialogDescription>
+              Enter scores and comments for a GP without uploading a screenshot. Total score is calculated automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Game Presenter *</label>
+                <select
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+                  value={addForm.gamePresenterId ?? ""}
+                  onChange={(e) => setAddForm({ ...addForm, gamePresenterId: e.target.value ? Number(e.target.value) : null })}
+                >
+                  <option value="">Select GP…</option>
+                  {(gpListAll ?? []).map((gp: any) => (
+                    <option key={gp.id} value={gp.id}>{gp.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date *</label>
+                <input
+                  type="date"
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+                  value={addForm.evaluationDate}
+                  onChange={(e) => setAddForm({ ...addForm, evaluationDate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Evaluator</label>
+                <input
+                  type="text"
+                  placeholder="Floor manager name"
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+                  value={addForm.evaluatorName}
+                  onChange={(e) => setAddForm({ ...addForm, evaluatorName: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Game</label>
+                <input
+                  type="text"
+                  placeholder="Baccarat / Roulette / etc."
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-card text-sm"
+                  value={addForm.game}
+                  onChange={(e) => setAddForm({ ...addForm, game: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Appearance scores (max 3 each)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <CriterionInput label="Hair" max={3} score={addForm.hairScore} comment={addForm.hairComment} onChange={(s, c) => setAddForm({ ...addForm, hairScore: s, hairComment: c })} />
+                <CriterionInput label="Makeup" max={3} score={addForm.makeupScore} comment={addForm.makeupComment} onChange={(s, c) => setAddForm({ ...addForm, makeupScore: s, makeupComment: c })} />
+                <CriterionInput label="Outfit" max={3} score={addForm.outfitScore} comment={addForm.outfitComment} onChange={(s, c) => setAddForm({ ...addForm, outfitScore: s, outfitComment: c })} />
+                <CriterionInput label="Posture" max={3} score={addForm.postureScore} comment={addForm.postureComment} onChange={(s, c) => setAddForm({ ...addForm, postureScore: s, postureComment: c })} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Game performance scores (max 5 each)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <CriterionInput label="Dealing style" max={5} score={addForm.dealingStyleScore} comment={addForm.dealingStyleComment} onChange={(s, c) => setAddForm({ ...addForm, dealingStyleScore: s, dealingStyleComment: c })} />
+                <CriterionInput label="Game performance" max={5} score={addForm.gamePerformanceScore} comment={addForm.gamePerformanceComment} onChange={(s, c) => setAddForm({ ...addForm, gamePerformanceScore: s, gamePerformanceComment: c })} />
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-muted/30 p-3 flex items-center justify-between">
+              <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Calculated total score</span>
+              <span className="text-2xl font-bold tabular-nums text-primary">
+                {(addForm.hairScore ?? 0) + (addForm.makeupScore ?? 0) + (addForm.outfitScore ?? 0) + (addForm.postureScore ?? 0) + (addForm.dealingStyleScore ?? 0) + (addForm.gamePerformanceScore ?? 0)}
+                <span className="text-sm text-muted-foreground"> / 22</span>
+              </span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button onClick={handleSubmitAdd} disabled={createEvalMutation.isPending}>
+              {createEvalMutation.isPending ? "Saving…" : "Save evaluation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ============================================
+// Helpers for the manual Add Evaluation dialog
+// ============================================
+
+type AddEvalForm = {
+  gamePresenterId: number | null;
+  evaluationDate: string;
+  evaluatorName: string;
+  game: string;
+  hairScore?: number;
+  hairComment: string;
+  makeupScore?: number;
+  makeupComment: string;
+  outfitScore?: number;
+  outfitComment: string;
+  postureScore?: number;
+  postureComment: string;
+  dealingStyleScore?: number;
+  dealingStyleComment: string;
+  gamePerformanceScore?: number;
+  gamePerformanceComment: string;
+};
+
+function emptyAddEvalForm(): AddEvalForm {
+  return {
+    gamePresenterId: null,
+    evaluationDate: new Date().toISOString().slice(0, 10),
+    evaluatorName: "",
+    game: "",
+    hairComment: "",
+    makeupComment: "",
+    outfitComment: "",
+    postureComment: "",
+    dealingStyleComment: "",
+    gamePerformanceComment: "",
+  };
+}
+
+/** CSV cell escaping — wrap in quotes when value contains comma, quote, or newline. */
+function csvEscape(v: string): string {
+  if (/[",\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+  return v;
+}
+
+function CriterionInput({
+  label,
+  max,
+  score,
+  comment,
+  onChange,
+}: {
+  label: string;
+  max: number;
+  score?: number;
+  comment: string;
+  onChange: (score: number | undefined, comment: string) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium">{label}</span>
+        <div className="flex items-center gap-1">
+          {Array.from({ length: max + 1 }, (_, i) => i).map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onChange(score === n ? undefined : n, comment)}
+              className={`h-7 w-7 rounded-md text-xs font-semibold tabular-nums transition-colors ${
+                score === n
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted hover:bg-muted-foreground/10 text-muted-foreground"
+              }`}
+            >
+              {n}
+            </button>
+          ))}
+          <span className="text-[10px] text-muted-foreground ml-1">/ {max}</span>
+        </div>
+      </div>
+      <input
+        type="text"
+        placeholder="Comment (optional)"
+        value={comment}
+        onChange={(e) => onChange(score, e.target.value)}
+        className="w-full h-8 px-2 rounded-md border border-border bg-background text-xs"
       />
     </div>
   );
