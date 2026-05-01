@@ -80,6 +80,89 @@ export const dashboardRouter = router({
       );
     }),
 
+  /**
+   * Auto-generated insights — the "Operations Brain". Looks at the
+   * caller's data and surfaces the top items that need attention,
+   * each with a clear next-step action. Replaces the FM having to
+   * manually check 5 different pages to figure out what's gone stale,
+   * what's regressed, and what's missing this month.
+   *
+   * Insight kinds:
+   *   - stale_sync       — Persona sync hasn't run for >14 days (warning)
+   *   - missing_report   — last calendar month has no report for a team (recommendation)
+   *   - score_regression — GPs whose avg score dropped >2 points vs prev month (alert)
+   *   - score_improvement — GPs whose avg score improved >2 points (celebration)
+   *   - coverage_gap     — current month has no evaluations for >50% of GPs (warning)
+   *
+   * Sorted by severity (alert > warning > recommendation > info > success)
+   * then by recency. Capped at 12 items so the UI doesn't drown the FM.
+   */
+  insights: protectedProcedure
+    .input(z.object({
+      teamId: z.number().positive().optional(),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const teamId = input?.teamId;
+      const userScope = ctx.user.role !== 'admin' ? ctx.user.id : undefined;
+
+      // Tenant scope — same pattern as dashboard.stats: when a non-admin
+      // explicitly passes a teamId, verify that team belongs to them so a
+      // crafted request can't read another tenant's insights. The DB
+      // layer also filters by userId as defense in depth, but failing
+      // FAST here gives a clean 403 instead of silently returning [].
+      if (ctx.user.role !== 'admin' && teamId) {
+        const team = await db.getFmTeamById(teamId);
+        if (!team || team.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+        }
+      }
+      return await db.computeDashboardInsights({
+        teamId,
+        userId: userScope,
+        userRole: ctx.user.role,
+      });
+    }),
+
+  /**
+   * Recent activity feed — the most recent 20 events across:
+   *   - Persona sync runs (success / partial / failed)
+   *   - Generated reports
+   *   - New evaluations
+   *   - Uploaded error files
+   * — so the FM can see what's been happening on the system at a glance,
+   * without bouncing between five admin tabs.
+   *
+   * Accepts an optional teamId so the dashboard can keep the feed
+   * synchronised with the team selector at the top of the page —
+   * showing all-team activity when the FM has "All teams" selected
+   * and only the active team's activity when they pick one.
+   */
+  activityFeed: protectedProcedure
+    .input(z.object({
+      limit: z.number().int().min(1).max(50).default(20),
+      teamId: z.number().positive().optional(),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const limit = input?.limit ?? 20;
+      const teamId = input?.teamId;
+      const userScope = ctx.user.role !== 'admin' ? ctx.user.id : undefined;
+
+      // Same tenant-scope check as insights — non-admin must own the
+      // team they're querying about.
+      if (ctx.user.role !== 'admin' && teamId) {
+        const team = await db.getFmTeamById(teamId);
+        if (!team || team.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+        }
+      }
+      return await db.getDashboardActivityFeed({
+        limit,
+        userId: userScope,
+        teamId,
+        userRole: ctx.user.role,
+      });
+    }),
+
   // Admin dashboard with system-wide stats
   adminStats: adminProcedure.query(async () => {
     return cache.getOrSet(
