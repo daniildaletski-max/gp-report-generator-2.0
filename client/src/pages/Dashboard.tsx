@@ -1369,20 +1369,24 @@ function DashboardHero({
   totalReports: number;
   trend: HeroTrendItem[];
 }) {
-  // Period delta: current month vs previous month for the score.
+  // Period deltas: only meaningful when we have at least two months of
+  // trend data. With one item, lastTwo[1] would be undefined and the
+  // ?? 0 fallback used to fabricate huge negative regressions like
+  // "−18.7 vs last month" for new teams. Gate everything on hasPrev.
+  const hasPrev = trend.length >= 2;
   const lastTwo = trend.slice(-2);
-  const previousScore = lastTwo[0]?.avgTotalScore ?? 0;
-  const currentScore = lastTwo[1]?.avgTotalScore ?? 0;
-  const scoreDelta = currentScore - previousScore;
-  const scoreDeltaPct = previousScore > 0 ? (scoreDelta / previousScore) * 100 : 0;
+  const previousScore = hasPrev ? (Number(lastTwo[0]?.avgTotalScore) || 0) : 0;
+  const currentScore = hasPrev ? (Number(lastTwo[1]?.avgTotalScore) || 0) : 0;
+  const scoreDelta = hasPrev ? currentScore - previousScore : undefined;
+  const scoreDeltaPct = hasPrev && previousScore > 0 ? ((currentScore - previousScore) / previousScore) * 100 : undefined;
 
   // Spark series for each tile (avgTotalScore, uniqueGPs, totalEvaluations)
   const scoreSeries = trend.map((m, i) => ({ x: i, y: Number(m.avgTotalScore) || 0 }));
   const evalSeries = trend.map((m, i) => ({ x: i, y: m.totalEvaluations }));
   const gpSeries = trend.map((m, i) => ({ x: i, y: m.uniqueGPs }));
 
-  const evalDelta = (lastTwo[1]?.totalEvaluations ?? 0) - (lastTwo[0]?.totalEvaluations ?? 0);
-  const gpDelta = (lastTwo[1]?.uniqueGPs ?? 0) - (lastTwo[0]?.uniqueGPs ?? 0);
+  const evalDelta = hasPrev ? (lastTwo[1].totalEvaluations - lastTwo[0].totalEvaluations) : undefined;
+  const gpDelta = hasPrev ? (lastTwo[1].uniqueGPs - lastTwo[0].uniqueGPs) : undefined;
 
   const evaluatedPct = totalGPs > 0 ? Math.round((evaluatedGPs / totalGPs) * 100) : 0;
 
@@ -1399,7 +1403,7 @@ function DashboardHero({
                 <span className="text-4xl sm:text-5xl font-bold tabular-nums text-foreground">
                   {avgTeamScore > 0 ? avgTeamScore.toFixed(1) : "—"}
                 </span>
-                {avgTeamScore > 0 && previousScore > 0 && (
+                {hasPrev && avgTeamScore > 0 && previousScore > 0 && scoreDelta !== undefined && (
                   <DeltaPill delta={scoreDelta} pct={scoreDeltaPct} suffix="vs last month" />
                 )}
               </div>
