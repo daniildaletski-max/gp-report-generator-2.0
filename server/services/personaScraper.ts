@@ -475,3 +475,130 @@ export async function closeBrowser(): Promise<void> {
     browserInstance = null;
   }
 }
+
+// ============================================
+// Diagnostic test connection
+// ============================================
+
+export type TestStepStatus = "pending" | "success" | "failed" | "skipped";
+
+export interface TestConnectionStep {
+  step: "credentials" | "browser" | "login" | "schedule" | "data";
+  label: string;
+  status: TestStepStatus;
+  /** Error message (only set when status==="failed"). */
+  error?: string;
+  /** Wall-clock duration of this step in ms. */
+  durationMs?: number;
+}
+
+export interface TestConnectionResult {
+  success: boolean;
+  steps: TestConnectionStep[];
+  /** PNG screenshot of the last page state, base64-encoded. Captured on
+   *  failure so the admin can see what Persona looked like when sync broke
+   *  (login form? error page? blank?). Empty string on success.
+   */
+  failureScreenshotB64: string;
+}
+
+/**
+ * Run the Persona sync flow up through schedule-page navigation, but
+ * skip month-year selection and worker parsing. Used by the admin
+ * "Test Connection" button so the FM can verify auth + reachability
+ * without waiting for a full sync (which can take 30-60s).
+ *
+ * Returns a per-step status array so the UI can render a checklist
+ * showing exactly which step failed. On failure, captures a screenshot
+ * so the admin can see the actual page state — invaluable when Persona
+ * silently changes a selector or pops up a CAPTCHA.
+ */
+export async function testPersonaConnection(): Promise<TestConnectionResult> {
+  const steps: TestConnectionStep[] = [
+    { step: "credentials", label: "Credentials configured", status: "pending" },
+    { step: "browser", label: "Launch headless browser", status: "pending" },
+    { step: "login", label: "Log into Persona", status: "pending" },
+    { step: "schedule", label: "Open schedule page", status: "pending" },
+    { step: "data", label: "Schedule data present", status: "pending" },
+  ];
+
+  const setStatus = (
+    step: TestConnectionStep["step"],
+    status: TestStepStatus,
+    extras?: Partial<Pick<TestConnectionStep, "error" | "durationMs">>,
+  ) => {
+    const s = steps.find(x => x.step === step);
+    if (s) {
+      s.status = status;
+      if (extras?.error) s.error = extras.error;
+      if (extras?.durationMs) s.durationMs = extras.durationMs;
+    }
+  };
+
+  const time = async <T>(stepName: TestConnectionStep["step"], fn: () => Promise<T>): Promise<T> => {
+    const t0 = Date.now();
+    try {
+      const r = await fn();
+      setStatus(stepName, "success", { durationMs: Date.now() - t0 });
+      return r;
+    } catch (e) {
+      setStatus(stepName, "failed", {
+        durationMs: Date.now() - t0,
+        error: e instanceof Error ? e.message : String(e),
+      });
+      throw e;
+    }
+  };
+
+  const username = process.env.PERSONA_USERNAME || '';
+  const password = process.env.PERSONA_PASSWORD || '';
+
+  if (!username || !password) {
+    setStatus("credentials", "failed", {
+      error: "PERSONA_USERNAME / PERSONA_PASSWORD not set in environment",
+    });
+    // Mark remaining steps as skipped for visual clarity.
+    steps.filter(s => s.status === "pending").forEach(s => { s.status = "skipped"; });
+    return { success: false, steps, failureScreenshotB64: "" };
+  }
+  setStatus("credentials", "success");
+
+  let browser: Browser | null = null;
+  let page: Page | null = null;
+  let failureScreenshotB64 = "";
+
+  try {
+    browser = await time("browser", () => getBrowser());
+    page = await browser.newPage();
+    await page.setDefaultTimeout(Math.max(getNavTimeoutMs(), 90000));
+
+    await time("login", () => loginToPersona(page!, username, password));
+    await time("schedule", () => navigateToSchedule(page!));
+
+    const html = await page.content();
+    if (!html.includes('TgAddWorker')) {
+      throw new Error("Schedule page loaded but contains no worker data (TgAddWorker missing)");
+    }
+    setStatus("data", "success");
+
+    await page.close();
+    return { success: true, steps, failureScreenshotB64 };
+  } catch {
+    // Capture a screenshot of whatever Persona is showing right now so
+    // the admin can SEE what happened. We swallow screenshot errors —
+    // the underlying Puppeteer failure is what we report up.
+    if (page) {
+      try {
+        const buf = await page.screenshot({ type: "png", fullPage: false, encoding: "base64" });
+        failureScreenshotB64 = typeof buf === "string" ? buf : "";
+      } catch {
+        /* screenshot failed too — ignore, original error is already in steps */
+      }
+      try { await page.close(); } catch { /* ignore */ }
+    }
+    // Skip any still-pending downstream steps so the UI shows them
+    // greyed out instead of forever-pending.
+    steps.filter(s => s.status === "pending").forEach(s => { s.status = "skipped"; });
+    return { success: false, steps, failureScreenshotB64 };
+  }
+}

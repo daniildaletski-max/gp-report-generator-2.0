@@ -20,7 +20,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import * as db from "../db";
-import { syncPersonaAttendance } from "../services/personaScraper";
+import { syncPersonaAttendance, testPersonaConnection } from "../services/personaScraper";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("PersonaSync");
@@ -449,4 +449,16 @@ export const personaSyncRouter = router({
         totals: { teams: results.length, matched: totalMatched, unmatched: totalUnmatched, failed },
       };
     }),
+
+  /**
+   * Diagnostic: run only login + schedule navigation, skip month select
+   * and worker parsing. Returns per-step status + a screenshot of the
+   * Persona page on failure so the admin can see what actually broke
+   * (login form? error page? blank screen?).
+   *
+   * Doesn't write to persona_sync_logs — this is a probe, not a sync.
+   */
+  testConnection: adminProcedure.mutation(async () => {
+    return await testPersonaConnection();
+  }),
 });
