@@ -76,10 +76,15 @@ function parseStudioworksDate(s: string): Date | null {
 
 /**
  * Idempotency check: do we already have this exact evaluation?
- * Match on (gpId, date, evaluator, game). Strict enough that a re-run
- * doesn't double-insert; loose enough that two genuinely-distinct
- * same-day evals don't collide (e.g. the same FM evaluating the same
- * GP twice in a day on different games).
+ *
+ * Matches on (gpId, day, evaluator, game) using strict equality —
+ * NULL/empty on either side counts as a distinct value, so:
+ *   - existing(NULL evaluator) does NOT match incoming("Kristo")
+ *   - existing("Kristo") does NOT match incoming(NULL)
+ * Previous looser logic (`if both non-empty AND different → skip`)
+ * caused the duplicate check to silently drop valid new evaluations
+ * whenever a manual/historical row had a NULL evaluator on the same
+ * day as an incoming sync row.
  */
 async function findExistingEvaluation(opts: {
   gpId: number;
@@ -88,14 +93,17 @@ async function findExistingEvaluation(opts: {
   game?: string;
 }) {
   const evals = await db.getEvaluationsByGP(opts.gpId);
-  // Match on date (truncated to day) + evaluator + game when present.
   const dayKey = (d: Date | null) => d ? d.toISOString().slice(0, 10) : "";
   const target = dayKey(opts.date);
+  // Strict: treat null/undefined/"" as one value; non-empty strings
+  // are compared verbatim.
+  const sameKey = (a: string | null | undefined, b: string | null | undefined) =>
+    (a ?? "") === (b ?? "");
   for (const e of evals) {
     if (!e.evaluationDate) continue;
     if (dayKey(new Date(e.evaluationDate)) !== target) continue;
-    if (opts.evaluatorName && e.evaluatorName && e.evaluatorName !== opts.evaluatorName) continue;
-    if (opts.game && e.game && e.game !== opts.game) continue;
+    if (!sameKey(opts.evaluatorName, e.evaluatorName)) continue;
+    if (!sameKey(opts.game, e.game)) continue;
     return e;
   }
   return null;
@@ -103,7 +111,10 @@ async function findExistingEvaluation(opts: {
 
 async function importOne(
   raw: ExtractedEvaluation,
-  userId: number,
+  /** Admin who clicked Sync — used as the FALLBACK ownership stamp
+   *  when the GP itself has no owner. The primary ownership goes to
+   *  the GP's userId so user-scoped reads still see this eval. */
+  triggeredByAdminUserId: number,
 ): Promise<ImportDetail> {
   const date = parseStudioworksDate(raw.date);
   const baseDetail: ImportDetail = {
@@ -183,9 +194,16 @@ async function importOne(
         externalId: raw.externalId,
         overallComment: raw.overallComment ?? null,
         scrapedAt: new Date().toISOString(),
+        triggeredByAdminUserId: triggeredByAdminUserId,
       } as any,
-      uploadedById: userId,
-      userId,
+      // IMPORTANT: ownership goes to the GP's owner (the FM whose team
+      // this GP belongs to), NOT the admin who triggered the sync.
+      // Otherwise user-scoped reads (getEvaluationsWithGPByUser etc.)
+      // would hide the eval from the FM who actually needs it.
+      // Fallback to the admin only when the GP has no owner yet
+      // (orphan GPs created via fuzzy-create on upload paths).
+      uploadedById: match.gamePresenter.userId ?? triggeredByAdminUserId,
+      userId: match.gamePresenter.userId ?? triggeredByAdminUserId,
     });
     return { ...baseDetail, matched: true, gpId, gpName };
   } catch (e) {
