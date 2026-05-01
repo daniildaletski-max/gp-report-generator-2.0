@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Bell, ChevronRight, LogOut, Search, Settings, User as UserIcon, Sparkles, AlertTriangle, Award, Target, Zap, ArrowRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -48,8 +48,13 @@ export function TopBar({
   onLogout: () => void;
   onNavigate: (path: string) => void;
 }) {
-  const [location] = useLocation();
-  const breadcrumb = useMemo(() => buildBreadcrumb(location), [location]);
+  // wouter v3's useLocation returns only the pathname — query params
+  // come from the separate useSearch hook. Without it, our admin
+  // sub-tab breadcrumb (?tab=persona etc.) would never render because
+  // the splitter on "?" never finds anything in the path.
+  const [pathname] = useLocation();
+  const search = useSearch();
+  const breadcrumb = useMemo(() => buildBreadcrumb(pathname, search), [pathname, search]);
 
   const { data: insights } = trpc.dashboard.insights.useQuery(undefined, {
     refetchInterval: 60_000,
@@ -225,8 +230,7 @@ const ADMIN_TAB_LABELS: Record<string, string> = {
   studioworks: "Studioworks sync",
 };
 
-function buildBreadcrumb(location: string): Crumb[] {
-  const [pathname, search = ""] = location.split("?");
+function buildBreadcrumb(pathname: string, search: string): Crumb[] {
   const segments = pathname.split("/").filter(Boolean);
   const crumbs: Crumb[] = [{ label: "Home", href: "/dashboard" }];
 
@@ -238,7 +242,9 @@ function buildBreadcrumb(location: string): Crumb[] {
   }
 
   // Surface ?tab=foo for the admin page so the breadcrumb shows the
-  // active sub-tab the user navigated to.
+  // active sub-tab. `search` comes from wouter's useSearch hook (the
+  // raw query string without the leading "?"), since useLocation in
+  // wouter v3 returns only pathname.
   if (segments[0] === "admin" && search) {
     const params = new URLSearchParams(search);
     const tab = params.get("tab");
