@@ -312,13 +312,21 @@ export async function computeDashboardInsights(opts: {
   const twoMonthsAgoMonth = twoMonthsAgoDate.getMonth() + 1;
   const twoMonthsAgoYear = twoMonthsAgoDate.getFullYear();
 
-  // Resolve which teams the caller can see.
+  // Resolve which teams the caller can see. When userId is set (non-admin
+  // caller), every branch ALSO filters by that userId so a crafted teamId
+  // can't pull another tenant's data — defense in depth on top of the
+  // router-level ownership check.
   let teamRows: { id: number; teamName: string }[];
   try {
-    if (opts.teamId) {
-      const t = await db.select({ id: fmTeams.id, teamName: fmTeams.teamName })
+    if (opts.teamId && opts.userId) {
+      teamRows = await db.select({ id: fmTeams.id, teamName: fmTeams.teamName })
+        .from(fmTeams)
+        .where(and(eq(fmTeams.id, opts.teamId), eq(fmTeams.userId, opts.userId)))
+        .limit(1);
+    } else if (opts.teamId) {
+      // Admin path — no userId scoping needed.
+      teamRows = await db.select({ id: fmTeams.id, teamName: fmTeams.teamName })
         .from(fmTeams).where(eq(fmTeams.id, opts.teamId)).limit(1);
-      teamRows = t;
     } else if (opts.userId) {
       teamRows = await db.select({ id: fmTeams.id, teamName: fmTeams.teamName })
         .from(fmTeams).where(eq(fmTeams.userId, opts.userId));

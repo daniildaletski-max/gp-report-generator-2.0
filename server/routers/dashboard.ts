@@ -104,6 +104,18 @@ export const dashboardRouter = router({
     .query(async ({ ctx, input }) => {
       const teamId = input?.teamId;
       const userScope = ctx.user.role !== 'admin' ? ctx.user.id : undefined;
+
+      // Tenant scope — same pattern as dashboard.stats: when a non-admin
+      // explicitly passes a teamId, verify that team belongs to them so a
+      // crafted request can't read another tenant's insights. The DB
+      // layer also filters by userId as defense in depth, but failing
+      // FAST here gives a clean 403 instead of silently returning [].
+      if (ctx.user.role !== 'admin' && teamId) {
+        const team = await db.getFmTeamById(teamId);
+        if (!team || team.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+        }
+      }
       return await db.computeDashboardInsights({ teamId, userId: userScope });
     }),
 
