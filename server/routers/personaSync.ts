@@ -161,6 +161,13 @@ export async function runPersonaSyncForTeam(opts: {
   matchDetails: MatchDetail[];
   status: "success" | "partial" | "failed";
   error?: string;
+  /** Diagnostic — surfaces what the Persona shift-type parser saw.
+   *  Lets the FM see at a glance "matched everyone but found 0 sick
+   *  entries" vs "matched everyone AND found their absences". */
+  parserDiagnostics?: {
+    allTypes: string[];
+    bucketCounts: { sick: number; missed: number; extra: number; late: number; unknown: number };
+  };
 }> {
   const team = await db.getFmTeamById(opts.teamId);
   if (!team) throw new Error("Team not found");
@@ -400,6 +407,7 @@ export async function runPersonaSyncForTeam(opts: {
       totalPersonaWorkers: result.workers.length,
       matchDetails,
       status,
+      parserDiagnostics: result.diagnostics,
     };
   } catch (error) {
     const errMessage = error instanceof Error ? error.message : String(error);
