@@ -3884,12 +3884,45 @@ function PersonaSyncTab({
 
   const isSyncing = syncState.phase === "running";
 
+  // tRPC cache utilities — used to invalidate downstream queries (Attendance,
+  // dashboard stats, attendance-health-check) after Persona sync writes new
+  // attendance records. Without this, the Attendance page shows stale data
+  // until the user manually refreshes — looks like the sync silently
+  // dropped the writes.
+  const utils = trpc.useUtils();
+  const invalidateDownstreamOfSync = async () => {
+    await Promise.all([
+      utils.attendance.teamSummary.invalidate(),
+      utils.attendance.trends.invalidate(),
+      utils.dashboard.stats.invalidate(),
+      utils.dashboard.monthlyTrend.invalidate(),
+      utils.dashboard.teamComparison.invalidate(),
+      utils.gamePresenter.list.invalidate(),
+      utils.gamePresenter.listWithStats.invalidate(),
+      utils.report.list.invalidate(),
+    ]);
+  };
+
   const moveGpMutation = trpc.gamePresenter.assignToTeam.useMutation({
+    onSuccess: async () => {
+      // GP team membership changed — refresh queries that filter by team.
+      await Promise.all([
+        utils.gamePresenter.list.invalidate(),
+        utils.gamePresenter.listWithStats.invalidate(),
+        utils.attendance.teamSummary.invalidate(),
+      ]);
+    },
     onError: (err) => toast.error(`Move failed: ${err.message}`),
     onSettled: () => setPendingAction(null),
   });
 
   const createGpMutation = trpc.gamePresenter.createForTeam.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.gamePresenter.list.invalidate(),
+        utils.gamePresenter.listWithStats.invalidate(),
+      ]);
+    },
     onError: (err) => toast.error(`Add failed: ${err.message}`),
     onSettled: () => setPendingAction(null),
   });
@@ -3961,7 +3994,7 @@ function PersonaSyncTab({
   });
 
   const syncMutation = trpc.personaSync.syncTeam.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setSyncState({
         phase: "done",
         result: {
@@ -3976,6 +4009,11 @@ function PersonaSyncTab({
           status: data.status,
         },
       });
+      // Refresh attendance/dashboard/report queries so the new attendance
+      // numbers show up on those pages without a manual refresh. Was a
+      // silent gap: sync wrote correctly, downstream pages just held cached
+      // results indefinitely so it looked like the sync did nothing.
+      await invalidateDownstreamOfSync();
       toast.success(`Synced ${data.matched} GPs from Persona`);
     },
     onError: (err) => {
@@ -3997,7 +4035,7 @@ function PersonaSyncTab({
   // Bulk sync — runs every team the FM can see, sequentially. Saves the
   // FM having to re-pick every team each month.
   const syncAllMutation = trpc.personaSync.syncAllTeams.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setSyncState({
         phase: "done",
         result: {
@@ -4014,6 +4052,7 @@ function PersonaSyncTab({
         toast.warning(`Synced with ${data.totals.failed} team${data.totals.failed === 1 ? '' : 's'} failed; see log`);
       }
       refetchTeamProjects();
+      await invalidateDownstreamOfSync();
     },
     onError: (err) => {
       setSyncState({ phase: "error", message: err.message });
