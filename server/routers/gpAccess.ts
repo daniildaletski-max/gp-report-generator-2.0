@@ -10,19 +10,28 @@ import { createLogger } from "../services/logger";
 const log = createLogger("gpAccess");
 
 /**
- * Deduplicate combined error details. The portal merges two sources —
- * uploaded screenshots and Excel-parsed gp_errors — and the SAME error
- * frequently appears in both: the FM uploads a screenshot AND later the
- * monthly Excel file (which also contains that error) gets parsed into
- * gp_errors. Without dedupe the portal showed N×2 entries for every
- * such mistake (user reported 4 entries for 2 actual errors).
+ * Deduplicate combined error details — CROSS-SOURCE only.
  *
- * Dedupe key: errorType + tableId + day(errorDate) + first 80 chars of
- * description, all normalised to lowercase. Screenshot source wins
- * (more authoritative — has an image and richer metadata) when both
- * are present for the same logical error.
+ * The portal merges uploaded screenshots and Excel-parsed gp_errors.
+ * The same logical error often appears in both (FM uploads a
+ * screenshot AND later the monthly Excel gets parsed). Without
+ * dedupe the portal showed each such mistake twice.
+ *
+ * BUT: two distinct same-source errors can share the composite key
+ * (same code + table + day + description prefix), e.g. the same GP
+ * dropping cards at the same table twice on the same shift. The
+ * earlier dedup collapsed those into one, under-reporting genuine
+ * mistakes (codex P1).
+ *
+ * New strategy: pair screenshots 1:1 with matching excel rows.
+ *   - For each key, keep ALL screenshots
+ *   - For each screenshot, drop ONE excel row with the same key
+ *   - Excess excel rows (more excel than screenshots) are kept
+ * So 2 screenshots + 0 excel -> 2 entries; 1 screenshot + 1 excel
+ * (cross-source dup) -> 1 entry; 0 screenshots + 2 excel -> 2 entries.
  */
 function dedupeErrorDetails<T extends {
+  id: number | string;
   source: "screenshot" | "excel";
   errorType?: string | null;
   errorDescription?: string | null;
@@ -41,20 +50,27 @@ function dedupeErrorDetails<T extends {
     dayKey(e.errorDate ?? e.createdAt),
     (e.errorDescription ?? "").slice(0, 80).toLowerCase().trim(),
   ].join("|");
-  // Process in two passes so screenshot entries win the de-dup race
-  // even when excel entries appeared first in the input array.
-  const winners = new Map<string, T>();
+  // Index excel rows by key into a FIFO queue. Each screenshot pulls
+  // ONE matching excel row out of the queue and marks it for removal.
+  const excelByKey = new Map<string, T[]>();
+  for (const e of items) {
+    if (e.source !== "excel") continue;
+    const k = keyOf(e);
+    const list = excelByKey.get(k) ?? [];
+    list.push(e);
+    excelByKey.set(k, list);
+  }
+  const dropExcelIds = new Set<string | number>();
   for (const e of items) {
     if (e.source !== "screenshot") continue;
     const k = keyOf(e);
-    if (!winners.has(k)) winners.set(k, e);
+    const list = excelByKey.get(k);
+    if (list && list.length > 0) {
+      const paired = list.shift();
+      if (paired) dropExcelIds.add(paired.id);
+    }
   }
-  for (const e of items) {
-    if (e.source === "screenshot") continue;
-    const k = keyOf(e);
-    if (!winners.has(k)) winners.set(k, e);
-  }
-  return Array.from(winners.values());
+  return items.filter(e => !(e.source === "excel" && dropExcelIds.has(e.id)));
 }
 
 /**
