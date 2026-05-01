@@ -3844,6 +3844,14 @@ type TeamSyncResult = {
   unmatched: number;
   matchDetails: MatchDetail[];
   status: "success" | "partial" | "failed";
+  /** Persona shift-type parser diagnostics — same shape as Test
+   *  Connection's parserDiagnostics. Renders inline in the result
+   *  panel so the FM doesn't have to bounce to Test Connection to see
+   *  WHY everyone shows "No change". */
+  parserDiagnostics?: {
+    allTypes: string[];
+    bucketCounts: { sick: number; missed: number; extra: number; late: number; unknown: number };
+  };
 };
 
 type BulkSyncResult = {
@@ -4014,6 +4022,7 @@ function PersonaSyncTab({
         unmatched: data.unmatched,
         matchDetails: data.matchDetails as MatchDetail[],
         status: data.status,
+        parserDiagnostics: (data as any).parserDiagnostics,
       });
     },
     onError: (err) => {
@@ -4035,6 +4044,7 @@ function PersonaSyncTab({
           unmatched: data.unmatched,
           matchDetails: data.matchDetails as MatchDetail[],
           status: data.status,
+          parserDiagnostics: (data as any).parserDiagnostics,
         },
       });
       // Refresh attendance/dashboard/report queries so the new attendance
@@ -4420,6 +4430,9 @@ function PersonaSyncTab({
             <div className="space-y-4">
               <SyncSummaryGrid result={previewData} />
               <SyncHintBanner result={previewData} />
+              {previewData.parserDiagnostics && (
+                <ParserDiagnostics diagnostics={previewData.parserDiagnostics} />
+              )}
               <div className="space-y-1.5">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Match details</p>
                 <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
@@ -4903,6 +4916,9 @@ function SyncResultPanel({
       <CardContent className="space-y-4">
         <SyncSummaryGrid result={result} />
         <SyncHintBanner result={result} />
+        {result.parserDiagnostics && (
+          <ParserDiagnostics diagnostics={result.parserDiagnostics} />
+        )}
         {result.matchDetails.length > 0 && (
           <>
             <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
