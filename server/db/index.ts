@@ -66,7 +66,7 @@ export {
 
 // Attendance
 export {
-  getOrCreateAttendance, updateAttendance, getAttendanceByTeamMonth, getAttendanceTrends,
+  getOrCreateAttendance, findAttendance, updateAttendance, getAttendanceByTeamMonth, getAttendanceTrends,
 } from "./attendance";
 
 // Monthly Stats
@@ -138,6 +138,7 @@ export {
   createActionItem, getActionItemById, updateActionItem,
   deleteActionItem, completeActionItem, listActionItems,
   getActionItemStats, verifyActionItemOwnership,
+  getRecentActionItemsByGpAndSource,
 } from "./actionItems";
 export type { ActionItemWithGp } from "./actionItems";
 

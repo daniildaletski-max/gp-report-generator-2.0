@@ -49,6 +49,34 @@ export async function deleteActionItem(id: number): Promise<void> {
 }
 
 /**
+ * Recently-created action items for a given GP filtered by source —
+ * used by auto-coaching/Persona-anomaly de-duplication so the same
+ * insight doesn't generate the same item every cron tick.
+ *
+ * `withinDays` defaults to 14; we look at items created within that
+ * window from now.
+ */
+export async function getRecentActionItemsByGpAndSource(
+  gpId: number,
+  source: "manual" | "ai_insight",
+  withinDays: number = 14,
+): Promise<ActionItem[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const cutoff = new Date(Date.now() - withinDays * 24 * 60 * 60 * 1000);
+  const { gte } = await import("drizzle-orm");
+  const rows = await db.select()
+    .from(actionItems)
+    .where(and(
+      eq(actionItems.gamePresenterId, gpId),
+      eq(actionItems.source, source),
+      gte(actionItems.createdAt, cutoff),
+    ))
+    .orderBy(desc(actionItems.createdAt));
+  return rows;
+}
+
+/**
  * Mark an item done. Stores when it was completed and an optional note
  * (e.g. "trained on grooming, +2 score next eval").
  */
