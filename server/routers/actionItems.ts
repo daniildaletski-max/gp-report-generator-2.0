@@ -40,17 +40,17 @@ export const actionItemsRouter = router({
    */
   list: protectedProcedure
     .input(z.object({
-      gpId: z.number().positive().optional(),
-      teamId: z.number().positive().optional(),
+      gpId: z.number().positive().nullish(),
+      teamId: z.number().positive().nullish(),
       includeAllStatuses: z.boolean().default(false),
     }).optional())
     .query(async ({ ctx, input }) => {
-      const gpId = input?.gpId;
+      const gpId = input?.gpId ?? undefined;
       if (gpId) await ensureCanReadGp(ctx, gpId);
 
       return db.listActionItems({
         gpId,
-        teamId: input?.teamId,
+        teamId: input?.teamId ?? undefined,
         userId: ctx.user.role === "admin" ? undefined : ctx.user.id,
         includeAllStatuses: input?.includeAllStatuses,
       });
@@ -58,13 +58,13 @@ export const actionItemsRouter = router({
 
   stats: protectedProcedure
     .input(z.object({
-      gpId: z.number().positive().optional(),
-      teamId: z.number().positive().optional(),
+      gpId: z.number().positive().nullish(),
+      teamId: z.number().positive().nullish(),
     }).optional())
     .query(async ({ ctx, input }) => {
       return db.getActionItemStats({
-        gpId: input?.gpId,
-        teamId: input?.teamId,
+        gpId: input?.gpId ?? undefined,
+        teamId: input?.teamId ?? undefined,
         userId: ctx.user.role === "admin" ? undefined : ctx.user.id,
       });
     }),
@@ -154,9 +154,14 @@ export const actionItemsRouter = router({
       if (!tokenRecord || !tokenRecord.isActive) {
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid or expired token" });
       }
-      return db.listActionItems({
-        gpId: tokenRecord.gamePresenterId,
-        includeAllStatuses: false,
-      });
+      try {
+        return await db.listActionItems({
+          gpId: tokenRecord.gamePresenterId,
+          includeAllStatuses: false,
+        });
+      } catch {
+        // GP may have been deleted; return empty list gracefully
+        return [];
+      }
     }),
 });

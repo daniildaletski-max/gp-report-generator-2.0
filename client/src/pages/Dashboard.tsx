@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { StatCard } from "@/components/ui/stat-card";
 import { GlassCard } from "@/components/ui/glass-card";
 import { useLocation } from "wouter";
-import { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { GPDetailDrawer } from "@/components/GPDetailDrawer";
 import { PageHeader } from "@/components/PageHeader";
 import { useUrlState, urlNumber } from "@/hooks/useUrlState";
@@ -1492,6 +1492,7 @@ function DashboardHero({
           secondary={`of ${totalGPs} · ${evaluatedPct}%`}
           delta={gpDelta}
           spark={gpSeries}
+          sparkLabels={trend.map(t => t.label)}
           icon={Users}
         />
         <MiniMetric
@@ -1499,6 +1500,7 @@ function DashboardHero({
           primary={`${totalEvaluations}`}
           delta={evalDelta}
           spark={evalSeries}
+          sparkLabels={trend.map(t => t.label)}
           icon={FileCheck}
         />
         <MiniMetric
@@ -1538,6 +1540,8 @@ function MiniMetric({
   secondary,
   delta,
   spark,
+  sparkLabels,
+  sparkValueFormatter,
   icon: Icon,
 }: {
   label: string;
@@ -1545,6 +1549,8 @@ function MiniMetric({
   secondary?: string;
   delta?: number;
   spark?: { x: number; y: number }[];
+  sparkLabels?: string[];
+  sparkValueFormatter?: (v: number) => string;
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
@@ -1573,6 +1579,8 @@ function MiniMetric({
               fillId="spark-mini-grad"
               height={24}
               strokeWidth={1.1}
+              labels={sparkLabels}
+              valueFormatter={sparkValueFormatter}
             />
           </div>
         )}
@@ -1631,6 +1639,9 @@ function Sparkline({
   labels?: string[];
   valueFormatter?: (v: number) => string;
 }) {
+  const [hoveredIdx, setHoveredIdx] = React.useState<number | null>(null);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
   if (points.length < 2) {
     return <div className="text-[10px] text-muted-foreground/60 italic">need 2+ months for trend</div>;
   }
@@ -1657,19 +1668,76 @@ function Sparkline({
   const areaPath = `${linePath} L ${w.toFixed(2)} ${h} L 0 ${h} Z`;
   const lastPoint = coords[coords.length - 1];
 
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!labels || labels.length === 0) return;
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const relX = (e.clientX - rect.left) / rect.width;
+    const idx = Math.round(relX * (points.length - 1));
+    const clamped = Math.max(0, Math.min(points.length - 1, idx));
+    setHoveredIdx(clamped);
+  };
+
+  const handleMouseLeave = () => setHoveredIdx(null);
+
+  const fmt = valueFormatter ?? ((v: number) => v.toString());
+
   return (
-    <svg
-      viewBox={`0 0 ${w} ${h}`}
-      preserveAspectRatio="none"
-      className="w-full block"
-      style={{ height }}
-      role="img"
-      aria-label={labels ? `Trend: ${labels.map((l, i) => `${l}: ${(valueFormatter ?? (v => v.toString()))(points[i].y)}`).join(", ")}` : "Trend sparkline"}
-    >
-      {fillId && <path d={areaPath} fill={`url(#${fillId})`} />}
-      <path d={linePath} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-      <circle cx={lastPoint.x} cy={lastPoint.y} r="2.5" fill={color} stroke="white" strokeWidth="1" />
-    </svg>
+    <div className="relative" ref={containerRef}>
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        preserveAspectRatio="none"
+        className="w-full block cursor-crosshair"
+        style={{ height }}
+        role="img"
+        aria-label={labels ? `Trend: ${labels.map((l, i) => `${l}: ${fmt(points[i].y)}`).join(", ")}` : "Trend sparkline"}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      >
+        {fillId && <path d={areaPath} fill={`url(#${fillId})`} />}
+        <path d={linePath} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        <circle cx={lastPoint.x} cy={lastPoint.y} r="2.5" fill={color} stroke="white" strokeWidth="1" />
+        {/* Hover indicator dot */}
+        {hoveredIdx !== null && labels && (
+          <circle
+            cx={coords[hoveredIdx].x}
+            cy={coords[hoveredIdx].y}
+            r="3.5"
+            fill="white"
+            stroke={color}
+            strokeWidth="2"
+            className="transition-all duration-100"
+            style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.2))" }}
+          />
+        )}
+        {/* Invisible hit areas for each data point */}
+        {labels && coords.map((c, i) => (
+          <rect
+            key={i}
+            x={c.x - xStep / 2}
+            y={0}
+            width={xStep}
+            height={h}
+            fill="transparent"
+            onMouseEnter={() => setHoveredIdx(i)}
+          />
+        ))}
+      </svg>
+      {/* Tooltip */}
+      {hoveredIdx !== null && labels && labels[hoveredIdx] && (
+        <div
+          className="absolute z-50 pointer-events-none px-2 py-1 rounded-lg bg-popover text-popover-foreground border border-border shadow-lg text-[11px] font-medium whitespace-nowrap transition-all duration-150"
+          style={{
+            left: `${(coords[hoveredIdx].x / w) * 100}%`,
+            top: "-8px",
+            transform: "translate(-50%, -100%)",
+          }}
+        >
+          <span className="text-muted-foreground">{labels[hoveredIdx]}:</span>{" "}
+          <span className="font-bold tabular-nums">{fmt(points[hoveredIdx].y)}</span>
+        </div>
+      )}
+    </div>
   );
 }
 
