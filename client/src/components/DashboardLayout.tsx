@@ -22,6 +22,7 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { CommandPalette, useCommandPalette } from "./CommandPalette";
+import { TopBar } from "./TopBar";
 
 type MenuItem = {
   icon: React.ComponentType<{ className?: string }>;
@@ -240,34 +241,58 @@ function DashboardLayoutContent({
             </div>
 
             <SidebarMenu className="px-2 py-2">
+              {!isCollapsed && (
+                <li className="px-2 pt-1 pb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">
+                  Workspace
+                </li>
+              )}
               {menuItems.map(item => {
-                const isActive = location === item.path;
+                const isActive = location.startsWith(item.path);
                 return (
-                  <SidebarMenuItem key={item.path} className="relative">
+                  <SidebarMenuItem key={item.path} className="relative group/nav">
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
                       tooltip={item.label}
                       className={`h-11 transition-all duration-300 font-normal rounded-xl ${
-                        isActive 
-                          ? "bg-primary/10 text-primary border border-primary/20 shadow-lg shadow-primary/5" 
-                          : "hover:bg-primary/5 text-muted-foreground hover:text-foreground"
+                        isActive
+                          ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary border border-primary/25 shadow-md shadow-primary/10"
+                          : "hover:bg-primary/5 text-muted-foreground hover:text-foreground hover:translate-x-0.5"
                       }`}
                     >
                       {isActive && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] bg-gradient-to-b from-primary to-primary/80 rounded-r-full" />
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[65%] bg-gradient-to-b from-primary to-primary/60 rounded-r-full" />
                       )}
                       <item.icon
-                        className={`h-4 w-4 transition-transform duration-200 ${
-                          isActive ? "text-primary scale-110" : "group-hover:scale-110"
+                        className={`h-4 w-4 transition-all duration-200 ${
+                          isActive ? "text-primary scale-110" : "group-hover/nav:scale-110 group-hover/nav:text-primary"
                         }`}
                       />
-                      <span className={isActive ? "font-medium" : ""}>{item.label}</span>
+                      <span className={isActive ? "font-semibold" : ""}>{item.label}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
               })}
             </SidebarMenu>
+
+            {/* Decorative bottom-of-nav badge — gives the sidebar visual
+                anchor and reminds the user of the brand colour. Hidden
+                when collapsed since there's no room. */}
+            {!isCollapsed && (
+              <div className="mt-auto px-3 pb-3 pt-6">
+                <div className="rounded-xl border border-primary/15 bg-gradient-to-br from-primary/5 via-card to-card p-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow shadow-primary/20">
+                      <span className="text-white text-[10px] font-bold">GP</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-semibold text-foreground truncate">Reports Workspace</p>
+                      <p className="text-[10px] text-muted-foreground truncate">v2 · live</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </SidebarContent>
 
           <SidebarFooter className="p-3 border-t border-primary/10">
@@ -346,6 +371,15 @@ function DashboardLayoutContent({
               </button>
             </div>
           </div>
+        )}
+        {!isMobile && (
+          <TopBar
+            user={user as { name?: string | null; email?: string | null; role?: string | null } | null}
+            isMac={isMac}
+            onOpenSearch={() => palette.setOpen(true)}
+            onLogout={handleLogout}
+            onNavigate={setLocation}
+          />
         )}
         <main className="flex-1 p-4">{children}</main>
       </SidebarInset>
