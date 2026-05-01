@@ -1023,13 +1023,24 @@ export default function GPPortal() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Error Details */}
               <div>
-                <h3 className="text-base font-semibold mb-3 flex items-center gap-2 text-slate-800">
-                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                  Errors & Mistakes
-                  {errorDetails.length > 0 && (
-                    <Badge className="ml-2 bg-red-50 text-red-700 border-red-200">{errorDetails.length}</Badge>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-base font-semibold flex items-center gap-2 text-slate-800">
+                    <span className="h-7 w-7 rounded-lg bg-rose-100 border border-rose-200 flex items-center justify-center">
+                      <AlertTriangle className="h-3.5 w-3.5 text-rose-600" />
+                    </span>
+                    Errors & Mistakes
+                    {errorDetails.length > 0 && (
+                      <Badge className="ml-1 bg-rose-50 text-rose-700 border-rose-200 tabular-nums">
+                        {errorDetails.length}
+                      </Badge>
+                    )}
+                  </h3>
+                  {errorDetails.length === 0 && (
+                    <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                      Clean month
+                    </span>
                   )}
-                </h3>
+                </div>
 
                 {technicalErrorsHidden > 0 && (
                   <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50">

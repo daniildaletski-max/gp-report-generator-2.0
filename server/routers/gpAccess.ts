@@ -10,6 +10,70 @@ import { createLogger } from "../services/logger";
 const log = createLogger("gpAccess");
 
 /**
+ * Deduplicate combined error details — CROSS-SOURCE only.
+ *
+ * The portal merges uploaded screenshots and Excel-parsed gp_errors.
+ * The same logical error often appears in both (FM uploads a
+ * screenshot AND later the monthly Excel gets parsed). Without
+ * dedupe the portal showed each such mistake twice.
+ *
+ * BUT: two distinct same-source errors can share the composite key
+ * (same code + table + day + description prefix), e.g. the same GP
+ * dropping cards at the same table twice on the same shift. The
+ * earlier dedup collapsed those into one, under-reporting genuine
+ * mistakes (codex P1).
+ *
+ * New strategy: pair screenshots 1:1 with matching excel rows.
+ *   - For each key, keep ALL screenshots
+ *   - For each screenshot, drop ONE excel row with the same key
+ *   - Excess excel rows (more excel than screenshots) are kept
+ * So 2 screenshots + 0 excel -> 2 entries; 1 screenshot + 1 excel
+ * (cross-source dup) -> 1 entry; 0 screenshots + 2 excel -> 2 entries.
+ */
+function dedupeErrorDetails<T extends {
+  id: number | string;
+  source: "screenshot" | "excel";
+  errorType?: string | null;
+  errorDescription?: string | null;
+  tableId?: string | null;
+  errorDate?: Date | string | null;
+  createdAt?: Date | string | null;
+}>(items: T[]): T[] {
+  const dayKey = (d: Date | string | null | undefined) => {
+    if (!d) return "";
+    const date = d instanceof Date ? d : new Date(d);
+    return isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  };
+  const keyOf = (e: T) => [
+    (e.errorType ?? "").toLowerCase(),
+    (e.tableId ?? "").toLowerCase(),
+    dayKey(e.errorDate ?? e.createdAt),
+    (e.errorDescription ?? "").slice(0, 80).toLowerCase().trim(),
+  ].join("|");
+  // Index excel rows by key into a FIFO queue. Each screenshot pulls
+  // ONE matching excel row out of the queue and marks it for removal.
+  const excelByKey = new Map<string, T[]>();
+  for (const e of items) {
+    if (e.source !== "excel") continue;
+    const k = keyOf(e);
+    const list = excelByKey.get(k) ?? [];
+    list.push(e);
+    excelByKey.set(k, list);
+  }
+  const dropExcelIds = new Set<string | number>();
+  for (const e of items) {
+    if (e.source !== "screenshot") continue;
+    const k = keyOf(e);
+    const list = excelByKey.get(k);
+    if (list && list.length > 0) {
+      const paired = list.shift();
+      if (paired) dropExcelIds.add(paired.id);
+    }
+  }
+  return items.filter(e => !(e.source === "excel" && dropExcelIds.has(e.id)));
+}
+
+/**
  * In-memory daily cache for AI Coach insights, keyed by `${gpId}-YYYY-MM-DD`.
  * Each GP gets at most one LLM round-trip per UTC day; the portal polls
  * every 30s but the cached insights are returned for free in between.
@@ -185,7 +249,7 @@ export const gpAccessRouter = router({
         return d.getMonth() + 1 === input.month && d.getFullYear() === input.year;
       });
 
-      const errorDetails = [
+      const errorDetailsRaw = [
         ...errorScreenshots.map(e => ({
           id: e.id,
           source: 'screenshot' as const,
@@ -213,6 +277,9 @@ export const gpAccessRouter = router({
           createdAt: e.createdAt,
         })),
       ];
+      // Dedupe — same error logged via screenshot AND Excel was being
+      // shown twice, inflating the count badge and the visible list.
+      const errorDetails = dedupeErrorDetails(errorDetailsRaw);
 
       // Show the count that matches what the GP actually sees in the list.
       // The upstream `monthlyGpStats.mistakes` value already excludes most
@@ -382,8 +449,10 @@ export const gpAccessRouter = router({
         errorDescription: e.errorDescription,
       }));
 
-      // Combine error sources: screenshots and Excel-parsed errors
-      const errorDetails = [
+      // Combine error sources: screenshots and Excel-parsed errors,
+      // then dedupe — same error often appears in both because the FM
+      // uploads a screenshot AND the monthly Excel file gets parsed.
+      const errorDetailsRaw = [
         ...errorScreenshots.map(e => ({
           id: e.id,
           source: 'screenshot' as const,
@@ -395,9 +464,10 @@ export const gpAccessRouter = router({
           tableId: e.tableId,
           screenshotUrl: e.screenshotUrl,
           createdAt: e.createdAt,
+          errorDate: (e as any).errorDate ?? null,
         })),
         ...gpErrors.map(e => ({
-          id: `excel-${e.id}`, // Unique string ID to avoid collision with screenshot IDs
+          id: `excel-${e.id}`,
           source: 'excel' as const,
           errorType: e.errorCode || 'excel_error',
           errorDescription: e.errorDescription,
@@ -410,6 +480,7 @@ export const gpAccessRouter = router({
           errorDate: e.errorDate,
         })),
       ];
+      const errorDetails = dedupeErrorDetails(errorDetailsRaw);
 
       return {
         gpName: gp.name,
