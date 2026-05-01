@@ -1461,9 +1461,14 @@ function DashboardHero({
   // fallback path (i.e. trend had no value for selected but stats did),
   // so the "Ranged X-Y" caption never contradicts the headline.
   const scoreYs = scoreSeries.map(p => p.y).filter(y => y > 0);
+  // Only merge headlineScore into the stat series when the selected
+  // month is INSIDE the plotted trend window (selectedIdx >= 0). Out
+  // of window, the headline came from gpStats for an unrelated period
+  // — appending it here would produce labels like "Avg 7mo" and a
+  // "last 6 months" range that included a value not on the chart.
   const statSeries = trendCurrentValue > 0
     ? scoreYs
-    : (headlineScore > 0 ? [...scoreYs, headlineScore] : scoreYs);
+    : (selectedIdx >= 0 && headlineScore > 0 ? [...scoreYs, headlineScore] : scoreYs);
   const scoreMin = statSeries.length > 0 ? Math.min(...statSeries) : 0;
   const scoreMax = statSeries.length > 0 ? Math.max(...statSeries) : 0;
   const firstLabel = trend[0]?.label;
