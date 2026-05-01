@@ -1,27 +1,52 @@
-import React, { createContext, useContext, useEffect } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
+
+type Theme = "light" | "dark";
 
 interface ThemeContextType {
-  theme: "light";
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const STORAGE_KEY = "gp-theme";
+
 interface ThemeProviderProps {
   children: React.ReactNode;
-  defaultTheme?: string;
+  defaultTheme?: Theme;
 }
 
 export function ThemeProvider({
   children,
+  defaultTheme = "dark",
 }: ThemeProviderProps) {
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof window === "undefined") return defaultTheme;
+    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
+    return stored === "light" || stored === "dark" ? stored : defaultTheme;
+  });
+
+  const setTheme = (newTheme: Theme) => {
+    setThemeState(newTheme);
+    localStorage.setItem(STORAGE_KEY, newTheme);
+  };
+
+  const toggleTheme = () => {
+    setTheme(theme === "dark" ? "light" : "dark");
+  };
+
   useEffect(() => {
-    // Always enforce light mode — remove any stale dark class
-    document.documentElement.classList.remove("dark");
-    localStorage.removeItem("theme");
-  }, []);
+    const root = document.documentElement;
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+  }, [theme]);
 
   return (
-    <ThemeContext.Provider value={{ theme: "light" }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -26,8 +26,14 @@ const InvitePage = lazy(() => import("./pages/InvitePage"));
 
 function PageLoader() {
   return (
-    <div className="flex items-center justify-center min-h-[50vh]">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+      <div className="relative">
+        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+        </div>
+        <div className="absolute inset-0 rounded-xl bg-primary/5 animate-ping" />
+      </div>
+      <p className="text-sm text-muted-foreground animate-pulse">Loading...</p>
     </div>
   );
 }
@@ -154,7 +160,7 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="light">
+      <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
           <Router />

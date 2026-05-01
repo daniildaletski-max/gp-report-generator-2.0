@@ -56,12 +56,21 @@ const CHART_TOOLTIP_LIGHT = {
   boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
 };
 
+const CHART_TOOLTIP_DARK = {
+  ...CHART_TOOLTIP_STYLE,
+  background: 'rgba(24, 24, 32, 0.92)',
+  border: '1px solid rgba(255, 255, 255, 0.1)',
+  color: '#f0f0f0',
+  boxShadow: '0 10px 40px rgba(0, 0, 0, 0.4)',
+};
+
 function useChartTheme() {
+  const isDark = document.documentElement.classList.contains('dark');
   return {
-    tooltipStyle: CHART_TOOLTIP_LIGHT,
-    tickFill: '#374151',
-    gridStroke: '#e5e5e3',
-    legendColor: '#4b5563',
+    tooltipStyle: isDark ? CHART_TOOLTIP_DARK : CHART_TOOLTIP_LIGHT,
+    tickFill: isDark ? '#9ca3af' : '#374151',
+    gridStroke: isDark ? 'rgba(255,255,255,0.08)' : '#e5e5e3',
+    legendColor: isDark ? '#9ca3af' : '#4b5563',
   };
 }
 
@@ -176,23 +185,26 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="p-4 sm:p-6 space-y-5">
+      <div className="p-4 sm:p-6 space-y-5 animate-in fade-in duration-300">
         <div className="flex items-center justify-between">
           <div className="space-y-2">
-            <div className="h-7 w-40 rounded-lg bg-muted animate-pulse" />
-            <div className="h-4 w-56 rounded-lg bg-muted/50 animate-pulse" />
+            <div className="h-7 w-40 rounded-lg skeleton-shimmer" />
+            <div className="h-4 w-56 rounded-lg skeleton-shimmer" style={{ animationDelay: '0.1s' }} />
           </div>
           <div className="flex gap-2">
-            <div className="h-10 w-32 rounded-xl bg-muted animate-pulse" />
-            <div className="h-10 w-20 rounded-xl bg-muted animate-pulse" />
+            <div className="h-10 w-32 rounded-xl skeleton-shimmer" style={{ animationDelay: '0.2s' }} />
+            <div className="h-10 w-20 rounded-xl skeleton-shimmer" style={{ animationDelay: '0.3s' }} />
           </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-28 sm:h-32 rounded-2xl bg-muted/50 border border-border animate-pulse" />
+            <div key={i} className="h-28 sm:h-32 rounded-2xl skeleton-shimmer border border-border/50" style={{ animationDelay: `${i * 0.1}s` }} />
           ))}
         </div>
-        <div className="h-64 rounded-2xl bg-muted/50 border border-border animate-pulse" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="h-64 rounded-2xl skeleton-shimmer border border-border/50" style={{ animationDelay: '0.5s' }} />
+          <div className="h-64 rounded-2xl skeleton-shimmer border border-border/50" style={{ animationDelay: '0.6s' }} />
+        </div>
       </div>
     );
   }
@@ -200,14 +212,14 @@ export default function Dashboard() {
   if (isStatsError) {
     return (
       <div className="p-4 sm:p-6">
-        <Card className="border border-rose-200 bg-rose-50">
+        <Card className="border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-950/30">
           <CardContent className="py-12 flex flex-col items-center text-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-rose-100 flex items-center justify-center">
-              <AlertTriangle className="h-7 w-7 text-rose-600" />
+            <div className="w-14 h-14 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
+              <AlertTriangle className="h-7 w-7 text-rose-600 dark:text-rose-400" />
             </div>
             <div className="space-y-1.5">
-              <h3 className="text-lg font-semibold text-rose-900">Couldn't load dashboard data</h3>
-              <p className="text-sm text-rose-700 max-w-md">
+              <h3 className="text-lg font-semibold text-rose-900 dark:text-rose-200">Couldn't load dashboard data</h3>
+              <p className="text-sm text-rose-700 dark:text-rose-300 max-w-md">
                 The server didn't return stats for this period. This usually clears on a retry —
                 if it keeps failing, check the network or open the admin panel.
               </p>
