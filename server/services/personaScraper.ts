@@ -80,6 +80,15 @@ export interface PersonaSyncResult {
   error?: string;
   month: number;
   year: number;
+  /** Diagnostic — all distinct shift-type keys parsed from the page,
+   *  with the count per bucket. Surfaces in the admin UI so when the
+   *  parser misclassifies (e.g. Persona introduces a new variant
+   *  suffix) the operator can see "we saw X type but couldn't bucket
+   *  it" instead of silently getting 0/0/0/0 for everyone. */
+  diagnostics?: {
+    allTypes: string[];
+    bucketCounts: { sick: number; missed: number; extra: number; late: number; unknown: number };
+  };
 }
 
 let browserInstance: Browser | null = null;
@@ -294,6 +303,14 @@ function parseShiftTypes(html: string): {
   missedIndices: Set<number>;
   extraIndices: Set<number>;
   lateIndices: Set<number>;
+  /** All discovered shift-type keys, in order. Surfaced via the sync
+   *  result so the admin can see exactly what Persona returned and we
+   *  can iterate on the matching rules without re-scraping. */
+  allTypes: string[];
+  /** Counts of each bucket for diagnostics — appears in the test
+   *  connection result so the admin can see at a glance whether
+   *  the parser actually recognized any types. */
+  bucketCounts: { sick: number; missed: number; extra: number; late: number; unknown: number };
 } {
   const viewtoopostMatches = html.match(/TgAddViewToopost\(([^;]+)\);/g) || [];
   const toopostMatches = html.match(/TgAddToopost\(([^;]+)\);/g) || [];
@@ -315,32 +332,48 @@ function parseShiftTypes(html: string): {
   const sickIndices = new Set<number>();
   const missedIndices = new Set<number>();
   const extraIndices = new Set<number>();
-  // Late-to-work indices — Persona uses one of several Estonian keys
-  // depending on which version of the schedule is active.
-  // "Hilinemine" = late, "Toopaev|5" was observed for some projects.
   const lateIndices = new Set<number>();
 
-  allTypes.forEach((key, i) => {
-    // Haigusleht|1 = sick leave, Haigusleht|3 = continuation sick leave
-    if (key === 'Haigusleht|1' || key === 'Haigusleht|3') {
+  // PREFIX-based matching — earlier we used exact-match strings like
+  // "Haigusleht|1", but Persona's encoding varies between projects /
+  // schedule versions. Real-world scrape on Team Nu showed 165 workers
+  // matched but every count returned 0/0/0 because the project uses
+  // suffixes like "|5" / "|7" we hadn't seen. Matching on the Estonian
+  // category prefix is robust to those variations.
+  //
+  // Reference categories (Estonian -> English):
+  //   Haigusleht*    -> sick leave
+  //   TooPeatumine*  -> work interruption / missed
+  //   VabaPaev*      -> day off / extra shift
+  //   Hilinemine*    -> late to work
+  // Anything else falls into "unknown" for diagnostic purposes.
+  //
+  // Matching is case-insensitive on a normalised lowercase key so all
+  // diacritic / camel-case variants ("TooPeatumine", "Tööpeatumine",
+  // "TööPeatumine", "tööpeatumine") land in the same bucket. The exact
+  // raw key is still preserved in `allTypes` for diagnostics.
+  allTypes.forEach((rawKey, i) => {
+    const key = (rawKey ?? "").trim().toLowerCase();
+    if (key.startsWith('haigusleht')) {
       sickIndices.add(i);
-    }
-    // TooPeatumine|2 = missed day
-    if (key === 'TooPeatumine|2') {
+    } else if (key.startsWith('toopeatumine') || key.startsWith('tööpeatumine')) {
       missedIndices.add(i);
-    }
-    // VabaPaev|4 = extra shift (ExtraS)
-    if (key === 'VabaPaev|4') {
+    } else if (key.startsWith('vabapaev') || key.startsWith('vabapäev')) {
       extraIndices.add(i);
-    }
-    // Late-to-work — match a few likely keys. We scan the prefix
-    // because Persona sometimes appends |N suffixes for variants.
-    if (key.startsWith('Hilinemine') || key.startsWith('Hilinen')) {
+    } else if (key.startsWith('hilinemine') || key.startsWith('hilinen')) {
       lateIndices.add(i);
     }
   });
 
-  return { sickIndices, missedIndices, extraIndices, lateIndices };
+  const bucketCounts = {
+    sick: sickIndices.size,
+    missed: missedIndices.size,
+    extra: extraIndices.size,
+    late: lateIndices.size,
+    unknown: allTypes.length - sickIndices.size - missedIndices.size - extraIndices.size - lateIndices.size,
+  };
+
+  return { sickIndices, missedIndices, extraIndices, lateIndices, allTypes, bucketCounts };
 }
 
 function parseWorkerData(
@@ -500,7 +533,8 @@ export async function syncPersonaAttendance(
     }
 
     // Parse shift type indices
-    const { sickIndices, missedIndices, extraIndices, lateIndices } = parseShiftTypes(html);
+    const shiftTypes = parseShiftTypes(html);
+    const { sickIndices, missedIndices, extraIndices, lateIndices, allTypes, bucketCounts } = shiftTypes;
 
     // Parse worker attendance data
     const workers = parseWorkerData(html, month, year, projectId, sickIndices, missedIndices, extraIndices, lateIndices);
@@ -512,6 +546,12 @@ export async function syncPersonaAttendance(
       workers,
       month,
       year,
+      diagnostics: {
+        // Cap distinct types to avoid blowing up the UI when Persona
+        // returns hundreds of distinct keys.
+        allTypes: Array.from(new Set(allTypes)).slice(0, 50),
+        bucketCounts,
+      },
     };
   } catch (error) {
     if (page) {
@@ -560,6 +600,13 @@ export interface TestConnectionResult {
    *  (login form? error page? blank?). Empty string on success.
    */
   failureScreenshotB64: string;
+  /** Discovered shift-type keys + bucket counts. Surfaces what Persona
+   *  actually returned so we can iterate on the parser when a project
+   *  uses unfamiliar variants. Set even on partial failure. */
+  parserDiagnostics?: {
+    allTypes: string[];
+    bucketCounts: { sick: number; missed: number; extra: number; late: number; unknown: number };
+  };
 }
 
 /**
@@ -639,10 +686,23 @@ export async function testPersonaConnection(): Promise<TestConnectionResult> {
     if (!html.includes('TgAddWorker')) {
       throw new Error("Schedule page loaded but contains no worker data (TgAddWorker missing)");
     }
+
+    // Run the parser pass so we can surface discovered shift-types
+    // + bucket counts. Lets the admin diagnose "matched 10 GPs but
+    // all show 0 sick/missed/extra" without having to do a full sync.
+    let parserDiagnostics: TestConnectionResult["parserDiagnostics"];
+    try {
+      const shiftTypes = parseShiftTypes(html);
+      parserDiagnostics = {
+        allTypes: Array.from(new Set(shiftTypes.allTypes)).slice(0, 50),
+        bucketCounts: shiftTypes.bucketCounts,
+      };
+    } catch { /* diagnostic-only, never block the test */ }
+
     setStatus("data", "success");
 
     await page.close();
-    return { success: true, steps, failureScreenshotB64 };
+    return { success: true, steps, failureScreenshotB64, parserDiagnostics };
   } catch {
     // Capture a screenshot of whatever Persona is showing right now so
     // the admin can SEE what happened. We swallow screenshot errors —

@@ -3874,6 +3874,14 @@ type TestConnectionResult = {
   success: boolean;
   steps: TestConnectionStep[];
   failureScreenshotB64: string;
+  /** Parser diagnostics — distinct shift-type keys parsed from the
+   *  schedule page + bucket counts. Used to debug "matched but
+   *  everyone has 0 sick/missed/extra" by showing the operator what
+   *  Persona actually returned. */
+  parserDiagnostics?: {
+    allTypes: string[];
+    bucketCounts: { sick: number; missed: number; extra: number; late: number; unknown: number };
+  };
 };
 
 function PersonaSyncTab({
@@ -5035,6 +5043,9 @@ function TestConnectionPanel({
             <TestStepRow key={s.step} step={s} />
           ))}
         </div>
+        {result.parserDiagnostics && (
+          <ParserDiagnostics diagnostics={result.parserDiagnostics} />
+        )}
         {!result.success && result.failureScreenshotB64 && (
           <details className="rounded-lg border border-border bg-background p-3" open>
             <summary className="cursor-pointer text-sm font-medium select-none">
@@ -5054,6 +5065,73 @@ function TestConnectionPanel({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Surfaces what the Persona shift-type parser actually saw vs what
+ * it bucketed. When everyone shows 0/0/0/0 this panel makes it clear
+ * whether (a) Persona returned no shift entries at all, (b) the
+ * parser saw entries but couldn't classify them (unknown bucket > 0),
+ * or (c) entries are correctly bucketed but those workers genuinely
+ * had no absences.
+ */
+function ParserDiagnostics({ diagnostics }: { diagnostics: { allTypes: string[]; bucketCounts: { sick: number; missed: number; extra: number; late: number; unknown: number } } }) {
+  const { allTypes, bucketCounts } = diagnostics;
+  const total = bucketCounts.sick + bucketCounts.missed + bucketCounts.extra + bucketCounts.late + bucketCounts.unknown;
+  const tone = total === 0 || bucketCounts.unknown > total * 0.5
+    ? "border-amber-200 bg-amber-50/40"
+    : "border-emerald-200 bg-emerald-50/40";
+  return (
+    <details className={`rounded-lg border ${tone} p-3`} open={total === 0 || bucketCounts.unknown > 0}>
+      <summary className="cursor-pointer text-sm font-medium select-none flex items-center gap-2">
+        <BarChart3 className="h-3.5 w-3.5" />
+        Shift-type parser diagnostics ({total} entries scanned)
+      </summary>
+      <div className="mt-3 space-y-2">
+        <div className="grid grid-cols-5 gap-2">
+          <DiagBucket label="Sick" value={bucketCounts.sick} tone="rose" />
+          <DiagBucket label="Missed" value={bucketCounts.missed} tone="amber" />
+          <DiagBucket label="Extra" value={bucketCounts.extra} tone="emerald" />
+          <DiagBucket label="Late" value={bucketCounts.late} tone="amber" />
+          <DiagBucket label="Unknown" value={bucketCounts.unknown} tone={bucketCounts.unknown > 0 ? "rose" : "muted"} />
+        </div>
+        {bucketCounts.unknown > 0 && (
+          <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            <strong>{bucketCounts.unknown}</strong> shift-type {bucketCounts.unknown === 1 ? "entry" : "entries"} couldn't be classified. They're listed below — share them so the matcher can be updated.
+          </p>
+        )}
+        {total === 0 && (
+          <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            Persona returned no shift-type entries on this page. Either there genuinely was no absence/shift activity, or the page format differs from what we parse — try a month with known activity, or share a screenshot.
+          </p>
+        )}
+        {allTypes.length > 0 && (
+          <div>
+            <p className="text-[11px] text-muted-foreground mb-1">Distinct shift-type keys parsed (first 50):</p>
+            <div className="flex flex-wrap gap-1">
+              {allTypes.map((t, i) => (
+                <code key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-foreground font-mono">{t}</code>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function DiagBucket({ label, value, tone }: { label: string; value: number; tone: "rose" | "amber" | "emerald" | "muted" }) {
+  const cls =
+    tone === "rose" ? "border-rose-200 bg-rose-50 text-rose-700" :
+    tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-700" :
+    tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-700" :
+    "border-border bg-muted/40 text-muted-foreground";
+  return (
+    <div className={`rounded-md border p-2 text-center ${cls}`}>
+      <p className="text-[9px] uppercase tracking-wider font-medium">{label}</p>
+      <p className="text-base font-bold tabular-nums">{value}</p>
+    </div>
   );
 }
 
