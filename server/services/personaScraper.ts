@@ -10,6 +10,50 @@ import { existsSync } from 'node:fs';
 const PERSONA_URL = 'https://persona.fujitsu.ee/Persona/Avaleht/Login_EmbInt.aspx?ReturnUrl=%2fPersona';
 const SCHEDULE_ENTRY_URL = 'https://persona.fujitsu.ee/Persona/Pages/ErrorPages/ErrorPage.aspx';
 
+/**
+ * Navigation timeout in ms.
+ *
+ * Default 60s — Persona login routinely chains through a v3 reverse-proxy
+ * (Fujitsu auth → ADFS → callback → final landing) and a single 30s budget
+ * was firing on the proxy round-trip even when the network was healthy.
+ *
+ * Override via PERSONA_NAV_TIMEOUT_MS for environments where the proxy is
+ * slower (or faster) than the median. The Manus deploy image takes ~25-35s
+ * on a cold start so 60s gives ample headroom.
+ */
+function getNavTimeoutMs(): number {
+  const fromEnv = parseInt(process.env.PERSONA_NAV_TIMEOUT_MS || '', 10);
+  return Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : 60000;
+}
+
+/**
+ * Run `fn`, label any error with `step`, and retry once on transient
+ * Puppeteer failures (TimeoutError, ProtocolError, frame detached, target
+ * closed). A second timeout is treated as fatal — at that point either the
+ * proxy is genuinely down or the credentials are wrong, neither of which a
+ * third retry will fix.
+ */
+async function withStepRetry<T>(step: string, fn: () => Promise<T>): Promise<T> {
+  const isTransient = (e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    return /timeout|navigation timeout|frame detached|target closed|protocol error|net::err/i.test(msg);
+  };
+  try {
+    return await fn();
+  } catch (e1) {
+    if (!isTransient(e1)) {
+      throw new Error(`[${step}] ${e1 instanceof Error ? e1.message : String(e1)}`);
+    }
+    // One retry — short pause to let any pending redirect settle.
+    await new Promise(r => setTimeout(r, 1500));
+    try {
+      return await fn();
+    } catch (e2) {
+      throw new Error(`[${step}] ${e2 instanceof Error ? e2.message : String(e2)} (retried once)`);
+    }
+  }
+}
+
 export interface PersonaWorkerAttendance {
   name: string;
   workerId: number;
@@ -97,7 +141,11 @@ async function getBrowser(): Promise<Browser> {
 }
 
 async function loginToPersona(page: Page, username: string, password: string): Promise<void> {
-  await page.goto(PERSONA_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  const navTimeout = getNavTimeoutMs();
+
+  await withStepRetry('open login page', () =>
+    page.goto(PERSONA_URL, { waitUntil: 'domcontentloaded', timeout: navTimeout })
+  );
 
   const hasLoginForm = await page.$('#UsernameTextBox');
   if (!hasLoginForm) {
@@ -107,34 +155,61 @@ async function loginToPersona(page: Page, username: string, password: string): P
   await page.type('#UsernameTextBox', username);
   await page.type('#PasswordTextBox', password);
 
-  // Click login - page may redirect to v3 proxy
-  page.click('#LoginButton');
-
-  await page.waitForFunction(
-    () => !window.location.href.includes('Login_EmbInt'),
-    { timeout: 30000 }
+  // Click login + wait for the v3-proxy redirect chain to leave the
+  // login page. Set up the wait BEFORE the click so the redirect
+  // can't fire and complete before we're listening (Promise.all
+  // pattern recommended by the Puppeteer docs for click-then-nav).
+  await withStepRetry('login redirect', () =>
+    Promise.all([
+      page.click('#LoginButton'),
+      page.waitForFunction(
+        () => !window.location.href.includes('Login_EmbInt'),
+        { timeout: navTimeout, polling: 500 },
+      ),
+    ])
   );
+
+  // Persona's login finishes by chaining 2-3 redirects through the v3
+  // reverse-proxy; the URL leaves Login_EmbInt almost immediately but
+  // the final landing page is still loading. waitForNetworkIdle lets
+  // the chain settle before any subsequent goto/postback fires. Best-
+  // effort: if it never goes idle (e.g. long-poll connection) we fall
+  // through after the timeout — the next step has its own timeout to
+  // surface a clean error.
+  try {
+    await page.waitForNetworkIdle({ idleTime: 800, timeout: 10000 });
+  } catch {
+    /* network never went idle — proceed; downstream steps will fail loudly if it matters */
+  }
 }
 
 async function navigateToSchedule(page: Page): Promise<void> {
-  // Navigate to a page that has the main menu
-  await page.goto(SCHEDULE_ENTRY_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  const navTimeout = getNavTimeoutMs();
+
+  await withStepRetry('open schedule entry page', () =>
+    page.goto(SCHEDULE_ENTRY_URL, { waitUntil: 'domcontentloaded', timeout: navTimeout })
+  );
 
   const hasMenu = await page.$('#ctl00_PersonaMainMenu_Link6');
   if (!hasMenu) {
-    throw new Error('Not logged in or schedule menu not found');
+    throw new Error('[schedule menu] Login appears to have failed — main menu not found');
   }
 
-  // Click Schedule menu (Link6)
-  await page.evaluate(() => {
-    (window as any).__doPostBack('ctl00$PersonaMainMenu$Link6', '');
-  });
-
-  await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 });
+  // Trigger __doPostBack and wait for the resulting nav. As with login,
+  // set up waitForNavigation BEFORE the postback fires so we don't lose
+  // the event to a race.
+  await withStepRetry('open schedule (Graafik)', () =>
+    Promise.all([
+      page.evaluate(() => {
+        (window as any).__doPostBack('ctl00$PersonaMainMenu$Link6', '');
+      }),
+      page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: navTimeout }),
+    ])
+  );
 
   const url = page.url();
   if (!url.includes('Graafik')) {
-    throw new Error(`Failed to navigate to schedule page. Current URL: ${url}`);
+    throw new Error(`[schedule menu] Failed to land on schedule page. Current URL: ${url}`);
   }
 }
 
@@ -327,7 +402,10 @@ export async function syncPersonaAttendance(
   try {
     browser = await getBrowser();
     page = await browser.newPage();
-    await page.setDefaultTimeout(60000);
+    // Default timeout for any page operation that doesn't take an
+    // explicit timeout. Keep it >= getNavTimeoutMs() so a default-bound
+    // call never trips before our explicit-timeout calls do.
+    await page.setDefaultTimeout(Math.max(getNavTimeoutMs(), 90000));
 
     // Login to Persona
     await loginToPersona(page, username, password);
