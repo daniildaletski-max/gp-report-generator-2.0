@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import {
   CommandDialog,
@@ -37,6 +37,8 @@ const ADMIN_QUICK_TABS = [
 interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Pre-fill the search input with this query when the palette opens */
+  initialQuery?: string;
 }
 
 /**
@@ -49,17 +51,34 @@ interface CommandPaletteProps {
  *
  * Loads its index lazily — only when first opened — to keep the
  * initial page paint cheap.
+ *
+ * Accepts an optional `initialQuery` prop so the TopBar search input
+ * can pre-fill the palette with whatever the user started typing.
  */
-export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
+export function CommandPalette({ open, onOpenChange, initialQuery }: CommandPaletteProps) {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const [drawerGpId, setDrawerGpId] = useState<number | null>(null);
   const [hasOpened, setHasOpened] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const prevOpen = useRef(false);
 
-  // Track whether the palette has been opened so we can lazy-fetch the index
+  // Track whether the palette has been opened so we can lazy-fetch the index.
+  // Also pre-fill the query from the TopBar search input when provided.
   useEffect(() => {
-    if (open) setHasOpened(true);
-  }, [open]);
+    if (open) {
+      setHasOpened(true);
+      // Pre-fill with the query passed from the TopBar search input
+      if (initialQuery !== undefined && initialQuery !== "") {
+        setInputValue(initialQuery);
+      }
+    }
+    // Reset input when closing so next open starts fresh
+    if (!open && prevOpen.current) {
+      setInputValue("");
+    }
+    prevOpen.current = open;
+  }, [open, initialQuery]);
 
   const { data: index } = trpc.search.paletteIndex.useQuery(undefined, {
     enabled: hasOpened,
@@ -102,7 +121,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         title="Quick navigation"
         description="Search GPs, teams, reports, plans, or jump to any page."
       >
-        <CommandInput placeholder="Search GPs, teams, reports, plans…" />
+        <CommandInput
+          placeholder="Search GPs, teams, reports, plans…"
+          value={inputValue}
+          onValueChange={setInputValue}
+        />
         <CommandList>
           <CommandEmpty>No results.</CommandEmpty>
 
@@ -242,11 +265,18 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
  */
 export function useCommandPalette() {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const openWithQuery = useCallback((q: string) => {
+    setQuery(q);
+    setOpen(true);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === "k" || e.key === "K") && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
+        setQuery("");
         setOpen(o => !o);
       }
     };
@@ -254,5 +284,5 @@ export function useCommandPalette() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  return { open, setOpen };
+  return { open, setOpen, query, openWithQuery };
 }

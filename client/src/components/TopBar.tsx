@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState, useRef, useCallback, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
-import { Bell, ChevronRight, LogOut, Search, Settings, User as UserIcon, Sparkles, AlertTriangle, Award, Target, Zap, ArrowRight } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Search, Settings, User as UserIcon, Sparkles, AlertTriangle, Award, Target, Zap, ArrowRight, CheckCheck } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -18,22 +18,19 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
+const NOTIF_SEEN_KEY = "gp-notif-last-seen";
+
 /**
  * Global TopBar — sticky strip above page content on desktop.
  *
- * Replaces the previous "blank gap above the page header" with an
- * always-visible navigation strip that:
- *   - Renders breadcrumbs derived from the URL (Section / Tab)
- *   - Exposes a real-looking search input (clicking opens the
- *     Cmd+K palette — same target, but discoverable for users
- *     who'd never guess Cmd+K exists)
- *   - Surfaces a notifications bell with a live badge driven by
- *     dashboard.insights — clicking opens a popover with the actionable
- *     insights and one-click navigation
- *   - Has a user avatar dropdown with profile / sign out
- *
- * Mobile keeps the existing mobile nav header (in DashboardLayout) —
- * this component renders only at md+ to avoid horizontal crowding.
+ * Features:
+ *   - Breadcrumbs derived from the URL (Section / Tab)
+ *   - Real search input: typing any character immediately opens the
+ *     Cmd+K palette with the typed text pre-filled as the query
+ *   - Notifications bell with a persistent unread badge (localStorage
+ *     tracks last-seen timestamp; only truly new items since last open
+ *     count as unread)
+ *   - User avatar dropdown with profile / sign out
  */
 export function TopBar({
   user,
@@ -44,27 +41,81 @@ export function TopBar({
 }: {
   user: { name?: string | null; email?: string | null; role?: string | null } | null;
   isMac: boolean;
-  onOpenSearch: () => void;
+  onOpenSearch: (query?: string) => void;
   onLogout: () => void;
   onNavigate: (path: string) => void;
 }) {
-  // wouter v3's useLocation returns only the pathname — query params
-  // come from the separate useSearch hook. Without it, our admin
-  // sub-tab breadcrumb (?tab=persona etc.) would never render because
-  // the splitter on "?" never finds anything in the path.
   const [pathname] = useLocation();
   const search = useSearch();
   const breadcrumb = useMemo(() => buildBreadcrumb(pathname, search), [pathname, search]);
 
+  // ── Search input state ──────────────────────────────────────────────
+  // The input is a real <input> that captures keystrokes. On any input
+  // event we immediately open the palette and pass the typed value so
+  // the user sees results as they type without a separate "click to open" step.
+  const [searchValue, setSearchValue] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSearchInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setSearchValue(val);
+    onOpenSearch(val);
+    // Clear the local input so the palette owns the query state
+    setSearchValue("");
+  }, [onOpenSearch]);
+
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === "ArrowDown") {
+      e.preventDefault();
+      onOpenSearch(searchValue);
+      setSearchValue("");
+    }
+    if (e.key === "Escape") {
+      setSearchValue("");
+      searchInputRef.current?.blur();
+    }
+  }, [onOpenSearch, searchValue]);
+
+  // ── Notifications ───────────────────────────────────────────────────
   const { data: insights } = trpc.dashboard.insights.useQuery(undefined, {
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   });
 
+  // Track last time the bell was opened (persisted in localStorage)
+  const [lastSeenTs, setLastSeenTs] = useState<number>(() => {
+    const stored = localStorage.getItem(NOTIF_SEEN_KEY);
+    return stored ? parseInt(stored, 10) : 0;
+  });
+
+  const [bellOpen, setBellOpen] = useState(false);
+
   const insightsList = (insights ?? []) as Insight[];
+
+  // Count insights that are newer than the last-seen timestamp.
+  // Since insights don't have a timestamp, we use the total count as a
+  // proxy — if the count changed since last seen, show the badge.
+  const [lastSeenCount, setLastSeenCount] = useState<number>(() => {
+    const stored = localStorage.getItem(NOTIF_SEEN_KEY + "-count");
+    return stored ? parseInt(stored, 10) : 0;
+  });
+
+  const unreadCount = Math.max(0, insightsList.length - lastSeenCount);
   const actionableCount = insightsList.filter(
     i => i.severity === "alert" || i.severity === "warning",
   ).length;
+
+  // When the bell popover opens, mark all as read
+  const handleBellOpen = useCallback((open: boolean) => {
+    setBellOpen(open);
+    if (open) {
+      const now = Date.now();
+      setLastSeenTs(now);
+      setLastSeenCount(insightsList.length);
+      localStorage.setItem(NOTIF_SEEN_KEY, now.toString());
+      localStorage.setItem(NOTIF_SEEN_KEY + "-count", insightsList.length.toString());
+    }
+  }, [insightsList.length]);
 
   return (
     <div className="hidden md:flex sticky top-0 z-30 h-14 items-center gap-3 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 px-4">
@@ -72,50 +123,72 @@ export function TopBar({
 
       <div className="flex-1" />
 
-      {/* Search input — looks like a real input, opens Cmd+K palette */}
-      <button
-        type="button"
-        onClick={onOpenSearch}
-        className="hidden lg:flex items-center gap-2 h-9 w-72 px-3 rounded-xl border border-border bg-muted/40 hover:bg-muted/70 hover:border-primary/30 transition-colors text-left text-sm text-muted-foreground hover:text-foreground"
-      >
-        <Search className="h-3.5 w-3.5 shrink-0" />
-        <span className="flex-1 truncate text-xs">Search GPs, teams, reports…</span>
-        <kbd className="inline-flex items-center gap-0.5 rounded border border-border bg-background text-[10px] font-medium text-muted-foreground px-1.5 py-0.5 shrink-0">
+      {/* Real search input — typing immediately opens the palette with the query pre-filled */}
+      <div className="hidden lg:flex items-center gap-2 h-9 w-72 px-3 rounded-xl border border-border bg-muted/40 hover:bg-muted/70 hover:border-primary/30 focus-within:border-primary/40 focus-within:bg-muted/60 transition-colors text-left text-sm text-muted-foreground">
+        <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <input
+          ref={searchInputRef}
+          type="text"
+          value={searchValue}
+          onChange={handleSearchInput}
+          onKeyDown={handleSearchKeyDown}
+          onFocus={() => onOpenSearch(searchValue || undefined)}
+          placeholder="Search GPs, teams, reports…"
+          className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none border-none min-w-0"
+          aria-label="Search"
+        />
+        <kbd
+          className="inline-flex items-center gap-0.5 rounded border border-border bg-background text-[10px] font-medium text-muted-foreground px-1.5 py-0.5 shrink-0 cursor-pointer"
+          onClick={() => onOpenSearch()}
+        >
           {isMac ? "⌘" : "Ctrl"}<span>K</span>
         </kbd>
-      </button>
+      </div>
 
       {/* Compact search button below the lg breakpoint */}
       <button
         type="button"
-        onClick={onOpenSearch}
+        onClick={() => onOpenSearch()}
         className="lg:hidden h-9 w-9 flex items-center justify-center rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
         aria-label="Open search"
       >
         <Search className="h-4 w-4" />
       </button>
 
-      {/* Notifications */}
-      <Popover>
+      {/* Notifications bell */}
+      <Popover open={bellOpen} onOpenChange={handleBellOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
             className="relative h-9 w-9 flex items-center justify-center rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Notifications"
+            aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} new)` : ""}`}
           >
-            <Bell className="h-4 w-4" />
-            {actionableCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold leading-none">
-                {actionableCount > 9 ? "9+" : actionableCount}
+            <Bell className={`h-4 w-4 transition-all ${unreadCount > 0 ? "text-primary animate-pulse" : ""}`} />
+            {unreadCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold leading-none shadow-sm">
+                {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
           </button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-96 p-0 overflow-hidden">
+        <PopoverContent align="end" className="w-96 p-0 overflow-hidden shadow-xl border-primary/10">
           <div className="px-4 py-3 border-b border-border bg-gradient-to-r from-card via-card to-primary/5">
-            <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Sparkles className="h-3.5 w-3.5 text-primary" /> What needs attention
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-primary" /> What needs attention
+              </p>
+              {insightsList.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleBellOpen(false)}
+                  className="text-[11px] text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+                  title="Mark all as read"
+                >
+                  <CheckCheck className="h-3 w-3" />
+                  Mark read
+                </button>
+              )}
+            </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {insightsList.length === 0
                 ? "Nothing flagged — everything's quiet."
@@ -128,18 +201,24 @@ export function TopBar({
                 <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 mb-2">
                   <Zap className="h-4 w-4 text-emerald-600" />
                 </div>
-                <p className="text-sm text-foreground">All caught up</p>
+                <p className="text-sm font-medium text-foreground">All caught up</p>
+                <p className="text-xs text-muted-foreground mt-1">No alerts or warnings right now.</p>
               </div>
             ) : (
-              insightsList.slice(0, 8).map(i => (
-                <NotificationRow key={i.id} insight={i} onNavigate={onNavigate} />
+              insightsList.slice(0, 8).map((i, idx) => (
+                <NotificationRow
+                  key={i.id}
+                  insight={i}
+                  onNavigate={(path) => { handleBellOpen(false); onNavigate(path); }}
+                  isNew={idx < unreadCount}
+                />
               ))
             )}
           </div>
           {insightsList.length > 0 && (
             <button
               type="button"
-              onClick={() => onNavigate("/dashboard")}
+              onClick={() => { handleBellOpen(false); onNavigate("/dashboard"); }}
               className="w-full px-4 py-2.5 border-t border-border text-xs font-medium text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-1"
             >
               View all on Dashboard
@@ -233,18 +312,14 @@ const ADMIN_TAB_LABELS: Record<string, string> = {
 function buildBreadcrumb(pathname: string, search: string): Crumb[] {
   const segments = pathname.split("/").filter(Boolean);
   const crumbs: Crumb[] = [{ label: "Home", href: "/dashboard" }];
-
   let acc = "";
   for (const seg of segments) {
     acc += `/${seg}`;
     const label = PATH_LABELS[seg] ?? capitalize(seg);
     crumbs.push({ label, href: acc });
   }
-
   // Surface ?tab=foo for the admin page so the breadcrumb shows the
-  // active sub-tab. `search` comes from wouter's useSearch hook (the
-  // raw query string without the leading "?"), since useLocation in
-  // wouter v3 returns only pathname.
+  // active sub-tab.
   if (segments[0] === "admin" && search) {
     const params = new URLSearchParams(search);
     const tab = params.get("tab");
@@ -273,7 +348,6 @@ function Breadcrumb({ crumbs }: { crumbs: Crumb[] }) {
                   href={c.href}
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors truncate"
                   onClick={(e) => {
-                    // Wouter routing — prevent full reload
                     e.preventDefault();
                     if (c.href) window.history.pushState({}, "", c.href);
                     window.dispatchEvent(new PopStateEvent("popstate"));
@@ -307,7 +381,15 @@ type Insight = {
   action?: { label: string; href: string };
 };
 
-function NotificationRow({ insight, onNavigate }: { insight: Insight; onNavigate: (path: string) => void }) {
+function NotificationRow({
+  insight,
+  onNavigate,
+  isNew,
+}: {
+  insight: Insight;
+  onNavigate: (path: string) => void;
+  isNew?: boolean;
+}) {
   const Icon =
     insight.severity === "alert" ? AlertTriangle :
     insight.severity === "warning" ? Zap :
@@ -325,9 +407,12 @@ function NotificationRow({ insight, onNavigate }: { insight: Insight; onNavigate
       type="button"
       onClick={() => insight.action && onNavigate(insight.action.href)}
       disabled={!insight.action}
-      className="w-full text-left px-4 py-2.5 hover:bg-muted/40 transition-colors disabled:hover:bg-transparent disabled:cursor-default"
+      className={`w-full text-left px-4 py-2.5 hover:bg-muted/40 transition-colors disabled:hover:bg-transparent disabled:cursor-default ${isNew ? "bg-primary/3" : ""}`}
     >
       <div className="flex items-start gap-2.5">
+        {isNew && (
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-primary" />
+        )}
         <div className={`shrink-0 rounded-lg p-1.5 ${iconColor}`}>
           <Icon className="h-3 w-3" />
         </div>

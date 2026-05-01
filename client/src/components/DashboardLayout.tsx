@@ -376,7 +376,7 @@ function DashboardLayoutContent({
           <TopBar
             user={user as { name?: string | null; email?: string | null; role?: string | null } | null}
             isMac={isMac}
-            onOpenSearch={() => palette.setOpen(true)}
+            onOpenSearch={(q?: string) => q ? palette.openWithQuery(q) : palette.setOpen(true)}
             onLogout={handleLogout}
             onNavigate={setLocation}
           />
@@ -384,7 +384,7 @@ function DashboardLayoutContent({
         <main className="flex-1 p-4">{children}</main>
       </SidebarInset>
 
-      <CommandPalette open={palette.open} onOpenChange={palette.setOpen} />
+      <CommandPalette open={palette.open} onOpenChange={palette.setOpen} initialQuery={palette.query} />
     </>
   );
 }
