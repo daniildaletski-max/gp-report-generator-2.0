@@ -1413,11 +1413,31 @@ function DashboardHero({
   const selectedIdx = trend.findIndex(t => t.month === selectedMonth && t.year === selectedYear);
   const currentTrend = selectedIdx >= 0 ? trend[selectedIdx] : null;
   const prevTrend = selectedIdx > 0 ? trend[selectedIdx - 1] : null;
-  const previousScore = prevTrend ? (Number(prevTrend.avgTotalScore) || 0) : 0;
-  const hasComparablePrev = !!prevTrend && previousScore > 0 && avgTeamScore > 0;
 
-  const scoreDelta = hasComparablePrev ? avgTeamScore - previousScore : undefined;
-  const scoreDeltaPct = hasComparablePrev ? ((avgTeamScore - previousScore) / previousScore) * 100 : undefined;
+  // Headline + range + High/Low/Avg ALL must come from the same source
+  // — otherwise we get the bug the user reported: headline 19.5
+  // (computed from gpStats as avg-of-GP-averages) appearing under
+  // a range "19.7-20.4" (computed from trend as avg-of-evaluations).
+  // Two different statistics, both correct in isolation, but visually
+  // they say "the headline is below the range minimum" which reads as
+  // a bug.
+  //
+  // Fix: prefer trend.avgTotalScore for the headline (same series the
+  // chart is drawn from). Fall back to avgTeamScore (gpStats source)
+  // only when trend has no data for the selected month — giving the
+  // user some number is better than a "—" empty state when stats
+  // does have data.
+  const trendCurrentValue = currentTrend ? Number(currentTrend.avgTotalScore) || 0 : 0;
+  const headlineScore =
+    trendCurrentValue > 0 ? trendCurrentValue
+    : avgTeamScore > 0 ? avgTeamScore
+    : 0;
+
+  const previousScore = prevTrend ? (Number(prevTrend.avgTotalScore) || 0) : 0;
+  const hasComparablePrev = !!prevTrend && previousScore > 0 && headlineScore > 0;
+
+  const scoreDelta = hasComparablePrev ? headlineScore - previousScore : undefined;
+  const scoreDeltaPct = hasComparablePrev ? ((headlineScore - previousScore) / previousScore) * 100 : undefined;
 
   // Spark series cover the full 6-month window so the line shows
   // trajectory regardless of which slot the user selected.
@@ -1437,12 +1457,15 @@ function DashboardHero({
 
   const evaluatedPct = totalGPs > 0 ? Math.round((evaluatedGPs / totalGPs) * 100) : 0;
 
-  // Range for the sparkline footer label — gives the line context
-  // ("ranges 17.4–22.1 across these 6 months") instead of just a
-  // floating curve. Only meaningful when the spark has data.
+  // Range / stats include the headline value when it's from the gpStats
+  // fallback path (i.e. trend had no value for selected but stats did),
+  // so the "Ranged X-Y" caption never contradicts the headline.
   const scoreYs = scoreSeries.map(p => p.y).filter(y => y > 0);
-  const scoreMin = scoreYs.length > 0 ? Math.min(...scoreYs) : 0;
-  const scoreMax = scoreYs.length > 0 ? Math.max(...scoreYs) : 0;
+  const statSeries = trendCurrentValue > 0
+    ? scoreYs
+    : (headlineScore > 0 ? [...scoreYs, headlineScore] : scoreYs);
+  const scoreMin = statSeries.length > 0 ? Math.min(...statSeries) : 0;
+  const scoreMax = statSeries.length > 0 ? Math.max(...statSeries) : 0;
   const firstLabel = trend[0]?.label;
   const lastLabel = trend[trend.length - 1]?.label;
 
@@ -1458,7 +1481,7 @@ function DashboardHero({
   // no fallback is meaningful in that case, render the "No data yet"
   // empty state instead of an unrelated number.
   let fallbackPoint: { idx: number; y: number } | null = null;
-  if (avgTeamScore <= 0 && selectedIdx >= 0) {
+  if (headlineScore <= 0 && selectedIdx >= 0) {
     // Walk backwards from selectedIdx (or selectedIdx-1 if the
     // selected month itself is the empty one) to find the most recent
     // prior month with non-zero score.
@@ -1469,10 +1492,10 @@ function DashboardHero({
   }
   const fallbackLabel = fallbackPoint ? trend[fallbackPoint.idx]?.label : null;
   const displayValue =
-    avgTeamScore > 0 ? avgTeamScore.toFixed(1)
+    headlineScore > 0 ? headlineScore.toFixed(1)
     : fallbackPoint ? fallbackPoint.y.toFixed(1)
     : null;
-  const isFallback = avgTeamScore <= 0 && !!fallbackPoint;
+  const isFallback = headlineScore <= 0 && !!fallbackPoint;
 
   return (
     // items-start so the primary tile doesn't stretch to match the
@@ -1506,7 +1529,7 @@ function DashboardHero({
                   Showing {fallbackLabel} — selected period has no evaluations yet
                 </p>
               )}
-              {!isFallback && scoreYs.length >= 2 && (
+              {!isFallback && statSeries.length >= 2 && (
                 <p className="text-[11px] text-muted-foreground mt-1.5">
                   Ranged {scoreMin.toFixed(1)}–{scoreMax.toFixed(1)} over the last 6 months
                 </p>
@@ -1535,7 +1558,7 @@ function DashboardHero({
             {/* Inline mini-stats below the chart fill the remaining
                 vertical space with useful context — high / low / monthly
                 avg of the score series — instead of leaving a blank gap. */}
-            {scoreYs.length >= 2 && (
+            {statSeries.length >= 2 && (
               <div className="grid grid-cols-3 gap-2 mt-3">
                 <SparkStat label="High" value={scoreMax.toFixed(1)} tone="emerald" />
                 <SparkStat label="Low" value={scoreMin.toFixed(1)} tone="rose" />
@@ -1546,8 +1569,8 @@ function DashboardHero({
                     the typical-score signal toward zero, which is
                     NOT what we want — but the label needs to match). */}
                 <SparkStat
-                  label={scoreYs.length === trend.length ? "6mo avg" : `Avg ${scoreYs.length}mo`}
-                  value={(scoreYs.reduce((a, b) => a + b, 0) / scoreYs.length).toFixed(1)}
+                  label={statSeries.length === trend.length ? "6mo avg" : `Avg ${statSeries.length}mo`}
+                  value={(statSeries.reduce((a, b) => a + b, 0) / statSeries.length).toFixed(1)}
                   tone="muted"
                 />
               </div>
