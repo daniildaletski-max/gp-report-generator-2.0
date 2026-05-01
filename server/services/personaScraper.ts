@@ -61,6 +61,17 @@ export interface PersonaWorkerAttendance {
   sickLeaves: number;
   missedDays: number;
   extraShifts: number;
+  /** Number of late-to-work events in this month. */
+  lateToWork: number;
+  /** Per-day breakdown — exact dates that fell into each bucket.
+   *  Saved alongside the monthly counts so the FM can drill in to
+   *  see "which 4 days was she sick?" without re-scraping. */
+  dayBreakdown: {
+    sick: string[];        // ISO yyyy-mm-dd
+    missed: string[];
+    extra: string[];
+    late: string[];
+  };
 }
 
 export interface PersonaSyncResult {
@@ -255,6 +266,7 @@ function parseShiftTypes(html: string): {
   sickIndices: Set<number>;
   missedIndices: Set<number>;
   extraIndices: Set<number>;
+  lateIndices: Set<number>;
 } {
   const viewtoopostMatches = html.match(/TgAddViewToopost\(([^;]+)\);/g) || [];
   const toopostMatches = html.match(/TgAddToopost\(([^;]+)\);/g) || [];
@@ -276,6 +288,10 @@ function parseShiftTypes(html: string): {
   const sickIndices = new Set<number>();
   const missedIndices = new Set<number>();
   const extraIndices = new Set<number>();
+  // Late-to-work indices — Persona uses one of several Estonian keys
+  // depending on which version of the schedule is active.
+  // "Hilinemine" = late, "Toopaev|5" was observed for some projects.
+  const lateIndices = new Set<number>();
 
   allTypes.forEach((key, i) => {
     // Haigusleht|1 = sick leave, Haigusleht|3 = continuation sick leave
@@ -290,9 +306,14 @@ function parseShiftTypes(html: string): {
     if (key === 'VabaPaev|4') {
       extraIndices.add(i);
     }
+    // Late-to-work — match a few likely keys. We scan the prefix
+    // because Persona sometimes appends |N suffixes for variants.
+    if (key.startsWith('Hilinemine') || key.startsWith('Hilinen')) {
+      lateIndices.add(i);
+    }
   });
 
-  return { sickIndices, missedIndices, extraIndices };
+  return { sickIndices, missedIndices, extraIndices, lateIndices };
 }
 
 function parseWorkerData(
@@ -302,7 +323,8 @@ function parseWorkerData(
   projectId: number | null,
   sickIndices: Set<number>,
   missedIndices: Set<number>,
-  extraIndices: Set<number>
+  extraIndices: Set<number>,
+  lateIndices: Set<number>,
 ): PersonaWorkerAttendance[] {
   // Find the script block with TgAddWorker and TgAddTime
   const scriptMatches = html.match(/<script[^>]*>([\s\S]*?)<\/script>/g) || [];
@@ -339,9 +361,13 @@ function parseWorkerData(
     // Parse time entries for this worker
     const timeEntryMatches = block.match(/TgAddTime\(worker, (\d+), (\d+), (\d+), (\d+)/g) || [];
 
-    let sickCount = 0;
-    let missedCount = 0;
-    let extraCount = 0;
+    // Aggregate per-day breakdown — Set so duplicate slots within
+    // the same day count once (Persona sometimes splits one absence
+    // into multiple time entries).
+    const sickDays = new Set<string>();
+    const missedDays = new Set<string>();
+    const extraDays = new Set<string>();
+    const lateDays = new Set<string>();
 
     for (const entry of timeEntryMatches) {
       const m = entry.match(/TgAddTime\(worker, (\d+), (\d+), (\d+), (\d+)/);
@@ -353,15 +379,15 @@ function parseWorkerData(
       const startDate = new Date(startTs);
       const entryMonth = startDate.getUTCMonth() + 1;
       const entryYear = startDate.getUTCFullYear();
+      // ISO yyyy-mm-dd in UTC — same convention used by attendance
+      // breakdown elsewhere.
+      const dayKey = startDate.toISOString().slice(0, 10);
 
       if (entryMonth === month && entryYear === year) {
-        if (sickIndices.has(typeIdx)) {
-          sickCount++;
-        } else if (missedIndices.has(typeIdx)) {
-          missedCount++;
-        } else if (extraIndices.has(typeIdx)) {
-          extraCount++;
-        }
+        if (sickIndices.has(typeIdx)) sickDays.add(dayKey);
+        else if (missedIndices.has(typeIdx)) missedDays.add(dayKey);
+        else if (extraIndices.has(typeIdx)) extraDays.add(dayKey);
+        else if (lateIndices.has(typeIdx)) lateDays.add(dayKey);
       }
     }
 
@@ -369,9 +395,16 @@ function parseWorkerData(
       name,
       workerId,
       projectId: workerProjectId,
-      sickLeaves: sickCount,
-      missedDays: missedCount,
-      extraShifts: extraCount,
+      sickLeaves: sickDays.size,
+      missedDays: missedDays.size,
+      extraShifts: extraDays.size,
+      lateToWork: lateDays.size,
+      dayBreakdown: {
+        sick: Array.from(sickDays).sort(),
+        missed: Array.from(missedDays).sort(),
+        extra: Array.from(extraDays).sort(),
+        late: Array.from(lateDays).sort(),
+      },
     });
   }
 
@@ -440,10 +473,10 @@ export async function syncPersonaAttendance(
     }
 
     // Parse shift type indices
-    const { sickIndices, missedIndices, extraIndices } = parseShiftTypes(html);
+    const { sickIndices, missedIndices, extraIndices, lateIndices } = parseShiftTypes(html);
 
     // Parse worker attendance data
-    const workers = parseWorkerData(html, month, year, projectId, sickIndices, missedIndices, extraIndices);
+    const workers = parseWorkerData(html, month, year, projectId, sickIndices, missedIndices, extraIndices, lateIndices);
 
     await page.close();
 

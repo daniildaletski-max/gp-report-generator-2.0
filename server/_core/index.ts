@@ -9,7 +9,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { initScheduledReports, initStudioworksSync, initAutoCoaching } from "../scheduledReports";
+import { initScheduledReports, initStudioworksSync, initAutoCoaching, initPersonaAutoSync } from "../scheduledReports";
 import { createLogger } from "../services/logger";
 import { requestTracingMiddleware, requestValidation } from "../services/requestTracing";
 import { cache } from "../services/cache";
@@ -263,6 +263,11 @@ async function startServer() {
     // into action items so the FM doesn't have to manually create
     // a coaching plan for every GP that dropped points.
     initAutoCoaching();
+    // Persona attendance auto-sync — every 12h. Keeps attendance
+    // numbers fresh throughout the month instead of only on the
+    // 1st. Anomaly detection inside personaSync flags sudden absence
+    // spikes as high-priority action items.
+    initPersonaAutoSync();
     // Idempotent schema repair for `game_presenters.realName`.
     // Manus's deploy doesn't run drizzle migrations automatically, so
     // when PR #38 added the column to schema.ts but the prod DB still
