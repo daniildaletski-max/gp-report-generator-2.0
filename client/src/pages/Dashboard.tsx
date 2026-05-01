@@ -1680,8 +1680,8 @@ type ActivityItem = {
 };
 
 function OperationsBrain({ teamId, onNavigate }: { teamId?: number; onNavigate: (path: string) => void }) {
-  const { data: insights, isLoading: insightsLoading } = trpc.dashboard.insights.useQuery({ teamId });
-  const { data: activity, isLoading: activityLoading } = trpc.dashboard.activityFeed.useQuery({ limit: 12, teamId });
+  const { data: insights, isLoading: insightsLoading, isError: insightsError, refetch: refetchInsights } = trpc.dashboard.insights.useQuery({ teamId });
+  const { data: activity, isLoading: activityLoading, isError: activityError, refetch: refetchActivity } = trpc.dashboard.activityFeed.useQuery({ limit: 12, teamId });
 
   const list = (insights ?? []) as Insight[];
   const feed = (activity ?? []) as ActivityItem[];
@@ -1708,9 +1708,11 @@ function OperationsBrain({ teamId, onNavigate }: { teamId?: number; onNavigate: 
               <p className="text-[11px] text-muted-foreground">
                 {insightsLoading
                   ? "Scanning…"
-                  : list.length === 0
-                    ? "Everything's quiet — no issues detected"
-                    : `${counts.alert + counts.warning} need action · ${counts.recommendation} suggested · ${counts.celebration} wins`}
+                  : insightsError
+                    ? "Couldn't load — see below"
+                    : list.length === 0
+                      ? "Everything's quiet — no issues detected"
+                      : `${counts.alert + counts.warning} need action · ${counts.recommendation} suggested · ${counts.celebration} wins`}
               </p>
             </div>
           </div>
@@ -1721,6 +1723,26 @@ function OperationsBrain({ teamId, onNavigate }: { teamId?: number; onNavigate: 
               {[1, 2, 3].map(i => (
                 <div key={i} className="h-14 rounded-lg bg-muted/40 animate-pulse" />
               ))}
+            </div>
+          ) : insightsError ? (
+            // Error path is distinct from "all caught up" — without this
+            // a transient server failure would render the friendly green
+            // "no issues detected" empty state, hiding real alerts from
+            // the FM during outages.
+            <div className="p-8 text-center">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 mb-3">
+                <AlertTriangle className="h-5 w-5 text-rose-600" />
+              </div>
+              <p className="text-sm font-medium text-foreground">Couldn't load insights</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Real alerts may be hidden — try again.</p>
+              <button
+                type="button"
+                onClick={() => refetchInsights()}
+                className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-rose-700 hover:underline"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Retry
+              </button>
             </div>
           ) : list.length === 0 ? (
             <div className="p-8 text-center">
@@ -1755,6 +1777,22 @@ function OperationsBrain({ teamId, onNavigate }: { teamId?: number; onNavigate: 
               {[1, 2, 3, 4, 5].map(i => (
                 <div key={i} className="h-10 rounded-lg bg-muted/40 animate-pulse" />
               ))}
+            </div>
+          ) : activityError ? (
+            // Same rationale as the insights error branch — distinguish
+            // load failure from "genuinely no recent activity" so the FM
+            // knows the feed isn't authoritative right now.
+            <div className="p-8 text-center">
+              <AlertTriangle className="h-6 w-6 text-rose-600 mx-auto mb-2" />
+              <p className="text-sm text-foreground">Couldn't load activity</p>
+              <button
+                type="button"
+                onClick={() => refetchActivity()}
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-rose-700 hover:underline"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Retry
+              </button>
             </div>
           ) : feed.length === 0 ? (
             <div className="p-8 text-center">
