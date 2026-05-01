@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, FileCheck, TrendingUp, FileSpreadsheet, AlertTriangle, Award, Target, Calendar, BarChart3, PieChart, ArrowRight, Upload, Sparkles, RefreshCw, Clock, Zap } from "lucide-react";
+import { Users, FileCheck, TrendingUp, TrendingDown, FileSpreadsheet, AlertTriangle, Award, Target, Calendar, PieChart, ArrowRight, Upload, Sparkles, RefreshCw, Clock, Zap, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -108,6 +108,14 @@ export default function Dashboard() {
     month: selectedMonth,
     year: selectedYear,
     teamId: selectedTeamId,
+  });
+
+  // 6-month rolling trend — used for the hero tile sparklines + period
+  // deltas. Same query that TrendSection lower on the page uses, so
+  // tRPC's cache collapses it into one network request.
+  const { data: heroTrend } = trpc.dashboard.monthlyTrend.useQuery({
+    teamId: selectedTeamId,
+    months: 6,
   });
 
   const selectedTeamName = selectedTeamId ? teams?.find(t => t.id === selectedTeamId)?.teamName : undefined;
@@ -384,13 +392,24 @@ export default function Dashboard() {
         </GlassCard>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard icon={Users} value={stats?.totalGPs || 0} label="Game Presenters" color="violet" />
-        <StatCard icon={FileCheck} value={stats?.totalEvaluations || 0} label="Evaluations" color="indigo" />
-        <StatCard icon={TrendingUp} value={avgTeamScore > 0 ? avgTeamScore.toFixed(1) : '—'} label="Avg Score" color="green" />
-        <StatCard icon={FileSpreadsheet} value={stats?.totalReports || 0} label="Reports" color="blue" />
-      </div>
+      {/* Hero board — replaces the old 4-StatCard row with a primary
+          KPI tile (avg team score, big number + sparkline + period
+          delta) and 3 mini metric tiles. Gives the FM an immediate
+          read on team trajectory at the top of the page. */}
+      <DashboardHero
+        avgTeamScore={avgTeamScore}
+        totalGPs={stats?.totalGPs || 0}
+        evaluatedGPs={evaluatedGPs}
+        totalEvaluations={stats?.totalEvaluations || 0}
+        totalReports={stats?.totalReports || 0}
+        trend={heroTrend ?? []}
+      />
+
+      {/* Quick actions — five most-used operations promoted from
+          buried admin tabs / submenus to one-click cards. Saves the
+          FM a navigation hop for the operations they actually do
+          every week (Sync Persona / Generate report / Upload). */}
+      <DashboardQuickActions onNavigate={setLocation} />
 
       {/* Main Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1314,6 +1333,282 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+// ============================================
+// Dashboard Hero — primary KPI tile (avg team score) + 3 mini metric
+// tiles, each with a sparkline and a "vs previous month" delta. Replaces
+// the old 4-StatCard row, which was just colored boxes with numbers and
+// no sense of trajectory. Hero shows whether the team is climbing or
+// sliding at a glance — the most important question on the page.
+// ============================================
+
+type HeroTrendItem = {
+  month: number;
+  year: number;
+  label: string;
+  totalEvaluations: number;
+  uniqueGPs: number;
+  avgTotalScore: number;
+};
+
+function DashboardHero({
+  avgTeamScore,
+  totalGPs,
+  evaluatedGPs,
+  totalEvaluations,
+  totalReports,
+  trend,
+}: {
+  avgTeamScore: number;
+  totalGPs: number;
+  evaluatedGPs: number;
+  totalEvaluations: number;
+  totalReports: number;
+  trend: HeroTrendItem[];
+}) {
+  // Period delta: current month vs previous month for the score.
+  const lastTwo = trend.slice(-2);
+  const previousScore = lastTwo[0]?.avgTotalScore ?? 0;
+  const currentScore = lastTwo[1]?.avgTotalScore ?? 0;
+  const scoreDelta = currentScore - previousScore;
+  const scoreDeltaPct = previousScore > 0 ? (scoreDelta / previousScore) * 100 : 0;
+
+  // Spark series for each tile (avgTotalScore, uniqueGPs, totalEvaluations)
+  const scoreSeries = trend.map((m, i) => ({ x: i, y: Number(m.avgTotalScore) || 0 }));
+  const evalSeries = trend.map((m, i) => ({ x: i, y: m.totalEvaluations }));
+  const gpSeries = trend.map((m, i) => ({ x: i, y: m.uniqueGPs }));
+
+  const evalDelta = (lastTwo[1]?.totalEvaluations ?? 0) - (lastTwo[0]?.totalEvaluations ?? 0);
+  const gpDelta = (lastTwo[1]?.uniqueGPs ?? 0) - (lastTwo[0]?.uniqueGPs ?? 0);
+
+  const evaluatedPct = totalGPs > 0 ? Math.round((evaluatedGPs / totalGPs) * 100) : 0;
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3 sm:gap-4">
+      {/* Primary tile — Avg Team Score */}
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-5 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
+        <div className="absolute -top-12 -right-12 h-48 w-48 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
+        <div className="relative flex flex-col h-full justify-between gap-4 min-h-[160px]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Avg Team Score</p>
+              <div className="flex items-baseline gap-3 mt-2">
+                <span className="text-4xl sm:text-5xl font-bold tabular-nums text-foreground">
+                  {avgTeamScore > 0 ? avgTeamScore.toFixed(1) : "—"}
+                </span>
+                {avgTeamScore > 0 && previousScore > 0 && (
+                  <DeltaPill delta={scoreDelta} pct={scoreDeltaPct} suffix="vs last month" />
+                )}
+              </div>
+            </div>
+            <div className="rounded-2xl bg-primary/10 border border-primary/20 p-3">
+              <TrendingUp className="h-5 w-5 text-primary" />
+            </div>
+          </div>
+          <Sparkline
+            points={scoreSeries}
+            color="oklch(0.65 0.13 75)"
+            fill="oklch(0.65 0.13 75 / 0.15)"
+            height={56}
+            labels={trend.map(t => t.label)}
+            valueFormatter={v => v.toFixed(1)}
+          />
+        </div>
+      </div>
+
+      {/* Mini tiles — vertical stack on desktop, horizontal scroll on mobile */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3">
+        <MiniMetric
+          label="GPs evaluated"
+          primary={`${evaluatedGPs}`}
+          secondary={`of ${totalGPs} · ${evaluatedPct}%`}
+          delta={gpDelta}
+          spark={gpSeries}
+          icon={Users}
+        />
+        <MiniMetric
+          label="Evaluations"
+          primary={`${totalEvaluations}`}
+          delta={evalDelta}
+          spark={evalSeries}
+          icon={FileCheck}
+        />
+        <MiniMetric
+          label="Reports"
+          primary={`${totalReports}`}
+          icon={FileSpreadsheet}
+        />
+      </div>
+    </div>
+  );
+}
+
+function DeltaPill({ delta, pct, suffix }: { delta: number; pct?: number; suffix?: string }) {
+  if (delta === 0) {
+    return <span className="text-xs text-muted-foreground">no change{suffix && ` · ${suffix}`}</span>;
+  }
+  const positive = delta > 0;
+  const cls = positive
+    ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+    : "bg-rose-100 text-rose-700 border-rose-200";
+  const Icon = positive ? TrendingUp : TrendingDown;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${cls}`}>
+      <Icon className="h-3 w-3" />
+      {positive ? "+" : ""}{Math.abs(delta).toFixed(delta % 1 === 0 ? 0 : 1)}
+      {pct !== undefined && Math.abs(pct) >= 0.5 && (
+        <span className="opacity-75">({positive ? "+" : "−"}{Math.abs(pct).toFixed(0)}%)</span>
+      )}
+      {suffix && <span className="opacity-60 hidden sm:inline ml-0.5">{suffix}</span>}
+    </span>
+  );
+}
+
+function MiniMetric({
+  label,
+  primary,
+  secondary,
+  delta,
+  spark,
+  icon: Icon,
+}: {
+  label: string;
+  primary: string;
+  secondary?: string;
+  delta?: number;
+  spark?: { x: number; y: number }[];
+  icon: React.ComponentType<{ className?: string }>;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 hover:border-primary/30 hover:shadow-sm transition-all">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
+          <p className="text-2xl font-bold tabular-nums text-foreground mt-1">{primary}</p>
+          {secondary && (
+            <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{secondary}</p>
+          )}
+        </div>
+        <div className="rounded-xl bg-muted/50 p-2 shrink-0">
+          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+        </div>
+      </div>
+      <div className="flex items-end justify-between gap-2 mt-2 min-h-[28px]">
+        {delta !== undefined && delta !== 0 && (
+          <DeltaPill delta={delta} />
+        )}
+        {spark && spark.length >= 2 && (
+          <div className="flex-1 max-w-[120px] ml-auto">
+            <Sparkline
+              points={spark}
+              color="oklch(0.65 0.13 75)"
+              fill="oklch(0.65 0.13 75 / 0.12)"
+              height={28}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Tiny stand-alone sparkline. Built on raw SVG (no recharts) so it
+ * stays cheap to render — the dashboard renders six of these in the
+ * hero alone.
+ */
+function Sparkline({
+  points,
+  color,
+  fill,
+  height = 32,
+  labels,
+  valueFormatter,
+}: {
+  points: { x: number; y: number }[];
+  color: string;
+  fill?: string;
+  height?: number;
+  labels?: string[];
+  valueFormatter?: (v: number) => string;
+}) {
+  if (points.length < 2) {
+    return <div className="text-[10px] text-muted-foreground/60 italic">need 2+ months for trend</div>;
+  }
+  const w = 100;
+  const h = height;
+  const ys = points.map(p => p.y);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const range = maxY - minY || 1;
+  const padding = h * 0.15;
+  const usableH = h - padding * 2;
+  const xStep = w / (points.length - 1);
+  const coords = points.map((p, i) => ({
+    x: i * xStep,
+    y: padding + usableH - ((p.y - minY) / range) * usableH,
+    raw: p.y,
+  }));
+  const linePath = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x.toFixed(2)} ${c.y.toFixed(2)}`).join(" ");
+  const areaPath = `${linePath} L ${(w).toFixed(2)} ${h} L 0 ${h} Z`;
+  const lastPoint = coords[coords.length - 1];
+
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      className="w-full"
+      style={{ height }}
+      role="img"
+      aria-label={labels ? `Trend: ${labels.map((l, i) => `${l}: ${(valueFormatter ?? (v => v.toString()))(points[i].y)}`).join(", ")}` : "Trend sparkline"}
+    >
+      {fill && <path d={areaPath} fill={fill} />}
+      <path d={linePath} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={lastPoint.x} cy={lastPoint.y} r="2" fill={color} />
+    </svg>
+  );
+}
+
+/**
+ * Quick Actions strip — the 4 ops the FM does most often, promoted
+ * from buried admin tabs / sub-pages to one-click cards on the
+ * dashboard. Was previously a multi-step navigation each time.
+ */
+function DashboardQuickActions({ onNavigate }: { onNavigate: (path: string) => void }) {
+  const actions: { label: string; description: string; icon: React.ComponentType<{ className?: string }>; path: string; tone: "amber" | "violet" | "blue" | "emerald" }[] = [
+    { label: "Sync Persona", description: "Pull attendance now", icon: RefreshCw, path: "/admin?tab=persona", tone: "amber" },
+    { label: "Generate report", description: "Monthly Excel + email", icon: FileSpreadsheet, path: "/reports", tone: "violet" },
+    { label: "Upload screenshots", description: "Evaluations + attitude", icon: Upload, path: "/upload", tone: "blue" },
+    { label: "Review attendance", description: "Sick / late / extra", icon: Calendar, path: "/attendance", tone: "emerald" },
+  ];
+  const toneClasses: Record<string, string> = {
+    amber: "from-amber-50 to-orange-50 border-amber-200 hover:border-amber-300 text-amber-700",
+    violet: "from-violet-50 to-purple-50 border-violet-200 hover:border-violet-300 text-violet-700",
+    blue: "from-sky-50 to-blue-50 border-sky-200 hover:border-sky-300 text-sky-700",
+    emerald: "from-emerald-50 to-teal-50 border-emerald-200 hover:border-emerald-300 text-emerald-700",
+  };
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+      {actions.map(a => (
+        <button
+          key={a.path}
+          type="button"
+          onClick={() => onNavigate(a.path)}
+          className={`group relative overflow-hidden rounded-2xl border bg-gradient-to-br p-3 sm:p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${toneClasses[a.tone]}`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="rounded-xl bg-white/70 backdrop-blur-sm border border-white p-2">
+              <a.icon className="h-4 w-4" />
+            </div>
+            <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+          </div>
+          <p className="text-sm font-semibold text-foreground leading-tight">{a.label}</p>
+          <p className="text-[11px] text-foreground/60 mt-0.5">{a.description}</p>
+        </button>
+      ))}
     </div>
   );
 }

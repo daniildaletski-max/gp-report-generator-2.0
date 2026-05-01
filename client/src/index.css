@@ -206,6 +206,19 @@
     transform: translateY(-2px);
   }
 
+  /* Subtle in-card surface — used for nested panels (sparkline rows,
+     summary subgrids) where a full card would be visually heavy. */
+  .surface-soft {
+    background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(0,0,0,0.012) 100%);
+    border: 1px solid rgba(0,0,0,0.04);
+    border-radius: 12px;
+  }
+
+  /* Tabular numerals utility — keeps stat-card numbers from jumping
+     when their value changes (default proportional digits look bad in
+     dashboards where every digit width matters). */
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+
   .glass-elevated {
     background: #ffffff;
     border: 1px solid #e5e5e3;
