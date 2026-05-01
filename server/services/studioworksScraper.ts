@@ -330,6 +330,12 @@ async function fetchEvaluations(page: Page): Promise<{ evaluations: ExtractedEva
  * holding the array.
  */
 function parseJsonResponses(responses: { url: string; body: any }[]): ExtractedEvaluation[] {
+  // Continue scanning ALL candidates across ALL responses — return only
+  // the first one that produces a non-empty normalized result. The
+  // earlier `return` on first shape-match meant a response that looked
+  // right but had differently-named fields (so normalize dropped every
+  // row) silently swallowed the entire scan, and we'd never see a later
+  // response that DID have the right shape.
   for (const { body } of responses) {
     const candidates: any[][] = [];
     if (Array.isArray(body)) candidates.push(body);
@@ -349,7 +355,9 @@ function parseJsonResponses(responses: { url: string; body: any }[]): ExtractedE
           && ('date' in sample || 'evaluationDate' in sample || 'createdAt' in sample)
         );
       if (!looksLikeEval) continue;
-      return arr.map(normalizeJsonEvaluation).filter((e): e is ExtractedEvaluation => e !== null);
+      const normalized = arr.map(normalizeJsonEvaluation).filter((e): e is ExtractedEvaluation => e !== null);
+      if (normalized.length > 0) return normalized;
+      // Otherwise keep scanning subsequent candidates / responses.
     }
   }
   return [];
@@ -364,15 +372,19 @@ function normalizeJsonEvaluation(raw: any): ExtractedEvaluation | null {
     if (!date) return null;
     const externalId = String(raw.id ?? raw.uuid ?? raw._id ?? hashEvaluation(presenterName, date, evaluatorName, raw.game));
 
-    // Ratings — try a few key shapes
+    // Ratings — try a few key shapes. Each criterion has a known
+    // schema max (appearance criteria = /3, performance criteria = /5)
+    // — pass it as a default so bare-number ratings (`hair: 2`) get
+    // stored as 2/3 instead of 2/5. If the source supplies an explicit
+    // maxScore, that wins.
     const ratingsObj = raw.ratings ?? raw.scores ?? raw.criteria ?? raw;
     const r: ExtractedEvaluation['ratings'] = {
-      hair: pickRating(ratingsObj, ['hair']),
-      makeup: pickRating(ratingsObj, ['makeup', 'makeUp']),
-      outfit: pickRating(ratingsObj, ['outfit', 'clothing']),
-      posture: pickRating(ratingsObj, ['posture']),
-      dealingStyle: pickRating(ratingsObj, ['dealingStyle', 'dealing', 'dealing_style']),
-      gamePerformance: pickRating(ratingsObj, ['gamePerformance', 'gameCommenting', 'gamePerf', 'performance', 'game_performance']),
+      hair: pickRating(ratingsObj, ['hair'], 3),
+      makeup: pickRating(ratingsObj, ['makeup', 'makeUp'], 3),
+      outfit: pickRating(ratingsObj, ['outfit', 'clothing'], 3),
+      posture: pickRating(ratingsObj, ['posture'], 3),
+      dealingStyle: pickRating(ratingsObj, ['dealingStyle', 'dealing', 'dealing_style'], 5),
+      gamePerformance: pickRating(ratingsObj, ['gamePerformance', 'gameCommenting', 'gamePerf', 'performance', 'game_performance'], 5),
     };
 
     return {
@@ -390,20 +402,22 @@ function normalizeJsonEvaluation(raw: any): ExtractedEvaluation | null {
   }
 }
 
-function pickRating(obj: any, keys: string[]): ExtractedRating | undefined {
+function pickRating(obj: any, keys: string[], defaultMax: number): ExtractedRating | undefined {
   if (!obj || typeof obj !== 'object') return undefined;
   for (const k of keys) {
     const v = obj[k];
     if (v == null) continue;
     if (typeof v === 'number') {
-      // Bare number — assume rating with default max
-      return { score: v, maxScore: 5 };
+      // Bare number — fall back to the criterion-specific schema max
+      // (3 for appearance, 5 for performance) since downstream
+      // displays/reports use it directly.
+      return { score: v, maxScore: defaultMax };
     }
     if (typeof v === 'object') {
       const score = v.score ?? v.value ?? v.rating;
-      const maxScore = v.maxScore ?? v.max ?? v.outOf ?? 5;
+      const maxScore = v.maxScore ?? v.max ?? v.outOf ?? defaultMax;
       if (typeof score === 'number') {
-        return { score, maxScore: typeof maxScore === 'number' ? maxScore : 5, comment: v.comment ?? v.note };
+        return { score, maxScore: typeof maxScore === 'number' ? maxScore : defaultMax, comment: v.comment ?? v.note };
       }
     }
   }
@@ -595,6 +609,15 @@ export async function testStudioworksConnection(): Promise<StudioworksTestResult
     detectedSource = source;
     sampleCount = evaluations.length;
     if (evaluations.length === 0) {
+      // Mark the `data` step explicitly as failed BEFORE throwing.
+      // Otherwise the catch block below converts pending steps to
+      // `skipped`, and the operator sees "data: skipped" in the UI —
+      // hiding the actual stage that needs attention. The "no evaluations
+      // extracted" path is the one operators most need to debug, so it
+      // must surface as the failed step, not a skipped one.
+      setStatus('data', 'failed', {
+        error: 'Login + page load OK, but no evaluations were extracted. The page structure may have changed (e.g. JSON shape, selectors).',
+      });
       throw new Error('Login + page load OK, but no evaluations were extracted. The page structure may have changed.');
     }
     setStatus('data', 'success');
