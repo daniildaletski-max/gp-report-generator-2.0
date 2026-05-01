@@ -1539,7 +1539,17 @@ function DashboardHero({
               <div className="grid grid-cols-3 gap-2 mt-3">
                 <SparkStat label="High" value={scoreMax.toFixed(1)} tone="emerald" />
                 <SparkStat label="Low" value={scoreMin.toFixed(1)} tone="rose" />
-                <SparkStat label="6mo avg" value={(scoreYs.reduce((a, b) => a + b, 0) / scoreYs.length).toFixed(1)} tone="muted" />
+                {/* Label is dynamic so it stays honest: when sparse
+                    months exist, "Avg 4mo" is true; "6mo avg" was a
+                    misleading label because we filter scoreYs to y>0
+                    (averaging in zeros from empty months would drag
+                    the typical-score signal toward zero, which is
+                    NOT what we want — but the label needs to match). */}
+                <SparkStat
+                  label={scoreYs.length === trend.length ? "6mo avg" : `Avg ${scoreYs.length}mo`}
+                  value={(scoreYs.reduce((a, b) => a + b, 0) / scoreYs.length).toFixed(1)}
+                  tone="muted"
+                />
               </div>
             )}
           </div>
