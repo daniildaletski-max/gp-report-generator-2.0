@@ -1240,12 +1240,18 @@ function CoverageMatrix({
     return out;
   }, []);
 
-  // Index: `${teamId}-${year}-${month}` → report
+  // Index: `${teamId}-${year}-${month}` → report.
+  // Keep the FIRST report seen for any (team, year, month) tuple. The
+  // list comes back from the server ordered newest-first, so the first
+  // iteration is the newest report — and we want the matrix to reflect
+  // the newest state (status/color and click-through target should point
+  // at the most recent regeneration, not stale older copies).
   const reportIndex = useMemo(() => {
     const idx = new Map<string, ReportListItem>();
     for (const r of reports ?? []) {
       if (r.report.teamId == null) continue;
-      idx.set(`${r.report.teamId}-${r.report.reportYear}-${r.report.reportMonth}`, r);
+      const key = `${r.report.teamId}-${r.report.reportYear}-${r.report.reportMonth}`;
+      if (!idx.has(key)) idx.set(key, r);
     }
     return idx;
   }, [reports]);
