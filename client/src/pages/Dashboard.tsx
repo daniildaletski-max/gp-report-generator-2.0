@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, FileCheck, TrendingUp, TrendingDown, FileSpreadsheet, AlertTriangle, Award, Target, Calendar, PieChart, ArrowRight, Upload, Sparkles, RefreshCw, Clock, Zap, BarChart3 } from "lucide-react";
+import { Users, FileCheck, TrendingUp, TrendingDown, FileSpreadsheet, AlertTriangle, Award, Target, Calendar, PieChart, ArrowRight, Upload, Sparkles, RefreshCw, Clock, Zap, BarChart3, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -403,6 +403,8 @@ export default function Dashboard() {
         totalEvaluations={stats?.totalEvaluations || 0}
         totalReports={stats?.totalReports || 0}
         trend={heroTrend ?? []}
+        selectedMonth={selectedMonth}
+        selectedYear={selectedYear}
       />
 
       {/* Quick actions — five most-used operations promoted from
@@ -410,6 +412,13 @@ export default function Dashboard() {
           FM a navigation hop for the operations they actually do
           every week (Sync Persona / Generate report / Upload). */}
       <DashboardQuickActions onNavigate={setLocation} />
+
+      {/* Operations Brain — auto-generated insights + activity feed.
+          Replaces the FM having to bounce through 5 admin tabs to see
+          what's gone stale, what's regressed, and what's recent. The
+          system actively pulls these together and tells the FM what
+          to do next instead of waiting to be asked. */}
+      <OperationsBrain teamId={selectedTeamId} onNavigate={setLocation} />
 
       {/* Main Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1361,6 +1370,8 @@ function DashboardHero({
   totalEvaluations,
   totalReports,
   trend,
+  selectedMonth,
+  selectedYear,
 }: {
   avgTeamScore: number;
   totalGPs: number;
@@ -1368,25 +1379,41 @@ function DashboardHero({
   totalEvaluations: number;
   totalReports: number;
   trend: HeroTrendItem[];
+  selectedMonth: number;
+  selectedYear: number;
 }) {
-  // Period deltas: only meaningful when we have at least two months of
-  // trend data. With one item, lastTwo[1] would be undefined and the
-  // ?? 0 fallback used to fabricate huge negative regressions like
-  // "−18.7 vs last month" for new teams. Gate everything on hasPrev.
-  const hasPrev = trend.length >= 2;
-  const lastTwo = trend.slice(-2);
-  const previousScore = hasPrev ? (Number(lastTwo[0]?.avgTotalScore) || 0) : 0;
-  const currentScore = hasPrev ? (Number(lastTwo[1]?.avgTotalScore) || 0) : 0;
-  const scoreDelta = hasPrev ? currentScore - previousScore : undefined;
-  const scoreDeltaPct = hasPrev && previousScore > 0 ? ((currentScore - previousScore) / previousScore) * 100 : undefined;
+  // Anchor the deltas to the SELECTED month/year, not the last item in
+  // trend. The previous version used `trend.slice(-2)` which assumed the
+  // last item was always "current" — but when the FM views April from
+  // May (current calendar month) the last item is May with 0
+  // evaluations, producing fake −100% regression pills next to the
+  // April number. Now we look up the selected month in the trend array
+  // and use the slot before it as "previous"; if either is missing we
+  // hide the delta entirely instead of fabricating a value.
+  const selectedIdx = trend.findIndex(t => t.month === selectedMonth && t.year === selectedYear);
+  const currentTrend = selectedIdx >= 0 ? trend[selectedIdx] : null;
+  const prevTrend = selectedIdx > 0 ? trend[selectedIdx - 1] : null;
+  const previousScore = prevTrend ? (Number(prevTrend.avgTotalScore) || 0) : 0;
+  const hasComparablePrev = !!prevTrend && previousScore > 0 && avgTeamScore > 0;
 
-  // Spark series for each tile (avgTotalScore, uniqueGPs, totalEvaluations)
+  const scoreDelta = hasComparablePrev ? avgTeamScore - previousScore : undefined;
+  const scoreDeltaPct = hasComparablePrev ? ((avgTeamScore - previousScore) / previousScore) * 100 : undefined;
+
+  // Spark series cover the full 6-month window so the line shows
+  // trajectory regardless of which slot the user selected.
   const scoreSeries = trend.map((m, i) => ({ x: i, y: Number(m.avgTotalScore) || 0 }));
   const evalSeries = trend.map((m, i) => ({ x: i, y: m.totalEvaluations }));
   const gpSeries = trend.map((m, i) => ({ x: i, y: m.uniqueGPs }));
 
-  const evalDelta = hasPrev ? (lastTwo[1].totalEvaluations - lastTwo[0].totalEvaluations) : undefined;
-  const gpDelta = hasPrev ? (lastTwo[1].uniqueGPs - lastTwo[0].uniqueGPs) : undefined;
+  // Mini-tile deltas use the same selectedIdx anchor so all three
+  // pills move together: they all describe "current selected month vs
+  // the month before it", or all three are hidden.
+  const evalDelta = currentTrend && prevTrend
+    ? currentTrend.totalEvaluations - prevTrend.totalEvaluations
+    : undefined;
+  const gpDelta = currentTrend && prevTrend
+    ? currentTrend.uniqueGPs - prevTrend.uniqueGPs
+    : undefined;
 
   const evaluatedPct = totalGPs > 0 ? Math.round((evaluatedGPs / totalGPs) * 100) : 0;
 
@@ -1403,7 +1430,7 @@ function DashboardHero({
                 <span className="text-4xl sm:text-5xl font-bold tabular-nums text-foreground">
                   {avgTeamScore > 0 ? avgTeamScore.toFixed(1) : "—"}
                 </span>
-                {hasPrev && avgTeamScore > 0 && previousScore > 0 && scoreDelta !== undefined && (
+                {hasComparablePrev && scoreDelta !== undefined && (
                   <DeltaPill delta={scoreDelta} pct={scoreDeltaPct} suffix="vs last month" />
                 )}
               </div>
@@ -1615,4 +1642,239 @@ function DashboardQuickActions({ onNavigate }: { onNavigate: (path: string) => v
       ))}
     </div>
   );
+}
+
+// ============================================
+// Operations Brain — auto-generated insights + recent activity feed.
+// Tells the FM what needs attention and shows recent system activity in
+// one consolidated panel, replacing 5 separate admin sub-tab visits.
+// ============================================
+
+type Insight = {
+  id: string;
+  kind: "stale_sync" | "missing_report" | "score_regression" | "score_improvement" | "coverage_gap";
+  severity: "alert" | "warning" | "recommendation" | "celebration" | "info";
+  title: string;
+  description: string;
+  action?: { label: string; href: string };
+  timestamp: string | Date;
+  metadata?: { gpId?: number; gpName?: string; teamId?: number; teamName?: string };
+};
+
+type ActivityItem = {
+  id: string;
+  kind: "sync" | "report" | "evaluation" | "error_file";
+  timestamp: string | Date;
+  title: string;
+  detail?: string;
+  href?: string;
+  status?: "success" | "partial" | "failed";
+};
+
+function OperationsBrain({ teamId, onNavigate }: { teamId?: number; onNavigate: (path: string) => void }) {
+  const { data: insights, isLoading: insightsLoading } = trpc.dashboard.insights.useQuery({ teamId });
+  const { data: activity, isLoading: activityLoading } = trpc.dashboard.activityFeed.useQuery({ limit: 12 });
+
+  const list = (insights ?? []) as Insight[];
+  const feed = (activity ?? []) as ActivityItem[];
+
+  const counts = useMemo(() => {
+    const c = { alert: 0, warning: 0, recommendation: 0, celebration: 0 };
+    for (const i of list) {
+      if (i.severity in c) (c as any)[i.severity]++;
+    }
+    return c;
+  }, [list]);
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-3 sm:gap-4">
+      {/* Insights panel */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-gradient-to-r from-card via-card to-primary/5">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-primary/10 border border-primary/20 p-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">What needs your attention</h3>
+              <p className="text-[11px] text-muted-foreground">
+                {insightsLoading
+                  ? "Scanning…"
+                  : list.length === 0
+                    ? "Everything's quiet — no issues detected"
+                    : `${counts.alert + counts.warning} need action · ${counts.recommendation} suggested · ${counts.celebration} wins`}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="divide-y divide-border">
+          {insightsLoading ? (
+            <div className="p-5 space-y-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-14 rounded-lg bg-muted/40 animate-pulse" />
+              ))}
+            </div>
+          ) : list.length === 0 ? (
+            <div className="p-8 text-center">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 mb-3">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              </div>
+              <p className="text-sm font-medium text-foreground">All caught up</p>
+              <p className="text-xs text-muted-foreground mt-0.5">No stale syncs, missing reports, or score regressions detected for your teams.</p>
+            </div>
+          ) : (
+            list.map(i => <InsightCard key={i.id} insight={i} onNavigate={onNavigate} />)
+          )}
+        </div>
+      </div>
+
+      {/* Activity feed */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-muted/50 p-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Recent activity</h3>
+              <p className="text-[11px] text-muted-foreground">Last {feed.length} events</p>
+            </div>
+          </div>
+        </div>
+        <div className="max-h-[480px] overflow-y-auto">
+          {activityLoading ? (
+            <div className="p-5 space-y-2">
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="h-10 rounded-lg bg-muted/40 animate-pulse" />
+              ))}
+            </div>
+          ) : feed.length === 0 ? (
+            <div className="p-8 text-center">
+              <Clock className="h-6 w-6 text-muted-foreground/40 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">No recent activity</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {feed.map(item => (
+                <ActivityRow key={item.id} item={item} onNavigate={onNavigate} />
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InsightCard({ insight, onNavigate }: { insight: Insight; onNavigate: (path: string) => void }) {
+  const sev = severityStyle(insight.severity);
+  const Icon = severityIcon(insight.severity);
+  return (
+    <div className="px-5 py-3 hover:bg-muted/20 transition-colors">
+      <div className="flex items-start gap-3">
+        <div className={`shrink-0 rounded-lg p-1.5 ${sev.iconBg}`}>
+          <Icon className={`h-3.5 w-3.5 ${sev.iconColor}`} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-foreground leading-tight">{insight.title}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{insight.description}</p>
+          {insight.action && (
+            <button
+              type="button"
+              onClick={() => onNavigate(insight.action!.href)}
+              className={`mt-2 inline-flex items-center gap-1 text-xs font-medium ${sev.actionColor} hover:underline`}
+            >
+              {insight.action.label}
+              <ArrowRight className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActivityRow({ item, onNavigate }: { item: ActivityItem; onNavigate: (path: string) => void }) {
+  const Icon = activityIcon(item.kind);
+  const ts = new Date(item.timestamp);
+  return (
+    <li>
+      <button
+        type="button"
+        disabled={!item.href}
+        onClick={() => item.href && onNavigate(item.href)}
+        className="w-full text-left px-5 py-2.5 hover:bg-muted/20 transition-colors disabled:hover:bg-transparent disabled:cursor-default"
+      >
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 rounded-lg bg-muted/50 p-1.5 mt-0.5">
+            <Icon className="h-3 w-3 text-muted-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-foreground leading-tight truncate">{item.title}</p>
+            {item.detail && (
+              <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{item.detail}</p>
+            )}
+          </div>
+          <span className="shrink-0 text-[11px] text-muted-foreground/80 mt-1 tabular-nums">
+            {formatRelativeTime(ts)}
+          </span>
+        </div>
+      </button>
+    </li>
+  );
+}
+
+function severityStyle(severity: Insight["severity"]) {
+  switch (severity) {
+    case "alert":
+      return { iconBg: "bg-rose-100", iconColor: "text-rose-600", actionColor: "text-rose-700" };
+    case "warning":
+      return { iconBg: "bg-amber-100", iconColor: "text-amber-600", actionColor: "text-amber-700" };
+    case "recommendation":
+      return { iconBg: "bg-blue-100", iconColor: "text-blue-600", actionColor: "text-blue-700" };
+    case "celebration":
+      return { iconBg: "bg-emerald-100", iconColor: "text-emerald-600", actionColor: "text-emerald-700" };
+    default:
+      return { iconBg: "bg-muted", iconColor: "text-muted-foreground", actionColor: "text-foreground" };
+  }
+}
+
+function severityIcon(severity: Insight["severity"]) {
+  switch (severity) {
+    case "alert": return AlertTriangle;
+    case "warning": return Zap;
+    case "recommendation": return Target;
+    case "celebration": return Award;
+    default: return Sparkles;
+  }
+}
+
+function activityIcon(kind: ActivityItem["kind"]) {
+  switch (kind) {
+    case "sync": return RefreshCw;
+    case "report": return FileSpreadsheet;
+    case "evaluation": return FileCheck;
+    case "error_file": return AlertTriangle;
+    default: return Clock;
+  }
+}
+
+/**
+ * Format a date as a friendly relative time ("3m ago", "2h ago", "Apr 12").
+ * Returns absolute date when older than ~7 days, since "23 days ago" is
+ * less useful than the actual date.
+ */
+function formatRelativeTime(date: Date): string {
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  if (diffMs < 0) return "just now";
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
