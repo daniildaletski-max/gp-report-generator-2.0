@@ -66,7 +66,7 @@ export {
 
 // Attendance
 export {
-  getOrCreateAttendance, updateAttendance, getAttendanceByTeamMonth, getAttendanceTrends,
+  getOrCreateAttendance, findAttendance, updateAttendance, getAttendanceByTeamMonth, getAttendanceTrends,
 } from "./attendance";
 
 // Monthly Stats

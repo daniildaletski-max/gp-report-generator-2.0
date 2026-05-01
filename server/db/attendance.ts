@@ -5,6 +5,22 @@ import { eq, and } from "drizzle-orm";
 import { gpMonthlyAttendance, InsertGpMonthlyAttendance, GpMonthlyAttendance, gamePresenters, monthlyGpStats } from "../../drizzle/schema";
 import { getDb } from "./connection";
 
+/**
+ * Read-only attendance lookup — does NOT create a zero-filled row
+ * when nothing exists. Use this in code paths that need to distinguish
+ * "this month genuinely has no record" from "this month has all-zero
+ * absences", e.g. the Persona anomaly detector reading a baseline
+ * prior month. Otherwise the read mutates historical data.
+ */
+export async function findAttendance(gpId: number, month: number, year: number): Promise<GpMonthlyAttendance | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const existing = await db.select().from(gpMonthlyAttendance)
+    .where(and(eq(gpMonthlyAttendance.gamePresenterId, gpId), eq(gpMonthlyAttendance.month, month), eq(gpMonthlyAttendance.year, year)))
+    .limit(1);
+  return existing.length > 0 ? existing[0] : null;
+}
+
 export async function getOrCreateAttendance(gpId: number, month: number, year: number): Promise<GpMonthlyAttendance> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

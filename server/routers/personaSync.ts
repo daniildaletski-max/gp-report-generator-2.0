@@ -50,11 +50,22 @@ async function maybeFlagAttendanceAnomaly(opts: {
   year: number;
   current: { sickLeaves: number; missedDays: number; lateToWork: number };
 }): Promise<void> {
-  // Compare to previous calendar month
+  // Compare to previous calendar month — but READ-ONLY. The earlier
+  // version used getOrCreateAttendance, which inserts a zero-filled
+  // row when the prior month has no record. That mutated historical
+  // data ("not yet synced" -> "0 absences") for every matched GP
+  // every 12h, breaking downstream queries that distinguish missing
+  // from real-zero absenteeism. Now we use findAttendance and skip
+  // the anomaly check entirely when there's no baseline to compare
+  // against — better to wait for next month's data than to fabricate
+  // it.
   const prevDate = new Date(opts.year, opts.month - 2, 1);
   const prevMonth = prevDate.getMonth() + 1;
   const prevYear = prevDate.getFullYear();
-  const prev = await db.getOrCreateAttendance(opts.gpId, prevMonth, prevYear);
+  const prev = await db.findAttendance(opts.gpId, prevMonth, prevYear);
+  if (!prev) {
+    return; // No baseline — no spike comparison meaningful.
+  }
 
   const sickDelta = opts.current.sickLeaves - (prev.sickLeaves ?? 0);
   const missedDelta = opts.current.missedDays - (prev.missedDays ?? 0);
@@ -249,23 +260,43 @@ export async function runPersonaSyncForTeam(opts: {
           changes.lateToWork = { from: existing.lateToWork ?? 0, to: worker.lateToWork };
         }
 
-        if (!opts.dryRun && Object.keys(changes).length > 0) {
-          // Per-day breakdown — only write to `remarks` when it's
-          // safe (empty or already-our-JSON). Otherwise preserve the
-          // FM's manual coaching notes; data-loss regression caught
-          // by codex review.
-          //
-          // We detect "our JSON" by parsing — only auto-replace when
-          // the existing value is a JSON object with source==="persona".
-          // Anything else (free text, other JSON) is left alone.
-          const existingRemarks = (existing.remarks ?? "").trim();
-          const isReplaceable = (() => {
-            if (existingRemarks === "") return true;
-            try {
-              const parsed = JSON.parse(existingRemarks);
-              return parsed && typeof parsed === "object" && parsed.source === "persona";
-            } catch { return false; }
-          })();
+        // Per-day breakdown handling — must trigger a write even when
+        // the monthly counts are identical, because individual dates
+        // can shift (e.g. a sick day moves from the 3rd to the 7th)
+        // without changing totals. Without this check, the drill-down
+        // JSON in `remarks` would go stale.
+        const existingRemarks = (existing.remarks ?? "").trim();
+        const isReplaceable = (() => {
+          if (existingRemarks === "") return true;
+          try {
+            const parsed = JSON.parse(existingRemarks);
+            return parsed && typeof parsed === "object" && parsed.source === "persona";
+          } catch { return false; }
+        })();
+        // Compare existing breakdown (if it's our JSON) vs the new
+        // one — a difference means we must persist even when counts
+        // didn't move.
+        const existingBreakdown: { sick?: string[]; missed?: string[]; extra?: string[]; late?: string[] } = (() => {
+          if (!isReplaceable || existingRemarks === "") return {};
+          try {
+            const parsed = JSON.parse(existingRemarks);
+            return parsed && typeof parsed === "object" ? (parsed.days ?? {}) : {};
+          } catch { return {}; }
+        })();
+        const eq = (a: string[] | undefined, b: string[]) =>
+          (a ?? []).length === b.length && (a ?? []).every((v, i) => v === b[i]);
+        const breakdownChanged =
+          isReplaceable && (
+            !eq(existingBreakdown.sick, worker.dayBreakdown.sick) ||
+            !eq(existingBreakdown.missed, worker.dayBreakdown.missed) ||
+            !eq(existingBreakdown.extra, worker.dayBreakdown.extra) ||
+            !eq(existingBreakdown.late, worker.dayBreakdown.late)
+          );
+
+        const hasCountChange = Object.keys(changes).length > 0;
+        const shouldWrite = hasCountChange || breakdownChanged;
+
+        if (!opts.dryRun && shouldWrite) {
           const breakdownJson = JSON.stringify({
             source: "persona",
             syncedAt: new Date().toISOString(),
