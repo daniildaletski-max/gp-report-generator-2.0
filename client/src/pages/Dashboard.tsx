@@ -1673,7 +1673,7 @@ type ActivityItem = {
 
 function OperationsBrain({ teamId, onNavigate }: { teamId?: number; onNavigate: (path: string) => void }) {
   const { data: insights, isLoading: insightsLoading } = trpc.dashboard.insights.useQuery({ teamId });
-  const { data: activity, isLoading: activityLoading } = trpc.dashboard.activityFeed.useQuery({ limit: 12 });
+  const { data: activity, isLoading: activityLoading } = trpc.dashboard.activityFeed.useQuery({ limit: 12, teamId });
 
   const list = (insights ?? []) as Insight[];
   const feed = (activity ?? []) as ActivityItem[];

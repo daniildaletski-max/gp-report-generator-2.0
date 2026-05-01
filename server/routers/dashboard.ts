@@ -116,7 +116,11 @@ export const dashboardRouter = router({
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
         }
       }
-      return await db.computeDashboardInsights({ teamId, userId: userScope });
+      return await db.computeDashboardInsights({
+        teamId,
+        userId: userScope,
+        userRole: ctx.user.role,
+      });
     }),
 
   /**
@@ -127,15 +131,31 @@ export const dashboardRouter = router({
    *   - Uploaded error files
    * — so the FM can see what's been happening on the system at a glance,
    * without bouncing between five admin tabs.
+   *
+   * Accepts an optional teamId so the dashboard can keep the feed
+   * synchronised with the team selector at the top of the page —
+   * showing all-team activity when the FM has "All teams" selected
+   * and only the active team's activity when they pick one.
    */
   activityFeed: protectedProcedure
     .input(z.object({
       limit: z.number().int().min(1).max(50).default(20),
+      teamId: z.number().positive().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 20;
+      const teamId = input?.teamId;
       const userScope = ctx.user.role !== 'admin' ? ctx.user.id : undefined;
-      return await db.getDashboardActivityFeed({ limit, userId: userScope });
+
+      // Same tenant-scope check as insights — non-admin must own the
+      // team they're querying about.
+      if (ctx.user.role !== 'admin' && teamId) {
+        const team = await db.getFmTeamById(teamId);
+        if (!team || team.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+        }
+      }
+      return await db.getDashboardActivityFeed({ limit, userId: userScope, teamId });
     }),
 
   // Admin dashboard with system-wide stats

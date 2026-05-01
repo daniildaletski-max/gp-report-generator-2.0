@@ -295,7 +295,21 @@ const MAX_INSIGHTS = 12;
 export async function computeDashboardInsights(opts: {
   teamId?: number;
   userId?: number;
+  /** Admin actions like opening the persona tab aren't FM-reachable —
+   *  the role lets us pick a sensible action target per insight. */
+  userRole?: string;
 }): Promise<DashboardInsight[]> {
+  const isAdmin = opts.userRole === "admin";
+  // FMs can't open /admin?tab=persona (admin-only tab). For stale-sync
+  // insights they need either no action button (the insight is still
+  // useful as a heads-up) or a different target. We hide the action
+  // for non-admins — they should ping their admin to fix it.
+  const personaSyncAction = isAdmin
+    ? { label: "Sync now", href: "/admin?tab=persona" }
+    : undefined;
+  const personaConfigureAction = isAdmin
+    ? { label: "Configure", href: "/admin?tab=persona" }
+    : undefined;
   const db = await getDb();
   if (!db) return [];
 
@@ -369,8 +383,10 @@ export async function computeDashboardInsights(opts: {
           kind: "stale_sync",
           severity: "warning",
           title: `${teamName} hasn't synced for ${daysAgo} days`,
-          description: `Last Persona sync was ${daysAgo} days ago. Attendance numbers may be out of date.`,
-          action: { label: "Sync now", href: "/admin?tab=persona" },
+          description: isAdmin
+            ? `Last Persona sync was ${daysAgo} days ago. Attendance numbers may be out of date.`
+            : `Last Persona sync was ${daysAgo} days ago. Ask your admin to run a sync — attendance numbers may be out of date.`,
+          action: personaSyncAction,
           timestamp: lastDate,
           metadata: { teamId: sync.teamId, teamName },
         });
@@ -384,8 +400,10 @@ export async function computeDashboardInsights(opts: {
           kind: "stale_sync",
           severity: "warning",
           title: `${t.teamName} has never been synced`,
-          description: "No Persona sync has ever run for this team. Set the Project ID in admin and run a sync.",
-          action: { label: "Configure", href: "/admin?tab=persona" },
+          description: isAdmin
+            ? "No Persona sync has ever run for this team. Set the Project ID in admin and run a sync."
+            : "No Persona sync has ever run for this team. Ask your admin to set the Project ID.",
+          action: personaConfigureAction,
           timestamp: new Date(0),
           metadata: { teamId: t.id, teamName: t.teamName },
         });
@@ -608,14 +626,34 @@ export interface ActivityItem {
 export async function getDashboardActivityFeed(opts: {
   limit: number;
   userId?: number;
+  /** When set, scope every per-source query to this team so the feed
+   *  matches the team selector at the top of the dashboard. */
+  teamId?: number;
 }): Promise<ActivityItem[]> {
   const db = await getDb();
   if (!db) return [];
 
-  // Resolve teams the caller can see — used to scope each per-source query.
+  // Resolve which teamIds bound the query. Three cases:
+  //   - explicit teamId given → use just that one (after ownership check)
+  //   - non-admin (userId set) → all teams owned by that user
+  //   - admin / no scope → no filter
   let teamIds: number[] | undefined;
   try {
-    if (opts.userId) {
+    if (opts.teamId) {
+      if (opts.userId) {
+        // Defense-in-depth: confirm the team belongs to the user before
+        // including it. Router-level check already does this; double-up
+        // here so any future internal caller still gets isolation.
+        const owned = await db.select({ id: fmTeams.id })
+          .from(fmTeams)
+          .where(and(eq(fmTeams.id, opts.teamId), eq(fmTeams.userId, opts.userId)))
+          .limit(1);
+        teamIds = owned.map(t => t.id);
+        if (teamIds.length === 0) return [];
+      } else {
+        teamIds = [opts.teamId];
+      }
+    } else if (opts.userId) {
       const userTeams = await db.select({ id: fmTeams.id }).from(fmTeams).where(eq(fmTeams.userId, opts.userId));
       teamIds = userTeams.map(t => t.id);
       if (teamIds.length === 0) return [];
