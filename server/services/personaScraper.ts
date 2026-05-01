@@ -347,15 +347,20 @@ function parseShiftTypes(html: string): {
   //   VabaPaev*      -> day off / extra shift
   //   Hilinemine*    -> late to work
   // Anything else falls into "unknown" for diagnostic purposes.
+  //
+  // Matching is case-insensitive on a normalised lowercase key so all
+  // diacritic / camel-case variants ("TooPeatumine", "Tööpeatumine",
+  // "TööPeatumine", "tööpeatumine") land in the same bucket. The exact
+  // raw key is still preserved in `allTypes` for diagnostics.
   allTypes.forEach((rawKey, i) => {
-    const key = (rawKey ?? "").trim();
-    if (key.startsWith('Haigusleht')) {
+    const key = (rawKey ?? "").trim().toLowerCase();
+    if (key.startsWith('haigusleht')) {
       sickIndices.add(i);
-    } else if (key.startsWith('TooPeatumine') || key.startsWith('Tööpeatumine')) {
+    } else if (key.startsWith('toopeatumine') || key.startsWith('tööpeatumine')) {
       missedIndices.add(i);
-    } else if (key.startsWith('VabaPaev') || key.startsWith('Vabapäev') || key.startsWith('VabaPäev')) {
+    } else if (key.startsWith('vabapaev') || key.startsWith('vabapäev')) {
       extraIndices.add(i);
-    } else if (key.startsWith('Hilinemine') || key.startsWith('Hilinen')) {
+    } else if (key.startsWith('hilinemine') || key.startsWith('hilinen')) {
       lateIndices.add(i);
     }
   });
