@@ -243,6 +243,13 @@ export async function runPersonaSyncForTeam(opts: {
       // GPs that the FM owns.
       if (match && match.gamePresenter.teamId === opts.teamId) {
         const existing = await db.getOrCreateAttendance(match.gamePresenter.id, opts.month, opts.year);
+        // Defensive defaults — older scraper builds and test mocks
+        // don't supply lateToWork or dayBreakdown. Treating "missing"
+        // as zero / empty keeps the sync from crashing the whole team
+        // when one worker payload is partial.
+        const workerLate = (worker as any).lateToWork ?? 0;
+        const workerBreakdown: { sick: string[]; missed: string[]; extra: string[]; late: string[] } =
+          (worker as any).dayBreakdown ?? { sick: [], missed: [], extra: [], late: [] };
         const changes: MatchDetail["changes"] = {};
         if ((existing.sickLeaves ?? 0) !== worker.sickLeaves) {
           changes.sickLeaves = { from: existing.sickLeaves ?? 0, to: worker.sickLeaves };
@@ -256,8 +263,8 @@ export async function runPersonaSyncForTeam(opts: {
         // lateToWork is new — Persona didn't surface this before. We
         // also detect a change when it exists in the scraper output
         // even if existing was 0.
-        if ((existing.lateToWork ?? 0) !== worker.lateToWork) {
-          changes.lateToWork = { from: existing.lateToWork ?? 0, to: worker.lateToWork };
+        if ((existing.lateToWork ?? 0) !== workerLate) {
+          changes.lateToWork = { from: existing.lateToWork ?? 0, to: workerLate };
         }
 
         // Per-day breakdown handling — must trigger a write even when
@@ -287,10 +294,10 @@ export async function runPersonaSyncForTeam(opts: {
           (a ?? []).length === b.length && (a ?? []).every((v, i) => v === b[i]);
         const breakdownChanged =
           isReplaceable && (
-            !eq(existingBreakdown.sick, worker.dayBreakdown.sick) ||
-            !eq(existingBreakdown.missed, worker.dayBreakdown.missed) ||
-            !eq(existingBreakdown.extra, worker.dayBreakdown.extra) ||
-            !eq(existingBreakdown.late, worker.dayBreakdown.late)
+            !eq(existingBreakdown.sick, workerBreakdown.sick) ||
+            !eq(existingBreakdown.missed, workerBreakdown.missed) ||
+            !eq(existingBreakdown.extra, workerBreakdown.extra) ||
+            !eq(existingBreakdown.late, workerBreakdown.late)
           );
 
         const hasCountChange = Object.keys(changes).length > 0;
@@ -300,13 +307,13 @@ export async function runPersonaSyncForTeam(opts: {
           const breakdownJson = JSON.stringify({
             source: "persona",
             syncedAt: new Date().toISOString(),
-            days: worker.dayBreakdown,
+            days: workerBreakdown,
           });
           await db.updateAttendance(existing.id, {
             sickLeaves: worker.sickLeaves,
             missedDays: worker.missedDays,
             extraShifts: worker.extraShifts,
-            lateToWork: worker.lateToWork,
+            lateToWork: workerLate,
             ...(isReplaceable ? { remarks: breakdownJson } : {}),
           });
         }
@@ -335,7 +342,7 @@ export async function runPersonaSyncForTeam(opts: {
             current: {
               sickLeaves: worker.sickLeaves,
               missedDays: worker.missedDays,
-              lateToWork: worker.lateToWork,
+              lateToWork: workerLate,
             },
           }).catch(err => {
             log.warn(`anomaly check failed for ${worker.name}: ${err instanceof Error ? err.message : String(err)}`);
