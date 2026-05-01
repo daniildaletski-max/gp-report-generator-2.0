@@ -65,6 +65,41 @@ export const gamePresenterRouter = router({
       return { success: true };
     }),
 
+  /**
+   * Create a brand-new GP and assign it to the given team.
+   *
+   * Unlike `findOrCreateGamePresenter` which fuzzy-matches against the
+   * entire DB before inserting, this procedure ALWAYS inserts a fresh
+   * row. Used by the Persona sync admin's "Add as new GP" inline
+   * action: when a Persona worker doesn't match any GP in the target
+   * team, the FM clicks "Add" and we want exactly one new GP, even if
+   * there's a fuzzy match in some other team (which would silently
+   * pull the wrong GP under the new team's roof).
+   */
+  createForTeam: protectedProcedure
+    .input(z.object({
+      name: z.string().min(1).max(200),
+      teamId: z.number().positive(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // For non-admins, verify the team belongs to them.
+      if (ctx.user.role !== 'admin') {
+        const team = await db.getFmTeamById(input.teamId);
+        if (!team || team.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: that team is not yours' });
+        }
+      }
+      const dbi = await getDbDirect();
+      if (!dbi) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+      const result = await dbi.insert(gamePresenters).values({
+        name: input.name.trim(),
+        teamId: input.teamId,
+        userId: ctx.user.id,
+      });
+      const created = await db.getGamePresenterById(Number(result[0].insertId));
+      return { success: true, gp: created };
+    }),
+
   delete: protectedProcedure
     .input(z.object({ gpId: z.number() }))
     .mutation(async ({ ctx, input }) => {
