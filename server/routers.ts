@@ -25,6 +25,7 @@ import { errorScreenshotRouter } from "./routers/errorScreenshot";
 import { attitudeScreenshotRouter } from "./routers/attitudeScreenshot";
 import { attendanceRouter } from "./routers/attendance";
 import { personaSyncRouter } from "./routers/personaSync";
+import { studioworksSyncRouter } from "./routers/studioworksSync";
 import { actionItemsRouter } from "./routers/actionItems";
 import { searchRouter } from "./routers/search";
 
@@ -45,6 +46,7 @@ export const appRouter = router({
   attitudeScreenshot: attitudeScreenshotRouter,
   attendance: attendanceRouter,
   personaSync: personaSyncRouter,
+  studioworksSync: studioworksSyncRouter,
   actionItems: actionItemsRouter,
   search: searchRouter,
 });

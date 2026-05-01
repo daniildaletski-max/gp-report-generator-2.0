@@ -1,0 +1,272 @@
+/**
+ * Studioworks Sync Router
+ *
+ * Pulls evaluations from team.studioworks.ee and inserts them into our
+ * `evaluations` table — replacing the manual screenshot-upload flow.
+ *
+ * Mirrors the Persona-sync admin pattern: testConnection probe, manual
+ * Sync now, history. Idempotent insert: each evaluation is keyed by
+ * (gpId, evaluationDate, evaluatorName, game) so re-running sync
+ * doesn't create duplicates.
+ *
+ * Tenant scoping: cross-team writes happen via the global GP fuzzy
+ * matcher, but each evaluation is tagged with the calling user's
+ * userId so per-user data isolation in the rest of the app keeps
+ * working.
+ */
+import { TRPCError } from "@trpc/server";
+import { router, adminProcedure } from "../_core/trpc";
+import * as db from "../db";
+import {
+  syncStudioworksEvaluations,
+  testStudioworksConnection,
+  type ExtractedEvaluation,
+} from "../services/studioworksScraper";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("StudioworksSync");
+
+interface ImportDetail {
+  externalId: string;
+  presenterName: string;
+  evaluatorName?: string;
+  date: string;
+  game?: string;
+  matched: boolean;
+  /** Resolved GP id when matched. */
+  gpId?: number;
+  gpName?: string;
+  /** Skipped because we already have this exact evaluation in DB. */
+  skippedExisting?: boolean;
+  /** Error string when this row failed to insert (other rows still process). */
+  error?: string;
+}
+
+export interface StudioworksSyncSummary {
+  status: "success" | "partial" | "failed";
+  source: "json" | "html" | "none";
+  totalFound: number;
+  inserted: number;
+  skippedExisting: number;
+  unmatched: number;
+  errors: number;
+  details: ImportDetail[];
+  error?: string;
+}
+
+/**
+ * Parse a date string from Studioworks (e.g. "30 Apr 2026" or
+ * "2026-04-30T00:00:00Z") into a Date. Returns null if unparseable.
+ */
+function parseStudioworksDate(s: string): Date | null {
+  if (!s) return null;
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+  // Fallback: "30 Apr 2026" pattern
+  const m = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+  if (m) {
+    const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+    const monthIdx = months.indexOf(m[2].slice(0, 3).toLowerCase());
+    if (monthIdx >= 0) {
+      return new Date(Number(m[3]), monthIdx, Number(m[1]));
+    }
+  }
+  return null;
+}
+
+/**
+ * Idempotency check: do we already have this exact evaluation?
+ * Match on (gpId, date, evaluator, game). Strict enough that a re-run
+ * doesn't double-insert; loose enough that two genuinely-distinct
+ * same-day evals don't collide (e.g. the same FM evaluating the same
+ * GP twice in a day on different games).
+ */
+async function findExistingEvaluation(opts: {
+  gpId: number;
+  date: Date;
+  evaluatorName?: string;
+  game?: string;
+}) {
+  const evals = await db.getEvaluationsByGP(opts.gpId);
+  // Match on date (truncated to day) + evaluator + game when present.
+  const dayKey = (d: Date | null) => d ? d.toISOString().slice(0, 10) : "";
+  const target = dayKey(opts.date);
+  for (const e of evals) {
+    if (!e.evaluationDate) continue;
+    if (dayKey(new Date(e.evaluationDate)) !== target) continue;
+    if (opts.evaluatorName && e.evaluatorName && e.evaluatorName !== opts.evaluatorName) continue;
+    if (opts.game && e.game && e.game !== opts.game) continue;
+    return e;
+  }
+  return null;
+}
+
+async function importOne(
+  raw: ExtractedEvaluation,
+  userId: number,
+): Promise<ImportDetail> {
+  const date = parseStudioworksDate(raw.date);
+  const baseDetail: ImportDetail = {
+    externalId: raw.externalId,
+    presenterName: raw.presenterName,
+    evaluatorName: raw.evaluatorName,
+    date: raw.date,
+    game: raw.game,
+    matched: false,
+  };
+
+  if (!date) {
+    return { ...baseDetail, error: `unparseable date: "${raw.date}"` };
+  }
+
+  // GP match — use the SAME global fuzzy matcher used by everything else.
+  // Studioworks gives us the presenter's full name; same matcher handles
+  // word-order swaps and minor spelling diffs.
+  const match = await db.findBestMatchingGP(raw.presenterName, 0.7);
+  if (!match) {
+    return { ...baseDetail, error: `no GP matched for "${raw.presenterName}"` };
+  }
+
+  const gpId = match.gamePresenter.id;
+  const gpName = match.gamePresenter.name;
+
+  // Idempotency
+  const existing = await findExistingEvaluation({
+    gpId,
+    date,
+    evaluatorName: raw.evaluatorName,
+    game: raw.game,
+  });
+  if (existing) {
+    return {
+      ...baseDetail,
+      matched: true,
+      gpId,
+      gpName,
+      skippedExisting: true,
+    };
+  }
+
+  // Build the evaluation row. Fields fall back to their schema defaults
+  // when studioworks didn't supply a particular rating (e.g. older
+  // evaluations missing one of the criteria).
+  try {
+    const r = raw.ratings;
+    await db.createEvaluation({
+      gamePresenterId: gpId,
+      evaluatorName: raw.evaluatorName ?? null,
+      evaluationDate: date,
+      game: raw.game ?? null,
+      totalScore: raw.totalScore ?? null,
+      hairScore: r.hair?.score ?? null,
+      hairMaxScore: r.hair?.maxScore ?? 3,
+      hairComment: r.hair?.comment ?? null,
+      makeupScore: r.makeup?.score ?? null,
+      makeupMaxScore: r.makeup?.maxScore ?? 3,
+      makeupComment: r.makeup?.comment ?? null,
+      outfitScore: r.outfit?.score ?? null,
+      outfitMaxScore: r.outfit?.maxScore ?? 3,
+      outfitComment: r.outfit?.comment ?? null,
+      postureScore: r.posture?.score ?? null,
+      postureMaxScore: r.posture?.maxScore ?? 3,
+      postureComment: r.posture?.comment ?? null,
+      dealingStyleScore: r.dealingStyle?.score ?? null,
+      dealingStyleMaxScore: r.dealingStyle?.maxScore ?? 5,
+      dealingStyleComment: r.dealingStyle?.comment ?? null,
+      gamePerformanceScore: r.gamePerformance?.score ?? null,
+      gamePerformanceMaxScore: r.gamePerformance?.maxScore ?? 5,
+      gamePerformanceComment: r.gamePerformance?.comment ?? null,
+      // rawExtractedData stores the externalId so we can do future
+      // upgrades (proper external-id idempotency) without a migration.
+      rawExtractedData: {
+        source: "studioworks",
+        externalId: raw.externalId,
+        overallComment: raw.overallComment ?? null,
+        scrapedAt: new Date().toISOString(),
+      } as any,
+      uploadedById: userId,
+      userId,
+    });
+    return { ...baseDetail, matched: true, gpId, gpName };
+  } catch (e) {
+    return {
+      ...baseDetail,
+      matched: true,
+      gpId,
+      gpName,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+export const studioworksSyncRouter = router({
+  /**
+   * Diagnostic probe — runs login + page load + extraction discovery
+   * but DOES NOT write to DB. Returns per-step status + a screenshot
+   * of the page on failure so the admin can see what's actually going
+   * on. Same UX pattern as personaSync.testConnection.
+   */
+  testConnection: adminProcedure.mutation(async () => {
+    return await testStudioworksConnection();
+  }),
+
+  /**
+   * Pull evaluations and insert them. Per-row errors don't stop the
+   * batch — each row reports its own status.
+   */
+  syncNow: adminProcedure.mutation(async ({ ctx }): Promise<StudioworksSyncSummary> => {
+    const result = await syncStudioworksEvaluations();
+    if (!result.success) {
+      return {
+        status: "failed",
+        source: result.source,
+        totalFound: 0,
+        inserted: 0,
+        skippedExisting: 0,
+        unmatched: 0,
+        errors: 0,
+        details: [],
+        error: result.error,
+      };
+    }
+
+    const details: ImportDetail[] = [];
+    for (const raw of result.evaluations) {
+      try {
+        const d = await importOne(raw, ctx.user.id);
+        details.push(d);
+      } catch (e) {
+        details.push({
+          externalId: raw.externalId,
+          presenterName: raw.presenterName,
+          evaluatorName: raw.evaluatorName,
+          date: raw.date,
+          game: raw.game,
+          matched: false,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
+    const inserted = details.filter(d => d.matched && !d.skippedExisting && !d.error).length;
+    const skippedExisting = details.filter(d => d.skippedExisting).length;
+    const unmatched = details.filter(d => !d.matched && !d.error?.includes("date")).length;
+    const errors = details.filter(d => d.error).length;
+    const status: StudioworksSyncSummary["status"] =
+      result.evaluations.length === 0 ? "failed" :
+        unmatched > 0 || errors > 0 ? "partial" : "success";
+
+    log.info(`Studioworks sync: source=${result.source} found=${result.evaluations.length} inserted=${inserted} skipped=${skippedExisting} unmatched=${unmatched} errors=${errors}`);
+
+    return {
+      status,
+      source: result.source,
+      totalFound: result.evaluations.length,
+      inserted,
+      skippedExisting,
+      unmatched,
+      errors,
+      details,
+    };
+  }),
+});

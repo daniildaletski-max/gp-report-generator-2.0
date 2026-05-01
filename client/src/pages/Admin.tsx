@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
 import { ActionItemsBoardTab } from "@/components/admin/ActionItemsBoardTab";
 
-const ADMIN_TABS = ["overview", "invitations", "users", "teams", "stats", "action-items", "access", "errors", "persona"] as const;
+const ADMIN_TABS = ["overview", "invitations", "users", "teams", "stats", "action-items", "access", "errors", "persona", "studioworks"] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
 const FM_TABS = ["stats", "action-items", "access"] as const;
@@ -22,9 +22,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { 
-  FileSpreadsheet, Loader2, Users, AlertTriangle, Trash2, Link, Copy, Check, 
-  RefreshCw, ExternalLink, Star, AlertCircle, UserCog, Download, Shield, 
+import {
+  FileSpreadsheet, FileCheck, Loader2, Users, AlertTriangle, Trash2, Link, Copy, Check,
+  RefreshCw, ExternalLink, Star, AlertCircle, UserCog, Download, Shield,
   Building2, Plus, Edit, BarChart3, Activity, CheckSquare, Square, RotateCcw,
   TrendingUp, TrendingDown, Search, Filter, X, Eye, EyeOff, Calendar,
   Award, Target, Zap, Clock, ChevronUp, ChevronDown, Mail, Send, UserPlus,
@@ -224,6 +224,10 @@ function FullAdminPanel() {
             <RefreshCw className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Persona</span>
           </TabsTrigger>
+          <TabsTrigger value="studioworks" className="flex items-center justify-center gap-2 py-2">
+            <FileCheck className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Studioworks</span>
+          </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -279,6 +283,9 @@ function FullAdminPanel() {
           setSelectedMonth={setSelectedMonth}
           setSelectedYear={setSelectedYear}
         />
+
+        {/* Studioworks Sync Tab */}
+        <StudioworksSyncTab />
       </Tabs>
     </div>
   );
@@ -5034,5 +5041,294 @@ function TestConnectionPanel({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ============================================
+// Studioworks Sync Tab — pulls evaluations from team.studioworks.ee
+// and inserts them into our evaluations table. Same UX scaffolding as
+// the Persona tab: Test connection probe with screenshot-on-failure,
+// Sync now button, structured result panel.
+// ============================================
+
+type SwStepStatus = "pending" | "success" | "failed" | "skipped";
+type SwTestStep = {
+  step: "credentials" | "browser" | "login" | "evaluations" | "data";
+  label: string;
+  status: SwStepStatus;
+  error?: string;
+  durationMs?: number;
+};
+type SwTestResult = {
+  success: boolean;
+  steps: SwTestStep[];
+  source: "json" | "html" | "none";
+  sampleCount: number;
+  failureScreenshotB64: string;
+};
+
+type SwImportDetail = {
+  externalId: string;
+  presenterName: string;
+  evaluatorName?: string;
+  date: string;
+  game?: string;
+  matched: boolean;
+  gpId?: number;
+  gpName?: string;
+  skippedExisting?: boolean;
+  error?: string;
+};
+
+type SwSyncSummary = {
+  status: "success" | "partial" | "failed";
+  source: "json" | "html" | "none";
+  totalFound: number;
+  inserted: number;
+  skippedExisting: number;
+  unmatched: number;
+  errors: number;
+  details: SwImportDetail[];
+  error?: string;
+};
+
+function StudioworksSyncTab() {
+  const [testResult, setTestResult] = useState<SwTestResult | null>(null);
+  const [syncResult, setSyncResult] = useState<SwSyncSummary | null>(null);
+
+  const utils = trpc.useUtils();
+
+  const testMutation = trpc.studioworksSync.testConnection.useMutation({
+    onSuccess: (data) => {
+      setTestResult(data);
+      if (data.success) {
+        toast.success(`Connection OK — ${data.sampleCount} evaluations visible (${data.source})`);
+      } else {
+        const failed = data.steps.find(s => s.status === "failed");
+        toast.error(`Test failed at: ${failed?.label ?? "unknown step"}`);
+      }
+    },
+    onError: (err) => toast.error(`Test failed: ${err.message}`),
+  });
+
+  const syncMutation = trpc.studioworksSync.syncNow.useMutation({
+    onSuccess: async (data) => {
+      setSyncResult(data);
+      if (data.status === "failed") {
+        toast.error(`Sync failed: ${data.error ?? "no evaluations imported"}`);
+      } else {
+        toast.success(`Imported ${data.inserted} new (${data.skippedExisting} already in DB, ${data.unmatched} unmatched)`);
+      }
+      // Refresh anything that depends on evaluations
+      await Promise.all([
+        utils.dashboard.stats.invalidate(),
+        utils.dashboard.monthlyTrend.invalidate(),
+        utils.dashboard.activityFeed.invalidate(),
+        utils.evaluation.list.invalidate(),
+      ]);
+    },
+    onError: (err) => toast.error(`Sync failed: ${err.message}`),
+  });
+
+  return (
+    <TabsContent value="studioworks" className="space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="icon-box p-3">
+          <FileCheck className="h-5 w-5" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold">Studioworks Evaluations Sync</h2>
+          <p className="text-sm text-muted-foreground">
+            Pulls evaluations from team.studioworks.ee/evaluations and writes them straight into the DB — replaces manual screenshot uploads.
+          </p>
+        </div>
+      </div>
+
+      <Card className="border border-border">
+        <CardHeader>
+          <CardTitle className="text-base">Actions</CardTitle>
+          <CardDescription>
+            <strong>Test connection</strong> probes login + page load without writing anything.
+            <strong> Sync now</strong> imports every visible evaluation (idempotent — re-runs skip duplicates).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => { setTestResult(null); testMutation.mutate(); }}
+              disabled={testMutation.isPending || syncMutation.isPending}
+            >
+              {testMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Testing connection…</>
+              ) : (
+                <><Activity className="h-4 w-4 mr-2" /> Test connection</>
+              )}
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => { setSyncResult(null); syncMutation.mutate(); }}
+              disabled={testMutation.isPending || syncMutation.isPending}
+            >
+              {syncMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Syncing…</>
+              ) : (
+                <><RefreshCw className="h-4 w-4 mr-2" /> Sync now</>
+              )}
+            </Button>
+          </div>
+          <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-200 bg-amber-50/50 text-sm text-amber-800">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <div>
+              <strong>Setup:</strong> set <code className="bg-amber-100 px-1 rounded text-[11px]">STUDIOWORKS_USERNAME</code> and <code className="bg-amber-100 px-1 rounded text-[11px]">STUDIOWORKS_PASSWORD</code> env vars on the deploy. Optional: <code className="bg-amber-100 px-1 rounded text-[11px]">STUDIOWORKS_NAV_TIMEOUT_MS</code> (default 60s).
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Test result panel */}
+      {testResult && (
+        <Card className={`border ${testResult.success ? "border-emerald-200 bg-emerald-50/30" : "border-rose-200 bg-rose-50/30"}`}>
+          <CardHeader className="flex-row items-start justify-between space-y-0 gap-3">
+            <div className="flex-1">
+              <CardTitle className="text-base flex items-center gap-2">
+                {testResult.success ? <Check className="h-4 w-4 text-emerald-600" /> : <AlertCircle className="h-4 w-4 text-rose-600" />}
+                Connection {testResult.success ? "OK" : "failed"}
+              </CardTitle>
+              <CardDescription>
+                {testResult.success
+                  ? `Found ${testResult.sampleCount} evaluations via ${testResult.source}. Sync should work.`
+                  : "One of the stages broke — see which one below; the screenshot shows what the page actually rendered."}
+              </CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setTestResult(null)} title="Clear"><X className="h-4 w-4" /></Button>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2">
+              {testResult.steps.map((s) => {
+                const Icon = s.status === "success" ? Check : s.status === "failed" ? X : s.status === "skipped" ? AlertCircle : Loader2;
+                const iconClass =
+                  s.status === "success" ? "text-emerald-600" :
+                  s.status === "failed" ? "text-rose-600" :
+                  s.status === "skipped" ? "text-muted-foreground" :
+                  "text-muted-foreground animate-spin";
+                const bg =
+                  s.status === "failed" ? "border-rose-200 bg-rose-50/40" :
+                  s.status === "success" ? "border-emerald-200 bg-emerald-50/40" :
+                  "border-border bg-muted/20";
+                return (
+                  <div key={s.step} className={`flex items-start gap-3 p-3 rounded-lg border ${bg}`}>
+                    <Icon className={`h-4 w-4 shrink-0 mt-0.5 ${iconClass}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-foreground">{s.label}</span>
+                        {s.durationMs !== undefined && <span className="text-[10px] text-muted-foreground">{s.durationMs} ms</span>}
+                        {s.status === "skipped" && <Badge variant="outline" className="text-[10px] text-muted-foreground">Skipped</Badge>}
+                      </div>
+                      {s.error && <p className="text-xs text-rose-700 mt-1 whitespace-pre-wrap break-words">{s.error}</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {!testResult.success && testResult.failureScreenshotB64 && (
+              <details className="rounded-lg border border-border bg-background p-3" open>
+                <summary className="cursor-pointer text-sm font-medium select-none">Screenshot at the moment of failure</summary>
+                <div className="mt-3 rounded-md overflow-hidden border border-border bg-muted">
+                  <img
+                    src={`data:image/png;base64,${testResult.failureScreenshotB64}`}
+                    alt="Studioworks page at failure"
+                    className="w-full max-h-[480px] object-contain"
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-2">
+                  Common patterns: blank page (network blocked), login form still visible (credentials wrong), 2FA / CAPTCHA (manual login required), unexpected redirect.
+                </p>
+              </details>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Sync result panel */}
+      {syncResult && (
+        <Card className={`border ${syncResult.status === "failed" ? "border-rose-200 bg-rose-50/30" : syncResult.status === "partial" ? "border-amber-200 bg-amber-50/30" : "border-emerald-200 bg-emerald-50/30"}`}>
+          <CardHeader className="flex-row items-start justify-between space-y-0 gap-3">
+            <div className="flex-1">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                Sync result — {syncResult.status}
+              </CardTitle>
+              <CardDescription>
+                {syncResult.status === "failed"
+                  ? syncResult.error ?? "Sync ran but reported failure."
+                  : `Source: ${syncResult.source} · Found ${syncResult.totalFound} · Inserted ${syncResult.inserted} · Skipped ${syncResult.skippedExisting} (already in DB) · Unmatched ${syncResult.unmatched} · Errors ${syncResult.errors}`}
+              </CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setSyncResult(null)} title="Clear"><X className="h-4 w-4" /></Button>
+          </CardHeader>
+          {syncResult.details.length > 0 && (
+            <CardContent>
+              <div className="space-y-1.5 max-h-[480px] overflow-y-auto pr-1">
+                {syncResult.details.map((d, i) => {
+                  const ok = d.matched && !d.error && !d.skippedExisting;
+                  const skipped = d.skippedExisting;
+                  const err = !!d.error;
+                  const Icon = ok ? Check : skipped ? AlertCircle : err ? X : AlertTriangle;
+                  const tone = ok
+                    ? "border-emerald-200 bg-emerald-50/40"
+                    : skipped
+                      ? "border-blue-200 bg-blue-50/40"
+                      : err
+                        ? "border-rose-200 bg-rose-50/40"
+                        : "border-amber-200 bg-amber-50/40";
+                  const iconColor = ok ? "text-emerald-600" : skipped ? "text-blue-600" : err ? "text-rose-600" : "text-amber-600";
+                  return (
+                    <div key={i} className={`flex items-start gap-2 p-2.5 rounded-lg border ${tone}`}>
+                      <Icon className={`h-4 w-4 shrink-0 mt-0.5 ${iconColor}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-sm text-foreground truncate">{d.presenterName}</p>
+                          {d.gpName && d.gpName !== d.presenterName && (
+                            <Badge variant="outline" className="text-[10px]">→ {d.gpName}</Badge>
+                          )}
+                          {skipped && <Badge variant="outline" className="text-[10px] bg-blue-100 text-blue-800 border-blue-200">already imported</Badge>}
+                          {err && !d.matched && <Badge variant="outline" className="text-[10px] bg-rose-100 text-rose-800 border-rose-200">unmatched</Badge>}
+                          {err && d.matched && <Badge variant="outline" className="text-[10px] bg-rose-100 text-rose-800 border-rose-200">insert failed</Badge>}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {d.date}{d.game ? ` · ${d.game}` : ""}{d.evaluatorName ? ` · by ${d.evaluatorName}` : ""}
+                        </p>
+                        {d.error && <p className="text-[11px] text-rose-700 mt-0.5">{d.error}</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          )}
+        </Card>
+      )}
+
+      {/* How it works */}
+      <Card className="border border-amber-500/20 bg-amber-500/5">
+        <CardContent className="pt-4">
+          <div className="flex gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-amber-400">How Studioworks Sync Works</p>
+              <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                <li>Logs into team.studioworks.ee using stored credentials</li>
+                <li>Discovers evaluations via JSON API intercept (preferred) or HTML scrape fallback</li>
+                <li>Matches each presenter name to a GP using the same fuzzy matcher upload uses</li>
+                <li>Inserts new evaluations; <strong>idempotent</strong> — re-runs skip rows we already have for the same (GP, date, evaluator, game)</li>
+                <li>Click <strong>Test connection</strong> first if Sync fails — it shows you the exact stage that broke + a screenshot of the page</li>
+              </ul>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </TabsContent>
   );
 }
