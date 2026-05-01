@@ -104,7 +104,7 @@ export default function Dashboard() {
 
   const { data: teams } = trpc.fmTeam.list.useQuery();
   
-  const { data: stats, isLoading } = trpc.dashboard.stats.useQuery({
+  const { data: stats, isLoading, isError: isStatsError, refetch: refetchStats } = trpc.dashboard.stats.useQuery({
     month: selectedMonth,
     year: selectedYear,
     teamId: selectedTeamId,
@@ -177,6 +177,36 @@ export default function Dashboard() {
           ))}
         </div>
         <div className="h-64 rounded-2xl bg-muted/50 border border-border animate-pulse" />
+      </div>
+    );
+  }
+
+  if (isStatsError) {
+    return (
+      <div className="p-4 sm:p-6">
+        <Card className="border border-rose-200 bg-rose-50">
+          <CardContent className="py-12 flex flex-col items-center text-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-rose-100 flex items-center justify-center">
+              <AlertTriangle className="h-7 w-7 text-rose-600" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-semibold text-rose-900">Couldn't load dashboard data</h3>
+              <p className="text-sm text-rose-700 max-w-md">
+                The server didn't return stats for this period. This usually clears on a retry —
+                if it keeps failing, check the network or open the admin panel.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => refetchStats()}>
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                Retry
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setLocation("/admin")}>
+                Open admin
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -603,7 +633,7 @@ export default function Dashboard() {
 // Trend Section (Score Trends, Volume, Summary)
 // ======================================
 function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { isMobile: boolean; selectedTeamId?: number; selectedTeamName?: string; teams?: { id: number; teamName: string }[] }) {
-  const { data: trendData, isLoading: isLoadingTrend } = trpc.dashboard.monthlyTrend.useQuery({
+  const { data: trendData, isLoading: isLoadingTrend, isError: isTrendError, refetch: refetchTrend } = trpc.dashboard.monthlyTrend.useQuery({
     teamId: selectedTeamId,
     months: 6,
   });
@@ -619,6 +649,24 @@ function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { i
           <div className="h-80 rounded-2xl bg-muted/50 border border-border animate-pulse" />
         </div>
       </div>
+    );
+  }
+
+  if (isTrendError) {
+    return (
+      <Card className="border border-rose-200 bg-rose-50">
+        <CardContent className="py-8 flex flex-col items-center text-center gap-3">
+          <AlertTriangle className="h-8 w-8 text-rose-600" />
+          <div>
+            <p className="text-sm font-medium text-rose-800">Couldn't load trend data</p>
+            <p className="text-xs text-rose-700 mt-1">The chart will reload when the network recovers.</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => refetchTrend()} className="mt-1">
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -987,7 +1035,7 @@ function GPMonthlyComparisonSection({ isMobile }: { isMobile: boolean }) {
 // Cross-Team GP Comparison Component
 // ======================================
 function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
-  const { data: comparisonData, isLoading } = trpc.dashboard.teamComparison.useQuery();
+  const { data: comparisonData, isLoading, isError, refetch } = trpc.dashboard.teamComparison.useQuery();
   const [viewMode, setViewMode] = useState<'overview' | 'detailed'>('overview');
 
   if (isLoading) {
@@ -996,6 +1044,24 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
         <div className="h-8 w-64 rounded-lg bg-muted animate-pulse" />
         <div className="h-80 rounded-2xl bg-muted/50 border border-border animate-pulse" />
       </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card className="border border-rose-200 bg-rose-50">
+        <CardContent className="py-8 flex flex-col items-center text-center gap-3">
+          <AlertTriangle className="h-8 w-8 text-rose-600" />
+          <div>
+            <p className="text-sm font-medium text-rose-800">Couldn't load team comparison</p>
+            <p className="text-xs text-rose-700 mt-1">The data will reload when the network recovers.</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-1">
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 

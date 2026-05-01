@@ -3836,6 +3836,20 @@ type SyncState =
 
 type RowFilter = "all" | "matched" | "issues";
 
+type TestStepStatus = "pending" | "success" | "failed" | "skipped";
+type TestConnectionStep = {
+  step: "credentials" | "browser" | "login" | "schedule" | "data";
+  label: string;
+  status: TestStepStatus;
+  error?: string;
+  durationMs?: number;
+};
+type TestConnectionResult = {
+  success: boolean;
+  steps: TestConnectionStep[];
+  failureScreenshotB64: string;
+};
+
 function PersonaSyncTab({
   teams,
   selectedMonth,
@@ -3855,8 +3869,24 @@ function PersonaSyncTab({
   const [previewData, setPreviewData] = useState<TeamSyncResult | null>(null);
   const [rowFilter, setRowFilter] = useState<RowFilter>("all");
   const [rowSearch, setRowSearch] = useState<string>("");
+  const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
 
   const isSyncing = syncState.phase === "running";
+
+  const testConnectionMutation = trpc.personaSync.testConnection.useMutation({
+    onSuccess: (data) => {
+      setTestResult(data);
+      if (data.success) {
+        toast.success("Persona connection OK");
+      } else {
+        const failed = data.steps.find(s => s.status === "failed");
+        toast.error(`Persona test failed at: ${failed?.label ?? "unknown step"}`);
+      }
+    },
+    onError: (err) => {
+      toast.error(`Test failed: ${err.message}`);
+    },
+  });
 
   const { data: teamsWithProjects, refetch: refetchTeamProjects } = trpc.personaSync.getTeamsWithProjectIds.useQuery();
 
@@ -4128,9 +4158,26 @@ function PersonaSyncTab({
                 <><RefreshCw className="h-4 w-4 mr-2" /> Sync ALL teams</>
               )}
             </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              onClick={() => {
+                setTestResult(null);
+                testConnectionMutation.mutate();
+              }}
+              disabled={isSyncing || testConnectionMutation.isPending}
+              title="Probe Persona auth + reachability without running a full sync"
+            >
+              {testConnectionMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Testing connection…</>
+              ) : (
+                <><Activity className="h-4 w-4 mr-2" /> Test connection</>
+              )}
+            </Button>
             <p className="text-xs text-muted-foreground">
               <strong>Preview</strong> shows what would change without saving.{" "}
-              <strong>Sync</strong> writes to the database. Scheduled sync also runs on the 1st of each month before reports are generated.
+              <strong>Sync</strong> writes to the database. <strong>Test connection</strong> probes Persona auth without doing a sync — useful for debugging.
             </p>
           </CardContent>
         </Card>
@@ -4195,6 +4242,14 @@ function PersonaSyncTab({
           </CardContent>
         </Card>
       </div>
+
+      {/* Test Connection result */}
+      {testResult && (
+        <TestConnectionPanel
+          result={testResult}
+          onClear={() => setTestResult(null)}
+        />
+      )}
 
       {/* Sync Result */}
       {syncState.phase !== "idle" && (
@@ -4458,13 +4513,25 @@ function SyncResultPanel({
   }
 
   if (state.phase === "error") {
+    // Errors from the scraper are now prefixed with the failed step in
+    // brackets — e.g. "[login redirect] Navigation timeout of 60000 ms".
+    // Pull that out so the FM sees WHICH stage failed, prominently.
+    const stepMatch = state.message.match(/^\[([^\]]+)\]\s*([\s\S]*)$/);
+    const failedStep = stepMatch?.[1];
+    const detail = stepMatch?.[2] ?? state.message;
+    const recoveryHint = failedStep
+      ? recoveryHintFor(failedStep)
+      : "Re-run the sync. If it keeps failing, click \"Test connection\" to probe each stage individually.";
     return (
       <Card className="border border-rose-200 bg-rose-50">
         <CardContent className="py-4 flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-rose-800">Sync failed</p>
-            <p className="text-xs text-rose-700 mt-0.5 whitespace-pre-wrap break-words">{state.message}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-rose-800">
+              Sync failed{failedStep ? ` at: ${failedStep}` : ""}
+            </p>
+            <p className="text-xs text-rose-700 mt-0.5 whitespace-pre-wrap break-words">{detail}</p>
+            <p className="text-xs text-rose-700/80 mt-2 italic">{recoveryHint}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClear} className="text-rose-700 hover:text-rose-800">
             <X className="h-4 w-4" />
@@ -4592,6 +4659,122 @@ function SyncResultPanel({
               )}
             </div>
           </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================
+// Test Connection panel — diagnostic checklist for the Persona scrape
+// pipeline. Shows each step (credentials → browser → login → schedule
+// → data) with a status icon and timing, plus a screenshot of the page
+// state on failure so the admin can see WHAT broke instead of guessing.
+// ============================================
+
+function recoveryHintFor(failedStep: string): string {
+  // Map the bracketed step labels emitted by personaScraper to a one-
+  // line "what to try next" hint.
+  const s = failedStep.toLowerCase();
+  if (s.includes("login")) {
+    return "Check PERSONA_USERNAME / PERSONA_PASSWORD env vars; the login form may also have changed.";
+  }
+  if (s.includes("schedule")) {
+    return "Persona reached the menu but couldn't load the schedule — check if Persona changed its URL or layout.";
+  }
+  if (s.includes("browser")) {
+    return "Headless Chromium failed to start — check the deploy image has the @sparticuz/chromium binary.";
+  }
+  if (s.includes("network") || s.includes("net::")) {
+    return "Network can't reach persona.fujitsu.ee from the deploy — check VPN / firewall / DNS.";
+  }
+  return "Click \"Test connection\" to probe each stage individually and see exactly which one fails.";
+}
+
+function TestStepRow({ step }: { step: TestConnectionStep }) {
+  const { status } = step;
+  const Icon = status === "success" ? Check : status === "failed" ? X : status === "skipped" ? AlertCircle : Loader2;
+  const iconClass =
+    status === "success" ? "text-emerald-600" :
+    status === "failed" ? "text-rose-600" :
+    status === "skipped" ? "text-muted-foreground" :
+    "text-muted-foreground animate-spin";
+  const rowBg =
+    status === "failed" ? "border-rose-200 bg-rose-50/40" :
+    status === "success" ? "border-emerald-200 bg-emerald-50/40" :
+    "border-border bg-muted/20";
+  return (
+    <div className={`flex items-start gap-3 p-3 rounded-lg border ${rowBg}`}>
+      <Icon className={`h-4 w-4 shrink-0 mt-0.5 ${iconClass}`} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium text-foreground">{step.label}</span>
+          {step.durationMs !== undefined && (
+            <span className="text-[10px] text-muted-foreground">{step.durationMs} ms</span>
+          )}
+          {status === "skipped" && (
+            <Badge variant="outline" className="text-[10px] text-muted-foreground">Skipped</Badge>
+          )}
+        </div>
+        {step.error && (
+          <p className="text-xs text-rose-700 mt-1 whitespace-pre-wrap break-words">{step.error}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TestConnectionPanel({
+  result,
+  onClear,
+}: {
+  result: TestConnectionResult;
+  onClear: () => void;
+}) {
+  return (
+    <Card className={`border ${result.success ? "border-emerald-200 bg-emerald-50/30" : "border-rose-200 bg-rose-50/30"}`}>
+      <CardHeader className="flex-row items-start justify-between space-y-0 gap-3">
+        <div className="flex-1">
+          <CardTitle className="text-base flex items-center gap-2">
+            {result.success ? (
+              <Check className="h-4 w-4 text-emerald-600" />
+            ) : (
+              <AlertCircle className="h-4 w-4 text-rose-600" />
+            )}
+            Persona connection {result.success ? "OK" : "failed"}
+          </CardTitle>
+          <CardDescription>
+            {result.success
+              ? "All checks passed. Sync should work — re-run it if it was failing."
+              : "One of the stages broke. See which one below; the screenshot shows what Persona was actually showing."}
+          </CardDescription>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onClear} title="Clear">
+          <X className="h-4 w-4" />
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-2">
+          {result.steps.map((s) => (
+            <TestStepRow key={s.step} step={s} />
+          ))}
+        </div>
+        {!result.success && result.failureScreenshotB64 && (
+          <details className="rounded-lg border border-border bg-background p-3" open>
+            <summary className="cursor-pointer text-sm font-medium select-none">
+              Screenshot at the moment of failure
+            </summary>
+            <div className="mt-3 rounded-md overflow-hidden border border-border bg-muted">
+              <img
+                src={`data:image/png;base64,${result.failureScreenshotB64}`}
+                alt="Persona page at failure"
+                className="w-full max-h-[480px] object-contain"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              This is exactly what Persona was rendering when the test failed. Common patterns: blank page (network blocked), login form still visible (credentials wrong), CAPTCHA / MFA (manual login required), error page (Persona internal issue).
+            </p>
+          </details>
         )}
       </CardContent>
     </Card>
