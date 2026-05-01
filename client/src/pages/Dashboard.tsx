@@ -1517,21 +1517,17 @@ function DashboardHero({
             </div>
           </div>
           <div>
-            <Sparkline
-              points={scoreSeries}
-              color="oklch(0.62 0.16 75)"
-              fillId="spark-primary-grad"
-              height={64}
-              strokeWidth={1.75}
-              labels={trend.map(t => t.label)}
-              valueFormatter={v => v.toFixed(1)}
+            <HeroChart
+              points={trend.map((t, i) => ({
+                x: i,
+                y: Number(t.avgTotalScore) || 0,
+                label: t.label,
+                evals: t.totalEvaluations,
+                gps: t.uniqueGPs,
+              }))}
+              height={180}
+              selectedIdx={selectedIdx}
             />
-            {firstLabel && lastLabel && (
-              <div className="flex items-center justify-between mt-1.5 text-[10px] text-muted-foreground/80 uppercase tracking-wider tabular-nums">
-                <span>{firstLabel}</span>
-                <span>{lastLabel}</span>
-              </div>
-            )}
             {/* Inline mini-stats below the chart fill the remaining
                 vertical space with useful context — high / low / monthly
                 avg of the score series — instead of leaving a blank gap. */}
@@ -2165,4 +2161,337 @@ function formatRelativeTime(date: Date): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+// ============================================
+// HeroChart — rich avg-score chart for the dashboard hero
+//
+// Replaces the plain Sparkline used previously. Adds:
+//   - Y-axis: 4 horizontal grid lines with min/max/quartile labels
+//   - X-axis: month label under EVERY data point (not just first/last)
+//   - Visible dot markers on every month (filled gold)
+//   - Pulse animation on the selected month (or last with data)
+//   - Hover tooltip per dot showing month + avg + evals + unique GPs
+//   - Smooth Bézier curve + multi-stop area gradient (deeper at peak)
+//   - Empty months (y=0) rendered as semi-transparent dots; line breaks
+//     the area shape so it doesn't drag down to zero
+// ============================================
+
+type HeroChartPoint = {
+  x: number;
+  y: number;
+  label: string;
+  evals: number;
+  gps: number;
+};
+
+function HeroChart({
+  points,
+  height = 180,
+  selectedIdx,
+}: {
+  points: HeroChartPoint[];
+  height?: number;
+  selectedIdx: number;
+}) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  if (points.length < 2) {
+    return (
+      <div
+        className="rounded-xl border border-dashed border-border bg-muted/20 flex items-center justify-center text-xs text-muted-foreground/70 italic"
+        style={{ height }}
+      >
+        Need at least 2 months of data to draw the trend
+      </div>
+    );
+  }
+
+  // Layout
+  const W = 600;
+  const H = height;
+  const padTop = 22;       // headroom for value bubbles on hover
+  const padBottom = 28;    // x-axis labels
+  const padLeft = 32;      // y-axis labels
+  const padRight = 8;
+  const innerW = W - padLeft - padRight;
+  const innerH = H - padTop - padBottom;
+
+  // Y-axis range — pad min/max so the line doesn't stick to edges
+  const ys = points.map(p => p.y).filter(y => y > 0);
+  const dataMin = ys.length > 0 ? Math.min(...ys) : 0;
+  const dataMax = ys.length > 0 ? Math.max(...ys) : 25;
+  const range = Math.max(dataMax - dataMin, 1);
+  const yPad = range * 0.25;
+  const yMin = Math.max(0, dataMin - yPad);
+  const yMax = dataMax + yPad;
+  const yScale = (v: number) => padTop + innerH - ((v - yMin) / (yMax - yMin)) * innerH;
+  const xStep = innerW / (points.length - 1);
+  const xScale = (i: number) => padLeft + i * xStep;
+
+  // Horizontal grid lines — 4 ticks (top / 2 inner / bottom)
+  const gridTicks = [yMax, (yMax * 2 + yMin) / 3, (yMax + yMin * 2) / 3, yMin];
+
+  // Line / area path (Bézier smoothing on non-zero points only;
+  // anchor zero points to the local trend so the line doesn't dive)
+  const smoothPath = (coords: { x: number; y: number }[]): string => {
+    if (coords.length === 0) return "";
+    if (coords.length === 1) return `M ${coords[0].x} ${coords[0].y}`;
+    const out: string[] = [`M ${coords[0].x.toFixed(2)} ${coords[0].y.toFixed(2)}`];
+    const tension = 0.2;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const p0 = coords[i - 1] ?? coords[i];
+      const p1 = coords[i];
+      const p2 = coords[i + 1];
+      const p3 = coords[i + 2] ?? p2;
+      const cp1x = p1.x + (p2.x - p0.x) * tension;
+      const cp1y = p1.y + (p2.y - p0.y) * tension;
+      const cp2x = p2.x - (p3.x - p1.x) * tension;
+      const cp2y = p2.y - (p3.y - p1.y) * tension;
+      out.push(
+        `C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`,
+      );
+    }
+    return out.join(" ");
+  };
+
+  const coords = points.map((p, i) => ({
+    x: xScale(i),
+    y: p.y > 0 ? yScale(p.y) : padTop + innerH * 0.6, // soft anchor for zero
+    raw: p,
+    isZero: p.y <= 0,
+  }));
+  const linePath = smoothPath(coords);
+  const areaPath = `${linePath} L ${xScale(points.length - 1).toFixed(2)} ${(padTop + innerH).toFixed(2)} L ${padLeft.toFixed(2)} ${(padTop + innerH).toFixed(2)} Z`;
+
+  // Highlight: prefer hovered dot, else selectedIdx (clamp to series),
+  // else last non-zero point.
+  const highlightIdx = (() => {
+    if (hoverIdx != null) return hoverIdx;
+    if (selectedIdx >= 0 && selectedIdx < points.length) return selectedIdx;
+    for (let i = points.length - 1; i >= 0; i--) {
+      if (points[i].y > 0) return i;
+    }
+    return points.length - 1;
+  })();
+  const highlight = coords[highlightIdx];
+  const highlightPoint = points[highlightIdx];
+
+  return (
+    <div className="relative w-full" style={{ height: H }}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        className="w-full h-full block overflow-visible"
+        role="img"
+        aria-label={`Trend across ${points.map(p => `${p.label}: ${p.y.toFixed(1)}`).join(", ")}`}
+      >
+        <defs>
+          <linearGradient id="hero-area-rich" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="oklch(0.65 0.18 75)" stopOpacity="0.55" />
+            <stop offset="40%" stopColor="oklch(0.62 0.16 75)" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="oklch(0.62 0.16 75)" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="hero-line-rich" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="oklch(0.62 0.16 75)" />
+            <stop offset="50%" stopColor="oklch(0.68 0.18 75)" />
+            <stop offset="100%" stopColor="oklch(0.62 0.16 75)" />
+          </linearGradient>
+          {/* Soft pulse around the highlighted dot */}
+          <radialGradient id="hero-pulse">
+            <stop offset="0%" stopColor="oklch(0.68 0.18 75)" stopOpacity="0.6" />
+            <stop offset="100%" stopColor="oklch(0.68 0.18 75)" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+
+        {/* Y-axis grid + labels */}
+        {gridTicks.map((tickValue, i) => {
+          const y = yScale(tickValue);
+          return (
+            <g key={`grid-${i}`}>
+              <line
+                x1={padLeft}
+                x2={W - padRight}
+                y1={y}
+                y2={y}
+                stroke="oklch(0.92 0.005 260)"
+                strokeWidth="1"
+                strokeDasharray={i === 0 || i === gridTicks.length - 1 ? undefined : "3 3"}
+              />
+              <text
+                x={padLeft - 6}
+                y={y + 3}
+                fontSize="9"
+                fontWeight="500"
+                textAnchor="end"
+                fill="oklch(0.55 0.01 260)"
+                className="tabular-nums select-none"
+              >
+                {tickValue.toFixed(1)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Area + line */}
+        <path d={areaPath} fill="url(#hero-area-rich)" />
+        <path
+          d={linePath}
+          fill="none"
+          stroke="url(#hero-line-rich)"
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+
+        {/* Pulse halo behind the highlight */}
+        {highlightPoint.y > 0 && (
+          <circle
+            cx={highlight.x}
+            cy={highlight.y}
+            r="14"
+            fill="url(#hero-pulse)"
+            className="origin-center"
+            style={{ animation: "hero-chart-pulse 2.4s ease-in-out infinite" }}
+          />
+        )}
+
+        {/* X-axis tick line */}
+        <line
+          x1={padLeft}
+          x2={W - padRight}
+          y1={padTop + innerH}
+          y2={padTop + innerH}
+          stroke="oklch(0.85 0.005 260)"
+          strokeWidth="1"
+        />
+
+        {/* Dots + hover targets */}
+        {coords.map((c, i) => {
+          const isHl = i === highlightIdx;
+          const isHover = hoverIdx === i;
+          return (
+            <g key={`dot-${i}`}>
+              {/* Invisible wide hit area for easier hovering */}
+              <rect
+                x={c.x - xStep / 2}
+                y={padTop}
+                width={xStep}
+                height={innerH}
+                fill="transparent"
+                onMouseEnter={() => setHoverIdx(i)}
+                onMouseLeave={() => setHoverIdx(null)}
+                style={{ cursor: c.raw.y > 0 ? "pointer" : "default" }}
+              />
+              {/* Vertical hover guide */}
+              {isHover && c.raw.y > 0 && (
+                <line
+                  x1={c.x}
+                  x2={c.x}
+                  y1={padTop}
+                  y2={padTop + innerH}
+                  stroke="oklch(0.75 0.05 75)"
+                  strokeWidth="1"
+                  strokeDasharray="2 3"
+                />
+              )}
+              {/* Dot */}
+              {c.raw.y > 0 ? (
+                <circle
+                  cx={c.x}
+                  cy={c.y}
+                  r={isHl ? 5 : isHover ? 4.5 : 3}
+                  fill="oklch(0.66 0.18 75)"
+                  stroke="white"
+                  strokeWidth={isHl ? 2.5 : 2}
+                  className="transition-all"
+                />
+              ) : (
+                <circle
+                  cx={c.x}
+                  cy={c.y}
+                  r="2.5"
+                  fill="oklch(0.85 0.005 260)"
+                  stroke="white"
+                  strokeWidth="1.5"
+                />
+              )}
+              {/* X-axis month label */}
+              <text
+                x={c.x}
+                y={padTop + innerH + 16}
+                fontSize="9"
+                fontWeight={isHl ? "600" : "500"}
+                textAnchor="middle"
+                fill={isHl ? "oklch(0.30 0.02 260)" : "oklch(0.55 0.01 260)"}
+                className="uppercase tracking-wider select-none"
+              >
+                {c.raw.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Hover tooltip — absolute-positioned div for crisper text rendering
+          than SVG <text>, plus drop-shadow */}
+      {hoverIdx != null && coords[hoverIdx].raw.y > 0 && (
+        <ChartTooltip
+          coord={coords[hoverIdx]}
+          point={points[hoverIdx]}
+          containerW={W}
+          containerH={H}
+          padLeft={padLeft}
+          padRight={padRight}
+          padTop={padTop}
+        />
+      )}
+
+      {/* Pulse keyframes (only need to be defined once globally; safe
+          to inline since the @keyframes name is namespaced) */}
+      <style>{`
+        @keyframes hero-chart-pulse {
+          0%, 100% { transform: scale(0.85); opacity: 0.55; transform-origin: center; transform-box: fill-box; }
+          50% { transform: scale(1.25); opacity: 0.15; transform-origin: center; transform-box: fill-box; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function ChartTooltip({
+  coord,
+  point,
+  containerW,
+  padLeft,
+  padRight,
+}: {
+  coord: { x: number; y: number };
+  point: HeroChartPoint;
+  containerW: number;
+  containerH: number;
+  padLeft: number;
+  padRight: number;
+  padTop: number;
+}) {
+  // Position via percentage so it tracks the SVG's responsive scaling.
+  // Flip horizontal anchor when near the right edge to avoid clipping.
+  const xPct = (coord.x / containerW) * 100;
+  const flipRight = coord.x > containerW - padRight - 100;
+  return (
+    <div
+      className="pointer-events-none absolute -translate-y-full mb-2 px-2.5 py-1.5 rounded-lg bg-foreground text-background shadow-lg text-[11px] tabular-nums whitespace-nowrap"
+      style={{
+        left: `${xPct}%`,
+        top: 0,
+        transform: flipRight
+          ? `translate(calc(-100% - 4px), -8px)`
+          : `translate(calc(-50% + ${padLeft / containerW * 100 / 2}px), -8px)`,
+      }}
+    >
+      <p className="font-semibold uppercase tracking-wider text-[9px] opacity-70">{point.label}</p>
+      <p className="font-bold text-sm leading-tight mt-0.5">{point.y.toFixed(1)}</p>
+      <p className="text-[10px] opacity-80 mt-0.5">{point.evals} eval{point.evals === 1 ? "" : "s"} · {point.gps} GP{point.gps === 1 ? "" : "s"}</p>
+    </div>
+  );
 }
