@@ -674,7 +674,20 @@ async function runPersonaAutoSync() {
     const { runPersonaSyncForTeam } = await import("./routers/personaSync");
     const { getAllFmTeams } = await import("./db");
 
-    const teams = await getAllFmTeams();
+    const allTeams = await getAllFmTeams();
+    // Skip teams without a configured personaProjectId — same guard
+    // the monthly pre-sync path uses. Without this, syncPersonaAttendance
+    // is called with projectId=null which means "no filter" and ingests
+    // EVERY worker visible to the Persona account, then fuzzy-matches
+    // them against same-name GPs across all teams. That risks
+    // overwriting one team's attendance with another team's data, plus
+    // burns Persona scrape time every 12h on teams that aren't even
+    // wired up to it.
+    const teams = allTeams.filter(t => (t as any).personaProjectId);
+    if (teams.length === 0) {
+      log.info("[PersonaAutoSync] No teams with personaProjectId — skipped");
+      return;
+    }
     // Compute month/year in Europe/Tallinn to match the cron timezone.
     // Without this, on a UTC-server host the Tallinn-midnight tick on
     // the 1st falls in the PREVIOUS UTC month — so Date.getMonth()
