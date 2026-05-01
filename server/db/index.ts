@@ -138,6 +138,7 @@ export {
   createActionItem, getActionItemById, updateActionItem,
   deleteActionItem, completeActionItem, listActionItems,
   getActionItemStats, verifyActionItemOwnership,
+  getRecentActionItemsByGpAndSource,
 } from "./actionItems";
 export type { ActionItemWithGp } from "./actionItems";
 

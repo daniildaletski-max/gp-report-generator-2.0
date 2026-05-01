@@ -30,6 +30,71 @@ const log = createLogger("PersonaSync");
  * missing because the migration wasn't applied yet) must NEVER stop
  * the actual sync from running.
  */
+/**
+ * Anomaly detection for attendance — fires when this month's
+ * sick/missed/late count rises sharply vs the prior calendar month.
+ *
+ * Thresholds:
+ *   - sick leaves: +3 days vs prior month → high priority
+ *   - missed days: +2 days vs prior month → high priority
+ *   - late: +3 events vs prior month → medium priority
+ *
+ * 14-day skip window keyed by `(gpId, source: persona_anomaly)` so a
+ * single rising trend doesn't generate the same item every 12h.
+ */
+async function maybeFlagAttendanceAnomaly(opts: {
+  gpId: number;
+  gpName: string;
+  ownerUserId: number | null;
+  month: number;
+  year: number;
+  current: { sickLeaves: number; missedDays: number; lateToWork: number };
+}): Promise<void> {
+  // Compare to previous calendar month
+  const prevDate = new Date(opts.year, opts.month - 2, 1);
+  const prevMonth = prevDate.getMonth() + 1;
+  const prevYear = prevDate.getFullYear();
+  const prev = await db.getOrCreateAttendance(opts.gpId, prevMonth, prevYear);
+
+  const sickDelta = opts.current.sickLeaves - (prev.sickLeaves ?? 0);
+  const missedDelta = opts.current.missedDays - (prev.missedDays ?? 0);
+  const lateDelta = opts.current.lateToWork - (prev.lateToWork ?? 0);
+
+  type Spike = { kind: "sick" | "missed" | "late"; delta: number; priority: "high" | "medium" };
+  const spikes: Spike[] = [];
+  if (sickDelta >= 3) spikes.push({ kind: "sick", delta: sickDelta, priority: "high" });
+  if (missedDelta >= 2) spikes.push({ kind: "missed", delta: missedDelta, priority: "high" });
+  if (lateDelta >= 3) spikes.push({ kind: "late", delta: lateDelta, priority: "medium" });
+  if (spikes.length === 0) return;
+
+  // Skip if we already created an attendance-anomaly item for this GP
+  // recently — keeps the coaching board from reposting the same
+  // alert every 12h sync.
+  const recent = await db.getRecentActionItemsByGpAndSource(opts.gpId, "ai_insight", 14);
+  if (recent.some(it => it.title.startsWith("Attendance spike:"))) return;
+
+  const monthName = new Date(opts.year, opts.month - 1, 1).toLocaleString("en-US", { month: "long" });
+  const lines = spikes.map(s => {
+    if (s.kind === "sick") return `Sick days ${prev.sickLeaves ?? 0} → ${opts.current.sickLeaves} (+${s.delta})`;
+    if (s.kind === "missed") return `Missed days ${prev.missedDays ?? 0} → ${opts.current.missedDays} (+${s.delta})`;
+    return `Late-to-work ${prev.lateToWork ?? 0} → ${opts.current.lateToWork} (+${s.delta})`;
+  });
+  const priority = spikes.some(s => s.priority === "high") ? "high" : "medium";
+
+  await db.createActionItem({
+    gamePresenterId: opts.gpId,
+    userId: opts.ownerUserId,
+    createdById: null,
+    title: `Attendance spike: ${opts.gpName} (${monthName})`,
+    description: `Sharp rise in absences detected by Persona auto-sync:\n${lines.join("\n")}\n\nWorth a 1:1 to check on the GP.`,
+    category: "attendance",
+    status: "open",
+    priority,
+    source: "ai_insight",
+  });
+  log.info(`[Persona anomaly] flagged ${opts.gpName}: ${spikes.map(s => `${s.kind}+${s.delta}`).join(", ")}`);
+}
+
 async function tryLog<T>(op: () => Promise<T>, label: string): Promise<T | null> {
   try {
     return await op();
@@ -47,7 +112,12 @@ interface MatchDetail {
   personaName: string;
   matched: boolean;
   similarity: number;
-  changes: { sickLeaves?: { from: number; to: number }; missedDays?: { from: number; to: number }; extraShifts?: { from: number; to: number } };
+  changes: {
+    sickLeaves?: { from: number; to: number };
+    missedDays?: { from: number; to: number };
+    extraShifts?: { from: number; to: number };
+    lateToWork?: { from: number; to: number };
+  };
   /**
    * Diagnostic info for unmatched rows so the admin can tell at a
    * glance WHY each Persona worker didn't match: closest GP candidate
@@ -172,12 +242,30 @@ export async function runPersonaSyncForTeam(opts: {
         if ((existing.extraShifts ?? 0) !== worker.extraShifts) {
           changes.extraShifts = { from: existing.extraShifts ?? 0, to: worker.extraShifts };
         }
+        // lateToWork is new — Persona didn't surface this before. We
+        // also detect a change when it exists in the scraper output
+        // even if existing was 0.
+        if ((existing.lateToWork ?? 0) !== worker.lateToWork) {
+          changes.lateToWork = { from: existing.lateToWork ?? 0, to: worker.lateToWork };
+        }
 
         if (!opts.dryRun && Object.keys(changes).length > 0) {
+          // Persist counts AND the per-day breakdown JSON so the FM
+          // can drill into "which 4 days was she sick" without re-
+          // scraping. The breakdown column is `remarks` — it's the
+          // closest existing JSON-friendly text field on the row.
+          // Format: JSON-stringified { sick, missed, extra, late }
+          // arrays of yyyy-mm-dd strings.
           await db.updateAttendance(existing.id, {
             sickLeaves: worker.sickLeaves,
             missedDays: worker.missedDays,
             extraShifts: worker.extraShifts,
+            lateToWork: worker.lateToWork,
+            remarks: JSON.stringify({
+              source: "persona",
+              syncedAt: new Date().toISOString(),
+              days: worker.dayBreakdown,
+            }),
           });
         }
         matched++;
@@ -189,6 +277,28 @@ export async function runPersonaSyncForTeam(opts: {
           similarity: match.similarity,
           changes,
         });
+
+        // Anomaly detection — when the absence count for this GP rises
+        // sharply versus the previous month, surface it as a high-
+        // priority attendance action item. Only runs on real syncs
+        // (not previews), and is best-effort: a failure here must not
+        // block the rest of the sync from completing.
+        if (!opts.dryRun) {
+          await maybeFlagAttendanceAnomaly({
+            gpId: match.gamePresenter.id,
+            gpName: match.gamePresenter.name,
+            ownerUserId: match.gamePresenter.userId ?? null,
+            month: opts.month,
+            year: opts.year,
+            current: {
+              sickLeaves: worker.sickLeaves,
+              missedDays: worker.missedDays,
+              lateToWork: worker.lateToWork,
+            },
+          }).catch(err => {
+            log.warn(`anomaly check failed for ${worker.name}: ${err instanceof Error ? err.message : String(err)}`);
+          });
+        }
       } else {
         unmatched++;
         // Decide the reason for the failure so the FM gets actionable
