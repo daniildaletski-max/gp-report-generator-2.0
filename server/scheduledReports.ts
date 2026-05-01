@@ -675,9 +675,17 @@ async function runPersonaAutoSync() {
     const { getAllFmTeams } = await import("./db");
 
     const teams = await getAllFmTeams();
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    const year = now.getFullYear();
+    // Compute month/year in Europe/Tallinn to match the cron timezone.
+    // Without this, on a UTC-server host the Tallinn-midnight tick on
+    // the 1st falls in the PREVIOUS UTC month — so Date.getMonth()
+    // returns the wrong month and the sync would query stale data.
+    const tallinn = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Tallinn",
+      year: "numeric",
+      month: "numeric",
+    }).formatToParts(new Date());
+    const month = Number(tallinn.find(p => p.type === "month")?.value ?? new Date().getMonth() + 1);
+    const year = Number(tallinn.find(p => p.type === "year")?.value ?? new Date().getFullYear());
 
     let total = { matched: 0, unmatched: 0, failed: 0 };
     for (const team of teams) {

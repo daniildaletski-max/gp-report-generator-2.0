@@ -250,22 +250,33 @@ export async function runPersonaSyncForTeam(opts: {
         }
 
         if (!opts.dryRun && Object.keys(changes).length > 0) {
-          // Persist counts AND the per-day breakdown JSON so the FM
-          // can drill into "which 4 days was she sick" without re-
-          // scraping. The breakdown column is `remarks` — it's the
-          // closest existing JSON-friendly text field on the row.
-          // Format: JSON-stringified { sick, missed, extra, late }
-          // arrays of yyyy-mm-dd strings.
+          // Per-day breakdown — only write to `remarks` when it's
+          // safe (empty or already-our-JSON). Otherwise preserve the
+          // FM's manual coaching notes; data-loss regression caught
+          // by codex review.
+          //
+          // We detect "our JSON" by parsing — only auto-replace when
+          // the existing value is a JSON object with source==="persona".
+          // Anything else (free text, other JSON) is left alone.
+          const existingRemarks = (existing.remarks ?? "").trim();
+          const isReplaceable = (() => {
+            if (existingRemarks === "") return true;
+            try {
+              const parsed = JSON.parse(existingRemarks);
+              return parsed && typeof parsed === "object" && parsed.source === "persona";
+            } catch { return false; }
+          })();
+          const breakdownJson = JSON.stringify({
+            source: "persona",
+            syncedAt: new Date().toISOString(),
+            days: worker.dayBreakdown,
+          });
           await db.updateAttendance(existing.id, {
             sickLeaves: worker.sickLeaves,
             missedDays: worker.missedDays,
             extraShifts: worker.extraShifts,
             lateToWork: worker.lateToWork,
-            remarks: JSON.stringify({
-              source: "persona",
-              syncedAt: new Date().toISOString(),
-              days: worker.dayBreakdown,
-            }),
+            ...(isReplaceable ? { remarks: breakdownJson } : {}),
           });
         }
         matched++;
