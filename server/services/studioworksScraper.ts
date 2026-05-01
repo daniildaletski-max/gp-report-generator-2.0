@@ -103,18 +103,39 @@ async function resolveChromiumExecutable(): Promise<string> {
 async function getBrowser(): Promise<Browser> {
   if (browserInstance && browserInstance.connected) return browserInstance;
   const executablePath = await resolveChromiumExecutable();
-  browserInstance = await puppeteer.launch({
-    executablePath,
-    args: [
-      ...chromium.args,
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-    ],
-    headless: true,
-  });
-  return browserInstance;
+  try {
+    browserInstance = await puppeteer.launch({
+      executablePath,
+      args: [
+        ...chromium.args,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
+      // Pass env explicitly so chromium.executablePath()'s LD_LIBRARY_PATH
+      // updates are captured at the moment of launch.
+      env: { ...(process.env as Record<string, string>) },
+      headless: true,
+    });
+    return browserInstance;
+  } catch (err) {
+    // Translate cryptic shared-library errors into something the
+    // operator can act on (libnspr4 / libnss3 etc. missing on the
+    // deploy host).
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/shared libraries|cannot open shared object|libnspr|libnss/i.test(msg)) {
+      throw new Error(
+        `[chromium] Missing system shared libraries. Chromium binary launched but couldn't load its deps.\n\n` +
+        `Original error: ${msg}\n\n` +
+        `Fix on the deploy host (one of):\n` +
+        `  1. Install Chromium runtime libs:\n` +
+        `     apt-get install -y libnspr4 libnss3 libgconf-2-4 libxss1 libasound2 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libgtk-3-0 libxcomposite1 libxdamage1 libxrandr2 libxkbcommon0\n` +
+        `  2. OR set PUPPETEER_EXECUTABLE_PATH to a system Chromium with deps already installed.`,
+      );
+    }
+    throw err;
+  }
 }
 
 export async function closeBrowser(): Promise<void> {
