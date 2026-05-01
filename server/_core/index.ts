@@ -9,7 +9,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { initScheduledReports } from "../scheduledReports";
+import { initScheduledReports, initStudioworksSync, initAutoCoaching } from "../scheduledReports";
 import { createLogger } from "../services/logger";
 import { requestTracingMiddleware, requestValidation } from "../services/requestTracing";
 import { cache } from "../services/cache";
@@ -255,6 +255,14 @@ async function startServer() {
     log.info(`Modules loaded: DB (13 domain modules), Services (5 modules), Routes (16 routers)`);
     // Initialize scheduled monthly report generation
     initScheduledReports();
+    // Studioworks auto-sync — runs every 6h by default. Skipped at
+    // runtime when STUDIOWORKS_USERNAME/PASSWORD env vars aren't set,
+    // so this is safe even when the integration isn't configured yet.
+    initStudioworksSync();
+    // Auto-coaching — daily at 07:00 EET, turns regression insights
+    // into action items so the FM doesn't have to manually create
+    // a coaching plan for every GP that dropped points.
+    initAutoCoaching();
     // Idempotent schema repair for `game_presenters.realName`.
     // Manus's deploy doesn't run drizzle migrations automatically, so
     // when PR #38 added the column to schema.ts but the prod DB still
