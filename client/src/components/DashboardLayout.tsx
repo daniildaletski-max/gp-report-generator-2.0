@@ -15,8 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, Moon, PanelLeft, Search, Sun } from "lucide-react";
-import { useTheme } from "@/contexts/ThemeContext";
+import { LayoutDashboard, LogOut, PanelLeft, Search } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState, createContext, useContext, useCallback } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -132,8 +131,6 @@ function DashboardLayoutContent({
   const isMobile = useIsMobile();
   const palette = useCommandPalette();
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform);
-  const { theme, toggleTheme } = useTheme();
-
   const handleLogout = useCallback(async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
@@ -293,25 +290,6 @@ function DashboardLayoutContent({
               )}
             </div>
 
-            {/* Theme toggle */}
-            <button
-              onClick={toggleTheme}
-              className="flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-primary/8 transition-all duration-200 w-full text-left group-data-[collapsible=icon]:justify-center text-muted-foreground hover:text-primary"
-              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            >
-              {theme === 'dark' ? (
-                <Sun className="h-4 w-4 shrink-0" />
-              ) : (
-                <Moon className="h-4 w-4 shrink-0" />
-              )}
-              {!isCollapsed && (
-                <span className="text-sm font-medium">
-                  {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-                </span>
-              )}
-            </button>
-
             {/* Sign out button — always visible */}
             <button
               onClick={handleLogout}
@@ -358,13 +336,6 @@ function DashboardLayoutContent({
                 aria-label="Open search"
               >
                 <Search className="h-4 w-4" />
-              </button>
-              <button
-                onClick={toggleTheme}
-                className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-primary/10 transition-colors text-muted-foreground hover:text-primary"
-                aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-              >
-                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </button>
               <button
                 onClick={handleLogout}

@@ -119,8 +119,8 @@ const ScoreCategory = ({
     <div className="space-y-2 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className={`p-1.5 rounded-md bg-${color}-100 dark:bg-${color}-900/30`}>
-            <Icon className={`h-4 w-4 text-${color}-600 dark:text-${color}-400`} />
+          <div className={`p-1.5 rounded-md bg-${color}-100${color}-900/30`}>
+            <Icon className={`h-4 w-4 text-${color}-600${color}-400`} />
           </div>
           <span className="font-medium text-sm">{label}</span>
         </div>
@@ -319,13 +319,13 @@ export default function EvaluationDetailView({
                   <div className="p-4 space-y-4">
                     {/* Summary Cards */}
                     <div className="grid grid-cols-2 gap-3">
-                      <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border-blue-200 dark:border-blue-800">
+                      <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200">
                         <CardContent className="p-3">
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-muted-foreground">Appearance</span>
                             <Sparkles className="h-4 w-4 text-blue-500" />
                           </div>
-                          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{appearanceScore}/12</p>
+                          <p className="text-2xl font-bold text-blue-600">{appearanceScore}/12</p>
                         </CardContent>
                       </Card>
                       <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
@@ -430,12 +430,12 @@ export default function EvaluationDetailView({
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-3 gap-6">
-                    <div className="text-center p-4 rounded-lg bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/30 dark:to-green-900/20">
+                    <div className="text-center p-4 rounded-lg bg-gradient-to-br from-green-50 to-green-100">
                       <p className="text-4xl font-bold text-green-600">{evaluation.totalScore || 0}</p>
                       <p className="text-sm text-muted-foreground mt-1">Total Score</p>
                       <p className="text-xs text-muted-foreground">out of 22</p>
                     </div>
-                    <div className="text-center p-4 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/20">
+                    <div className="text-center p-4 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100">
                       <p className="text-4xl font-bold text-blue-600">{appearanceScore}</p>
                       <p className="text-sm text-muted-foreground mt-1">Appearance</p>
                       <p className="text-xs text-muted-foreground">out of 12</p>

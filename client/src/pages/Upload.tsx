@@ -140,16 +140,16 @@ async function compressImage(file: File, maxWidth: number = 1920, quality: numbe
 
 function getScoreColor(score: number, maxScore: number): string {
   const pct = (score / maxScore) * 100;
-  if (pct >= 80) return "text-emerald-600 dark:text-emerald-400";
-  if (pct >= 60) return "text-amber-600 dark:text-amber-400";
+  if (pct >= 80) return "text-emerald-600";
+  if (pct >= 60) return "text-amber-600";
   return "text-red-600";
 }
 
 function getScoreBg(score: number, maxScore: number): string {
   const pct = (score / maxScore) * 100;
-  if (pct >= 80) return "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40";
-  if (pct >= 60) return "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/40";
-  return "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/40";
+  if (pct >= 80) return "bg-emerald-50 border-emerald-200";
+  if (pct >= 60) return "bg-amber-50 border-amber-200";
+  return "bg-red-50 border-red-200";
 }
 
 // ============ SCORE BAR COMPONENT ============
@@ -317,9 +317,9 @@ function EvaluationResultCard({ file, onRemove, onRetry }: { file: FileWithPrevi
         <div className="border-t border-border px-4 pb-4 pt-3 space-y-3 bg-muted/20">
           {/* Match info */}
           {file.matchInfo && !file.matchInfo.isExactMatch && !file.matchInfo.isNewGP && (
-            <div className="flex items-center gap-2 text-sm p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/40">
-              <Link2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <span className="text-blue-700 dark:text-blue-300">
+            <div className="flex items-center gap-2 text-sm p-2.5 rounded-lg bg-blue-50 border border-blue-200">
+              <Link2 className="h-4 w-4 text-blue-600" />
+              <span className="text-blue-700">
                 Matched to <strong>{file.matchInfo.matchedName}</strong> ({file.matchInfo.similarity}% similarity)
               </span>
             </div>
@@ -973,13 +973,13 @@ export default function UploadPage() {
 
       {/* Batch Summary */}
       {stats.success > 0 && !isProcessing && stats.pending === 0 && stats.uploading === 0 && (
-        <div className="p-4 rounded-xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/50 dark:bg-emerald-950/30">
+        <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
-              <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+              <CheckCircle className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
-              <p className="font-semibold text-emerald-800 dark:text-emerald-200">
+              <p className="font-semibold text-emerald-800">
                 {stats.success} screenshot{stats.success !== 1 ? "s" : ""} processed successfully
               </p>
               <p className="text-sm text-emerald-600 mt-0.5">

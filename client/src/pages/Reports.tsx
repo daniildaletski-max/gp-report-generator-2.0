@@ -1275,38 +1275,55 @@ function CoverageMatrix({
   }
 
   return (
-    <Card className="border border-border">
-      <CardHeader className="pb-3">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <Card className="border border-amber-200/50 shadow-sm overflow-hidden">
+      {/* Gold shimmer accent at top */}
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
+      <CardHeader className="pb-3 bg-gradient-to-br from-white to-amber-50/30">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <CardTitle className="text-base flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-primary" />
+              <div className="p-1.5 rounded-lg bg-amber-100 border border-amber-200">
+                <Calendar className="h-3.5 w-3.5 text-amber-700" />
+              </div>
               Coverage matrix
             </CardTitle>
-            <CardDescription>
-              {missingCount === 0
-                ? `All ${totalTeams} teams covered for ${MONTHS[currentMonth.month - 1]}`
-                : `${currentMonthCount} of ${totalTeams} teams covered for ${MONTHS[currentMonth.month - 1]} — ${missingCount} missing`}
+            <CardDescription className="mt-1">
+              {missingCount === 0 ? (
+                <span className="text-emerald-600 font-medium">✓ All {totalTeams} teams covered for {MONTHS[currentMonth.month - 1]}</span>
+              ) : (
+                <span>
+                  <span className="font-semibold text-slate-700">{currentMonthCount}/{totalTeams}</span> teams covered for {MONTHS[currentMonth.month - 1]}
+                  {" — "}<span className="text-amber-600 font-medium">{missingCount} missing</span>
+                </span>
+              )}
             </CardDescription>
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />Finalized</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-400" />Draft</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full border border-border bg-muted/40" />Missing</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />Finalized
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700">
+              <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />Draft
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200 text-slate-500">
+              <span className="h-2 w-2 rounded-full border border-slate-300 bg-slate-100 shrink-0" />Missing
+            </span>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="overflow-x-auto">
+      <CardContent className="overflow-x-auto p-0">
         <div className="inline-grid min-w-full" style={{ gridTemplateColumns: `minmax(160px, 1.5fr) repeat(${months.length}, minmax(72px, 1fr))` }}>
           {/* Header row */}
-          <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground py-2 px-2 sticky left-0 bg-card border-b border-border">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 py-2.5 px-3 sticky left-0 bg-amber-50/60 border-b border-amber-200/50">
             Team
           </div>
           {months.map((m, i) => (
             <div
               key={`h-${i}`}
-              className={`text-[11px] font-medium uppercase tracking-wider text-center py-2 border-b border-border ${
-                i === months.length - 1 ? "text-primary" : "text-muted-foreground"
+              className={`text-[11px] font-semibold uppercase tracking-wider text-center py-2.5 border-b ${
+                i === months.length - 1
+                  ? "text-amber-700 bg-amber-50/60 border-amber-200/50"
+                  : "text-slate-400 bg-slate-50/40 border-slate-200/50"
               }`}
             >
               {m.label}
@@ -1345,10 +1362,10 @@ function CoverageRow({
 }) {
   return (
     <>
-      <div className="py-2 px-2 sticky left-0 bg-card border-b border-border min-w-0">
-        <p className="text-sm font-medium truncate">{team.teamName}</p>
+      <div className="py-2.5 px-3 sticky left-0 bg-white border-b border-slate-100 min-w-0 hover:bg-amber-50/30 transition-colors">
+        <p className="text-sm font-semibold text-slate-800 truncate">{team.teamName}</p>
         {team.floorManagerName && (
-          <p className="text-[11px] text-muted-foreground truncate">{team.floorManagerName}</p>
+          <p className="text-[11px] text-slate-400 truncate">{team.floorManagerName}</p>
         )}
       </div>
       {months.map((m, i) => {
@@ -1357,6 +1374,7 @@ function CoverageRow({
         const status = r?.report.status;
         const isFinalized = status === "finalized";
         const isDraft = !!r && !isFinalized;
+        const isCurrentMonth = i === months.length - 1;
         const tooltip = r
           ? `${MONTHS[m.month - 1]} ${m.year} — ${isFinalized ? "Finalized" : "Draft"} (click to open)`
           : `${MONTHS[m.month - 1]} ${m.year} — no report yet (click to generate)`;
@@ -1366,17 +1384,31 @@ function CoverageRow({
             type="button"
             title={tooltip}
             onClick={() => (r ? onOpenReport(r) : onCreateForCell(team.id, m.month, m.year))}
-            className={`relative h-12 border-b border-border flex items-center justify-center transition-colors ${
+            className={`relative h-12 border-b flex items-center justify-center transition-all duration-200 group ${
               isFinalized
-                ? "bg-emerald-50 hover:bg-emerald-100"
+                ? "bg-emerald-50/80 hover:bg-emerald-100 border-emerald-100/60"
                 : isDraft
-                  ? "bg-amber-50 hover:bg-amber-100"
-                  : "bg-muted/20 hover:bg-muted/50"
+                  ? "bg-amber-50/80 hover:bg-amber-100 border-amber-100/60"
+                  : isCurrentMonth
+                    ? "bg-amber-50/30 hover:bg-amber-50 border-amber-100/40"
+                    : "bg-white hover:bg-slate-50 border-slate-100/60"
             }`}
           >
-            {isFinalized && <CheckCircle className="h-4 w-4 text-emerald-600" />}
-            {isDraft && <FileSpreadsheet className="h-4 w-4 text-amber-600" />}
-            {!r && <Plus className="h-3.5 w-3.5 text-muted-foreground/50" />}
+            {isFinalized && (
+              <div className="flex flex-col items-center gap-0.5">
+                <CheckCircle className="h-4 w-4 text-emerald-600 group-hover:scale-110 transition-transform" />
+              </div>
+            )}
+            {isDraft && (
+              <div className="flex flex-col items-center gap-0.5">
+                <FileSpreadsheet className="h-4 w-4 text-amber-600 group-hover:scale-110 transition-transform" />
+              </div>
+            )}
+            {!r && (
+              <Plus className={`h-3.5 w-3.5 transition-all duration-200 ${
+                isCurrentMonth ? "text-amber-400/70 group-hover:text-amber-600" : "text-slate-300 group-hover:text-slate-500"
+              }`} />
+            )}
           </button>
         );
       })}

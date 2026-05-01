@@ -1,9 +1,8 @@
 /**
  * Reusable presentational components for the GP Portal page.
  *
- * These were inline in `GPPortal.tsx` until extraction. No behaviour
- * change in the move — just a code organisation step that lets the
- * orchestrator file shrink as new tabbed sections are added.
+ * v2.0 — Premium gold/white design system, enhanced micro-interactions,
+ * improved mobile-first layout, and refined visual hierarchy.
  */
 import { useEffect, useState } from "react";
 import {
@@ -18,10 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MONTH_NAMES } from "../../../../shared/const";
 
 // ============================================================================
-// AI Coach card — the LLM reads the GP's recent evaluations + monthly stats
-// and returns four short personalised lines (headline + strength + focus +
-// motivation). Rendered as a single attention-grabbing block right under the
-// hero. Server caches per-day so the polling doesn't burn LLM credits.
+// AI Coach card — personalised LLM summary block
 // ============================================================================
 
 export function AICoachCard({
@@ -45,16 +41,19 @@ export function AICoachCard({
     : null;
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-amber-50 shadow-sm">
-      <div className="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-gradient-to-br from-violet-300/40 to-amber-300/40 blur-3xl pointer-events-none" aria-hidden />
+    <section className="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50 via-white to-yellow-50 shadow-sm hover:shadow-md transition-shadow duration-300">
+      {/* Decorative ambient glow */}
+      <div className="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-gradient-to-br from-amber-300/30 to-yellow-300/30 blur-3xl pointer-events-none" aria-hidden />
+      <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-gradient-to-tr from-amber-200/20 to-transparent blur-2xl pointer-events-none" aria-hidden />
+
       <div className="relative p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-violet-500 to-amber-500 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 shadow-md shadow-amber-200/50">
               <Wand2 className="h-4 w-4 text-white" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-violet-700">AI Coach</p>
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-700">AI Coach</p>
               <h3 className="text-base font-bold text-slate-900 leading-tight">
                 {isLoading ? "Reading your evaluations…" : insights?.headline || "Your personalised summary"}
               </h3>
@@ -64,15 +63,15 @@ export function AICoachCard({
             <button
               onClick={onRefresh}
               disabled={isFetching}
-              className="p-1.5 rounded-lg hover:bg-white/60 transition-colors disabled:opacity-50"
+              className="p-1.5 rounded-lg hover:bg-amber-100/60 transition-colors disabled:opacity-50"
               aria-label="Regenerate insights"
               title="Regenerate insights"
             >
-              <RefreshCw className={`h-3.5 w-3.5 text-slate-500 ${isFetching ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3.5 w-3.5 text-amber-600 ${isFetching ? "animate-spin" : ""}`} />
             </button>
             <button
               onClick={() => setCollapsed(c => !c)}
-              className="p-1.5 rounded-lg hover:bg-white/60 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-amber-100/60 transition-colors"
               aria-label={collapsed ? "Expand" : "Collapse"}
             >
               {collapsed ? <ChevronDown className="h-3.5 w-3.5 text-slate-500" /> : <ChevronUp className="h-3.5 w-3.5 text-slate-500" />}
@@ -91,7 +90,7 @@ export function AICoachCard({
             ) : (
               <>
                 <CoachLine icon={Sparkles} tone="emerald" label="Strength" text={insights.strength} />
-                <CoachLine icon={Target} tone="violet" label="Focus next" text={insights.focus} />
+                <CoachLine icon={Target} tone="gold" label="Focus next" text={insights.focus} />
                 <CoachLine icon={Flame} tone="amber" label="Keep going" text={insights.motivation} />
               </>
             )}
@@ -110,12 +109,12 @@ export function AICoachCard({
 }
 
 function CoachLine({ icon: Icon, tone, label, text }: {
-  icon: typeof Sparkles; tone: "emerald" | "violet" | "amber"; label: string; text: string;
+  icon: typeof Sparkles; tone: "emerald" | "gold" | "amber"; label: string; text: string;
 }) {
   const palette =
     tone === "emerald" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
-    tone === "violet" ? "bg-violet-100 text-violet-700 border-violet-200" :
-    "bg-amber-100 text-amber-700 border-amber-200";
+    tone === "gold" ? "bg-amber-100 text-amber-800 border-amber-300" :
+    "bg-yellow-100 text-yellow-800 border-yellow-300";
   return (
     <div className="flex items-start gap-3">
       <div className={`mt-0.5 shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wide ${palette}`}>
@@ -128,14 +127,7 @@ function CoachLine({ icon: Icon, tone, label, text }: {
 }
 
 // ============================================================================
-// Performance Pulse hero — dramatic full-width hero block intended to replace
-// the existing thin tier banner. Surfaces the GP's status at a glance:
-//   - Large circular progress ring sized off the overall score
-//   - Animated counter that rolls up to the current value on mount
-//   - Tier name + icon centred inside the ring
-//   - Three insight chips (delta vs prev / streak / last evaluation)
-// One block, one visual moment — meant to feel substantially different
-// from the prior thin banner. No new dependencies.
+// Performance Pulse hero — dramatic full-width hero block
 // ============================================================================
 
 function useCountUp(target: number, durationMs = 900): number {
@@ -175,7 +167,6 @@ export function PerformancePulseHero({
   maxScore: number;
   evaluationsCount: number;
   tierName: string;
-  /** tailwind classes for the gradient ring stroke + glow halo */
   tierAccent: string;
   TierIcon: typeof Star;
   delta: number | null;
@@ -190,32 +181,45 @@ export function PerformancePulseHero({
   const dashOffset = circumference * (1 - pct / 100);
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-slate-200 shadow-md">
-      {/* Backdrop layer — ambient gradient + soft amber halo behind ring */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-amber-50" aria-hidden />
-      <div className={`absolute -top-24 -right-20 h-72 w-72 rounded-full blur-3xl opacity-40 bg-gradient-to-br ${tierAccent}`} aria-hidden />
+    <section className="relative overflow-hidden rounded-3xl border border-amber-200/50 shadow-lg shadow-amber-100/40">
+      {/* Layered background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white via-amber-50/40 to-yellow-50" aria-hidden />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(251,191,36,0.12),transparent_60%)]" aria-hidden />
+      <div className={`absolute -top-24 -right-20 h-72 w-72 rounded-full blur-3xl opacity-30 bg-gradient-to-br ${tierAccent}`} aria-hidden />
+      {/* Gold shimmer line at top */}
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-400 to-transparent" aria-hidden />
 
       <div className="relative grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 sm:gap-8 p-6 sm:p-8 items-center">
         {/* Ring + tier badge */}
         <div className="relative h-48 w-48 mx-auto md:mx-0 shrink-0">
-          <svg viewBox="0 0 200 200" className="h-full w-full -rotate-90">
+          {/* Outer glow ring */}
+          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-200/40 to-yellow-200/40 blur-xl scale-110" aria-hidden />
+          <svg viewBox="0 0 200 200" className="h-full w-full -rotate-90 relative">
             <defs>
               <linearGradient id="pulseRing" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stopColor="#f59e0b" />
+                <stop offset="60%" stopColor="#d97706" />
                 <stop offset="100%" stopColor="#f97316" />
               </linearGradient>
+              <filter id="ringGlow">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
             </defs>
-            <circle cx="100" cy="100" r={radius} fill="none" stroke="#e2e8f0" strokeWidth="12" />
+            {/* Track */}
+            <circle cx="100" cy="100" r={radius} fill="none" stroke="#f3e8d0" strokeWidth="14" />
+            {/* Progress arc */}
             <circle
               cx="100"
               cy="100"
               r={radius}
               fill="none"
               stroke="url(#pulseRing)"
-              strokeWidth="12"
+              strokeWidth="14"
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={dashOffset}
+              filter="url(#ringGlow)"
               style={{ transition: "stroke-dashoffset 900ms cubic-bezier(0.16, 1, 0.3, 1)" }}
             />
           </svg>
@@ -232,19 +236,22 @@ export function PerformancePulseHero({
         </div>
 
         {/* Greeting + insight chips */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div>
-            <p className="text-xs sm:text-sm text-slate-500 uppercase tracking-wider font-medium">{greeting}</p>
-            <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 leading-tight">
-              {gpFirstName}'s <span className="text-amber-600">performance pulse</span>
+            <p className="text-xs sm:text-sm text-amber-600/80 uppercase tracking-widest font-semibold">{greeting}</p>
+            <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 leading-tight mt-1">
+              {gpFirstName}'s{" "}
+              <span className="bg-gradient-to-r from-amber-600 to-yellow-600 bg-clip-text text-transparent">
+                performance pulse
+              </span>
             </h1>
-            <p className="text-sm text-slate-600 mt-1">
+            <p className="text-sm text-slate-500 mt-1.5">
               {evaluationsCount} evaluation{evaluationsCount !== 1 ? "s" : ""} on record · keep stacking the wins
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {delta !== null && (
-              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border ${
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border shadow-sm ${
                 delta >= 0
                   ? "bg-emerald-50 border-emerald-200 text-emerald-700"
                   : "bg-rose-50 border-rose-200 text-rose-700"
@@ -254,18 +261,18 @@ export function PerformancePulseHero({
               </span>
             )}
             {cleanStreak >= 2 && (
-              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border ${
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border shadow-sm ${
                 cleanStreak >= 5
-                  ? "bg-violet-50 border-violet-200 text-violet-700"
-                  : "bg-amber-50 border-amber-200 text-amber-700"
+                  ? "bg-amber-50 border-amber-200 text-amber-700"
+                  : "bg-yellow-50 border-yellow-200 text-yellow-700"
               }`}>
                 {cleanStreak >= 5 ? <Crown className="h-3.5 w-3.5" /> : <Flame className="h-3.5 w-3.5" />}
                 {cleanStreak} perfect in a row
               </span>
             )}
             {lastEvaluationDate && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border bg-slate-50 border-slate-200 text-slate-700">
-                <Zap className="h-3.5 w-3.5" />
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border bg-slate-50 border-slate-200 text-slate-600 shadow-sm">
+                <Zap className="h-3.5 w-3.5 text-amber-500" />
                 Last eval {formatDistanceToNow(lastEvaluationDate, { addSuffix: true })}
               </span>
             )}
@@ -277,16 +284,13 @@ export function PerformancePulseHero({
 }
 
 // ============================================================================
-// Score card — large metric display with tooltip + status pill + progress bar
+// Score card — large metric display with premium hover effects
 // ============================================================================
 
 export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgColor, tooltip, delta, trend, sparkColor }: {
   score: number; maxScore: number; label: string; icon: typeof Star; accentColor: string; bgColor: string; tooltip?: string;
-  /** Month-over-month delta vs previous month with data. `null` = hide chip. */
   delta?: number | null;
-  /** Sequence of monthly values for the inline sparkline. Empty = hide chart. */
   trend?: Array<{ value: number }>;
-  /** Stroke colour for the sparkline. Defaults to amber. */
   sparkColor?: string;
 }) {
   const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
@@ -302,10 +306,15 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
   const showDelta = typeof delta === "number" && delta !== 0;
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl ${bgColor} p-5 sm:p-6 border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 group hover:-translate-y-0.5`}>
+    <div className={`relative overflow-hidden rounded-2xl ${bgColor} p-5 sm:p-6 border border-slate-200/80 shadow-sm hover:shadow-lg hover:shadow-amber-100/50 transition-all duration-300 group hover:-translate-y-1 cursor-default`}>
+      {/* Gold shimmer on hover */}
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-amber-50/50 to-transparent pointer-events-none" aria-hidden />
+      {/* Top accent line */}
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-400/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" aria-hidden />
+
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-4">
-          <div className={`p-2.5 rounded-xl border ${accentColor}`}>
+          <div className={`p-2.5 rounded-xl border ${accentColor} group-hover:scale-110 transition-transform duration-300`}>
             <Icon className="h-5 w-5" />
           </div>
           <div className="flex items-center gap-2">
@@ -313,14 +322,14 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
               <div className="relative">
                 <button
                   onClick={() => setShowTooltip(!showTooltip)}
-                  className="p-1 rounded-full hover:bg-slate-100 transition-colors"
+                  className="p-1 rounded-full hover:bg-amber-100 transition-colors"
                 >
-                  <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600" />
+                  <Info className="h-3.5 w-3.5 text-slate-400 hover:text-amber-600" />
                 </button>
                 {showTooltip && (
-                  <div className="absolute right-0 top-7 z-50 w-48 p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 shadow-lg">
+                  <div className="absolute right-0 top-7 z-50 w-48 p-3 bg-white border border-amber-200 rounded-xl text-xs text-slate-600 shadow-lg shadow-amber-100/50">
                     {tooltip}
-                    <div className="absolute -top-1 right-3 w-2 h-2 bg-white border-l border-t border-slate-200 rotate-45" />
+                    <div className="absolute -top-1 right-3 w-2 h-2 bg-white border-l border-t border-amber-200 rotate-45" />
                   </div>
                 )}
               </div>
@@ -345,9 +354,10 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
           </div>
           <p className="text-sm text-slate-500 mt-1">{label}</p>
         </div>
+        {/* Progress bar with gold gradient */}
         <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-1000 ease-out"
+            className="h-full bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 rounded-full transition-all duration-1000 ease-out shadow-sm"
             style={{ width: `${percentage}%` }}
           />
         </div>
@@ -357,7 +367,7 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
               <AreaChart data={trend} margin={{ top: 2, right: 2, left: 2, bottom: 0 }}>
                 <defs>
                   <linearGradient id={`spark-${label}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={sparkColor || "#f59e0b"} stopOpacity={0.35} />
+                    <stop offset="0%" stopColor={sparkColor || "#f59e0b"} stopOpacity={0.4} />
                     <stop offset="100%" stopColor={sparkColor || "#f59e0b"} stopOpacity={0} />
                   </linearGradient>
                 </defs>
@@ -365,7 +375,7 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
                   type="monotone"
                   dataKey="value"
                   stroke={sparkColor || "#f59e0b"}
-                  strokeWidth={1.75}
+                  strokeWidth={2}
                   fill={`url(#spark-${label})`}
                   isAnimationActive={false}
                   dot={false}
@@ -380,21 +390,25 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
 }
 
 // ============================================================================
-// Achievement badge — locked/unlocked tile shown in the achievements grid
+// Achievement badge — locked/unlocked tile
 // ============================================================================
 
 export function AchievementBadge({ icon: Icon, title, description, unlocked, color }: {
   icon: typeof Star; title: string; description: string; unlocked: boolean; color: string;
 }) {
   return (
-    <div className={`relative p-4 rounded-xl border transition-all duration-300 group ${
+    <div className={`relative p-4 rounded-xl border transition-all duration-300 group cursor-default ${
       unlocked
-        ? `${color} shadow-sm hover:shadow-md hover:scale-[1.02]`
-        : 'bg-slate-50 border-slate-200 opacity-60 grayscale'
+        ? `${color} shadow-sm hover:shadow-md hover:shadow-amber-100/60 hover:-translate-y-0.5`
+        : 'bg-slate-50 border-slate-200 opacity-50 grayscale'
     }`}>
-      <div className="flex items-center gap-3">
-        <div className={`p-2.5 rounded-xl transition-all ${unlocked ? 'bg-white/80 border border-slate-200' : 'bg-slate-100'}`}>
-          <Icon className={`h-5 w-5 ${unlocked ? 'text-slate-700' : 'text-slate-400'}`} />
+      {/* Gold shimmer on hover for unlocked */}
+      {unlocked && (
+        <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-amber-50/40 to-transparent pointer-events-none" aria-hidden />
+      )}
+      <div className="flex items-center gap-3 relative">
+        <div className={`p-2.5 rounded-xl transition-all duration-300 ${unlocked ? 'bg-white/80 border border-amber-200/60 group-hover:scale-110 group-hover:border-amber-300' : 'bg-slate-100'}`}>
+          <Icon className={`h-5 w-5 ${unlocked ? 'text-amber-700' : 'text-slate-400'}`} />
         </div>
         <div>
           <p className={`font-semibold text-sm ${unlocked ? 'text-slate-800' : 'text-slate-400'}`}>{title}</p>
@@ -402,7 +416,7 @@ export function AchievementBadge({ icon: Icon, title, description, unlocked, col
         </div>
       </div>
       {unlocked && (
-        <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-sm">
+        <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gradient-to-br from-amber-400 to-yellow-500 rounded-full flex items-center justify-center shadow-sm shadow-amber-200/60">
           <span className="text-[10px] text-white font-bold">✓</span>
         </div>
       )}
@@ -411,24 +425,26 @@ export function AchievementBadge({ icon: Icon, title, description, unlocked, col
 }
 
 // ============================================================================
-// Stat card — compact metric tile shown in the monthly stats grid
+// Stat card — compact metric tile with gold hover
 // ============================================================================
 
 export function StatCard({ icon: Icon, value, label, color, trend }: {
   icon: typeof Eye; value: string | number; label: string; color: string; trend?: number;
 }) {
   return (
-    <div className={`relative ${color} rounded-2xl border border-slate-200 overflow-hidden group hover:shadow-md transition-all duration-300`}>
+    <div className={`relative ${color} rounded-2xl border border-slate-200/80 overflow-hidden group hover:shadow-md hover:shadow-amber-100/40 hover:-translate-y-0.5 transition-all duration-300 cursor-default`}>
+      {/* Gold shimmer on hover */}
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-amber-50/40 to-transparent pointer-events-none" aria-hidden />
       <div className="p-4 sm:p-5 relative">
         <div className="flex items-center gap-3 sm:gap-4 relative">
-          <div className="bg-white/80 p-2.5 sm:p-3 rounded-xl shrink-0 shadow-sm border border-slate-200">
-            <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-slate-700" />
+          <div className="bg-white/90 p-2.5 sm:p-3 rounded-xl shrink-0 shadow-sm border border-amber-100/60 group-hover:scale-110 group-hover:border-amber-200 transition-all duration-300">
+            <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-amber-700" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-2xl sm:text-3xl font-bold text-slate-900">{value}</p>
               {trend !== undefined && trend !== 0 && (
-                <div className={`flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full ${trend > 0 ? 'text-red-600 bg-red-50' : 'text-green-600 bg-green-50'}`}>
+                <div className={`flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full ${trend > 0 ? 'text-red-600 bg-red-50' : 'text-emerald-600 bg-emerald-50'}`}>
                   {trend > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                   <span>{trend > 0 ? '+' : ''}{trend.toFixed(1)}</span>
                 </div>
@@ -451,7 +467,7 @@ export function LabeledComment({ icon: Icon, label, comment, score, maxScore }: 
 }) {
   if (!comment) return null;
   return (
-    <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+    <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-100/80 hover:border-amber-200 transition-colors duration-200">
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-2">
           <Icon className="h-3.5 w-3.5 text-amber-600" />
@@ -471,7 +487,6 @@ export function LabeledComment({ icon: Icon, label, comment, score, maxScore }: 
 
 // ============================================================================
 // Month selector — back/forward arrows around the displayed month/year
-// Used by the monthly details panel.
 // ============================================================================
 
 export function MonthSelector({ selectedMonth, selectedYear, onChange }: {
@@ -500,11 +515,11 @@ export function MonthSelector({ selectedMonth, selectedYear, onChange }: {
     <div className="flex items-center gap-2">
       <button
         onClick={handlePrev}
-        className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm"
+        className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-amber-50 hover:border-amber-200 transition-all duration-200 shadow-sm"
       >
         <ChevronLeft className="h-4 w-4 text-slate-600" />
       </button>
-      <div className="px-4 py-2 rounded-xl bg-white border border-slate-200 min-w-[160px] text-center shadow-sm">
+      <div className="px-4 py-2 rounded-xl bg-white border border-amber-200/60 min-w-[160px] text-center shadow-sm">
         <span className="text-sm font-medium text-slate-800">
           {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
         </span>
@@ -512,10 +527,10 @@ export function MonthSelector({ selectedMonth, selectedYear, onChange }: {
       <button
         onClick={handleNext}
         disabled={isCurrentMonth}
-        className={`p-2 rounded-lg border transition-colors shadow-sm ${
+        className={`p-2 rounded-lg border transition-all duration-200 shadow-sm ${
           isCurrentMonth
             ? 'bg-slate-50 border-slate-100 cursor-not-allowed'
-            : 'bg-white border-slate-200 hover:bg-slate-50'
+            : 'bg-white border-slate-200 hover:bg-amber-50 hover:border-amber-200'
         }`}
       >
         <ChevronRight className={`h-4 w-4 ${isCurrentMonth ? 'text-slate-300' : 'text-slate-600'}`} />
@@ -525,12 +540,12 @@ export function MonthSelector({ selectedMonth, selectedYear, onChange }: {
 }
 
 // ============================================================================
-// Action plan card — shows open/in-progress coaching items for the GP
+// Action plan card — coaching items for the GP
 // ============================================================================
 
 const PLAN_CATEGORY_TONE: Record<string, string> = {
   appearance: "border-emerald-200 bg-emerald-50",
-  performance: "border-violet-200 bg-violet-50",
+  performance: "border-amber-200 bg-amber-50",
   attitude: "border-pink-200 bg-pink-50",
   attendance: "border-blue-200 bg-blue-50",
   errors: "border-rose-200 bg-rose-50",
@@ -538,25 +553,23 @@ const PLAN_CATEGORY_TONE: Record<string, string> = {
 };
 
 // ============================================================================
-// Streak chip — small gamification element shown next to the hero. Motivates
-// the GP by surfacing "N days clean" or "M consecutive evaluations without an
-// error". Single chip, no card chrome — meant to ride alongside other badges.
+// Streak chip — gamification element
 // ============================================================================
 
 export function StreakChip({ days, label, tone = "amber" }: {
   days: number;
   label?: string;
-  tone?: "amber" | "emerald" | "violet";
+  tone?: "amber" | "emerald" | "gold";
 }) {
   if (days <= 0) return null;
   const palette =
     tone === "emerald" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
-    tone === "violet" ? "bg-violet-50 border-violet-200 text-violet-700" :
+    tone === "gold" ? "bg-amber-50 border-amber-300 text-amber-800" :
     "bg-amber-50 border-amber-200 text-amber-700";
-  const Icon = tone === "violet" ? Crown : Flame;
+  const Icon = tone === "gold" ? Crown : Flame;
   const text = label ?? `${days}-day streak`;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border ${palette}`}>
+    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border shadow-sm ${palette}`}>
       <Icon className="h-3.5 w-3.5" />
       {text}
     </span>
@@ -564,10 +577,7 @@ export function StreakChip({ days, label, tone = "amber" }: {
 }
 
 // ============================================================================
-// Month header — large prominent header for the Month tab with prev/next
-// navigation, the month name in big type, and a one-line summary. Replaces
-// the cramped inline `MonthSelector` and gives the bug-fix-visible Month tab
-// the visual prominence the user complained was missing.
+// Month tab header — prominent month navigation header
 // ============================================================================
 
 export function MonthTabHeader({ selectedMonth, selectedYear, onChange, evalCount, errorCount, attitudeScore }: {
@@ -593,27 +603,30 @@ export function MonthTabHeader({ selectedMonth, selectedYear, onChange, evalCoun
   const monthLabel = MONTH_NAMES[selectedMonth - 1];
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 sm:p-6 shadow-sm">
+    <div className="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-white to-amber-50/40 p-5 sm:p-6 shadow-sm">
+      {/* Decorative gold shimmer */}
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" aria-hidden />
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <button
             onClick={handlePrev}
-            className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm"
+            className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-amber-50 hover:border-amber-200 transition-all duration-200 shadow-sm"
             aria-label="Previous month"
           >
             <ChevronLeft className="h-4 w-4 text-slate-600" />
           </button>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Viewing</p>
+            <p className="text-[10px] uppercase tracking-wider text-amber-600/70 font-semibold">Viewing</p>
             <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 leading-tight">
-              {monthLabel} <span className="text-slate-400 font-normal">{selectedYear}</span>
+              {monthLabel}{" "}
+              <span className="text-slate-400 font-normal">{selectedYear}</span>
             </h2>
           </div>
           <button
             onClick={handleNext}
             disabled={isCurrentMonth}
-            className={`p-2 rounded-lg border transition-colors shadow-sm ${
-              isCurrentMonth ? 'bg-slate-50 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 hover:bg-slate-50'
+            className={`p-2 rounded-lg border transition-all duration-200 shadow-sm ${
+              isCurrentMonth ? 'bg-slate-50 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 hover:bg-amber-50 hover:border-amber-200'
             }`}
             aria-label="Next month"
           >
@@ -641,9 +654,7 @@ export function MonthTabHeader({ selectedMonth, selectedYear, onChange, evalCoun
 }
 
 // ============================================================================
-// At-a-glance strip — 4 micro-stats sitting below the hero, giving the GP an
-// immediate read of "where am I this month" before they scroll. Includes a
-// recency tile ("Last evaluation X days ago") so the dashboard reads as live.
+// At-a-glance strip — 4 micro-stats below the hero
 // ============================================================================
 
 export function AtAGlanceStrip({
@@ -658,7 +669,7 @@ export function AtAGlanceStrip({
     ? formatDistanceToNow(lastEvaluationDate, { addSuffix: true })
     : "—";
   const tiles: Array<{ icon: typeof Eye; label: string; value: string | number; tone: string }> = [
-    { icon: Eye, label: "Evaluations", value: evalCount, tone: "bg-amber-50 border-amber-200 text-amber-700" },
+    { icon: Eye, label: "Evaluations", value: evalCount, tone: "bg-amber-50 border-amber-200 text-amber-800" },
     { icon: AlertTriangle, label: "Mistakes", value: mistakes, tone: "bg-red-50 border-red-200 text-red-700" },
     { icon: ThumbsUp, label: "Attitude", value: attitude > 0 ? `+${attitude}` : `${attitude}`, tone: "bg-emerald-50 border-emerald-200 text-emerald-700" },
     { icon: Clock, label: "Last eval", value: recencyLabel, tone: "bg-slate-50 border-slate-200 text-slate-700" },
@@ -666,13 +677,16 @@ export function AtAGlanceStrip({
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {tiles.map(t => (
-        <div key={t.label} className={`rounded-xl border p-3 sm:p-4 ${t.tone} flex items-center gap-3`}>
-          <div className="bg-white/80 p-2 rounded-lg border border-white/40 shrink-0">
+        <div
+          key={t.label}
+          className={`rounded-xl border p-3 sm:p-4 ${t.tone} flex items-center gap-3 hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200 cursor-default`}
+        >
+          <div className="bg-white/90 p-2 rounded-lg border border-white/60 shrink-0 shadow-sm">
             <t.icon className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wider opacity-70">{t.label}</p>
-            <p className="text-lg sm:text-xl font-bold truncate">{t.value}</p>
+            <p className="text-[10px] uppercase tracking-wider opacity-60 font-medium">{t.label}</p>
+            <p className="text-lg sm:text-xl font-bold truncate leading-tight">{t.value}</p>
           </div>
         </div>
       ))}
@@ -684,13 +698,15 @@ export function ActionPlanCard({ items }: { items: Array<{ id: number; title: st
   const open = items.filter(i => i.status === "open");
   const inProgress = items.filter(i => i.status === "in_progress");
   return (
-    <Card className="bg-white border-slate-200 shadow-sm">
+    <Card className="bg-white border-amber-200/60 shadow-sm hover:shadow-md transition-shadow duration-300">
       <CardHeader className="pb-3">
         <CardTitle className="text-slate-800 text-base flex items-center gap-2">
-          <Target className="h-4 w-4 text-violet-600" />
+          <div className="p-1.5 rounded-lg bg-amber-100 border border-amber-200">
+            <Target className="h-4 w-4 text-amber-700" />
+          </div>
           Your action plan
         </CardTitle>
-        <CardDescription className="text-slate-600 text-xs">
+        <CardDescription className="text-slate-500 text-xs">
           {open.length} open, {inProgress.length} in progress — what your FM is asking you to focus on
         </CardDescription>
       </CardHeader>
@@ -698,7 +714,7 @@ export function ActionPlanCard({ items }: { items: Array<{ id: number; title: st
         {[...inProgress, ...open].slice(0, 6).map(item => (
           <div
             key={item.id}
-            className={`border rounded-lg p-3 ${PLAN_CATEGORY_TONE[item.category] ?? "border-slate-200 bg-white"}`}
+            className={`border rounded-lg p-3 hover:shadow-sm transition-all duration-200 ${PLAN_CATEGORY_TONE[item.category] ?? "border-slate-200 bg-white"}`}
           >
             <div className="flex items-start justify-between gap-2 mb-1">
               <p className="text-sm font-semibold text-slate-800">{item.title}</p>
@@ -726,15 +742,13 @@ export function ActionPlanCard({ items }: { items: Array<{ id: number; title: st
 }
 
 // ============================================================================
-// Skeleton — layout-matching placeholder shown while the portal data loads.
-// Replaces the spinner so the page reads as "preparing your view" rather than
-// "stuck loading", and avoids a layout shift when the real content lands.
+// Skeleton — layout-matching placeholder with shimmer
 // ============================================================================
 
 export function GPPortalSkeleton() {
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white/90 backdrop-blur-sm sticky top-0 z-10">
+    <div className="min-h-screen bg-gradient-to-br from-amber-50/30 via-white to-yellow-50/20">
+      <header className="border-b border-amber-200/40 bg-white/90 backdrop-blur-sm sticky top-0 z-10">
         <div className="container py-4 sm:py-5 flex items-center justify-between">
           <div className="flex items-center gap-3 sm:gap-4">
             <Skeleton className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl" />
@@ -748,7 +762,7 @@ export function GPPortalSkeleton() {
       </header>
       <main className="container py-6 sm:py-8 space-y-8">
         {/* Hero block */}
-        <Skeleton className="h-28 w-full rounded-2xl" />
+        <Skeleton className="h-48 w-full rounded-3xl" />
 
         {/* At-a-glance strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

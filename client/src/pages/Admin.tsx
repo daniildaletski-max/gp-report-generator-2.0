@@ -72,31 +72,34 @@ function FMRestrictedView() {
   return (
     <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
       <div className="flex items-center justify-between">
-        <div className="page-header">
-          <h1 className="page-title">Team Management</h1>
-          <p className="page-subtitle">
-            Manage your team: {team?.teamName || "Loading..."}
-          </p>
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-2xl bg-gradient-to-br from-amber-100 to-yellow-100 border border-amber-200 shadow-sm">
+            <Users className="h-6 w-6 text-amber-700" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Team Management</h1>
+            <p className="text-sm text-slate-500">Manage your team: {team?.teamName || "Loading..."}</p>
+          </div>
         </div>
-        <Badge className="bg-gradient-to-r from-primary/20 to-primary/20 border border-primary/30 text-sm rounded-xl px-4 py-2">
+        <Badge className="bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-800 border border-amber-300 rounded-xl px-4 py-2 font-semibold shadow-sm">
           <Users className="h-3 w-3 mr-1" />
           Floor Manager
         </Badge>
       </div>
 
-      <Tabs value={activeTab} onValueChange={v => setActiveTab(v as FmTab)} className="space-y-4">
-        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-3 h-auto">
-          <TabsTrigger value="stats" className="flex items-center justify-center gap-2 py-2">
+      <Tabs value={activeTab} onValueChange={v => setActiveTab(v as FmTab)} className="space-y-5">
+        <TabsList className="bg-white border border-amber-200/60 rounded-xl p-1 grid w-full grid-cols-3 h-auto gap-0.5 shadow-sm">
+          <TabsTrigger value="stats" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <Star className="h-4 w-4 shrink-0" />
-            <span>GP Stats</span>
+            <span className="text-xs font-medium">GP Stats</span>
           </TabsTrigger>
-          <TabsTrigger value="action-items" className="flex items-center justify-center gap-2 py-2">
+          <TabsTrigger value="action-items" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <Target className="h-4 w-4 shrink-0" />
-            <span>Plans</span>
+            <span className="text-xs font-medium">Plans</span>
           </TabsTrigger>
-          <TabsTrigger value="access" className="flex items-center justify-center gap-2 py-2">
+          <TabsTrigger value="access" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <Link className="h-4 w-4 shrink-0" />
-            <span>GP Access Links</span>
+            <span className="text-xs font-medium">GP Access Links</span>
           </TabsTrigger>
         </TabsList>
 
@@ -172,63 +175,65 @@ function FullAdminPanel() {
   return (
     <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
       <div className="flex items-center justify-between">
-        <div className="page-header flex items-center gap-4">
-          <div className="icon-box p-3">
-            <Shield className="h-6 w-6" />
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-2xl bg-gradient-to-br from-amber-100 to-yellow-100 border border-amber-200 shadow-sm">
+            <Shield className="h-6 w-6 text-amber-700" />
           </div>
           <div>
-            <h1 className="page-title">Admin Panel</h1>
-            <p className="page-subtitle">System administration and management</p>
+            <h1 className="text-2xl font-bold text-slate-900">Admin Panel</h1>
+            <p className="text-sm text-slate-500">System administration and management</p>
           </div>
         </div>
-        <Badge className="bg-gradient-to-r from-primary/20 to-primary/20 text-primary border border-primary/30 rounded-xl px-4 py-2">
+        <Badge className="bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-800 border border-amber-300 rounded-xl px-4 py-2 font-semibold shadow-sm">
           Administrator
         </Badge>
       </div>
 
-      <Tabs value={activeTab} onValueChange={v => setActiveTab(v as AdminTab)} className="space-y-4">
-        <TabsList className="bg-muted/50 border border-border rounded-xl p-1 grid w-full grid-cols-9 h-auto">
-          <TabsTrigger value="overview" className="flex items-center justify-center gap-2 py-2">
+      <Tabs value={activeTab} onValueChange={v => setActiveTab(v as AdminTab)} className="space-y-5">
+        <div className="overflow-x-auto -mx-1 px-1 pb-1">
+        <TabsList className="bg-white border border-amber-200/60 rounded-xl p-1 inline-flex w-auto min-w-full h-auto gap-0.5 shadow-sm">
+          <TabsTrigger value="overview" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <BarChart3 className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Overview</span>
+            <span className="hidden sm:inline text-xs font-medium">Overview</span>
           </TabsTrigger>
-          <TabsTrigger value="invitations" className="flex items-center justify-center gap-2 py-2">
+          <TabsTrigger value="invitations" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <UserPlus className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Invites</span>
+            <span className="hidden sm:inline text-xs font-medium">Invites</span>
           </TabsTrigger>
-          <TabsTrigger value="users" className="flex items-center justify-center gap-2 py-2">
+          <TabsTrigger value="users" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <UserCog className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Users</span>
+            <span className="hidden sm:inline text-xs font-medium">Users</span>
           </TabsTrigger>
-          <TabsTrigger value="teams" className="flex items-center justify-center gap-2 py-2">
+          <TabsTrigger value="teams" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <Building2 className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Teams</span>
+            <span className="hidden sm:inline text-xs font-medium">Teams</span>
           </TabsTrigger>
-          <TabsTrigger value="stats" className="flex items-center justify-center gap-2 py-2">
+          <TabsTrigger value="stats" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <Star className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">GP Stats</span>
+            <span className="hidden sm:inline text-xs font-medium">GP Stats</span>
           </TabsTrigger>
-          <TabsTrigger value="action-items" className="flex items-center justify-center gap-2 py-2">
+          <TabsTrigger value="action-items" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <Target className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Plans</span>
+            <span className="hidden sm:inline text-xs font-medium">Plans</span>
           </TabsTrigger>
-          <TabsTrigger value="access" className="flex items-center justify-center gap-2 py-2">
+          <TabsTrigger value="access" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <Link className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">GP Access</span>
+            <span className="hidden sm:inline text-xs font-medium">GP Access</span>
           </TabsTrigger>
-          <TabsTrigger value="errors" className="flex items-center justify-center gap-2 py-2">
+          <TabsTrigger value="errors" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Errors</span>
+            <span className="hidden sm:inline text-xs font-medium">Errors</span>
           </TabsTrigger>
-          <TabsTrigger value="persona" className="flex items-center justify-center gap-2 py-2">
+          <TabsTrigger value="persona" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <RefreshCw className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Persona</span>
+            <span className="hidden sm:inline text-xs font-medium">Persona</span>
           </TabsTrigger>
-          <TabsTrigger value="studioworks" className="flex items-center justify-center gap-2 py-2">
+          <TabsTrigger value="studioworks" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <FileCheck className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Studioworks</span>
+            <span className="hidden sm:inline text-xs font-medium">Studioworks</span>
           </TabsTrigger>
         </TabsList>
+        </div>
 
         {/* Overview Tab */}
         <AdminOverviewTab />
@@ -343,52 +348,60 @@ function AdminOverviewTab() {
   return (
     <TabsContent value="overview" className="space-y-6">
       {/* Main Stats */}
-      <div className="grid gap-4 md:grid-cols-5 animate-stagger">
+      <div className="grid gap-4 md:grid-cols-5">
         {statCards.map((stat, idx) => (
-          <div key={idx} className={`stat-card-enhanced ${stat.cardClass}`}>
-            <div className="icon-box">
-              <stat.icon className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">{stat.title}</p>
-              <p className="text-2xl font-bold">{stat.value}</p>
+          <div
+            key={idx}
+            className="relative overflow-hidden rounded-2xl bg-white border border-amber-200/60 p-5 shadow-sm hover:shadow-md hover:shadow-amber-100/50 hover:-translate-y-0.5 transition-all duration-300 group cursor-default"
+          >
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-amber-50/60 to-transparent pointer-events-none" aria-hidden />
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-400/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" aria-hidden />
+            <div className="relative flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-100 to-yellow-100 border border-amber-200 group-hover:scale-110 transition-transform duration-300">
+                <stat.icon className="h-5 w-5 text-amber-700" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium">{stat.title}</p>
+                <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
+              </div>
             </div>
           </div>
         ))}
       </div>
 
       {/* Quick Actions */}
-      <div className="unified-card">
-        <div className="unified-card-header">
-          <div className="section-header" style={{ paddingLeft: 0 }}>
-            <h3 className="section-title flex items-center gap-2">
-              <Zap className="h-5 w-5 text-yellow-500" />
-              Quick Actions
-            </h3>
-            <p className="section-subtitle">Common administrative tasks</p>
-          </div>
-        </div>
-        <div className="unified-card-body">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-primary/10 hover:border-primary/30 transition-all" onClick={() => toast.info("Navigate to Users tab")}>
+      <Card className="border border-amber-200/50 shadow-sm">
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-amber-100 border border-amber-200">
+              <Zap className="h-3.5 w-3.5 text-amber-700" />
+            </div>
+            Quick Actions
+          </CardTitle>
+          <CardDescription>Common administrative tasks</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Button variant="outline" className="h-20 flex-col gap-2 border-amber-200/60 hover:bg-amber-50 hover:border-amber-300 transition-all duration-200 text-slate-700 hover:text-amber-800" onClick={() => toast.info("Navigate to Users tab")}>
               <UserCog className="h-6 w-6" />
-              <span>Manage Users</span>
+              <span className="text-xs font-medium">Manage Users</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-primary/10 hover:border-primary/30 transition-all" onClick={() => toast.info("Navigate to Teams tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 border-amber-200/60 hover:bg-amber-50 hover:border-amber-300 transition-all duration-200 text-slate-700 hover:text-amber-800" onClick={() => toast.info("Navigate to Teams tab")}>
               <Building2 className="h-6 w-6" />
-              <span>Manage Teams</span>
+              <span className="text-xs font-medium">Manage Teams</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-primary/10 hover:border-primary/30 transition-all" onClick={() => toast.info("Navigate to GP Stats tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 border-amber-200/60 hover:bg-amber-50 hover:border-amber-300 transition-all duration-200 text-slate-700 hover:text-amber-800" onClick={() => toast.info("Navigate to GP Stats tab")}>
               <Star className="h-6 w-6" />
-              <span>View GP Stats</span>
+              <span className="text-xs font-medium">View GP Stats</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 hover:bg-red-500/10 hover:border-red-500/30 transition-all" onClick={() => toast.info("Navigate to Errors tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 border-red-200/60 hover:bg-red-50 hover:border-red-300 transition-all duration-200 text-slate-700 hover:text-red-700" onClick={() => toast.info("Navigate to Errors tab")}>
               <AlertTriangle className="h-6 w-6" />
-              <span>Check Errors</span>
+              <span className="text-xs font-medium">Check Errors</span>
             </Button>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Live System Health Monitor */}
       <SystemHealthMonitor />

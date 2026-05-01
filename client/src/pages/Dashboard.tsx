@@ -212,14 +212,14 @@ export default function Dashboard() {
   if (isStatsError) {
     return (
       <div className="p-4 sm:p-6">
-        <Card className="border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-950/30">
+        <Card className="border border-rose-200 bg-rose-50">
           <CardContent className="py-12 flex flex-col items-center text-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
-              <AlertTriangle className="h-7 w-7 text-rose-600 dark:text-rose-400" />
+            <div className="w-14 h-14 rounded-full bg-rose-100 flex items-center justify-center">
+              <AlertTriangle className="h-7 w-7 text-rose-600" />
             </div>
             <div className="space-y-1.5">
-              <h3 className="text-lg font-semibold text-rose-900 dark:text-rose-200">Couldn't load dashboard data</h3>
-              <p className="text-sm text-rose-700 dark:text-rose-300 max-w-md">
+              <h3 className="text-lg font-semibold text-rose-900">Couldn't load dashboard data</h3>
+              <p className="text-sm text-rose-700 max-w-md">
                 The server didn't return stats for this period. This usually clears on a retry —
                 if it keeps failing, check the network or open the admin panel.
               </p>
@@ -650,7 +650,7 @@ export default function Dashboard() {
                 <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center mb-2">
                   <Award className="h-5 w-5 text-emerald-500" />
                 </div>
-                <p className="text-emerald-600 dark:text-emerald-400 text-sm font-medium">All GPs performing well!</p>
+                <p className="text-emerald-600 text-sm font-medium">All GPs performing well!</p>
                 <p className="text-muted-foreground text-xs mt-0.5">No scores below 16</p>
               </div>
             )}
@@ -863,13 +863,13 @@ function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { i
                     <p className="text-lg font-bold text-foreground">{m.avgTotalScore > 0 ? m.avgTotalScore.toFixed(1) : '—'}</p>
                     <p className="text-[10px] text-muted-foreground">avg score</p>
                     <div className="flex items-center justify-center gap-2 text-[10px]">
-                      <span className="text-emerald-600 dark:text-emerald-400">{m.totalEvaluations} evals</span>
+                      <span className="text-emerald-600">{m.totalEvaluations} evals</span>
                       <span className="text-muted-foreground">·</span>
                       <span className="text-primary">{m.uniqueGPs} GPs</span>
                     </div>
                     {m.topScore > 0 && (
                       <div className="flex items-center justify-center gap-1.5 text-[10px]">
-                        <span className="text-emerald-600 dark:text-emerald-400">↑{m.topScore}</span>
+                        <span className="text-emerald-600">↑{m.topScore}</span>
                         <span className="text-muted-foreground">/</span>
                         <span className="text-rose-500">↓{m.lowScore}</span>
                       </div>
@@ -1236,7 +1236,7 @@ function TeamComparisonSection({ isMobile }: { isMobile: boolean }) {
                     <div className={`flex items-center justify-center h-8 w-8 rounded-lg text-xs font-bold ${
                       idx === 0 ? 'bg-primary/15 text-primary border border-primary/30' :
                       idx === 1 ? 'bg-primary/10 text-primary/80 border border-primary/20' :
-                      idx === 2 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30' :
+                      idx === 2 ? 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/30' :
                       'bg-muted text-muted-foreground border border-border'
                     }`}>
                       #{idx + 1}

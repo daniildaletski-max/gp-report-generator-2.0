@@ -715,10 +715,10 @@ export default function EvaluationsPage() {
                 const performanceScore = (evaluation.dealingStyleScore || 0) + (evaluation.gamePerformanceScore || 0);
                 const total = evaluation.totalScore || 0;
                 const tone = total >= 20
-                  ? "border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/30 dark:bg-emerald-950/20"
+                  ? "border-emerald-200 bg-emerald-50/30"
                   : total >= 16
                     ? "border-primary/15 bg-primary/5"
-                    : "border-rose-200 dark:border-rose-800/40 bg-rose-50/30 dark:bg-rose-950/20";
+                    : "border-rose-200 bg-rose-50/30";
                 return (
                   <div key={evaluation.id} className={`rounded-xl border p-3 ${tone}`}>
                     <div className="flex items-start gap-3">

@@ -52,7 +52,7 @@ export default function InvitePage() {
   // Loading state
   if (validationLoading || authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
             <div className="space-y-4">
@@ -70,8 +70,8 @@ export default function InvitePage() {
   // Invalid or expired invitation
   if (!validation?.valid) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-red-200 dark:border-red-900">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-red-200">
           <CardHeader className="text-center">
             <div className="h-16 w-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
               <XCircle className="h-8 w-8 text-red-500" />
@@ -104,7 +104,7 @@ export default function InvitePage() {
   // Accepting invitation (user is logged in)
   if (user && (isAccepting || acceptMutation.isPending)) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-8 pb-8">
             <div className="text-center space-y-4">
@@ -125,8 +125,8 @@ export default function InvitePage() {
   // Success state
   if (acceptMutation.isSuccess) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-green-200 dark:border-green-900">
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-green-200">
           <CardContent className="pt-8 pb-8">
             <div className="text-center space-y-4">
               <div className="h-16 w-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto">
@@ -147,7 +147,7 @@ export default function InvitePage() {
   const invitation = validation.invitation!;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
       <Card className="w-full max-w-md overflow-hidden">
         {/* Header with gradient */}
         <div className="bg-gradient-to-r from-primary to-primary/80 p-6 text-white">

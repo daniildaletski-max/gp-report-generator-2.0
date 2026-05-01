@@ -11,27 +11,36 @@ interface EmptyStateProps {
 }
 
 /**
- * Empty state used everywhere we render a list. One consistent visual
- * pattern instead of the dozen ad-hoc empty layouts that used to be
- * sprinkled across pages.
+ * Empty state used everywhere we render a list. Premium gold/white design
+ * with subtle ambient decoration and clear visual hierarchy.
  */
 export function EmptyState({ icon: Icon, title, description, action, size = "default" }: EmptyStateProps) {
-  const padding = size === "compact" ? "py-8" : "py-14";
-  const iconSize = size === "compact" ? "h-9 w-9" : "h-12 w-12";
-  const iconBox = size === "compact" ? "h-12 w-12" : "h-16 w-16";
+  const padding = size === "compact" ? "py-10" : "py-16";
+  const iconSize = size === "compact" ? "h-8 w-8" : "h-11 w-11";
+  const iconBox = size === "compact" ? "h-14 w-14" : "h-20 w-20";
 
   return (
-    <div className={`flex flex-col items-center justify-center text-center ${padding} px-6`}>
+    <div className={`relative flex flex-col items-center justify-center text-center ${padding} px-6 overflow-hidden`}>
+      {/* Ambient background decoration */}
+      <div className="absolute inset-0 pointer-events-none" aria-hidden>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-48 w-48 rounded-full bg-amber-100/40 blur-3xl" />
+      </div>
+
       {Icon && (
-        <div className={`${iconBox} rounded-2xl bg-muted/40 border border-border flex items-center justify-center mb-4`}>
-          <Icon className={`${iconSize} text-muted-foreground/60`} />
+        <div className="relative mb-5">
+          {/* Outer glow ring */}
+          <div className={`absolute inset-0 ${iconBox} rounded-2xl bg-amber-100/60 blur-md scale-125`} aria-hidden />
+          <div className={`relative ${iconBox} rounded-2xl bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200/60 flex items-center justify-center shadow-sm`}>
+            <Icon className={`${iconSize} text-amber-600/70`} />
+          </div>
         </div>
       )}
-      <h3 className="text-base font-semibold text-foreground mb-1">{title}</h3>
+
+      <h3 className="text-base font-semibold text-slate-800 mb-1.5">{title}</h3>
       {description && (
-        <p className="text-sm text-muted-foreground max-w-sm">{description}</p>
+        <p className="text-sm text-slate-500 max-w-sm leading-relaxed">{description}</p>
       )}
-      {action && <div className="mt-4">{action}</div>}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }
