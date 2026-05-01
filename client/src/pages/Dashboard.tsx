@@ -1446,20 +1446,33 @@ function DashboardHero({
   const firstLabel = trend[0]?.label;
   const lastLabel = trend[trend.length - 1]?.label;
 
-  // Headline value: fall back to the most-recent non-zero trend value
-  // when the SELECTED month has no evaluations yet. Showing a stark
-  // "—" (em-dash) at text-5xl + leading-none renders as a thin black
-  // horizontal line that reads as a graphic glitch, not a "no-data"
-  // signal. With a fallback, the user always sees a real number plus
-  // a small caption explaining which month it's from.
-  const lastNonZero = [...scoreSeries].reverse().find(p => p.y > 0);
-  const lastNonZeroIdx = lastNonZero ? scoreSeries.length - 1 - [...scoreSeries].reverse().indexOf(lastNonZero) : -1;
-  const fallbackLabel = lastNonZeroIdx >= 0 ? trend[lastNonZeroIdx]?.label : null;
+  // Headline value: when the SELECTED period has no evaluations, fall
+  // back to the most recent month with data — but ONLY months at or
+  // BEFORE the selected one. Searching the whole rolling 6-month
+  // window (current calendar - 5 to current) would show a FUTURE
+  // value when the user selects an older period, which is factually
+  // wrong as a "current" KPI.
+  //
+  // selectedIdx < 0 means the selected month isn't in the rolling
+  // window at all (e.g. Feb 2024 selected, trend covers Dec 2025+) —
+  // no fallback is meaningful in that case, render the "No data yet"
+  // empty state instead of an unrelated number.
+  let fallbackPoint: { idx: number; y: number } | null = null;
+  if (avgTeamScore <= 0 && selectedIdx >= 0) {
+    // Walk backwards from selectedIdx (or selectedIdx-1 if the
+    // selected month itself is the empty one) to find the most recent
+    // prior month with non-zero score.
+    for (let i = selectedIdx; i >= 0; i--) {
+      const y = scoreSeries[i]?.y ?? 0;
+      if (y > 0) { fallbackPoint = { idx: i, y }; break; }
+    }
+  }
+  const fallbackLabel = fallbackPoint ? trend[fallbackPoint.idx]?.label : null;
   const displayValue =
     avgTeamScore > 0 ? avgTeamScore.toFixed(1)
-    : lastNonZero ? lastNonZero.y.toFixed(1)
+    : fallbackPoint ? fallbackPoint.y.toFixed(1)
     : null;
-  const isFallback = avgTeamScore <= 0 && !!lastNonZero;
+  const isFallback = avgTeamScore <= 0 && !!fallbackPoint;
 
   return (
     // items-start so the primary tile doesn't stretch to match the
