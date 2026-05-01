@@ -56,6 +56,7 @@ interface MatchDetail {
    */
   reason?: "below-threshold" | "wrong-team" | "no-candidates";
   closestGpName?: string;
+  closestGpId?: number | null;
   closestGpTeam?: number | null;
   closestSimilarity?: number;
 }
@@ -212,6 +213,7 @@ export async function runPersonaSyncForTeam(opts: {
           changes: {},
           reason,
           closestGpName: closest?.gamePresenter.name,
+          closestGpId: closest?.gamePresenter.id ?? null,
           closestGpTeam: closest?.gamePresenter.teamId,
           closestSimilarity: closest?.similarity,
         });

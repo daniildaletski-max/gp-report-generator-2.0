@@ -3804,9 +3804,15 @@ type MatchDetail = {
   };
   reason?: "below-threshold" | "wrong-team" | "no-candidates";
   closestGpName?: string;
+  closestGpId?: number | null;
   closestGpTeam?: number | null;
   closestSimilarity?: number;
 };
+
+/** Local-state record of inline fixes the user applied without re-running sync. */
+type RowFix =
+  | { kind: "moved"; gpName: string; toTeamId: number }
+  | { kind: "created"; gpName: string };
 
 type TeamSyncResult = {
   kind: "team";
@@ -3870,8 +3876,51 @@ function PersonaSyncTab({
   const [rowFilter, setRowFilter] = useState<RowFilter>("all");
   const [rowSearch, setRowSearch] = useState<string>("");
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
+  // Inline fixes the user applied to unmatched rows since the last sync,
+  // keyed by personaName so we can render them as "fixed" without
+  // re-running the sync. Cleared whenever a new sync completes.
+  const [rowFixes, setRowFixes] = useState<Record<string, RowFix>>({});
+  const [pendingAction, setPendingAction] = useState<{ personaName: string; kind: "move" | "create" } | null>(null);
 
   const isSyncing = syncState.phase === "running";
+
+  const moveGpMutation = trpc.gamePresenter.assignToTeam.useMutation({
+    onError: (err) => toast.error(`Move failed: ${err.message}`),
+    onSettled: () => setPendingAction(null),
+  });
+
+  const createGpMutation = trpc.gamePresenter.createForTeam.useMutation({
+    onError: (err) => toast.error(`Add failed: ${err.message}`),
+    onSettled: () => setPendingAction(null),
+  });
+
+  const handleMoveGp = (personaName: string, gpId: number, gpName: string) => {
+    if (!selectedTeamId) return;
+    setPendingAction({ personaName, kind: "move" });
+    moveGpMutation.mutate(
+      { gpId, teamId: selectedTeamId },
+      {
+        onSuccess: () => {
+          setRowFixes(prev => ({ ...prev, [personaName]: { kind: "moved", gpName, toTeamId: selectedTeamId } }));
+          toast.success(`Moved ${gpName} to ${teamNameById(selectedTeamId)}`);
+        },
+      },
+    );
+  };
+
+  const handleCreateGp = (personaName: string) => {
+    if (!selectedTeamId) return;
+    setPendingAction({ personaName, kind: "create" });
+    createGpMutation.mutate(
+      { name: personaName, teamId: selectedTeamId },
+      {
+        onSuccess: () => {
+          setRowFixes(prev => ({ ...prev, [personaName]: { kind: "created", gpName: personaName } }));
+          toast.success(`Added ${personaName} to ${teamNameById(selectedTeamId)}`);
+        },
+      },
+    );
+  };
 
   const testConnectionMutation = trpc.personaSync.testConnection.useMutation({
     onSuccess: (data) => {
@@ -3988,6 +4037,7 @@ function PersonaSyncTab({
     setSyncState({ phase: "running", label: `Syncing from Persona for ${MONTHS[selectedMonth - 1]} ${selectedYear}…` });
     setRowFilter("all");
     setRowSearch("");
+    setRowFixes({});
     syncMutation.mutate({ teamId: selectedTeamId, month: selectedMonth, year: selectedYear });
   };
 
@@ -4147,6 +4197,7 @@ function PersonaSyncTab({
                 setSyncState({ phase: "running", label: `Syncing all teams for ${MONTHS[selectedMonth - 1]} ${selectedYear}…` });
                 setRowFilter("all");
                 setRowSearch("");
+                setRowFixes({});
                 syncAllMutation.mutate({ month: selectedMonth, year: selectedYear });
               }}
               disabled={isSyncing || syncAllMutation.isPending}
@@ -4260,6 +4311,12 @@ function PersonaSyncTab({
           rowSearch={rowSearch}
           setRowSearch={setRowSearch}
           onClear={() => setSyncState({ phase: "idle" })}
+          resolvedTeamId={selectedTeamId ?? undefined}
+          resolvedTeamName={selectedTeamId ? teamNameById(selectedTeamId) : undefined}
+          rowFixes={rowFixes}
+          onMoveGp={handleMoveGp}
+          onCreateGp={handleCreateGp}
+          pendingAction={pendingAction}
         />
       )}
 
@@ -4386,19 +4443,61 @@ function SummaryCard({ label, value, tone }: { label: string; value: number; ton
  * to surface so the panel stays compact on a clean run.
  */
 function SyncHintBanner({ result }: { result: TeamSyncResult }) {
-  if (result.matched > 0 || result.unmatched === 0) return null;
+  if (result.unmatched === 0) return null;
+
   const wrongTeam = result.matchDetails.filter(d => d.reason === "wrong-team").length;
-  const isWrongProject = wrongTeam > result.matchDetails.length / 2;
+  const noCandidates = result.matchDetails.filter(d => d.reason === "no-candidates").length;
+  const total = result.matchDetails.length;
+
+  // Decide which hint to show, in priority order:
+  // 1. Mostly wrong-team → almost certainly the Persona Project ID
+  //    points at a different team's project (most actionable insight)
+  // 2. Any wrong-team at all → still call it out, the FM can use the
+  //    inline "Move to this team" buttons to fix individuals
+  // 3. Mostly no-candidates → workers don't exist in our DB at all,
+  //    use the inline "Add as new GP" buttons or check spellings
+  // 4. Otherwise → spelling-based mismatch (Real name field can help)
+  if (wrongTeam > 0 && wrongTeam >= total / 2) {
+    return (
+      <HintRow tone="amber">
+        <strong>{wrongTeam}</strong> of {total} worker{total === 1 ? "" : "s"} matched GPs in <strong>other teams</strong>.
+        The Persona Project ID set here is probably for a different team. Either fix the Project ID, or use the
+        "Move to this team" buttons below if those GPs really belong here.
+      </HintRow>
+    );
+  }
+  if (wrongTeam > 0) {
+    return (
+      <HintRow tone="amber">
+        <strong>{wrongTeam}</strong> worker{wrongTeam === 1 ? "" : "s"} matched a GP in another team.
+        Use "Move to this team" below if they should belong here, or check the Persona Project ID.
+      </HintRow>
+    );
+  }
+  if (noCandidates > 0 && noCandidates >= total / 2) {
+    return (
+      <HintRow tone="rose">
+        <strong>{noCandidates}</strong> of {total} workers don't exist in your GP DB at all.
+        Use "Add as new GP" below for each, or double-check the Persona Project ID is correct for this team.
+      </HintRow>
+    );
+  }
   return (
-    <div className={`flex items-start gap-2 p-3 rounded-lg border text-sm ${
-      isWrongProject ? "border-amber-200 bg-amber-50 text-amber-800" : "border-rose-200 bg-rose-50 text-rose-800"
-    }`}>
+    <HintRow tone="rose">
+      Most names didn't match anything close. Likely your GPs are stored under different spellings —
+      set <strong>Real name</strong> on each GP to match what Persona returns.
+    </HintRow>
+  );
+}
+
+function HintRow({ tone, children }: { tone: "amber" | "rose"; children: React.ReactNode }) {
+  const cls = tone === "amber"
+    ? "border-amber-200 bg-amber-50 text-amber-800"
+    : "border-rose-200 bg-rose-50 text-rose-800";
+  return (
+    <div className={`flex items-start gap-2 p-3 rounded-lg border text-sm ${cls}`}>
       <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-      <span>
-        {isWrongProject
-          ? `${wrongTeam} workers matched GPs in OTHER teams — the Persona Project ID set here is probably for a different team.`
-          : "Most names didn't match anything close. Either this Persona project is unrelated to this team, or your GPs are stored under different spellings (use Real name to override)."}
-      </span>
+      <span>{children}</span>
     </div>
   );
 }
@@ -4420,9 +4519,47 @@ function reasonTone(reason?: MatchDetail["reason"]): "amber" | "rose" {
   return reason === "wrong-team" || reason === "below-threshold" ? "amber" : "rose";
 }
 
-function MatchRow({ detail }: { detail: MatchDetail }) {
+function MatchRow({
+  detail,
+  fix,
+  teamId,
+  teamName,
+  onMoveGp,
+  onCreateGp,
+  movePending,
+  createPending,
+}: {
+  detail: MatchDetail;
+  /** If set, this row was already fixed inline by the user (move/create). */
+  fix?: RowFix;
+  /** Target team — used for the "Move to <team>" / "Add to <team>" labels. */
+  teamId?: number;
+  teamName?: string;
+  /** Trigger a "move closest GP to this team" action. */
+  onMoveGp?: (personaName: string, gpId: number, gpName: string) => void;
+  /** Trigger a "create new GP with this name in this team" action. */
+  onCreateGp?: (personaName: string) => void;
+  movePending?: boolean;
+  createPending?: boolean;
+}) {
   const d = detail;
   const hasChanges = Object.keys(d.changes).length > 0;
+
+  // If the user just fixed this row inline, show a "fixed" state
+  // instead of the original error state — instant feedback, no need
+  // to re-run the whole sync to see it disappear.
+  if (fix) {
+    const label = fix.kind === "moved"
+      ? `Moved ${fix.gpName} → re-run sync to import attendance`
+      : `Added ${fix.gpName} as new GP → re-run sync to import attendance`;
+    return (
+      <div className="flex items-center gap-2 p-2.5 rounded-lg border border-emerald-300 bg-emerald-50">
+        <Check className="h-4 w-4 text-emerald-700 shrink-0" />
+        <p className="text-sm text-emerald-800 truncate">{label}</p>
+      </div>
+    );
+  }
+
   if (d.matched) {
     return (
       <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/40">
@@ -4457,6 +4594,24 @@ function MatchRow({ detail }: { detail: MatchDetail }) {
   const tone = reasonTone(d.reason);
   const borderClass = tone === "amber" ? "border-amber-200 bg-amber-50/40" : "border-rose-200 bg-rose-50/40";
   const badgeClass = tone === "amber" ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-rose-100 text-rose-800 border-rose-200";
+
+  // Decide which inline fix action makes sense for this row.
+  // - wrong-team with a closest GP id → "Move <closestGp> to <team>"
+  // - any other unmatched → "Add <personaName> as new GP in <team>"
+  // Action buttons only render when teamId+team callbacks are available
+  // (preview dialog doesn't show them — fixes only make sense after sync).
+  const canMove =
+    !!onMoveGp &&
+    teamId != null &&
+    d.reason === "wrong-team" &&
+    d.closestGpId != null &&
+    d.closestGpName;
+  const canCreate =
+    !!onCreateGp &&
+    teamId != null &&
+    (d.reason === "below-threshold" || d.reason === "no-candidates");
+  const showActions = canMove || canCreate;
+
   return (
     <div className={`flex items-start gap-2 p-2.5 rounded-lg border ${borderClass}`}>
       <X className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
@@ -4479,10 +4634,44 @@ function MatchRow({ detail }: { detail: MatchDetail }) {
         {!d.closestGpName && (
           <p className="text-xs text-muted-foreground mt-0.5">No GP candidate found in your DB.</p>
         )}
+        {showActions && (
+          <div className="flex gap-2 mt-2 flex-wrap">
+            {canMove && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => onMoveGp!(d.personaName, d.closestGpId!, d.closestGpName!)}
+                disabled={movePending}
+              >
+                {movePending ? <Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> : <Users className="h-3 w-3 mr-1.5" />}
+                Move {d.closestGpName} to {teamName ?? "this team"}
+              </Button>
+            )}
+            {canCreate && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => onCreateGp!(d.personaName)}
+                disabled={createPending}
+              >
+                {createPending ? <Loader2 className="h-3 w-3 mr-1.5 animate-spin" /> : <Plus className="h-3 w-3 mr-1.5" />}
+                Add as new GP in {teamName ?? "this team"}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
+/**
+ * Get the team id for a single-team sync result. Returns undefined for
+ * bulk results (which don't have a single target team) and for the
+ * preview dialog (where actions don't apply yet).
+ */
 
 function SyncResultPanel({
   state,
@@ -4491,6 +4680,12 @@ function SyncResultPanel({
   rowSearch,
   setRowSearch,
   onClear,
+  resolvedTeamId,
+  resolvedTeamName,
+  rowFixes,
+  onMoveGp,
+  onCreateGp,
+  pendingAction,
 }: {
   state: SyncState;
   rowFilter: RowFilter;
@@ -4498,6 +4693,16 @@ function SyncResultPanel({
   rowSearch: string;
   setRowSearch: (s: string) => void;
   onClear: () => void;
+  /** Active team id when this result is for a single-team sync. */
+  resolvedTeamId?: number;
+  /** Display name for the active team. */
+  resolvedTeamName?: string;
+  /** Map keyed by personaName → fix the user already applied. */
+  rowFixes?: Record<string, RowFix>;
+  onMoveGp?: (personaName: string, gpId: number, gpName: string) => void;
+  onCreateGp?: (personaName: string) => void;
+  /** Tracks which row currently has a pending mutation, so only that row spins. */
+  pendingAction?: { personaName: string; kind: "move" | "create" } | null;
 }) {
   if (state.phase === "idle") return null;
 
@@ -4655,7 +4860,19 @@ function SyncResultPanel({
               {filtered.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">No rows match this filter.</p>
               ) : (
-                filtered.map((d, i) => <MatchRow key={i} detail={d} />)
+                filtered.map((d, i) => (
+                  <MatchRow
+                    key={i}
+                    detail={d}
+                    fix={rowFixes?.[d.personaName]}
+                    teamId={resolvedTeamId}
+                    teamName={resolvedTeamName}
+                    onMoveGp={onMoveGp}
+                    onCreateGp={onCreateGp}
+                    movePending={pendingAction?.personaName === d.personaName && pendingAction?.kind === "move"}
+                    createPending={pendingAction?.personaName === d.personaName && pendingAction?.kind === "create"}
+                  />
+                ))
               )}
             </div>
           </>
