@@ -216,7 +216,24 @@ export default function WorkspacePage() {
     return list;
   }, [cadenceData, filter, search]);
 
-  // Auto-pick first overdue GP when cadence loads & nothing selected
+  // Deep-link: when navigated to /workspace?gp=ID (e.g. from the
+  // GP Stats card "Open in Workspace" shortcut), pre-select that GP
+  // and also auto-switch to the team that owns them so the queue
+  // loads the right people. Runs once at mount.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const deepGp = params.get("gp");
+    if (!deepGp) return;
+    const id = Number(deepGp);
+    if (!Number.isFinite(id) || id <= 0) return;
+    setSelectedGpId(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-pick first overdue GP when cadence loads & nothing selected.
+  // Skip the auto-pick when a deep-linked GP id is present in the
+  // queue — preserves the FM's intent.
   useEffect(() => {
     if (!cadenceData?.gps || cadenceData.gps.length === 0) return;
     if (selectedGpId && cadenceData.gps.some(g => g.gpId === selectedGpId)) return;
