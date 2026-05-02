@@ -26,7 +26,8 @@ import {
   CalendarCheck, Save, Loader2, Users, AlertTriangle,
   Clock, TrendingUp, TrendingDown, Minus, RotateCcw,
   ChevronDown, ChevronUp, Briefcase, Timer, CalendarX,
-  Stethoscope, MessageSquare, BarChart3, Info, LineChart as LineChartIcon
+  Stethoscope, MessageSquare, BarChart3, Info, LineChart as LineChartIcon,
+  CalendarDays, X
 } from "lucide-react";
 import { MONTH_NAMES } from "@shared/const";
 import {
@@ -355,6 +356,16 @@ export default function AttendancePage() {
             color="blue"
           />
         </div>
+      )}
+
+      {/* Per-day calendar view (uses Persona breakdown JSON in remarks) */}
+      {teamId && attendanceData?.items && attendanceData.items.length > 0 && (
+        <AttendanceCalendarView
+          items={attendanceData.items as any[]}
+          month={selectedMonth}
+          year={selectedYear}
+          onOpenGP={setDrawerGpId}
+        />
       )}
 
       {/* Attendance Trend Charts */}
@@ -988,5 +999,374 @@ function AttendanceTrendCharts({ teamId }: { teamId: number }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ============================================
+// AttendanceCalendarView — visual day-by-day breakdown for the team.
+// Reads the Persona breakdown JSON stashed in `attendance.remarks`
+// (`{ source: "persona", days: { sick, missed, late, extra } }`) and
+// renders a monthly calendar grid. Each day chip shows aggregated
+// counts per category; clicking reveals the GPs for that day.
+// ============================================
+
+type CalendarBucket = "sick" | "missed" | "late" | "extra";
+
+type CalendarEntry = {
+  gpId: number;
+  gpName: string;
+  bucket: CalendarBucket;
+};
+
+type CalendarDay = {
+  iso: string;          // YYYY-MM-DD
+  dayNumber: number;    // 1..31
+  inMonth: boolean;
+  entries: CalendarEntry[];
+};
+
+const BUCKET_META: Record<CalendarBucket, {
+  label: string;
+  short: string;
+  fill: string;
+  border: string;
+  text: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = {
+  sick: { label: "Sick leave", short: "Sick", fill: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", icon: Stethoscope },
+  missed: { label: "Missed shift", short: "Missed", fill: "bg-rose-50", border: "border-rose-200", text: "text-rose-700", icon: CalendarX },
+  late: { label: "Late to work", short: "Late", fill: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", icon: Timer },
+  extra: { label: "Extra shift", short: "Extra", fill: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", icon: Briefcase },
+};
+
+function pad2(n: number) { return n < 10 ? `0${n}` : `${n}`; }
+
+function AttendanceCalendarView({
+  items,
+  month,
+  year,
+  onOpenGP,
+}: {
+  items: any[];
+  month: number;
+  year: number;
+  onOpenGP: (gpId: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [activeDay, setActiveDay] = useState<string | null>(null);
+  const [activeBucket, setActiveBucket] = useState<CalendarBucket | "all">("all");
+
+  // Build a map dayKey -> entries[]
+  const dayMap = useMemo<Map<string, CalendarEntry[]>>(() => {
+    const map = new Map<string, CalendarEntry[]>();
+    for (const item of items) {
+      const att = item.attendance;
+      if (!att) continue;
+      const remarks = (att.remarks ?? "").trim();
+      if (!remarks) continue;
+      let parsed: any;
+      try { parsed = JSON.parse(remarks); } catch { continue; }
+      if (!parsed || parsed.source !== "persona" || !parsed.days) continue;
+      const days = parsed.days as Partial<Record<CalendarBucket, string[]>>;
+      const gpId = item.gamePresenter?.id;
+      const gpName = item.gamePresenter?.name;
+      if (!gpId || !gpName) continue;
+      (Object.keys(BUCKET_META) as CalendarBucket[]).forEach(bucket => {
+        const dates = days[bucket] ?? [];
+        for (const iso of dates) {
+          if (typeof iso !== "string") continue;
+          const list = map.get(iso) ?? [];
+          list.push({ gpId, gpName, bucket });
+          map.set(iso, list);
+        }
+      });
+    }
+    return map;
+  }, [items]);
+
+  // Aggregate counts across the whole month for the legend chips.
+  const monthTotals = useMemo(() => {
+    const totals: Record<CalendarBucket, number> = { sick: 0, missed: 0, late: 0, extra: 0 };
+    dayMap.forEach(entries => {
+      for (const e of entries) totals[e.bucket]++;
+    });
+    return totals;
+  }, [dayMap]);
+
+  // Build the calendar grid — leading & trailing blanks so weeks align
+  // to Monday..Sunday columns (Persona is Estonia → ISO week start).
+  const grid = useMemo<CalendarDay[]>(() => {
+    const first = new Date(year, month - 1, 1);
+    const last = new Date(year, month, 0);
+    const totalDays = last.getDate();
+    // Mon = 0, Sun = 6. JS getDay(): Sun=0..Sat=6.
+    const leadCount = (first.getDay() + 6) % 7;
+    const cells: CalendarDay[] = [];
+    for (let i = 0; i < leadCount; i++) {
+      const d = new Date(year, month - 1, -leadCount + i + 1);
+      const iso = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      cells.push({ iso, dayNumber: d.getDate(), inMonth: false, entries: [] });
+    }
+    for (let day = 1; day <= totalDays; day++) {
+      const iso = `${year}-${pad2(month)}-${pad2(day)}`;
+      cells.push({ iso, dayNumber: day, inMonth: true, entries: dayMap.get(iso) ?? [] });
+    }
+    while (cells.length % 7 !== 0) {
+      const idx = cells.length - leadCount - totalDays;
+      const d = new Date(year, month, idx + 1);
+      const iso = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      cells.push({ iso, dayNumber: d.getDate(), inMonth: false, entries: [] });
+    }
+    return cells;
+  }, [dayMap, month, year]);
+
+  const hasAnyData = monthTotals.sick + monthTotals.missed + monthTotals.late + monthTotals.extra > 0;
+
+  // Today's iso (highlight)
+  const todayIso = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }, []);
+
+  // Active day's entries, optionally filtered by bucket.
+  const activeEntries = useMemo<CalendarEntry[]>(() => {
+    if (!activeDay) return [];
+    const list = dayMap.get(activeDay) ?? [];
+    if (activeBucket === "all") return list;
+    return list.filter(e => e.bucket === activeBucket);
+  }, [activeDay, activeBucket, dayMap]);
+
+  if (!open) {
+    return (
+      <div className="glass-card p-4">
+        <Button
+          variant="outline"
+          className="w-full glass-button text-muted-foreground hover:text-foreground gap-2"
+          onClick={() => setOpen(true)}
+          disabled={!hasAnyData}
+        >
+          <CalendarDays className="h-4 w-4 text-primary" />
+          {hasAnyData
+            ? `Show Day-by-Day Calendar (${monthTotals.sick + monthTotals.missed + monthTotals.late + monthTotals.extra} events)`
+            : "Day-by-Day Calendar — sync Persona to see daily breakdown"}
+        </Button>
+      </div>
+    );
+  }
+
+  const weekdayHeaders = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  return (
+    <div className="glass-card p-4 sm:p-6 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-primary" />
+          <h3 className="font-semibold text-foreground">
+            Day-by-Day — {MONTH_NAMES[month - 1]} {year}
+          </h3>
+          <Badge variant="outline" className="text-[10px] border-primary/20 text-primary">
+            From Persona
+          </Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-muted-foreground hidden sm:inline">Filter:</span>
+          <CalendarBucketChip
+            bucket="all"
+            label="All"
+            count={monthTotals.sick + monthTotals.missed + monthTotals.late + monthTotals.extra}
+            active={activeBucket === "all"}
+            onClick={() => setActiveBucket("all")}
+          />
+          {(Object.keys(BUCKET_META) as CalendarBucket[]).map(b => (
+            <CalendarBucketChip
+              key={b}
+              bucket={b}
+              label={BUCKET_META[b].short}
+              count={monthTotals[b]}
+              active={activeBucket === b}
+              onClick={() => setActiveBucket(b)}
+            />
+          ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={() => setOpen(false)}
+          >
+            Hide
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+        {weekdayHeaders.map(d => (
+          <div key={d} className="text-[10px] sm:text-xs text-muted-foreground font-medium text-center py-1 uppercase tracking-wider">
+            {d}
+          </div>
+        ))}
+        {grid.map((cell, idx) => {
+          const filtered = activeBucket === "all"
+            ? cell.entries
+            : cell.entries.filter(e => e.bucket === activeBucket);
+          const counts: Record<CalendarBucket, number> = { sick: 0, missed: 0, late: 0, extra: 0 };
+          for (const e of filtered) counts[e.bucket]++;
+          const totalCount = filtered.length;
+          const isToday = cell.iso === todayIso && cell.inMonth;
+          const isSelected = cell.iso === activeDay;
+          const hasActivity = totalCount > 0;
+          const dayOfWeek = (() => {
+            const [y, m, d] = cell.iso.split("-").map(Number);
+            return new Date(y, m - 1, d).getDay();
+          })();
+          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+          return (
+            <button
+              key={`${cell.iso}-${idx}`}
+              type="button"
+              disabled={!cell.inMonth}
+              onClick={() => setActiveDay(cell.iso)}
+              className={`relative min-h-[68px] sm:min-h-[84px] p-1.5 sm:p-2 rounded-lg border text-left transition-all ${
+                cell.inMonth
+                  ? hasActivity
+                    ? "bg-white border-slate-200 hover:border-primary/40 hover:shadow-sm cursor-pointer"
+                    : isWeekend
+                      ? "bg-slate-50/60 border-slate-100 opacity-70"
+                      : "bg-white border-slate-100 hover:border-slate-200 cursor-default"
+                  : "bg-slate-50/40 border-transparent opacity-30 cursor-default"
+              } ${isSelected ? "ring-2 ring-primary/60 ring-offset-1" : ""} ${
+                isToday ? "outline outline-2 outline-amber-300" : ""
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className={`text-[11px] sm:text-xs font-semibold tabular-nums ${
+                  isToday ? "text-amber-700"
+                  : cell.inMonth ? "text-slate-700" : "text-slate-300"
+                }`}>
+                  {cell.dayNumber}
+                </span>
+                {isToday && (
+                  <span className="text-[8px] uppercase font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1 rounded">
+                    Today
+                  </span>
+                )}
+                {hasActivity && totalCount >= 3 && !isToday && (
+                  <span className="text-[8px] uppercase font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1 rounded">
+                    Hot
+                  </span>
+                )}
+              </div>
+              {hasActivity && (
+                <div className="flex flex-wrap gap-0.5">
+                  {(Object.keys(BUCKET_META) as CalendarBucket[]).map(b => {
+                    if (counts[b] === 0) return null;
+                    const meta = BUCKET_META[b];
+                    return (
+                      <span
+                        key={b}
+                        className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] sm:text-[10px] font-semibold tabular-nums border ${meta.fill} ${meta.border} ${meta.text}`}
+                        title={`${counts[b]} × ${meta.label}`}
+                      >
+                        <meta.icon className="h-2.5 w-2.5" />
+                        {counts[b]}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Selected-day drawer-style panel */}
+      {activeDay && (
+        <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 to-transparent p-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Selected day</p>
+              <p className="text-base font-semibold text-foreground">
+                {(() => {
+                  const [y, m, d] = activeDay.split("-").map(Number);
+                  const dt = new Date(y, m - 1, d);
+                  return dt.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+                })()}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {activeEntries.length === 0
+                  ? "No matching events for the active filter."
+                  : `${activeEntries.length} event${activeEntries.length === 1 ? "" : "s"} from Persona sync.`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveDay(null)}
+              className="h-7 w-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-500"
+              aria-label="Close day details"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {activeEntries.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {activeEntries.map((e, i) => {
+                const meta = BUCKET_META[e.bucket];
+                return (
+                  <button
+                    key={`${e.gpId}-${e.bucket}-${i}`}
+                    type="button"
+                    onClick={() => onOpenGP(e.gpId)}
+                    className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border text-left ${meta.fill} ${meta.border} hover:shadow-sm transition-all`}
+                  >
+                    <span className={`h-7 w-7 rounded-md ${meta.fill} ${meta.border} border flex items-center justify-center shrink-0`}>
+                      <meta.icon className={`h-3.5 w-3.5 ${meta.text}`} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-slate-800 truncate">{e.gpName}</p>
+                      <p className={`text-[10px] uppercase tracking-wider ${meta.text}`}>{meta.label}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CalendarBucketChip({
+  bucket,
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  bucket: CalendarBucket | "all";
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const meta = bucket === "all" ? null : BUCKET_META[bucket];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[11px] font-semibold transition-all ${
+        active
+          ? meta
+            ? `${meta.fill} ${meta.border} ${meta.text} ring-2 ring-offset-1 ring-current/30`
+            : "bg-primary/15 border-primary/30 text-primary ring-2 ring-offset-1 ring-primary/20"
+          : meta
+            ? `bg-white border-slate-200 text-slate-600 hover:${meta.fill} hover:${meta.border}`
+            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+      }`}
+    >
+      {meta ? <meta.icon className="h-3 w-3" /> : null}
+      <span>{label}</span>
+      <span className="tabular-nums opacity-80">{count}</span>
+    </button>
   );
 }
