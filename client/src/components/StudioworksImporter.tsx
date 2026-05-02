@@ -33,10 +33,12 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Download, Bookmark, Terminal, ClipboardPaste, Check, X, AlertTriangle,
   Loader2, Send, ExternalLink, Copy, ChevronRight, Search, Sparkles,
+  Link2, RefreshCw, UserCheck,
 } from "lucide-react";
 
 // ============================================
@@ -46,13 +48,21 @@ import {
 // (re-using existing session cookies), falls back to scraping rows
 // off the page. Never throws — surfaces errors to the user instead.
 // ============================================
-function buildBookmarkletScript(opts: { apiOrigin: string; sessionToken: string }): string {
+function buildBookmarkletScript(opts: { apiOrigin: string; sessionToken: string; autoRefreshMin?: number }): string {
   // The script is wrapped in an IIFE and as a string we URL-encode
   // for the bookmarklet form. Variables are inlined at copy time.
+  const autoMin = Math.max(0, Math.floor(opts.autoRefreshMin ?? 0));
   const body = `
 (async () => {
   const API = ${JSON.stringify(opts.apiOrigin)};
   const TOKEN = ${JSON.stringify(opts.sessionToken)};
+  const AUTO_MIN = ${autoMin};
+  // Idempotent guard so the user can't accidentally fire two
+  // overlapping auto-refresh loops in the same Studioworks tab.
+  if (window.__gpReportAutoRefresh) {
+    clearInterval(window.__gpReportAutoRefresh);
+    window.__gpReportAutoRefresh = null;
+  }
   const banner = (msg, color) => {
     const el = document.createElement("div");
     el.textContent = msg;
@@ -60,6 +70,7 @@ function buildBookmarkletScript(opts: { apiOrigin: string; sessionToken: string 
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 6000);
   };
+  const runOnce = async () => {
   try {
     banner("Scanning Studioworks for evaluations…", "#0ea5e9");
     // Strategy 1: look for embedded JSON on page (Next/Nuxt/Inertia
@@ -139,6 +150,12 @@ function buildBookmarkletScript(opts: { apiOrigin: string; sessionToken: string 
     }
   } catch (e) {
     banner("Error: " + (e && e.message ? e.message : e), "#dc2626");
+  }
+  };
+  await runOnce();
+  if (AUTO_MIN > 0) {
+    window.__gpReportAutoRefresh = setInterval(runOnce, AUTO_MIN * 60_000);
+    banner("Auto-refresh ON: re-scraping every " + AUTO_MIN + " min. Click bookmarklet again to stop.", "#7c3aed");
   }
 })();
   `.trim();
@@ -291,6 +308,13 @@ export function StudioworksImporter({
   const [pasteText, setPasteText] = useState("");
   const [parsed, setParsed] = useState<RawEval[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [autoRefreshMin, setAutoRefreshMin] = useState<number>(0);
+  // For unmatched-resolver: maps unmatched presenter name -> chosen GP id.
+  const [nameMappings, setNameMappings] = useState<Record<string, number>>({});
+
+  // Pull GP list for the unmatched-resolver dropdown. Filtered by the
+  // backend to GPs visible to the current user.
+  const { data: gpList } = trpc.gamePresenter.list.useQuery();
 
   const importMutation = trpc.studioworksSync.importBatch.useMutation({
     onSuccess: (res) => {
@@ -300,10 +324,38 @@ export function StudioworksImporter({
       setParsed([]);
       setPasteText("");
       setSelected(new Set());
+      setNameMappings({});
       onImported?.();
       // Don't auto-close so the FM can see the import summary.
     },
     onError: (err) => toast.error(`Import failed: ${err.message}`),
+  });
+
+  // Pull unmatched names from the most recent import so the FM can
+  // assign each to a real GP via dropdown and re-submit.
+  const unmatchedNames = useMemo<Array<{ name: string; date: string; externalId: string }>>(() => {
+    const data = importMutation.data;
+    if (!data) return [];
+    const seen = new Set<string>();
+    const out: Array<{ name: string; date: string; externalId: string }> = [];
+    for (const d of data.details) {
+      if (d.matched || d.skippedExisting) continue;
+      const key = d.presenterName.toLowerCase().trim();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ name: d.presenterName, date: d.date, externalId: d.externalId });
+    }
+    return out;
+  }, [importMutation.data]);
+
+  const resolveMutation = trpc.studioworksSync.importBatch.useMutation({
+    onSuccess: (res) => {
+      toast.success(
+        `Resolved ${res.inserted} + ${res.skippedExisting} skipped + ${res.unmatched} still unmatched`,
+      );
+      onImported?.();
+    },
+    onError: (err) => toast.error(`Resolve failed: ${err.message}`),
   });
 
   const onParse = useCallback(() => {
@@ -326,15 +378,36 @@ export function StudioworksImporter({
     importMutation.mutate({ evaluations: toSend });
   }, [parsed, selected, importMutation]);
 
+  const onResolveUnmatched = useCallback(() => {
+    if (Object.keys(nameMappings).length === 0) {
+      toast.error("Map at least one name to a GP first");
+      return;
+    }
+    // Re-build payloads from the parsed list (or from importMutation.data
+    // if parsed was cleared) but only for rows whose name has a mapping.
+    const sourceList: RawEval[] = parsed.length > 0 ? parsed : (importMutation.data?.details ?? [])
+      .filter(d => !d.matched && !d.skippedExisting)
+      .map(d => ({
+        externalId: d.externalId,
+        presenterName: d.presenterName,
+        evaluatorName: d.evaluatorName,
+        date: d.date,
+        game: d.game,
+        ratings: {},
+      }));
+    const payload = sourceList
+      .filter(r => nameMappings[r.presenterName.toLowerCase().trim()])
+      .map(r => ({ ...r, forceGpId: nameMappings[r.presenterName.toLowerCase().trim()] }));
+    if (payload.length === 0) {
+      toast.error("No rows to resubmit — pick a GP for at least one unmatched name");
+      return;
+    }
+    resolveMutation.mutate({ evaluations: payload });
+  }, [nameMappings, parsed, importMutation.data, resolveMutation]);
+
   const onCopyBookmarklet = useCallback(async () => {
-    // Build the script with no token (the user's app session cookie
-    // travels via fetch credentials when they're on the same origin
-    // as the API, but for cross-origin Studioworks→our-API the user
-    // would need to grant access first). For the bookmarklet form we
-    // produce a console-friendly snippet by default — the user can
-    // also drag the link to their bookmarks bar.
     const apiOrigin = window.location.origin;
-    const script = buildBookmarkletScript({ apiOrigin, sessionToken: "" });
+    const script = buildBookmarkletScript({ apiOrigin, sessionToken: "", autoRefreshMin });
     const href = asBookmarkletHref(script);
     try {
       await navigator.clipboard.writeText(href);
@@ -348,20 +421,26 @@ export function StudioworksImporter({
 
   const onCopyConsoleSnippet = useCallback(async () => {
     const apiOrigin = window.location.origin;
-    const script = buildBookmarkletScript({ apiOrigin, sessionToken: "" });
+    const script = buildBookmarkletScript({ apiOrigin, sessionToken: "", autoRefreshMin });
     try {
       await navigator.clipboard.writeText(script);
       toast.success("Console snippet copied", {
-        description: "Open team.studioworks.ee/evaluations, open DevTools (F12), Console tab, paste, hit Enter.",
+        description: autoRefreshMin > 0
+          ? `Auto-refresh ON (every ${autoRefreshMin} min). Paste into DevTools console.`
+          : "Open team.studioworks.ee/evaluations, open DevTools (F12), Console tab, paste, hit Enter.",
       });
     } catch {
       toast.error("Couldn't copy — please copy manually from the textarea below.");
     }
-  }, []);
+  }, [autoRefreshMin]);
 
   const consoleSnippet = useMemo(() => {
-    return buildBookmarkletScript({ apiOrigin: typeof window !== "undefined" ? window.location.origin : "", sessionToken: "" });
-  }, []);
+    return buildBookmarkletScript({
+      apiOrigin: typeof window !== "undefined" ? window.location.origin : "",
+      sessionToken: "",
+      autoRefreshMin,
+    });
+  }, [autoRefreshMin]);
 
   const toggleAll = (on: boolean) =>
     setSelected(on ? new Set(parsed.map(r => r.externalId)) : new Set());
@@ -401,6 +480,41 @@ export function StudioworksImporter({
                 <li>Open <a href="https://team.studioworks.ee/evaluations" target="_blank" rel="noreferrer" className="text-primary underline inline-flex items-center gap-0.5">team.studioworks.ee/evaluations <ExternalLink className="h-3 w-3" /></a> in another tab. Make sure you&apos;re logged in.</li>
                 <li>Click the bookmarklet. A banner shows progress; evals appear here automatically.</li>
               </ol>
+
+              {/* Auto-refresh selector — turns the bookmarklet into a
+                  background poller. The FM clicks once and Studioworks
+                  is re-scraped every N minutes for as long as the tab
+                  stays open. */}
+              <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className={`h-3.5 w-3.5 text-violet-700 ${autoRefreshMin > 0 ? "animate-spin" : ""}`} />
+                    <span className="text-xs font-semibold text-violet-800">Auto-refresh mode</span>
+                  </div>
+                  <Select
+                    value={String(autoRefreshMin)}
+                    onValueChange={v => setAutoRefreshMin(Number(v))}
+                  >
+                    <SelectTrigger className="h-8 w-[160px] text-xs glass-input">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Off (one-shot)</SelectItem>
+                      <SelectItem value="5">Every 5 min</SelectItem>
+                      <SelectItem value="10">Every 10 min</SelectItem>
+                      <SelectItem value="15">Every 15 min</SelectItem>
+                      <SelectItem value="30">Every 30 min</SelectItem>
+                      <SelectItem value="60">Every 60 min</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-[11px] text-violet-700">
+                  {autoRefreshMin > 0
+                    ? `Bookmarklet will keep re-scraping Studioworks every ${autoRefreshMin} min while the tab stays open. Click again to stop.`
+                    : "Set an interval to turn the bookmarklet into a background poller. Closest thing to true automation without server-side browser deps."}
+                </p>
+              </div>
+
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
                 <p className="text-xs text-slate-600 font-mono break-all overflow-hidden text-ellipsis line-clamp-3">
                   {asBookmarkletHref(consoleSnippet).slice(0, 240)}…
@@ -571,6 +685,77 @@ export function StudioworksImporter({
                       ))}
                   </ul>
                 </details>
+              )}
+
+              {/* Unmatched-name resolver — pick a real GP for each
+                  presenter name the fuzzy matcher couldn't resolve.
+                  After mapping, FM hits "Re-import mapped" to send
+                  these rows again with a forceGpId override. */}
+              {unmatchedNames.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <UserCheck className="h-4 w-4 text-amber-700" />
+                    <h5 className="text-sm font-semibold text-amber-900">
+                      Map unmatched names ({unmatchedNames.length})
+                    </h5>
+                    <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] ml-auto">
+                      {Object.keys(nameMappings).length} mapped
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-amber-800">
+                    These names didn&apos;t match any GP automatically. Pick the right one and re-import.
+                  </p>
+                  <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                    {unmatchedNames.map(u => {
+                      const key = u.name.toLowerCase().trim();
+                      const mapped = nameMappings[key];
+                      return (
+                        <div key={u.externalId} className="flex items-center gap-2 bg-white rounded-md border border-amber-200 px-2 py-1.5">
+                          <Link2 className={`h-3.5 w-3.5 shrink-0 ${mapped ? "text-emerald-600" : "text-amber-500"}`} />
+                          <span className="text-xs font-semibold text-slate-700 min-w-0 flex-1 truncate">
+                            {u.name}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{u.date}</span>
+                          <Select
+                            value={mapped ? String(mapped) : ""}
+                            onValueChange={v => setNameMappings(prev => ({ ...prev, [key]: Number(v) }))}
+                          >
+                            <SelectTrigger className="glass-input h-7 text-xs w-[160px] shrink-0">
+                              <SelectValue placeholder="Pick GP…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(gpList ?? []).map((gp: any) => (
+                                <SelectItem key={gp.id} value={String(gp.id)}>
+                                  {gp.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={onResolveUnmatched}
+                      disabled={Object.keys(nameMappings).length === 0 || resolveMutation.isPending}
+                      size="sm"
+                      className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
+                    >
+                      {resolveMutation.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <UserCheck className="h-3.5 w-3.5" />
+                      )}
+                      Re-import {Object.keys(nameMappings).length} mapped
+                    </Button>
+                    {Object.keys(nameMappings).length > 0 && (
+                      <Button variant="ghost" size="sm" onClick={() => setNameMappings({})} className="text-xs">
+                        Clear mappings
+                      </Button>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           )}

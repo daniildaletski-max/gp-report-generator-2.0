@@ -116,6 +116,10 @@ async function importOne(
    *  when the GP itself has no owner. The primary ownership goes to
    *  the GP's userId so user-scoped reads still see this eval. */
   triggeredByAdminUserId: number,
+  /** Optional override: when the FM has manually mapped an unmatched
+   *  studioworks name to a specific GP via the importer UI, we skip
+   *  the fuzzy matcher and use this id directly. */
+  forceGpId?: number,
 ): Promise<ImportDetail> {
   const date = parseStudioworksDate(raw.date);
   const baseDetail: ImportDetail = {
@@ -131,16 +135,28 @@ async function importOne(
     return { ...baseDetail, error: `unparseable date: "${raw.date}"` };
   }
 
-  // GP match — use the SAME global fuzzy matcher used by everything else.
-  // Studioworks gives us the presenter's full name; same matcher handles
-  // word-order swaps and minor spelling diffs.
-  const match = await db.findBestMatchingGP(raw.presenterName, 0.7);
-  if (!match) {
-    return { ...baseDetail, error: `no GP matched for "${raw.presenterName}"` };
+  // GP resolution — prefer the FM's explicit override, otherwise fall
+  // back to the SAME global fuzzy matcher used by everything else.
+  let gpId: number;
+  let gpName: string;
+  let gpOwnerId: number | null = null;
+  if (forceGpId) {
+    const gp = await db.getGamePresenterById(forceGpId);
+    if (!gp) {
+      return { ...baseDetail, error: `forced GP id ${forceGpId} not found` };
+    }
+    gpId = gp.id;
+    gpName = gp.name;
+    gpOwnerId = gp.userId ?? null;
+  } else {
+    const match = await db.findBestMatchingGP(raw.presenterName, 0.7);
+    if (!match) {
+      return { ...baseDetail, error: `no GP matched for "${raw.presenterName}"` };
+    }
+    gpId = match.gamePresenter.id;
+    gpName = match.gamePresenter.name;
+    gpOwnerId = match.gamePresenter.userId ?? null;
   }
-
-  const gpId = match.gamePresenter.id;
-  const gpName = match.gamePresenter.name;
 
   // Idempotency
   const existing = await findExistingEvaluation({
@@ -203,8 +219,8 @@ async function importOne(
       // would hide the eval from the FM who actually needs it.
       // Fallback to the admin only when the GP has no owner yet
       // (orphan GPs created via fuzzy-create on upload paths).
-      uploadedById: match.gamePresenter.userId ?? triggeredByAdminUserId,
-      userId: match.gamePresenter.userId ?? triggeredByAdminUserId,
+      uploadedById: gpOwnerId ?? triggeredByAdminUserId,
+      userId: gpOwnerId ?? triggeredByAdminUserId,
     });
     return { ...baseDetail, matched: true, gpId, gpName };
   } catch (e) {
@@ -322,13 +338,35 @@ export const studioworksSyncRouter = router({
           gamePerformance: z.object({ score: z.number(), maxScore: z.number(), comment: z.string().optional() }).optional(),
         }),
         overallComment: z.string().optional(),
+        /** Optional FM-supplied override: skip fuzzy matching and use
+         *  this GP id directly. Used by the unmatched-resolver UI when
+         *  the importer couldn't auto-match a name. */
+        forceGpId: z.number().int().positive().optional(),
       })).min(1).max(500),
     }))
     .mutation(async ({ ctx, input }): Promise<StudioworksSyncSummary> => {
       const details: ImportDetail[] = [];
       for (const raw of input.evaluations) {
         try {
-          const d = await importOne(raw as ExtractedEvaluation, ctx.user.id);
+          const { forceGpId, ...rest } = raw;
+          // Authorize the override: FMs can only force-match into GPs
+          // they own. Admins can force into anything.
+          if (forceGpId && ctx.user.role !== "admin") {
+            const gp = await db.getGamePresenterById(forceGpId);
+            if (!gp || (gp.userId && gp.userId !== ctx.user.id)) {
+              details.push({
+                externalId: raw.externalId,
+                presenterName: raw.presenterName,
+                evaluatorName: raw.evaluatorName,
+                date: raw.date,
+                game: raw.game,
+                matched: false,
+                error: "Cannot map to a GP outside your team",
+              });
+              continue;
+            }
+          }
+          const d = await importOne(rest as ExtractedEvaluation, ctx.user.id, forceGpId);
           // For FMs, only allow imports that match a GP they own.
           // If the matched GP belongs to another FM, refuse —
           // otherwise an FM could silently inject evaluations into
