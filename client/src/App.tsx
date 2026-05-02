@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -21,6 +21,7 @@ const Evaluations = lazy(() => import("./pages/Evaluations"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Attendance = lazy(() => import("./pages/Attendance"));
+const Workspace = lazy(() => import("./pages/Workspace"));
 const GPPortal = lazy(() => import("./pages/GPPortal"));
 const InvitePage = lazy(() => import("./pages/InvitePage"));
 
@@ -41,6 +42,7 @@ function PageLoader() {
 // Base sidebar items for all users
 const baseSidebarItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/workspace", label: "Workspace", icon: Zap },
   { href: "/upload", label: "Upload", icon: UploadIcon },
   { href: "/evaluations", label: "Evaluations", icon: FileCheck },
   { href: "/reports", label: "Reports", icon: FileSpreadsheet },
@@ -103,6 +105,11 @@ function DashboardRoutes() {
                 <Attendance />
               </RouteErrorBoundary>
             </Route>
+            <Route path="/workspace">
+              <RouteErrorBoundary fallbackTitle="Workspace failed to load">
+                <Workspace />
+              </RouteErrorBoundary>
+            </Route>
             <Route component={NotFound} />
           </Switch>
           </Suspense>
@@ -151,6 +158,7 @@ function Router() {
       <Route path="/reports" component={DashboardRoutes} />
       <Route path="/admin" component={DashboardRoutes} />
       <Route path="/attendance" component={DashboardRoutes} />
+      <Route path="/workspace" component={DashboardRoutes} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

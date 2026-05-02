@@ -185,6 +185,157 @@ export const evaluationRouter = router({
       return await db.getEvaluationsByMonth(input.year, input.month);
     }),
 
+  /**
+   * Cadence — for the Floor Manager Workspace. For each GP in the
+   * team, returns:
+   *  - last eval date / days-since
+   *  - last total score and per-criterion sub-scores (used to pre-fill
+   *    the Quick Evaluate form with sensible defaults)
+   *  - per-criterion 6-eval rolling trend (used for sparklines)
+   *  - "watch zone" — criteria where the average of the last 3 evals
+   *    is below 70% of max, surfaced so the FM knows where to focus.
+   *  - current-month attendance flags (sick / missed / late counts).
+   *  - pending action-item count.
+   * Read-only and team-scoped — non-admins only see their own teams.
+   */
+  cadence: protectedProcedure
+    .input(z.object({ teamId: z.number().positive() }))
+    .query(async ({ ctx, input }) => {
+      // Authorize team access — FMs can only see their own.
+      if (ctx.user.role !== 'admin') {
+        const team = await db.getFmTeamById(input.teamId);
+        if (!team || team.userId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+        }
+      }
+
+      const gps = await db.getGamePresentersByTeam(input.teamId);
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+
+      const result = await Promise.all(gps.map(async (gp) => {
+        const evals = await db.getEvaluationsByGP(gp.id);
+        // Sort newest first by evaluationDate (fallback to createdAt).
+        evals.sort((a, b) => {
+          const ta = (a.evaluationDate ?? a.createdAt ?? new Date(0)).getTime?.() ?? 0;
+          const tb = (b.evaluationDate ?? b.createdAt ?? new Date(0)).getTime?.() ?? 0;
+          return tb - ta;
+        });
+        const last = evals[0] ?? null;
+        const lastDate = last?.evaluationDate ?? last?.createdAt ?? null;
+        const daysSince = lastDate ? Math.floor((now.getTime() - new Date(lastDate).getTime()) / 86400000) : null;
+        const last3 = evals.slice(0, 3);
+        const avg = (key: keyof typeof evals[0]) => {
+          const vals = last3.map(e => Number((e as any)[key])).filter(v => Number.isFinite(v) && v > 0);
+          if (vals.length === 0) return null;
+          return vals.reduce((s, v) => s + v, 0) / vals.length;
+        };
+        const trends = {
+          total: evals.slice(0, 6).map(e => Number(e.totalScore || 0)).reverse(),
+          hair: evals.slice(0, 6).map(e => Number(e.hairScore || 0)).reverse(),
+          makeup: evals.slice(0, 6).map(e => Number(e.makeupScore || 0)).reverse(),
+          outfit: evals.slice(0, 6).map(e => Number(e.outfitScore || 0)).reverse(),
+          posture: evals.slice(0, 6).map(e => Number(e.postureScore || 0)).reverse(),
+          dealing: evals.slice(0, 6).map(e => Number(e.dealingStyleScore || 0)).reverse(),
+          perf: evals.slice(0, 6).map(e => Number(e.gamePerformanceScore || 0)).reverse(),
+        };
+        const watchZone: Array<{ key: string; label: string; avg: number; max: number }> = [];
+        const checkLow = (key: keyof typeof evals[0], label: string, max: number) => {
+          const a = avg(key);
+          if (a != null && a / max < 0.7) watchZone.push({ key: String(key), label, avg: Number(a.toFixed(2)), max });
+        };
+        checkLow("hairScore", "Hair", 3);
+        checkLow("makeupScore", "Makeup", 3);
+        checkLow("outfitScore", "Outfit", 3);
+        checkLow("postureScore", "Posture", 3);
+        checkLow("dealingStyleScore", "Dealing Style", 5);
+        checkLow("gamePerformanceScore", "Game Performance", 5);
+
+        // Attendance for current month — best-effort lookup.
+        let attendance: { sick: number; missed: number; late: number; extra: number } | null = null;
+        try {
+          const att = await db.findAttendance(gp.id, currentMonth, currentYear);
+          if (att) {
+            attendance = {
+              sick: att.sickLeaves ?? 0,
+              missed: att.missedDays ?? 0,
+              late: att.lateToWork ?? 0,
+              extra: att.extraShifts ?? 0,
+            };
+          }
+        } catch { /* swallow */ }
+
+        // Open action items count.
+        let openActions = 0;
+        try {
+          const items = await db.listActionItems({ gpId: gp.id });
+          openActions = items.filter((i: any) => i.status === "open" || i.status === "in_progress").length;
+        } catch { /* swallow */ }
+
+        // Compute urgency tier from days-since plus eval count.
+        const evalCount = evals.length;
+        let urgency: "never" | "overdue" | "due-soon" | "fresh" = "fresh";
+        if (evalCount === 0) urgency = "never";
+        else if (daysSince != null && daysSince >= 21) urgency = "overdue";
+        else if (daysSince != null && daysSince >= 14) urgency = "due-soon";
+
+        return {
+          gpId: gp.id,
+          gpName: gp.name,
+          evalCount,
+          lastEvalDate: lastDate,
+          daysSince,
+          urgency,
+          lastTotal: last?.totalScore ?? null,
+          lastSubscores: last ? {
+            hair: last.hairScore ?? null,
+            makeup: last.makeupScore ?? null,
+            outfit: last.outfitScore ?? null,
+            posture: last.postureScore ?? null,
+            dealing: last.dealingStyleScore ?? null,
+            perf: last.gamePerformanceScore ?? null,
+          } : null,
+          recentEvals: evals.slice(0, 3).map(e => ({
+            id: e.id,
+            date: e.evaluationDate ?? e.createdAt,
+            totalScore: e.totalScore,
+            evaluatorName: e.evaluatorName,
+            game: e.game,
+          })),
+          trends,
+          watchZone,
+          attendance,
+          openActions,
+        };
+      }));
+
+      // Sort: never first (most urgent for new GPs), then overdue (longest first),
+      // then due-soon, then fresh; alphabetical fallback.
+      const urgencyRank: Record<string, number> = { never: 0, overdue: 1, "due-soon": 2, fresh: 3 };
+      result.sort((a, b) => {
+        const ua = urgencyRank[a.urgency] ?? 99;
+        const ub = urgencyRank[b.urgency] ?? 99;
+        if (ua !== ub) return ua - ub;
+        if (a.daysSince != null && b.daysSince != null && a.daysSince !== b.daysSince) {
+          return b.daysSince - a.daysSince;
+        }
+        return a.gpName.localeCompare(b.gpName);
+      });
+
+      return {
+        teamId: input.teamId,
+        gps: result,
+        summary: {
+          total: result.length,
+          never: result.filter(r => r.urgency === "never").length,
+          overdue: result.filter(r => r.urgency === "overdue").length,
+          dueSoon: result.filter(r => r.urgency === "due-soon").length,
+          fresh: result.filter(r => r.urgency === "fresh").length,
+        },
+      };
+    }),
+
   getById: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {

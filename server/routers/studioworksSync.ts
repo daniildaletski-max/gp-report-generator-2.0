@@ -15,7 +15,8 @@
  * working.
  */
 import { TRPCError } from "@trpc/server";
-import { router, adminProcedure } from "../_core/trpc";
+import { z } from "zod";
+import { router, adminProcedure, protectedProcedure } from "../_core/trpc";
 import * as db from "../db";
 import {
   syncStudioworksEvaluations,
@@ -115,6 +116,10 @@ async function importOne(
    *  when the GP itself has no owner. The primary ownership goes to
    *  the GP's userId so user-scoped reads still see this eval. */
   triggeredByAdminUserId: number,
+  /** Optional override: when the FM has manually mapped an unmatched
+   *  studioworks name to a specific GP via the importer UI, we skip
+   *  the fuzzy matcher and use this id directly. */
+  forceGpId?: number,
 ): Promise<ImportDetail> {
   const date = parseStudioworksDate(raw.date);
   const baseDetail: ImportDetail = {
@@ -130,16 +135,28 @@ async function importOne(
     return { ...baseDetail, error: `unparseable date: "${raw.date}"` };
   }
 
-  // GP match — use the SAME global fuzzy matcher used by everything else.
-  // Studioworks gives us the presenter's full name; same matcher handles
-  // word-order swaps and minor spelling diffs.
-  const match = await db.findBestMatchingGP(raw.presenterName, 0.7);
-  if (!match) {
-    return { ...baseDetail, error: `no GP matched for "${raw.presenterName}"` };
+  // GP resolution — prefer the FM's explicit override, otherwise fall
+  // back to the SAME global fuzzy matcher used by everything else.
+  let gpId: number;
+  let gpName: string;
+  let gpOwnerId: number | null = null;
+  if (forceGpId) {
+    const gp = await db.getGamePresenterById(forceGpId);
+    if (!gp) {
+      return { ...baseDetail, error: `forced GP id ${forceGpId} not found` };
+    }
+    gpId = gp.id;
+    gpName = gp.name;
+    gpOwnerId = gp.userId ?? null;
+  } else {
+    const match = await db.findBestMatchingGP(raw.presenterName, 0.7);
+    if (!match) {
+      return { ...baseDetail, error: `no GP matched for "${raw.presenterName}"` };
+    }
+    gpId = match.gamePresenter.id;
+    gpName = match.gamePresenter.name;
+    gpOwnerId = match.gamePresenter.userId ?? null;
   }
-
-  const gpId = match.gamePresenter.id;
-  const gpName = match.gamePresenter.name;
 
   // Idempotency
   const existing = await findExistingEvaluation({
@@ -202,8 +219,8 @@ async function importOne(
       // would hide the eval from the FM who actually needs it.
       // Fallback to the admin only when the GP has no owner yet
       // (orphan GPs created via fuzzy-create on upload paths).
-      uploadedById: match.gamePresenter.userId ?? triggeredByAdminUserId,
-      userId: match.gamePresenter.userId ?? triggeredByAdminUserId,
+      uploadedById: gpOwnerId ?? triggeredByAdminUserId,
+      userId: gpOwnerId ?? triggeredByAdminUserId,
     });
     return { ...baseDetail, matched: true, gpId, gpName };
   } catch (e) {
@@ -287,4 +304,116 @@ export const studioworksSyncRouter = router({
       details,
     };
   }),
+
+  /**
+   * Client-side import — accepts an array of evaluations the FM has
+   * already extracted from team.studioworks.ee (via bookmarklet, dev
+   * console paste, or bulk-paste UI) and runs them through the SAME
+   * `importOne` matcher / dedup that the server-side scraper uses.
+   *
+   * Why this exists: the server-side Puppeteer scraper depends on
+   * Chromium runtime libs that aren't installed on the deploy host,
+   * so we let the FM's already-authenticated browser do the
+   * extraction and just POST the structured rows here. No browser
+   * deps, no creds in our env, instant.
+   *
+   * Accessible to FMs (not just admin) because they need to ingest
+   * evaluations for their own teams without filing IT tickets.
+   */
+  importBatch: protectedProcedure
+    .input(z.object({
+      evaluations: z.array(z.object({
+        externalId: z.string().min(1),
+        presenterName: z.string().min(1).max(255),
+        evaluatorName: z.string().max(255).optional(),
+        date: z.string().min(1),
+        game: z.string().max(100).optional(),
+        totalScore: z.number().min(0).max(100).optional(),
+        ratings: z.object({
+          hair: z.object({ score: z.number(), maxScore: z.number(), comment: z.string().optional() }).optional(),
+          makeup: z.object({ score: z.number(), maxScore: z.number(), comment: z.string().optional() }).optional(),
+          outfit: z.object({ score: z.number(), maxScore: z.number(), comment: z.string().optional() }).optional(),
+          posture: z.object({ score: z.number(), maxScore: z.number(), comment: z.string().optional() }).optional(),
+          dealingStyle: z.object({ score: z.number(), maxScore: z.number(), comment: z.string().optional() }).optional(),
+          gamePerformance: z.object({ score: z.number(), maxScore: z.number(), comment: z.string().optional() }).optional(),
+        }),
+        overallComment: z.string().optional(),
+        /** Optional FM-supplied override: skip fuzzy matching and use
+         *  this GP id directly. Used by the unmatched-resolver UI when
+         *  the importer couldn't auto-match a name. */
+        forceGpId: z.number().int().positive().optional(),
+      })).min(1).max(500),
+    }))
+    .mutation(async ({ ctx, input }): Promise<StudioworksSyncSummary> => {
+      const details: ImportDetail[] = [];
+      for (const raw of input.evaluations) {
+        try {
+          const { forceGpId, ...rest } = raw;
+          // Authorize the override: FMs can only force-match into GPs
+          // they own. Admins can force into anything.
+          if (forceGpId && ctx.user.role !== "admin") {
+            const gp = await db.getGamePresenterById(forceGpId);
+            if (!gp || (gp.userId && gp.userId !== ctx.user.id)) {
+              details.push({
+                externalId: raw.externalId,
+                presenterName: raw.presenterName,
+                evaluatorName: raw.evaluatorName,
+                date: raw.date,
+                game: raw.game,
+                matched: false,
+                error: "Cannot map to a GP outside your team",
+              });
+              continue;
+            }
+          }
+          const d = await importOne(rest as ExtractedEvaluation, ctx.user.id, forceGpId);
+          // For FMs, only allow imports that match a GP they own.
+          // If the matched GP belongs to another FM, refuse —
+          // otherwise an FM could silently inject evaluations into
+          // someone else's team.
+          if (ctx.user.role !== "admin" && d.matched && d.gpId) {
+            const gp = await db.getGamePresenterById(d.gpId);
+            if (gp && gp.userId && gp.userId !== ctx.user.id) {
+              details.push({
+                ...d,
+                error: "Skipped: GP belongs to a different FM",
+              });
+              continue;
+            }
+          }
+          details.push(d);
+        } catch (e) {
+          details.push({
+            externalId: raw.externalId,
+            presenterName: raw.presenterName,
+            evaluatorName: raw.evaluatorName,
+            date: raw.date,
+            game: raw.game,
+            matched: false,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      const inserted = details.filter(d => d.matched && !d.skippedExisting && !d.error).length;
+      const skippedExisting = details.filter(d => d.skippedExisting).length;
+      const unmatched = details.filter(d => !d.matched && !d.error?.includes("date")).length;
+      const errors = details.filter(d => d.error).length;
+      const status: StudioworksSyncSummary["status"] =
+        input.evaluations.length === 0 ? "failed" :
+          unmatched > 0 || errors > 0 ? "partial" : "success";
+
+      log.info(`Studioworks import-batch (user=${ctx.user.id}): submitted=${input.evaluations.length} inserted=${inserted} skipped=${skippedExisting} unmatched=${unmatched} errors=${errors}`);
+
+      return {
+        status,
+        source: "json",
+        totalFound: input.evaluations.length,
+        inserted,
+        skippedExisting,
+        unmatched,
+        errors,
+        details,
+      };
+    }),
 });

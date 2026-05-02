@@ -1020,6 +1020,26 @@ export default function GPPortal() {
               attitudeScore={attitudeDetails.reduce((s: number, a: any) => s + (a.attitudeScore || 0), 0)}
             />
 
+            <AchievementsRow
+              evaluations={(monthDetails?.evaluations ?? []) as any[]}
+              errorCount={errorDetails.length}
+              attitudeScore={attitudeDetails.reduce((s: number, a: any) => s + (a.attitudeScore || 0), 0)}
+              previousAvg={(() => {
+                const hist = (data.monthlyHistory ?? []) as any[];
+                const withData = hist.filter(m => Number(m.evalCount || 0) > 0);
+                if (withData.length < 2) return null;
+                return Number(withData[withData.length - 2].avgTotal) || null;
+              })()}
+              currentAvg={(() => {
+                const hist = (data.monthlyHistory ?? []) as any[];
+                const withData = hist.filter(m => Number(m.evalCount || 0) > 0);
+                if (withData.length < 1) return null;
+                return Number(withData[withData.length - 1].avgTotal) || null;
+              })()}
+            />
+
+            <CriterionBreakdown evaluations={(monthDetails?.evaluations ?? []) as any[]} />
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Error Details */}
               <div>
@@ -1320,6 +1340,262 @@ export default function GPPortal() {
           </p>
         </div>
       </footer>
+    </div>
+  );
+}
+
+// ============================================
+// AchievementsRow — auto-computed badges based on the GP's month.
+// Replaces "look at numbers and figure it out" with explicit
+// celebrations / call-outs the GP can be proud of (or learn from).
+// ============================================
+
+type Achievement = {
+  id: string;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tone: "gold" | "emerald" | "rose" | "blue" | "violet";
+};
+
+function AchievementsRow({
+  evaluations,
+  errorCount,
+  attitudeScore,
+  currentAvg,
+  previousAvg,
+}: {
+  evaluations: any[];
+  errorCount: number;
+  attitudeScore: number;
+  currentAvg: number | null;
+  previousAvg: number | null;
+}) {
+  const badges = useMemo<Achievement[]>(() => {
+    const out: Achievement[] = [];
+    if (evaluations.length === 0) return out;
+
+    const evalCount = evaluations.length;
+    // Top score this month
+    const topScore = Math.max(...evaluations.map(e => Number(e.totalScore) || 0));
+    // Average across all evals
+    const avgScore = evaluations.reduce((s, e) => s + (Number(e.totalScore) || 0), 0) / evalCount;
+    // Perfect appearance subscores in any evaluation
+    const hadPerfectAppearance = evaluations.some(e =>
+      Number(e.hairScore) === 3 && Number(e.makeupScore) === 3 &&
+      Number(e.outfitScore) === 3 && Number(e.postureScore) === 3,
+    );
+    // Perfect performance subscores
+    const hadPerfectPerformance = evaluations.some(e =>
+      Number(e.dealingStyleScore) === 5 && Number(e.gamePerformanceScore) === 5,
+    );
+
+    if (topScore >= 23) {
+      out.push({
+        id: "top-scorer",
+        label: "Top Scorer",
+        description: `Best evaluation hit ${topScore}/24 — exceptional work.`,
+        icon: Crown,
+        tone: "gold",
+      });
+    }
+    if (avgScore >= 20) {
+      out.push({
+        id: "consistent",
+        label: "Consistent High",
+        description: `Average ${avgScore.toFixed(1)}/24 across ${evalCount} eval${evalCount === 1 ? "" : "s"}.`,
+        icon: Medal,
+        tone: "emerald",
+      });
+    }
+    if (hadPerfectAppearance) {
+      out.push({
+        id: "perfect-appearance",
+        label: "Perfect Appearance",
+        description: "Hair / Makeup / Outfit / Posture all maxed in one eval.",
+        icon: Gem,
+        tone: "violet",
+      });
+    }
+    if (hadPerfectPerformance) {
+      out.push({
+        id: "perfect-perf",
+        label: "Perfect Performance",
+        description: "Dealing & Game Performance both 5/5 in one eval.",
+        icon: Trophy,
+        tone: "gold",
+      });
+    }
+    if (errorCount === 0 && evalCount >= 2) {
+      out.push({
+        id: "clean-month",
+        label: "Clean Month",
+        description: "Zero recorded errors with multiple evaluations.",
+        icon: Shield,
+        tone: "emerald",
+      });
+    }
+    if (evalCount >= 5) {
+      out.push({
+        id: "active-month",
+        label: "Active Month",
+        description: `${evalCount} evaluations — strong feedback flow.`,
+        icon: Flame,
+        tone: "rose",
+      });
+    }
+    if (attitudeScore >= 3) {
+      out.push({
+        id: "positive-vibes",
+        label: "Positive Vibes",
+        description: `+${attitudeScore} attitude points from FM feedback.`,
+        icon: Heart,
+        tone: "rose",
+      });
+    }
+    if (currentAvg != null && previousAvg != null && currentAvg - previousAvg >= 1.5) {
+      out.push({
+        id: "improving",
+        label: "Improving",
+        description: `Up ${(currentAvg - previousAvg).toFixed(1)} pts vs last month.`,
+        icon: TrendingUp,
+        tone: "emerald",
+      });
+    }
+    return out;
+  }, [evaluations, errorCount, attitudeScore, currentAvg, previousAvg]);
+
+  if (badges.length === 0) return null;
+
+  const toneClass = (t: Achievement["tone"]) => {
+    switch (t) {
+      case "gold": return "from-amber-50 via-yellow-50 to-amber-100/60 border-amber-200 text-amber-800";
+      case "emerald": return "from-emerald-50 via-teal-50 to-emerald-100/60 border-emerald-200 text-emerald-800";
+      case "rose": return "from-rose-50 via-pink-50 to-rose-100/60 border-rose-200 text-rose-800";
+      case "blue": return "from-sky-50 via-blue-50 to-sky-100/60 border-sky-200 text-sky-800";
+      case "violet": return "from-violet-50 via-purple-50 to-violet-100/60 border-violet-200 text-violet-800";
+    }
+  };
+  const iconBgClass = (t: Achievement["tone"]) => {
+    switch (t) {
+      case "gold": return "bg-amber-100 text-amber-600 border-amber-200";
+      case "emerald": return "bg-emerald-100 text-emerald-600 border-emerald-200";
+      case "rose": return "bg-rose-100 text-rose-600 border-rose-200";
+      case "blue": return "bg-sky-100 text-sky-600 border-sky-200";
+      case "violet": return "bg-violet-100 text-violet-600 border-violet-200";
+    }
+  };
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
+        <Trophy className="h-4 w-4 text-amber-500" />
+        Achievements this month
+        <Badge className="bg-amber-50 text-amber-700 border-amber-200 tabular-nums">{badges.length}</Badge>
+      </h3>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+        {badges.map(b => (
+          <div
+            key={b.id}
+            className={`relative overflow-hidden rounded-xl border bg-gradient-to-br p-3 ${toneClass(b.tone)}`}
+          >
+            <div className="flex items-start gap-2.5">
+              <div className={`h-8 w-8 rounded-lg border flex items-center justify-center shrink-0 ${iconBgClass(b.tone)}`}>
+                <b.icon className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold leading-tight">{b.label}</p>
+                <p className="text-[10px] opacity-80 mt-0.5 leading-tight">{b.description}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// CriterionBreakdown — horizontal bar chart of all 6 criteria so the
+// GP can see at a glance "where am I weakest". Each row shows score
+// out of max with a coloured fill, plus the % filled.
+// ============================================
+
+function CriterionBreakdown({ evaluations }: { evaluations: any[] }) {
+  const data = useMemo(() => {
+    if (!evaluations || evaluations.length === 0) return null;
+    const totals = { hair: 0, makeup: 0, outfit: 0, posture: 0, dealing: 0, perf: 0 };
+    const counts = { hair: 0, makeup: 0, outfit: 0, posture: 0, dealing: 0, perf: 0 };
+    for (const e of evaluations) {
+      const add = (key: keyof typeof totals, value: any) => {
+        if (value != null && Number.isFinite(Number(value))) {
+          totals[key] += Number(value);
+          counts[key]++;
+        }
+      };
+      add("hair", e.hairScore);
+      add("makeup", e.makeupScore);
+      add("outfit", e.outfitScore);
+      add("posture", e.postureScore);
+      add("dealing", e.dealingStyleScore);
+      add("perf", e.gamePerformanceScore);
+    }
+    const avg = (key: keyof typeof totals) => counts[key] > 0 ? totals[key] / counts[key] : null;
+    return [
+      { key: "hair", label: "Hair", value: avg("hair"), max: 3, icon: Scissors },
+      { key: "makeup", label: "Makeup", value: avg("makeup"), max: 3, icon: Palette },
+      { key: "outfit", label: "Outfit", value: avg("outfit"), max: 3, icon: Shirt },
+      { key: "posture", label: "Posture", value: avg("posture"), max: 3, icon: PersonStanding },
+      { key: "dealing", label: "Dealing Style", value: avg("dealing"), max: 5, icon: Target },
+      { key: "perf", label: "Game Performance", value: avg("perf"), max: 5, icon: Gamepad2 },
+    ];
+  }, [evaluations]);
+
+  if (!data) return null;
+
+  const ratioColor = (v: number | null, max: number) => {
+    if (v == null) return "bg-slate-200";
+    const pct = v / max;
+    if (pct >= 0.85) return "bg-emerald-500";
+    if (pct >= 0.6) return "bg-amber-500";
+    return "bg-rose-500";
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+          <BarChart3 className="h-4 w-4 text-amber-500" />
+          Criterion breakdown
+        </h3>
+        <span className="text-[11px] text-slate-500">
+          Average across {evaluations.length} eval{evaluations.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="space-y-3">
+        {data.map(d => {
+          const pct = d.value != null ? Math.min(100, (d.value / d.max) * 100) : 0;
+          return (
+            <div key={d.key} className="grid grid-cols-[140px_1fr_64px] sm:grid-cols-[180px_1fr_72px] gap-3 items-center">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="h-7 w-7 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+                  <d.icon className="h-3.5 w-3.5 text-slate-600" />
+                </div>
+                <span className="text-xs font-medium text-slate-700 truncate">{d.label}</span>
+              </div>
+              <div className="relative h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className={`absolute inset-y-0 left-0 rounded-full transition-all duration-700 ${ratioColor(d.value, d.max)}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <div className="text-right text-xs font-semibold tabular-nums text-slate-700">
+                {d.value != null ? `${d.value.toFixed(1)}/${d.max}` : "—"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

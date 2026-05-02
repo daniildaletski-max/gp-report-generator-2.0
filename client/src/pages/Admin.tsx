@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
 import { ActionItemsBoardTab } from "@/components/admin/ActionItemsBoardTab";
+import { StudioworksImportButton } from "@/components/StudioworksImporter";
 
 const ADMIN_TABS = ["overview", "invitations", "users", "teams", "stats", "action-items", "access", "errors", "persona", "studioworks"] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
@@ -5239,16 +5240,19 @@ function StudioworksSyncTab() {
 
   return (
     <TabsContent value="studioworks" className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="icon-box p-3">
-          <FileCheck className="h-5 w-5" />
+      <div className="flex items-center gap-3 justify-between">
+        <div className="flex items-center gap-3">
+          <div className="icon-box p-3">
+            <FileCheck className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Studioworks Evaluations Sync</h2>
+            <p className="text-sm text-muted-foreground">
+              Pulls evaluations from team.studioworks.ee/evaluations and writes them straight into the DB — replaces manual screenshot uploads.
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-xl font-bold">Studioworks Evaluations Sync</h2>
-          <p className="text-sm text-muted-foreground">
-            Pulls evaluations from team.studioworks.ee/evaluations and writes them straight into the DB — replaces manual screenshot uploads.
-          </p>
-        </div>
+        <StudioworksImportButton variant="default" />
       </div>
 
       <Card className="border border-border">
