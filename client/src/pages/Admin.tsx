@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useDeferredValue, memo } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
 import { ActionItemsBoardTab } from "@/components/admin/ActionItemsBoardTab";
@@ -29,7 +30,8 @@ import {
   Building2, Plus, Edit, BarChart3, Activity, CheckSquare, Square, RotateCcw,
   TrendingUp, TrendingDown, Search, Filter, X, Eye, EyeOff, Calendar,
   Award, Target, Zap, Clock, ChevronUp, ChevronDown, Mail, Send, UserPlus,
-  MailCheck, MailX, MailQuestion, Sparkles, Timer, Trophy, ThumbsUp, ThumbsDown
+  MailCheck, MailX, MailQuestion, Sparkles, Timer, Trophy, ThumbsUp, ThumbsDown,
+  MoreVertical, Gamepad2
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -300,6 +302,11 @@ function FullAdminPanel() {
 // Admin Overview Tab with system stats
 function AdminOverviewTab() {
   const { data: adminStats, isLoading } = trpc.dashboard.adminStats.useQuery();
+  const [, navigate] = useLocation();
+  // Quick Actions card buttons live inside this Overview tab. Each
+  // navigates to its respective admin sub-tab via the `?tab=` URL
+  // param that the parent <Tabs> picks up via useUrlState.
+  const goTab = useCallback((t: string) => navigate(`/admin?tab=${t}`), [navigate]);
 
   if (isLoading) {
     return (
@@ -384,19 +391,19 @@ function AdminOverviewTab() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Button variant="outline" className="h-20 flex-col gap-2 border-amber-200/60 hover:bg-amber-50 hover:border-amber-300 transition-all duration-200 text-slate-700 hover:text-amber-800" onClick={() => toast.info("Navigate to Users tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 border-amber-200/60 hover:bg-amber-50 hover:border-amber-300 transition-all duration-200 text-slate-700 hover:text-amber-800" onClick={() => goTab("users")}>
               <UserCog className="h-6 w-6" />
               <span className="text-xs font-medium">Manage Users</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 border-amber-200/60 hover:bg-amber-50 hover:border-amber-300 transition-all duration-200 text-slate-700 hover:text-amber-800" onClick={() => toast.info("Navigate to Teams tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 border-amber-200/60 hover:bg-amber-50 hover:border-amber-300 transition-all duration-200 text-slate-700 hover:text-amber-800" onClick={() => goTab("teams")}>
               <Building2 className="h-6 w-6" />
               <span className="text-xs font-medium">Manage Teams</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 border-amber-200/60 hover:bg-amber-50 hover:border-amber-300 transition-all duration-200 text-slate-700 hover:text-amber-800" onClick={() => toast.info("Navigate to GP Stats tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 border-amber-200/60 hover:bg-amber-50 hover:border-amber-300 transition-all duration-200 text-slate-700 hover:text-amber-800" onClick={() => goTab("stats")}>
               <Star className="h-6 w-6" />
               <span className="text-xs font-medium">View GP Stats</span>
             </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 border-red-200/60 hover:bg-red-50 hover:border-red-300 transition-all duration-200 text-slate-700 hover:text-red-700" onClick={() => toast.info("Navigate to Errors tab")}>
+            <Button variant="outline" className="h-20 flex-col gap-2 border-red-200/60 hover:bg-red-50 hover:border-red-300 transition-all duration-200 text-slate-700 hover:text-red-700" onClick={() => goTab("errors")}>
               <AlertTriangle className="h-6 w-6" />
               <span className="text-xs font-medium">Check Errors</span>
             </Button>
@@ -2531,7 +2538,12 @@ function GPStatsTab({
   const [editMistakes, setEditMistakes] = useState<number>(0);
   const [editTotalGames, setEditTotalGames] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState("");
-  
+  // useDeferredValue lets the input stay snappy even with 60+ GPs:
+  // typing updates `searchQuery` immediately for the input, but the
+  // expensive filter + render on `filteredGPs` happens against the
+  // deferred value so React can skip intermediate frames.
+  const deferredSearch = useDeferredValue(searchQuery);
+
   // GP Detail Modal state
   const [detailGpId, setDetailGpId] = useState<number | null>(null);
   
@@ -2581,10 +2593,10 @@ function GPStatsTab({
 
   const filteredGPs = useMemo(() => {
     if (!gpsWithStats) return [];
-    if (!searchQuery) return gpsWithStats;
-    const query = searchQuery.toLowerCase();
+    if (!deferredSearch) return gpsWithStats;
+    const query = deferredSearch.toLowerCase();
     return gpsWithStats.filter((gp: any) => gp.name.toLowerCase().includes(query));
-  }, [gpsWithStats, searchQuery]);
+  }, [gpsWithStats, deferredSearch]);
 
   const handleSaveStats = (gpId: number) => {
     updateStatsMutation.mutate({
@@ -3115,93 +3127,33 @@ function GPStatsTab({
               ))}
             </div>
           ) : filteredGPs && filteredGPs.length > 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredGPs.map((gp: any) => {
-                const attitude = gp.stats?.attitude;
-                const mistakes = gp.stats?.mistakes || 0;
-                const totalGames = gp.stats?.totalGames || 0;
-                const teamName = teams.find(t => t.id === gp.teamId)?.teamName || 'Unassigned';
-                
-                // Border color based on cumulative attitude
-// Border color handled by gp-card CSS classes
-                
-                // Get attitude display for cumulative values
-const getAttitudeDisplay = () => {
-                                  const value = attitude ?? 0;
-                                  if (value > 0) return { icon: <ThumbsUp className="h-5 w-5" />, label: `+${value}`, className: 'gp-attitude-positive' };
-                                  if (value < 0) return { icon: <ThumbsDown className="h-5 w-5" />, label: `${value}`, className: 'gp-attitude-negative' };
-                                  return { icon: null, label: '0', className: 'gp-attitude-neutral' };
-                                };
-                                const attitudeDisplay = getAttitudeDisplay();
-
-                return (
-                  <div 
-                    key={gp.id} 
-                    className={`gp-card ${(attitude ?? 0) > 0 ? 'gp-card-positive' : (attitude ?? 0) < 0 ? 'gp-card-negative' : ''} cursor-pointer ${selectedGpIds.includes(gp.id) ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
-                    onClick={() => setDetailGpId(gp.id)}
-                  >
-                    {/* Header with checkbox */}
-                    <div className="gp-card-header flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-<h4 className="gp-card-name truncate">{gp.name}</h4>
-                                        <p className="gp-card-team">{teamName}</p>
-                      </div>
-                      <Checkbox 
-                        checked={selectedGpIds.includes(gp.id)}
-                        onCheckedChange={() => toggleGpSelection(gp.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="mt-1"
-                      />
-                    </div>
-                    
-                    {/* Attitude Section */}
-                    <div className="gp-card-body" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Attitude</span>
-                        <div className={`gp-attitude-badge ${attitudeDisplay.className}`}>
-                          {attitudeDisplay.icon}
-                          <span>{attitudeDisplay.label}</span>
-                        </div>
-                      </div>
-                      <QuickAttitudeButtons
-                        gpId={gp.id}
-                        currentAttitude={attitude ?? null}
-                        currentMistakes={mistakes}
-                        selectedMonth={selectedMonth}
-                        selectedYear={selectedYear}
-                        onUpdate={refetch}
-                      />
-                    </div>
-                    
-                    {/* Stats Footer */}
-                    <div className="gp-card-footer flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1.5">
-                          <AlertTriangle className={`h-4 w-4 ${mistakes > 0 ? 'text-red-400' : 'text-muted-foreground'}`} />
-                          <span className={`text-sm font-medium ${mistakes > 0 ? 'gp-stat-danger' : ''}`}>
-                            {mistakes}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <Activity className="h-4 w-4 text-blue-400" />
-                          <span className="gp-stat-value">
-                            {totalGames.toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => { e.stopPropagation(); startEditing(gp); }}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <>
+              {/* Bulk-select helper hint — visible only when nothing
+                  selected, so the FM knows the cards' top-right
+                  checkboxes mean "pick for bulk action". */}
+              {selectedGpIds.length === 0 && (
+                <div className="mb-3 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-800 flex items-center gap-2">
+                  <CheckSquare className="h-3 w-3" />
+                  Tip: tick the checkboxes on multiple cards to bulk-set attitude or reset mistakes.
+                </div>
+              )}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {filteredGPs.map((gp: any) => (
+                  <GPStatsCard
+                    key={gp.id}
+                    gp={gp}
+                    teamName={teams.find(t => t.id === gp.teamId)?.teamName || 'Unassigned'}
+                    isSelected={selectedGpIds.includes(gp.id)}
+                    selectedMonth={selectedMonth}
+                    selectedYear={selectedYear}
+                    onOpenDetail={setDetailGpId}
+                    onToggleSelect={toggleGpSelection}
+                    onStartEdit={startEditing}
+                    onUpdate={refetch}
+                  />
+                ))}
+              </div>
+            </>
           ) : (
             <div className="gp-empty-state">
               <div className="gp-empty-icon">
@@ -3487,8 +3439,160 @@ function GPDetailModal({
   );
 }
 
+// ============================================
+// GPStatsCard — memoized card for the All Game Presenters grid.
+// Heavy rewrite to eliminate the duplicate-ATTITUDE display, surface
+// the bulk-select checkbox properly, expose the previously-hidden Edit
+// action, and add an "Open in Workspace" shortcut. Wrapped in
+// React.memo with a custom equality so typing in the search box
+// doesn't cascade re-renders into 60+ cards.
+// ============================================
+const GPStatsCard = memo(function GPStatsCard({
+  gp,
+  teamName,
+  isSelected,
+  selectedMonth,
+  selectedYear,
+  onOpenDetail,
+  onToggleSelect,
+  onStartEdit,
+  onUpdate,
+}: {
+  gp: any;
+  teamName: string;
+  isSelected: boolean;
+  selectedMonth: number;
+  selectedYear: number;
+  onOpenDetail: (gpId: number) => void;
+  onToggleSelect: (gpId: number) => void;
+  onStartEdit: (gp: any) => void;
+  onUpdate: () => void;
+}) {
+  const [, navigate] = useLocation();
+  const attitude = gp.stats?.attitude;
+  const mistakes = gp.stats?.mistakes || 0;
+  const totalGames = gp.stats?.totalGames || 0;
+  const attitudeValue = attitude ?? 0;
+  const tone = attitudeValue > 0 ? "positive" : attitudeValue < 0 ? "negative" : "neutral";
+
+  const initials = useMemo(() => {
+    const parts = String(gp.name || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }, [gp.name]);
+
+  return (
+    <div
+      className={`group gp-card ${tone === "positive" ? "gp-card-positive" : tone === "negative" ? "gp-card-negative" : ""} cursor-pointer ${isSelected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
+      onClick={() => onOpenDetail(gp.id)}
+    >
+      {/* Header — avatar + name/team, bulk-select checkbox top-right */}
+      <div className="gp-card-header flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+          <div className={`h-9 w-9 shrink-0 rounded-xl border flex items-center justify-center text-xs font-bold tabular-nums ${
+            tone === "positive" ? "bg-emerald-500/15 text-emerald-700 border-emerald-300/60"
+            : tone === "negative" ? "bg-rose-500/15 text-rose-700 border-rose-300/60"
+            : "bg-slate-200/60 text-slate-700 border-slate-300/60"
+          }`}>
+            {initials}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="gp-card-name truncate">{gp.name}</h4>
+            <p className="gp-card-team truncate">{teamName}</p>
+          </div>
+        </div>
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={() => onToggleSelect(gp.id)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Select ${gp.name} for bulk actions`}
+          className="mt-0.5 shrink-0"
+        />
+      </div>
+
+      {/* Body — single-row attitude controls. Removed the duplicate
+          ATTITUDE label + standalone badge — the value lives only in
+          the central button between -/+. */}
+      <div className="gp-card-body" onClick={(e) => e.stopPropagation()}>
+        <QuickAttitudeButtons
+          gpId={gp.id}
+          currentAttitude={attitude ?? null}
+          currentMistakes={mistakes}
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+          onUpdate={onUpdate}
+        />
+      </div>
+
+      {/* Footer — mistakes + games as left-anchored stats; right-side
+          action cluster (Open in Workspace, Edit) is always visible
+          (the previous opacity-0 group-hover trick was broken because
+          the parent didn't have `group`). */}
+      <div className="gp-card-footer flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <div
+            className="flex items-center gap-1.5"
+            title={mistakes === 0 ? "No mistakes this month" : `${mistakes} mistake${mistakes === 1 ? "" : "s"} this month`}
+          >
+            <AlertTriangle className={`h-3.5 w-3.5 ${mistakes > 0 ? "text-rose-500" : "text-slate-400"}`} />
+            <span className={`text-xs font-semibold tabular-nums ${mistakes > 0 ? "text-rose-600" : "text-slate-500"}`}>
+              {mistakes}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5" title={`${totalGames} games this month`}>
+            <Gamepad2 className="h-3.5 w-3.5 text-sky-500" />
+            <span className="text-xs font-semibold tabular-nums text-slate-700">
+              {totalGames.toLocaleString()}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 text-slate-500 hover:text-primary"
+            title="Open in Workspace"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/workspace?gp=${gp.id}`);
+            }}
+          >
+            <Zap className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 text-slate-500 hover:text-primary"
+            title="Edit numbers manually"
+            onClick={(e) => { e.stopPropagation(); onStartEdit(gp); }}
+          >
+            <Edit className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}, (prev, next) => {
+  // Only re-render this card when its own data, selection state, or
+  // the active month/year changes. Without this, every keystroke in
+  // the search box re-rendered all 60 cards because the parent
+  // re-creates `filteredGPs` array reference.
+  return (
+    prev.gp.id === next.gp.id &&
+    prev.gp.name === next.gp.name &&
+    prev.gp.stats?.attitude === next.gp.stats?.attitude &&
+    prev.gp.stats?.mistakes === next.gp.stats?.mistakes &&
+    prev.gp.stats?.totalGames === next.gp.stats?.totalGames &&
+    prev.teamName === next.teamName &&
+    prev.isSelected === next.isSelected &&
+    prev.selectedMonth === next.selectedMonth &&
+    prev.selectedYear === next.selectedYear
+  );
+});
+
 // Quick Attitude Buttons Component - Cumulative system: each click adds/subtracts from total
-function QuickAttitudeButtons({ 
+function QuickAttitudeButtons({
   gpId, 
   currentAttitude, 
   currentMistakes,
@@ -3550,15 +3654,20 @@ function QuickAttitudeButtons({
   };
 
   const attitudeValue = currentAttitude ?? 0;
-  const attitudeColor = attitudeValue > 0 ? 'text-green-400' : attitudeValue < 0 ? 'text-red-400' : 'text-muted-foreground';
+  const tone = attitudeValue > 0 ? "positive" : attitudeValue < 0 ? "negative" : "neutral";
+  const valueClasses = tone === "positive"
+    ? "bg-emerald-500/15 text-emerald-700 border-emerald-300/60"
+    : tone === "negative"
+      ? "bg-rose-500/15 text-rose-700 border-rose-300/60"
+      : "bg-slate-100 text-slate-600 border-slate-200";
 
   return (
-    <div className="flex items-center justify-center gap-1">
+    <div className="flex items-stretch gap-1.5">
       {/* Subtract button */}
       <Button
         size="sm"
         variant="ghost"
-        className="gp-attitude-button-negative"
+        className="gp-attitude-button-negative flex-1 h-9"
         onClick={() => handleAddAttitude(-1)}
         disabled={isUpdating !== null}
         title="Add -1 to attitude"
@@ -3569,12 +3678,13 @@ function QuickAttitudeButtons({
           <ThumbsDown className="h-4 w-4" />
         )}
       </Button>
-      
-      {/* Current value display with reset on click */}
+
+      {/* Central value display — single source of truth for attitude.
+          Click to reset to 0. */}
       <Button
         size="sm"
         variant="ghost"
-        className={`px-3 h-8 min-w-[50px] font-bold ${attitudeColor} hover:bg-muted`}
+        className={`px-2 h-9 min-w-[64px] font-bold tabular-nums border ${valueClasses} hover:opacity-90 focus:opacity-90`}
         onClick={handleReset}
         disabled={isUpdating !== null}
         title="Click to reset to 0"
@@ -3582,15 +3692,17 @@ function QuickAttitudeButtons({
         {isUpdating === 'reset' ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          <span>{attitudeValue >= 0 ? '+' : ''}{attitudeValue}</span>
+          <span className="text-base leading-none">
+            {attitudeValue >= 0 ? '+' : ''}{attitudeValue}
+          </span>
         )}
       </Button>
-      
+
       {/* Add button */}
       <Button
         size="sm"
         variant="ghost"
-        className="gp-attitude-button-positive"
+        className="gp-attitude-button-positive flex-1 h-9"
         onClick={() => handleAddAttitude(1)}
         disabled={isUpdating !== null}
         title="Add +1 to attitude"
