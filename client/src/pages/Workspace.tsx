@@ -218,27 +218,45 @@ export default function WorkspacePage() {
 
   // Deep-link: when navigated to /workspace?gp=ID (e.g. from the
   // GP Stats card "Open in Workspace" shortcut), pre-select that GP
-  // and also auto-switch to the team that owns them so the queue
-  // loads the right people. Runs once at mount.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  // AND switch the team selector to the GP's team — otherwise the
+  // cadence still loads the previously-selected team and the auto-
+  // pick effect below would overwrite our choice.
+  //
+  // We track a `deepLinkPending` id rather than calling the setters
+  // directly, so the auto-pick effect knows to back off until we
+  // resolve the team and the cadence reloads with our GP in it.
+  const [deepLinkPending, setDeepLinkPending] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
     const params = new URLSearchParams(window.location.search);
     const deepGp = params.get("gp");
-    if (!deepGp) return;
+    if (!deepGp) return null;
     const id = Number(deepGp);
-    if (!Number.isFinite(id) || id <= 0) return;
-    setSelectedGpId(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  });
+  // We need the global GP list (not just the team-scoped cadence) to
+  // resolve the deep-linked GP's owning team.
+  const { data: globalGpList } = trpc.gamePresenter.list.useQuery(undefined, {
+    enabled: deepLinkPending !== null,
+  });
+  useEffect(() => {
+    if (deepLinkPending == null || !globalGpList) return;
+    const gp = (globalGpList as any[]).find(g => g.id === deepLinkPending);
+    if (gp?.teamId) {
+      setSelectedTeamId(String(gp.teamId));
+    }
+    setSelectedGpId(deepLinkPending);
+    setDeepLinkPending(null);
+  }, [deepLinkPending, globalGpList]);
 
   // Auto-pick first overdue GP when cadence loads & nothing selected.
-  // Skip the auto-pick when a deep-linked GP id is present in the
-  // queue — preserves the FM's intent.
+  // Skip while a deep-link is still being resolved so we don't
+  // overwrite the FM's incoming intent.
   useEffect(() => {
+    if (deepLinkPending != null) return;
     if (!cadenceData?.gps || cadenceData.gps.length === 0) return;
     if (selectedGpId && cadenceData.gps.some(g => g.gpId === selectedGpId)) return;
     setSelectedGpId(cadenceData.gps[0].gpId);
-  }, [cadenceData, selectedGpId]);
+  }, [cadenceData, selectedGpId, deepLinkPending]);
 
   const selectedGp = useMemo(
     () => cadenceData?.gps.find(g => g.gpId === selectedGpId) ?? null,
