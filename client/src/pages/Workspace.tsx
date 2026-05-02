@@ -34,6 +34,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/PageHeader";
+import { StudioworksImportButton } from "@/components/StudioworksImporter";
 import { toast } from "sonner";
 import {
   Zap, Users, Clock, AlertTriangle, CheckCircle2, ChevronRight, ChevronLeft,
@@ -361,7 +362,7 @@ export default function WorkspacePage() {
         subtitle="Evaluate your team in 30-second loops — keyboard-first, smart pre-fill, auto-advance"
         icon={Zap}
         actions={(
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {summary && (
               <>
                 <SummaryPill icon={AlertTriangle} value={summary.never + summary.overdue} label="To do" tone="rose" />
@@ -369,6 +370,11 @@ export default function WorkspacePage() {
                 <SummaryPill icon={CheckCircle2} value={summary.fresh} label="Fresh" tone="emerald" />
               </>
             )}
+            <StudioworksImportButton
+              variant="outline"
+              size="sm"
+              onImported={() => refetchCadence()}
+            />
           </div>
         )}
       />

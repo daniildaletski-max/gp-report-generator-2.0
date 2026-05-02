@@ -15,7 +15,8 @@
  * working.
  */
 import { TRPCError } from "@trpc/server";
-import { router, adminProcedure } from "../_core/trpc";
+import { z } from "zod";
+import { router, adminProcedure, protectedProcedure } from "../_core/trpc";
 import * as db from "../db";
 import {
   syncStudioworksEvaluations,
@@ -287,4 +288,94 @@ export const studioworksSyncRouter = router({
       details,
     };
   }),
+
+  /**
+   * Client-side import — accepts an array of evaluations the FM has
+   * already extracted from team.studioworks.ee (via bookmarklet, dev
+   * console paste, or bulk-paste UI) and runs them through the SAME
+   * `importOne` matcher / dedup that the server-side scraper uses.
+   *
+   * Why this exists: the server-side Puppeteer scraper depends on
+   * Chromium runtime libs that aren't installed on the deploy host,
+   * so we let the FM's already-authenticated browser do the
+   * extraction and just POST the structured rows here. No browser
+   * deps, no creds in our env, instant.
+   *
+   * Accessible to FMs (not just admin) because they need to ingest
+   * evaluations for their own teams without filing IT tickets.
+   */
+  importBatch: protectedProcedure
+    .input(z.object({
+      evaluations: z.array(z.object({
+        externalId: z.string().min(1),
+        presenterName: z.string().min(1).max(255),
+        evaluatorName: z.string().max(255).optional(),
+        date: z.string().min(1),
+        game: z.string().max(100).optional(),
+        totalScore: z.number().min(0).max(100).optional(),
+        ratings: z.object({
+          hair: z.object({ score: z.number(), maxScore: z.number(), comment: z.string().optional() }).optional(),
+          makeup: z.object({ score: z.number(), maxScore: z.number(), comment: z.string().optional() }).optional(),
+          outfit: z.object({ score: z.number(), maxScore: z.number(), comment: z.string().optional() }).optional(),
+          posture: z.object({ score: z.number(), maxScore: z.number(), comment: z.string().optional() }).optional(),
+          dealingStyle: z.object({ score: z.number(), maxScore: z.number(), comment: z.string().optional() }).optional(),
+          gamePerformance: z.object({ score: z.number(), maxScore: z.number(), comment: z.string().optional() }).optional(),
+        }),
+        overallComment: z.string().optional(),
+      })).min(1).max(500),
+    }))
+    .mutation(async ({ ctx, input }): Promise<StudioworksSyncSummary> => {
+      const details: ImportDetail[] = [];
+      for (const raw of input.evaluations) {
+        try {
+          const d = await importOne(raw as ExtractedEvaluation, ctx.user.id);
+          // For FMs, only allow imports that match a GP they own.
+          // If the matched GP belongs to another FM, refuse —
+          // otherwise an FM could silently inject evaluations into
+          // someone else's team.
+          if (ctx.user.role !== "admin" && d.matched && d.gpId) {
+            const gp = await db.getGamePresenterById(d.gpId);
+            if (gp && gp.userId && gp.userId !== ctx.user.id) {
+              details.push({
+                ...d,
+                error: "Skipped: GP belongs to a different FM",
+              });
+              continue;
+            }
+          }
+          details.push(d);
+        } catch (e) {
+          details.push({
+            externalId: raw.externalId,
+            presenterName: raw.presenterName,
+            evaluatorName: raw.evaluatorName,
+            date: raw.date,
+            game: raw.game,
+            matched: false,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      const inserted = details.filter(d => d.matched && !d.skippedExisting && !d.error).length;
+      const skippedExisting = details.filter(d => d.skippedExisting).length;
+      const unmatched = details.filter(d => !d.matched && !d.error?.includes("date")).length;
+      const errors = details.filter(d => d.error).length;
+      const status: StudioworksSyncSummary["status"] =
+        input.evaluations.length === 0 ? "failed" :
+          unmatched > 0 || errors > 0 ? "partial" : "success";
+
+      log.info(`Studioworks import-batch (user=${ctx.user.id}): submitted=${input.evaluations.length} inserted=${inserted} skipped=${skippedExisting} unmatched=${unmatched} errors=${errors}`);
+
+      return {
+        status,
+        source: "json",
+        totalFound: input.evaluations.length,
+        inserted,
+        skippedExisting,
+        unmatched,
+        errors,
+        details,
+      };
+    }),
 });
