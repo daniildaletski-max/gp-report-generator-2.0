@@ -148,6 +148,12 @@ export default function Dashboard() {
     [gpRoster],
   );
 
+  // Integration status — backend-derived signal for the onboarding
+  // checklist's "Connect Persona or Studioworks" step. Replaces the
+  // previous localStorage flag that flipped to "done" the moment the
+  // FM clicked the CTA, even if they never finished setup.
+  const { data: integrationStatus } = trpc.dashboard.integrationStatus.useQuery();
+
   // 6-month rolling trend — used for the hero tile sparklines + period
   // deltas. Same query that TrendSection lower on the page uses, so
   // tRPC's cache collapses it into one network request.
@@ -462,6 +468,7 @@ export default function Dashboard() {
         hasGps={assignedGpCount > 0}
         hasEvaluations={(tenantStats?.totalEvaluations ?? 0) > 0}
         hasReports={(tenantStats?.totalReports ?? 0) > 0}
+        hasIntegration={integrationStatus?.hasAny ?? false}
         onNavigate={setLocation}
       />
 
@@ -2553,6 +2560,7 @@ function OnboardingChecklist({
   hasGps,
   hasEvaluations,
   hasReports,
+  hasIntegration,
   onNavigate,
 }: {
   userId: number | null;
@@ -2560,16 +2568,17 @@ function OnboardingChecklist({
   hasGps: boolean;
   hasEvaluations: boolean;
   hasReports: boolean;
+  /** Backend-derived: any persona sync log OR any studioworks-source
+   *  evaluation exists. Replaces the earlier localStorage hack that
+   *  flipped to "done" on click rather than on actual successful sync. */
+  hasIntegration: boolean;
   onNavigate: (path: string) => void;
 }) {
-  // localStorage keys are scoped per user id so signing into a
-  // different account on the same browser doesn't inherit the
-  // previous account's dismissal / integration flags. We deliberately
-  // skip persistence entirely when there's no userId yet (auth still
-  // loading) — the checklist will simply re-evaluate once the user
-  // resolves.
+  // The dismissal flag is the only piece of state still kept in
+  // localStorage — it's a pure UI preference (FM doesn't want to see
+  // the banner) so persisting it client-side is fine. Scoped per
+  // user id so a different account on the same browser starts fresh.
   const dismissKey = userId != null ? `dashboard.onboarding.dismissed.u${userId}` : null;
-  const integrationKey = userId != null ? `dashboard.onboarding.integration.u${userId}` : null;
 
   const [dismissed, setDismissed] = useState<boolean>(() => {
     if (typeof window === "undefined" || !dismissKey) return false;
@@ -2586,14 +2595,6 @@ function OnboardingChecklist({
     setDismissed(window.localStorage.getItem(dismissKey) === "1");
   }, [dismissKey]);
 
-  // "Connected an integration" is treated as optional — counted as
-  // done when EITHER Persona has been synced OR Studioworks importer
-  // has been used. We approximate via a per-user localStorage flag
-  // set when the FM clicks the corresponding shortcut, since we
-  // don't have a dedicated "first sync" timestamp on the API yet.
-  const hasIntegration = typeof window !== "undefined" && integrationKey != null
-    && window.localStorage.getItem(integrationKey) === "1";
-
   const steps = [
     { id: "team", label: "Create your first team", done: hasTeam, cta: "Create team", target: "/admin?tab=teams" },
     { id: "gps", label: "Assign Game Presenters to a team", done: hasGps, cta: "Assign GPs", target: "/admin?tab=teams" },
@@ -2607,10 +2608,9 @@ function OnboardingChecklist({
 
   if (allDone || dismissed) return null;
 
-  const handleAction = (target: string, isIntegration: boolean) => {
-    if (isIntegration && typeof window !== "undefined" && integrationKey) {
-      window.localStorage.setItem(integrationKey, "1");
-    }
+  const handleAction = (target: string) => {
+    // No more pre-marking on click — the integration milestone is now
+    // driven by the backend `dashboard.integrationStatus` query.
     onNavigate(target);
   };
 
@@ -2686,7 +2686,7 @@ function OnboardingChecklist({
               {!step.done && (
                 <button
                   type="button"
-                  onClick={() => handleAction(step.target, step.id === "sync")}
+                  onClick={() => handleAction(step.target)}
                   className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 hover:text-amber-900 inline-flex items-center gap-0.5 shrink-0"
                 >
                   {step.cta} <ChevronRight className="h-3 w-3" />

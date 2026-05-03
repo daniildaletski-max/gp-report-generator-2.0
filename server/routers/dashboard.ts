@@ -172,6 +172,48 @@ export const dashboardRouter = router({
     );
   }),
 
+  /**
+   * Integration status — used by the Dashboard onboarding checklist
+   * to mark "Connect Persona or Studioworks" as done. Replaces the
+   * previous localStorage flag that fired on click rather than on
+   * actual successful sync. Returns booleans for each integration so
+   * the UI can render which one's wired up.
+   *
+   * Done flags:
+   *  - hasPersonaSync: any persona_sync_logs row exists (any team).
+   *  - hasStudioworksImport: at least one evaluation has rawExtractedData.source = "studioworks".
+   * Combined result: hasAny is true when either is true.
+   *
+   * For non-admin users we still scan tenant-wide because integrations
+   * are an account-level setup signal — if the FM's team has been
+   * touched by Persona at any point, that counts.
+   */
+  integrationStatus: protectedProcedure.query(async () => {
+    const [recentSyncs, recentEvals] = await Promise.all([
+      db.getAllRecentSyncs(1).catch(() => [] as any[]),
+      // We only need to know if any studioworks-source eval exists.
+      // getAllEvaluations is fine here because the result is reduced
+      // to a single boolean — no payload returned to the client.
+      db.getAllEvaluations().catch(() => [] as any[]),
+    ]);
+    const hasPersonaSync = recentSyncs.length > 0;
+    const hasStudioworksImport = recentEvals.some((e: any) => {
+      const raw = e?.rawExtractedData;
+      if (!raw) return false;
+      try {
+        const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+        return parsed?.source === "studioworks";
+      } catch {
+        return false;
+      }
+    });
+    return {
+      hasPersonaSync,
+      hasStudioworksImport,
+      hasAny: hasPersonaSync || hasStudioworksImport,
+    };
+  }),
+
   // Server health check (admin-only, calls /api/health internally)
   serverHealth: adminProcedure.query(async () => {
     const startTime = Date.now();
