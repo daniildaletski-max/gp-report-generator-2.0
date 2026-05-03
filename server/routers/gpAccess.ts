@@ -3,32 +3,10 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
 import { nanoid } from "nanoid";
-import { isTechnicalError, dedupeErrorDetails } from "@shared/errorClassification";
 import { invokeLLM } from "../_core/llm";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("gpAccess");
-
-/**
- * Deduplicate combined error details — CROSS-SOURCE only.
- *
- * The portal merges uploaded screenshots and Excel-parsed gp_errors.
- * The same logical error often appears in both (FM uploads a
- * screenshot AND later the monthly Excel gets parsed). Without
- * dedupe the portal showed each such mistake twice.
- *
- * BUT: two distinct same-source errors can share the composite key
- * (same code + table + day + description prefix), e.g. the same GP
- * dropping cards at the same table twice on the same shift. The
- * earlier dedup collapsed those into one, under-reporting genuine
- * mistakes (codex P1).
- *
- * `dedupeErrorDetails` was moved to shared/errorClassification.ts so
- * the Attendance / Dashboard mistake counters use the exact same
- * dedup rules. Pair screenshots 1:1 with matching excel rows: each
- * screenshot drops one excel row with the same key, excess excel
- * rows are kept.
- */
 
 /**
  * In-memory daily cache for AI Coach insights, keyed by `${gpId}-YYYY-MM-DD`.
@@ -168,35 +146,14 @@ export const gpAccessRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
       }
 
-      // Get stats for selected month
+      // Get stats for selected month. `mistakes` here comes directly from
+      // the Excel "Error Count Analysis" sheet column E (set at upload time).
+      // We trust it as-is — no filtering, no dedup, no cross-source merge.
       const stats = await db.getMonthlyGpStats(accessToken.gamePresenterId, input.month, input.year);
 
-      // Get error screenshots for selected month — filter out TV / technical
-      // errors so the GP only sees errors actually attributable to them.
-      // Track the filtered count so the UI can explain a discrepancy
-      // (e.g. "FM uploaded 2 screenshots but only 1 counts toward you")
-      // rather than silently hiding them.
-      const errorScreenshotsRaw = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
-      const errorScreenshots = errorScreenshotsRaw.filter(e => !isTechnicalError({
-        errorType: e.errorType,
-        errorCategory: e.errorCategory,
-        errorDescription: e.errorDescription,
-      }));
-      const technicalErrorsHidden = errorScreenshotsRaw.length - errorScreenshots.length;
+      const errorScreenshots = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
       const attitudeDetails = await db.getAttitudeScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
-      // Re-apply `isTechnicalError` to Excel-imported `gpErrors` so
-      // TV-* / SYS-* / TECH-* codes don't count against the GP — those
-      // are interface/system issues out of their control. The earlier
-      // attempt to skip the filter (#31) ran TV-B2 "Interface frozen"
-      // rows up against Olha and inflated her mistake count. Filter
-      // matches by errorCode prefix (high-confidence); description
-      // keywords are still respected when the code is empty.
-      const gpErrorsRaw = await db.getGpErrorsForPortal(accessToken.gamePresenterId, input.month, input.year);
-      const gpErrors = gpErrorsRaw.filter(e => !isTechnicalError({
-        errorCode: e.errorCode,
-        errorDescription: e.errorDescription,
-      }));
-      const technicalGpErrorsHidden = gpErrorsRaw.length - gpErrors.length;
+      const gpErrors = await db.getGpErrorsForPortal(accessToken.gamePresenterId, input.month, input.year);
 
       // Get evaluations for this specific month
       const allEvals = await db.getGpEvaluationsForPortal(accessToken.gamePresenterId);
@@ -206,7 +163,7 @@ export const gpAccessRouter = router({
         return d.getMonth() + 1 === input.month && d.getFullYear() === input.year;
       });
 
-      const errorDetailsRaw = [
+      const errorDetails = [
         ...errorScreenshots.map(e => ({
           id: e.id,
           source: 'screenshot' as const,
@@ -234,15 +191,8 @@ export const gpAccessRouter = router({
           createdAt: e.createdAt,
         })),
       ];
-      // Dedupe — same error logged via screenshot AND Excel was being
-      // shown twice, inflating the count badge and the visible list.
-      const errorDetails = dedupeErrorDetails(errorDetailsRaw);
 
-      // Show the count that matches what the GP actually sees in the list.
-      // The upstream `monthlyGpStats.mistakes` value already excludes most
-      // technical errors (it comes from "Error Count Analysis" col E), but
-      // we re-apply the filter at display time so count == visible items.
-      const reportedMistakes = errorDetails.length;
+      const reportedMistakes = stats?.mistakes ?? 0;
 
       // When the count is zero, give the FM something actionable rather
       // than a generic "no errors" message — list the latest uploaded
@@ -271,67 +221,18 @@ export const gpAccessRouter = router({
         };
       }
 
-      // Build a "filtered/hidden technical errors" list so the UI can
-      // optionally show them under a "Hidden / not counted against you"
-      // expander. Both AI-detected screenshots and Excel-imported rows
-      // can be filtered as technical (TV / SYS / TECH codes), so we
-      // surface both in the same hidden list.
-      const hiddenTechnicalErrors = [
-        ...errorScreenshotsRaw
-          .filter(e => isTechnicalError({
-            errorType: e.errorType,
-            errorCategory: e.errorCategory,
-            errorDescription: e.errorDescription,
-          }))
-          .map(e => ({
-            id: e.id,
-            source: 'screenshot' as const,
-            errorType: e.errorType,
-            errorDescription: e.errorDescription,
-            errorCategory: e.errorCategory,
-            severity: e.severity,
-            gameType: e.gameType,
-            tableId: e.tableId,
-            screenshotUrl: e.screenshotUrl,
-            errorDate: e.errorDate,
-            createdAt: e.createdAt,
-          })),
-        ...gpErrorsRaw
-          .filter(e => isTechnicalError({
-            errorCode: e.errorCode,
-            errorDescription: e.errorDescription,
-          }))
-          .map(e => ({
-            id: `excel-${e.id}` as string | number,
-            source: 'excel' as const,
-            errorType: e.errorCode || 'excel_error',
-            errorDescription: e.errorDescription,
-            errorCategory: null as string | null,
-            severity: 'medium' as const,
-            gameType: e.gameType,
-            tableId: e.tableId,
-            screenshotUrl: null as string | null,
-            errorDate: e.errorDate,
-            createdAt: e.createdAt,
-          })),
-      ];
-
       return {
         month: input.month,
         year: input.year,
         stats: stats ? {
-          // Compute attitude from the actual row sum rather than the
-          // monthlyGpStats column — same reason as `mistakes`: the
-          // cached column drifts after entry-month re-bucketing.
           attitude: attitudeDetails.reduce((s: number, a: any) => s + (a.attitudeScore || 0), 0),
           mistakes: reportedMistakes,
           totalGames: stats.totalGames,
         } : null,
-        // Number of technical/TV errors that the FM logged but that don't
-        // count toward this GP. Surfaced in the UI so the count never seems
-        // mysteriously off.
-        technicalErrorsHidden: technicalErrorsHidden + technicalGpErrorsHidden,
-        hiddenTechnicalErrors,
+        // Kept for client compatibility; we no longer hide any errors
+        // from the count, so these are always 0 / empty.
+        technicalErrorsHidden: 0,
+        hiddenTechnicalErrors: [] as Array<never>,
         diagnostics,
         evaluations: monthEvals,
         errorDetails,
@@ -387,29 +288,11 @@ export const gpAccessRouter = router({
       // Get monthly history for trend charts (last 6 months)
       const monthlyHistory = await db.getGpMonthlyHistory(accessToken.gamePresenterId, 6);
 
-      // Get detailed error screenshots for current month — filter out TV /
-      // technical errors so the GP only sees errors actually attributable
-      // to them.
-      const errorScreenshotsRaw = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
-      const errorScreenshots = errorScreenshotsRaw.filter(e => !isTechnicalError({
-        errorType: e.errorType,
-        errorCategory: e.errorCategory,
-        errorDescription: e.errorDescription,
-      }));
+      const errorScreenshots = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
       const attitudeDetails = await db.getAttitudeScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
+      const gpErrors = await db.getGpErrorsForPortal(accessToken.gamePresenterId, currentMonth, currentYear);
 
-      // Re-apply isTechnicalError to Excel-imported gpErrors so TV-*
-      // codes don't count against the GP — same as in getMonthDetails.
-      const gpErrorsRaw = await db.getGpErrorsForPortal(accessToken.gamePresenterId, currentMonth, currentYear);
-      const gpErrors = gpErrorsRaw.filter(e => !isTechnicalError({
-        errorCode: e.errorCode,
-        errorDescription: e.errorDescription,
-      }));
-
-      // Combine error sources: screenshots and Excel-parsed errors,
-      // then dedupe — same error often appears in both because the FM
-      // uploads a screenshot AND the monthly Excel file gets parsed.
-      const errorDetailsRaw = [
+      const errorDetails = [
         ...errorScreenshots.map(e => ({
           id: e.id,
           source: 'screenshot' as const,
@@ -437,7 +320,6 @@ export const gpAccessRouter = router({
           errorDate: e.errorDate,
         })),
       ];
-      const errorDetails = dedupeErrorDetails(errorDetailsRaw);
 
       return {
         gpName: gp.name,
@@ -447,13 +329,9 @@ export const gpAccessRouter = router({
           current: currentMonthStats ? {
             month: currentMonth,
             year: currentYear,
-            // Compute attitude from the actual row sum rather than the
-            // monthlyGpStats column. The column is a running total that
-            // can drift out of sync with the visible rows once the
-            // entry-month re-bucketing fix moves rows around.
             attitude: attitudeDetails.reduce((s: number, a: any) => s + (a.attitudeScore || 0), 0),
-            // Use filtered count so what the GP sees in the list matches the headline number
-            mistakes: errorDetails.length,
+            // Trust the Excel "Error Count Analysis" column E value as-is.
+            mistakes: currentMonthStats.mistakes ?? 0,
             totalGames: currentMonthStats.totalGames,
           } : null,
           previous: prevMonthStats ? {

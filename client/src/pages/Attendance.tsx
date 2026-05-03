@@ -111,11 +111,9 @@ export default function AttendancePage() {
     setRows(attendanceData.items.map(item => ({
       gpId: item.gamePresenter.id,
       gpName: item.gamePresenter.name,
-      // Use the server-side filtered mistake count so what the FM
-      // sees in the row matches what the GP sees in their portal.
-      // Falls back to the raw stats column if the new field is
-      // missing (older API response on first refresh).
-      mistakes: (item as any).filteredMistakes ?? item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0,
+      // Source of truth: Excel "Error Count Analysis" column E,
+      // stored in monthlyGpStats.mistakes at upload time.
+      mistakes: item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0,
       extraShifts: item.attendance?.extraShifts ?? 0,
       lateToWork: item.attendance?.lateToWork ?? 0,
       missedDays: item.attendance?.missedDays ?? 0,
@@ -179,7 +177,7 @@ export default function AttendancePage() {
       setRows(attendanceData.items.map(item => ({
         gpId: item.gamePresenter.id,
         gpName: item.gamePresenter.name,
-        mistakes: (item as any).filteredMistakes ?? item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0,
+        mistakes: item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0,
         extraShifts: item.attendance?.extraShifts ?? 0,
         lateToWork: item.attendance?.lateToWork ?? 0,
         missedDays: item.attendance?.missedDays ?? 0,
