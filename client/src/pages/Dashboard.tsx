@@ -444,6 +444,7 @@ export default function Dashboard() {
           checklist doesn't re-appear when an FM picks a fresh team. */}
       <OnboardingChecklist
         userId={user?.id ?? null}
+        userRole={user?.role ?? "fm"}
         hasTeam={onboardingStatus?.hasTeam ?? false}
         hasGps={onboardingStatus?.hasAssignedGp ?? false}
         hasEvaluations={onboardingStatus?.hasEvaluation ?? false}
@@ -2536,6 +2537,7 @@ function ChartTooltip({
 // ============================================
 function OnboardingChecklist({
   userId,
+  userRole,
   hasTeam,
   hasGps,
   hasEvaluations,
@@ -2544,6 +2546,11 @@ function OnboardingChecklist({
   onNavigate,
 }: {
   userId: number | null;
+  /** "admin" can hit team/sync admin tabs; FMs can't (FMRestrictedView
+   *  only allows stats/action-items/access). Used to route CTAs to
+   *  destinations the current user can actually open instead of
+   *  bouncing them to a dead-end stats page. */
+  userRole: string;
   hasTeam: boolean;
   hasGps: boolean;
   hasEvaluations: boolean;
@@ -2575,12 +2582,48 @@ function OnboardingChecklist({
     setDismissed(window.localStorage.getItem(dismissKey) === "1");
   }, [dismissKey]);
 
-  const steps = [
-    { id: "team", label: "Create your first team", done: hasTeam, cta: "Create team", target: "/admin?tab=teams", optional: false },
-    { id: "gps", label: "Assign Game Presenters to a team", done: hasGps, cta: "Assign GPs", target: "/admin?tab=teams", optional: false },
-    { id: "eval", label: "Record your first evaluation", done: hasEvaluations, cta: "Open Workspace", target: "/workspace", optional: false },
-    { id: "report", label: "Generate a monthly report", done: hasReports, cta: "Generate report", target: "/reports", optional: false },
-    { id: "sync", label: "Connect Persona or Studioworks (optional)", done: hasIntegration, cta: "Set up sync", target: "/admin?tab=studioworks", optional: true },
+  // CTA routing depends on role. FMs see FMRestrictedView at
+  // /admin which only accepts the `stats / action-items / access`
+  // tabs — sending them to `/admin?tab=teams` or `?tab=studioworks`
+  // would silently land on `stats` and become a dead end. For FMs
+  // we either swap the destination (setup steps that aren't
+  // actionable for them get info-only treatment with no CTA) or
+  // route to a tab they can actually open.
+  const isAdmin = userRole === "admin";
+  type Step = {
+    id: string; label: string; done: boolean; optional: boolean;
+    cta?: string; target?: string;
+  };
+  const steps: Step[] = [
+    {
+      id: "team",
+      label: isAdmin ? "Create your first team" : "Get assigned to a team",
+      done: hasTeam,
+      optional: false,
+      cta: isAdmin ? "Create team" : undefined,
+      target: isAdmin ? "/admin?tab=teams" : undefined,
+    },
+    {
+      id: "gps",
+      label: isAdmin ? "Assign Game Presenters to a team" : "Get Game Presenters assigned to your team",
+      done: hasGps,
+      optional: false,
+      cta: isAdmin ? "Assign GPs" : undefined,
+      target: isAdmin ? "/admin?tab=teams" : undefined,
+    },
+    { id: "eval",   label: "Record your first evaluation", done: hasEvaluations, cta: "Open Workspace",  target: "/workspace", optional: false },
+    { id: "report", label: "Generate a monthly report",     done: hasReports,     cta: "Generate report", target: "/reports",   optional: false },
+    {
+      id: "sync",
+      label: "Connect Persona or Studioworks (optional)",
+      done: hasIntegration,
+      optional: true,
+      // Only admins see the CTA — FMs can't open the studioworks
+      // admin tab. Step still renders so the admin team can see at
+      // a glance whether sync is configured.
+      cta: isAdmin ? "Set up sync" : undefined,
+      target: isAdmin ? "/admin?tab=studioworks" : undefined,
+    },
   ];
   // Progress + auto-hide are driven by the REQUIRED steps only.
   // The sync step is labelled "(optional)" — gating allDone on it
@@ -2671,14 +2714,19 @@ function OnboardingChecklist({
               }`}>
                 {step.label}
               </span>
-              {!step.done && (
+              {!step.done && step.cta && step.target && (
                 <button
                   type="button"
-                  onClick={() => handleAction(step.target)}
+                  onClick={() => handleAction(step.target!)}
                   className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 hover:text-amber-900 inline-flex items-center gap-0.5 shrink-0"
                 >
                   {step.cta} <ChevronRight className="h-3 w-3" />
                 </button>
+              )}
+              {!step.done && !step.cta && (
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 italic shrink-0">
+                  waiting on admin
+                </span>
               )}
             </li>
           ))}
