@@ -29,7 +29,7 @@ import {
   RefreshCw, ExternalLink, Star, AlertCircle, UserCog, Download, Shield,
   Building2, Plus, Edit, BarChart3, Activity, CheckSquare, Square, RotateCcw,
   TrendingUp, TrendingDown, Search, Filter, X, Eye, EyeOff, Calendar,
-  Award, Target, Zap, Clock, ChevronUp, ChevronDown, Mail, Send, UserPlus,
+  Award, Target, Zap, Clock, ChevronUp, ChevronDown, ChevronRight, Mail, Send, UserPlus,
   MailCheck, MailX, MailQuestion, Sparkles, Timer, Trophy, ThumbsUp, ThumbsDown,
   MoreVertical, Gamepad2
 } from "lucide-react";
@@ -321,63 +321,65 @@ function AdminOverviewTab() {
   }
 
   const statCards = [
-    { 
-      title: "Total Users", 
-      value: adminStats?.totalUsers || 0, 
-      icon: Users, 
-      cardClass: "stat-card-gold"
-    },
-    { 
-      title: "Teams", 
-      value: adminStats?.totalTeams || 0, 
-      icon: Building2, 
-      cardClass: "stat-card-indigo"
-    },
-    { 
-      title: "Game Presenters", 
-      value: adminStats?.totalGPs || 0, 
-      icon: Star, 
-      cardClass: "stat-card-gold"
-    },
-    { 
-      title: "Evaluations", 
-      value: adminStats?.totalEvaluations || 0, 
-      icon: Target, 
-      cardClass: "stat-card-green"
-    },
-    { 
-      title: "Reports", 
-      value: adminStats?.totalReports || 0, 
-      icon: FileSpreadsheet, 
-      cardClass: "stat-card-gold"
-    },
+    { title: "Total Users", value: adminStats?.totalUsers || 0, icon: Users, tone: "amber" as const, href: "/admin?tab=users" },
+    { title: "Teams", value: adminStats?.totalTeams || 0, icon: Building2, tone: "indigo" as const, href: "/admin?tab=teams" },
+    { title: "Game Presenters", value: adminStats?.totalGPs || 0, icon: Star, tone: "emerald" as const, href: "/admin?tab=stats" },
+    { title: "Evaluations", value: adminStats?.totalEvaluations || 0, icon: Target, tone: "sky" as const, href: "/evaluations" },
+    { title: "Reports", value: adminStats?.totalReports || 0, icon: FileSpreadsheet, tone: "violet" as const, href: "/reports" },
   ];
+  const toneClasses: Record<string, { bg: string; iconBg: string; iconText: string; ring: string; accent: string }> = {
+    amber: { bg: "bg-gradient-to-br from-amber-50 to-amber-50/40 border-amber-200/70", iconBg: "bg-amber-100 border-amber-200", iconText: "text-amber-700", ring: "hover:ring-amber-300/60", accent: "from-amber-400" },
+    indigo: { bg: "bg-gradient-to-br from-indigo-50 to-indigo-50/40 border-indigo-200/70", iconBg: "bg-indigo-100 border-indigo-200", iconText: "text-indigo-700", ring: "hover:ring-indigo-300/60", accent: "from-indigo-400" },
+    emerald: { bg: "bg-gradient-to-br from-emerald-50 to-emerald-50/40 border-emerald-200/70", iconBg: "bg-emerald-100 border-emerald-200", iconText: "text-emerald-700", ring: "hover:ring-emerald-300/60", accent: "from-emerald-400" },
+    sky: { bg: "bg-gradient-to-br from-sky-50 to-sky-50/40 border-sky-200/70", iconBg: "bg-sky-100 border-sky-200", iconText: "text-sky-700", ring: "hover:ring-sky-300/60", accent: "from-sky-400" },
+    violet: { bg: "bg-gradient-to-br from-violet-50 to-violet-50/40 border-violet-200/70", iconBg: "bg-violet-100 border-violet-200", iconText: "text-violet-700", ring: "hover:ring-violet-300/60", accent: "from-violet-400" },
+  };
+
+  const quickActions = [
+    { label: "Manage Users", icon: UserCog, tone: "amber" as const, count: adminStats?.totalUsers, target: "users" },
+    { label: "Manage Teams", icon: Building2, tone: "indigo" as const, count: adminStats?.totalTeams, target: "teams" },
+    { label: "View GP Stats", icon: Star, tone: "emerald" as const, count: adminStats?.totalGPs, target: "stats" },
+    { label: "Check Errors", icon: AlertTriangle, tone: "rose" as const, count: undefined, target: "errors" },
+  ];
+  const actionToneClasses: Record<string, string> = {
+    amber: "border-amber-200/60 hover:border-amber-300 hover:bg-amber-50 text-slate-700 hover:text-amber-800",
+    indigo: "border-indigo-200/60 hover:border-indigo-300 hover:bg-indigo-50 text-slate-700 hover:text-indigo-800",
+    emerald: "border-emerald-200/60 hover:border-emerald-300 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800",
+    rose: "border-rose-200/60 hover:border-rose-300 hover:bg-rose-50 text-slate-700 hover:text-rose-800",
+  };
 
   return (
     <TabsContent value="overview" className="space-y-6">
-      {/* Main Stats */}
+      {/* Main Stats — color-coded, clickable, gradient backgrounds */}
       <div className="grid gap-4 md:grid-cols-5">
-        {statCards.map((stat, idx) => (
-          <div
-            key={idx}
-            className="relative overflow-hidden rounded-2xl bg-white border border-amber-200/60 p-5 shadow-sm hover:shadow-md hover:shadow-amber-100/50 hover:-translate-y-0.5 transition-all duration-300 group cursor-default"
-          >
-            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-amber-50/60 to-transparent pointer-events-none" aria-hidden />
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-400/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" aria-hidden />
-            <div className="relative flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-100 to-yellow-100 border border-amber-200 group-hover:scale-110 transition-transform duration-300">
-                <stat.icon className="h-5 w-5 text-amber-700" />
+        {statCards.map((stat, idx) => {
+          const c = toneClasses[stat.tone];
+          return (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => navigate(stat.href)}
+              className={`relative overflow-hidden rounded-2xl border p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md group ${c.bg} ${c.ring} hover:ring-2`}
+            >
+              <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${c.accent} via-current/40 to-transparent opacity-50 group-hover:opacity-100 transition-opacity`} aria-hidden />
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-xl border ${c.iconBg} group-hover:scale-110 transition-transform duration-300`}>
+                  <stat.icon className={`h-5 w-5 ${c.iconText}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">{stat.title}</p>
+                  <p className="text-2xl font-bold text-slate-900 tabular-nums leading-tight">{stat.value.toLocaleString()}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-slate-500 font-medium">{stat.title}</p>
-                <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
+              <div className="mt-2 flex items-center gap-1 text-[10px] uppercase tracking-wider text-slate-400 group-hover:text-slate-600 transition-colors">
+                Open <ChevronRight className="h-3 w-3" />
               </div>
-            </div>
-          </div>
-        ))}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions — live counts + tone-coded hover */}
       <Card className="border border-amber-200/50 shadow-sm">
         <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
         <CardHeader className="pb-3">
@@ -387,26 +389,29 @@ function AdminOverviewTab() {
             </div>
             Quick Actions
           </CardTitle>
-          <CardDescription>Common administrative tasks</CardDescription>
+          <CardDescription>Jump straight into the most-used admin pages.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Button variant="outline" className="h-20 flex-col gap-2 border-amber-200/60 hover:bg-amber-50 hover:border-amber-300 transition-all duration-200 text-slate-700 hover:text-amber-800" onClick={() => goTab("users")}>
-              <UserCog className="h-6 w-6" />
-              <span className="text-xs font-medium">Manage Users</span>
-            </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 border-amber-200/60 hover:bg-amber-50 hover:border-amber-300 transition-all duration-200 text-slate-700 hover:text-amber-800" onClick={() => goTab("teams")}>
-              <Building2 className="h-6 w-6" />
-              <span className="text-xs font-medium">Manage Teams</span>
-            </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 border-amber-200/60 hover:bg-amber-50 hover:border-amber-300 transition-all duration-200 text-slate-700 hover:text-amber-800" onClick={() => goTab("stats")}>
-              <Star className="h-6 w-6" />
-              <span className="text-xs font-medium">View GP Stats</span>
-            </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 border-red-200/60 hover:bg-red-50 hover:border-red-300 transition-all duration-200 text-slate-700 hover:text-red-700" onClick={() => goTab("errors")}>
-              <AlertTriangle className="h-6 w-6" />
-              <span className="text-xs font-medium">Check Errors</span>
-            </Button>
+            {quickActions.map((qa) => (
+              <button
+                key={qa.target}
+                type="button"
+                onClick={() => goTab(qa.target)}
+                className={`group relative h-20 rounded-xl border bg-white px-4 flex items-center gap-3 transition-all duration-200 ${actionToneClasses[qa.tone]}`}
+              >
+                <qa.icon className="h-6 w-6 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="text-xs font-semibold leading-tight">{qa.label}</div>
+                  {qa.count != null && (
+                    <div className="text-[10px] uppercase tracking-wider opacity-70 tabular-nums mt-0.5">
+                      {qa.count.toLocaleString()} {qa.count === 1 ? "item" : "items"}
+                    </div>
+                  )}
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all" />
+              </button>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -825,12 +830,41 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
             </div>
           ) : teamsWithGPs && teamsWithGPs.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {teamsWithGPs.map((team: any) => (
-                <Card key={team.id} className="relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-primary/50" />
+              {teamsWithGPs.map((team: any) => {
+                // Health rating: green when team has both GPs and recent
+                // reports; amber when half-set; rose when starved.
+                const gpC = Number(team.gpCount || 0);
+                const repC = Number(team.reportCount || 0);
+                const userC = Number(team.assignedUsers?.length || 0);
+                const score = (gpC > 0 ? 1 : 0) + (repC > 0 ? 1 : 0) + (userC > 0 ? 1 : 0);
+                const health = score === 3 ? "healthy" : score === 2 ? "ok" : "low";
+                const healthMeta = health === "healthy"
+                  ? { label: "Healthy", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", barCls: "from-emerald-400 to-emerald-500" }
+                  : health === "ok"
+                    ? { label: "OK", cls: "bg-amber-50 text-amber-700 border-amber-200", barCls: "from-amber-400 to-orange-400" }
+                    : { label: "Needs setup", cls: "bg-rose-50 text-rose-700 border-rose-200", barCls: "from-rose-400 to-pink-400" };
+                // Per-team gradient accent stripe — derived from team id
+                // so each team keeps a stable colour across reloads.
+                const accents = [
+                  "from-amber-400 via-orange-400 to-amber-500",
+                  "from-sky-400 via-cyan-400 to-sky-500",
+                  "from-violet-400 via-purple-400 to-violet-500",
+                  "from-emerald-400 via-teal-400 to-emerald-500",
+                  "from-rose-400 via-pink-400 to-rose-500",
+                  "from-indigo-400 via-blue-400 to-indigo-500",
+                ];
+                const accentCls = accents[Number(team.id) % accents.length];
+                return (
+                <Card key={team.id} className="relative overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                  <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${accentCls}`} />
                   <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">{team.teamName}</CardTitle>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <CardTitle className="text-lg truncate">{team.teamName}</CardTitle>
+                        <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border ${healthMeta.cls} shrink-0`}>
+                          {healthMeta.label}
+                        </span>
+                      </div>
                       <div className="flex items-center gap-1">
                         <Dialog open={editingTeam?.id === team.id} onOpenChange={(open) => {
                           if (!open) {
@@ -1033,70 +1067,107 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                         </AlertDialog>
                       </div>
                     </div>
-                    <CardDescription>{team.floorManagerName}</CardDescription>
+                    <CardDescription className="flex items-center gap-1.5">
+                      <UserCog className="h-3 w-3 text-slate-400" />
+                      {team.floorManagerName}
+                    </CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div>
-                        <div className="text-2xl font-bold text-primary">{team.gpCount}</div>
-                        <div className="text-xs text-muted-foreground">GPs</div>
+                  <CardContent className="space-y-4">
+                    {/* Stat trio with semantic colours + tabular nums */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="rounded-lg bg-emerald-50/60 border border-emerald-200/50 px-2 py-2 text-center">
+                        <div className="text-xl font-bold text-emerald-700 tabular-nums leading-none">{gpC}</div>
+                        <div className="text-[10px] text-emerald-700/80 mt-1 uppercase tracking-wider">GPs</div>
                       </div>
-                      <div>
-                        <div className="text-2xl font-bold">{team.reportCount}</div>
-                        <div className="text-xs text-muted-foreground">Reports</div>
+                      <div className="rounded-lg bg-sky-50/60 border border-sky-200/50 px-2 py-2 text-center">
+                        <div className="text-xl font-bold text-sky-700 tabular-nums leading-none">{repC}</div>
+                        <div className="text-[10px] text-sky-700/80 mt-1 uppercase tracking-wider">Reports</div>
                       </div>
-                      <div>
-                        <div className="text-2xl font-bold">{team.assignedUsers?.length || 0}</div>
-                        <div className="text-xs text-muted-foreground">Users</div>
+                      <div className="rounded-lg bg-violet-50/60 border border-violet-200/50 px-2 py-2 text-center">
+                        <div className="text-xl font-bold text-violet-700 tabular-nums leading-none">{userC}</div>
+                        <div className="text-[10px] text-violet-700/80 mt-1 uppercase tracking-wider">Users</div>
                       </div>
                     </div>
 
-                    {/* Show assigned GPs */}
+                    {/* Health progress bar — visualises the 3-point score */}
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-1">
+                        <span>Team health</span>
+                        <span className="tabular-nums">{score}/3</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full bg-gradient-to-r ${healthMeta.barCls} transition-all duration-500`}
+                          style={{ width: `${(score / 3) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Assigned GPs as avatar-initial chips */}
                     {team.gamePresenters?.length > 0 && (
-                      <div className="mt-4 pt-4 border-t">
-                        <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
-                          <Star className="h-3 w-3" />
-                          Game Presenters:
+                      <div>
+                        <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                          <Star className="h-3 w-3" /> Presenters
                         </div>
-                        <div className="flex flex-wrap gap-1">
-                          {team.gamePresenters.slice(0, 5).map((gp: any) => (
-                            <Badge key={gp.id} variant="outline" className="text-xs">
-                              {gp.name}
-                            </Badge>
-                          ))}
-                          {team.gamePresenters.length > 5 && (
-                            <Badge variant="secondary" className="text-xs">
-                              +{team.gamePresenters.length - 5} more
-                            </Badge>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {team.gamePresenters.slice(0, 6).map((gp: any) => {
+                            const initials = String(gp.name || "?")
+                              .split(/\s+/).filter(Boolean).slice(0, 2)
+                              .map((p: string) => p[0]).join("").toUpperCase() || "?";
+                            return (
+                              <span
+                                key={gp.id}
+                                title={gp.name}
+                                className="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-full bg-white border border-slate-200 text-[11px] text-slate-700"
+                              >
+                                <span className="h-4 w-4 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-600">
+                                  {initials}
+                                </span>
+                                <span className="truncate max-w-[80px]">{gp.name.split(" ")[0]}</span>
+                              </span>
+                            );
+                          })}
+                          {team.gamePresenters.length > 6 && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] text-slate-600 tabular-nums">
+                              +{team.gamePresenters.length - 6}
+                            </span>
                           )}
                         </div>
                       </div>
                     )}
 
-                    {/* Show assigned users */}
+                    {/* Assigned users as avatar circles */}
                     {team.assignedUsers?.length > 0 && (
-                      <div className="mt-3 pt-3 border-t">
-                        <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          Assigned Users:
+                      <div>
+                        <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                          <Users className="h-3 w-3" /> Assigned
                         </div>
-                        <div className="flex flex-wrap gap-1">
-                          {team.assignedUsers.slice(0, 3).map((u: any, idx: number) => (
-                            <Badge key={idx} variant="secondary" className="text-xs">
-                              {u.name || u.email || "Unknown"}
-                            </Badge>
-                          ))}
-                          {team.assignedUsers.length > 3 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{team.assignedUsers.length - 3} more
-                            </Badge>
+                        <div className="flex items-center -space-x-1">
+                          {team.assignedUsers.slice(0, 4).map((u: any, idx: number) => {
+                            const label = u.name || u.email || "?";
+                            const initials = String(label).split(/[\s@]+/).filter(Boolean).slice(0, 2).map((p: string) => p[0]).join("").toUpperCase() || "?";
+                            return (
+                              <span
+                                key={idx}
+                                title={label}
+                                className="h-7 w-7 rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 border-2 border-white text-[10px] font-bold text-violet-700 flex items-center justify-center"
+                              >
+                                {initials}
+                              </span>
+                            );
+                          })}
+                          {team.assignedUsers.length > 4 && (
+                            <span className="h-7 w-7 rounded-full bg-slate-100 border-2 border-white text-[10px] font-bold text-slate-600 flex items-center justify-center tabular-nums">
+                              +{team.assignedUsers.length - 4}
+                            </span>
                           )}
                         </div>
                       </div>
                     )}
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="empty-state">
