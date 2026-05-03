@@ -460,3 +460,58 @@ export async function deleteErrorScreenshotByUser(id: number, userId: number): P
   await db.delete(errorScreenshots).where(eq(errorScreenshots.id, id));
   return true;
 }
+
+/**
+ * One-shot cleanup: delete duplicate gp_errors rows that share a
+ * full signature (gpName + errorCode + tableId + gameType + day +
+ * description) inside the same errorFileId. Keeps the row with the
+ * smallest id; drops the rest. Used to clean up backlog created
+ * before the parser learned to dedupe at insert time.
+ *
+ * Scoped per user when userId is passed (FM cleaning their own
+ * data); pass undefined as admin to clean tenant-wide.
+ */
+export async function dedupeGpErrorsBySignature(userId?: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const conds: any[] = [];
+  if (userId != null) conds.push(eq(gpErrors.userId, userId));
+  // Pull the minimum candidate set ordered by id so the first
+  // occurrence per signature wins.
+  const rows = await db
+    .select()
+    .from(gpErrors)
+    .where(conds.length > 0 ? and(...conds) : undefined)
+    .orderBy(gpErrors.id);
+  const seen = new Set<string>();
+  const toDelete: number[] = [];
+  for (const r of rows) {
+    const day = r.errorDate
+      ? new Date(r.errorDate).toISOString().slice(0, 10)
+      : (r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : "");
+    const sig = [
+      String(r.errorFileId),
+      normalizeName(r.gpName ?? ""),
+      (r.errorCode ?? "").toLowerCase().trim(),
+      (r.tableId ?? "").toLowerCase().trim(),
+      (r.gameType ?? "").toLowerCase().trim(),
+      day,
+      (r.errorDescription ?? "").toLowerCase().trim(),
+    ].join("|");
+    if (seen.has(sig)) {
+      toDelete.push(r.id);
+    } else {
+      seen.add(sig);
+    }
+  }
+  // Delete in chunks to keep the IN list manageable.
+  let deleted = 0;
+  const CHUNK = 500;
+  for (let i = 0; i < toDelete.length; i += CHUNK) {
+    const slice = toDelete.slice(i, i + CHUNK);
+    if (slice.length === 0) continue;
+    await db.delete(gpErrors).where(inArray(gpErrors.id, slice));
+    deleted += slice.length;
+  }
+  return deleted;
+}

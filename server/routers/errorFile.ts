@@ -209,7 +209,26 @@ export const errorFileRouter = router({
         }
         
         // Create individual error records with descriptions if available
-        const details = gpErrorDetails[gpName] || [];
+        const rawDetails = gpErrorDetails[gpName] || [];
+        // Dedupe parse-noise: the "Errors" sheet sometimes carries
+        // the same row 2-3× (re-pastes / backfills). Source of truth
+        // for the COUNT is the "Error Count Analysis" sheet column E
+        // (`count` above); we drop duplicates here so the per-row
+        // detail list matches that count instead of inflating it.
+        const seenSig = new Set<string>();
+        const details: typeof rawDetails = [];
+        for (const d of rawDetails) {
+          const sig = [
+            (d.errorCode ?? "").toLowerCase().trim(),
+            (d.tableId ?? "").toLowerCase().trim(),
+            (d.gameType ?? "").toLowerCase().trim(),
+            d.date ? new Date(d.date).toISOString().slice(0, 10) : "",
+            (d.description ?? "").toLowerCase().trim(),
+          ].join("|");
+          if (seenSig.has(sig)) continue;
+          seenSig.add(sig);
+          details.push(d);
+        }
         if (details.length > 0) {
           // Create individual error records with full details
           for (const detail of details) {
@@ -399,6 +418,21 @@ export const errorFileRouter = router({
   }),
 
   /**
+   * One-shot dedupe of existing gpErrors. The Excel "Errors" sheet
+   * sometimes carries the same row 2-3× and earlier parser builds
+   * inserted every copy, so the GP Portal showed e.g. "4" when the
+   * "Error Count Analysis" sheet (column E, source of truth) said 2.
+   * The new parser path dedupes at insert; this endpoint cleans up
+   * the historical backlog. Tenant-scoped for non-admin.
+   */
+  dedupeExisting: protectedProcedure.mutation(async ({ ctx }) => {
+    const removed = await db.dedupeGpErrorsBySignature(
+      ctx.user.role === "admin" ? undefined : ctx.user.id,
+    );
+    return { removed };
+  }),
+
+  /**
    * Re-import an existing errorFile from S3.
    *
    * Use case: data drift. An earlier deploy bug deleted the
@@ -520,7 +554,25 @@ export const errorFileRouter = router({
         const updated = await db.updateGPMistakesDirectly(gpName, count, file.month, file.year, ctx.user.id);
         if (updated) updatedGPs.push(gpName); else notFoundGPs.push(gpName);
 
-        const details = gpErrorDetails[gpName] || [];
+        // Dedupe parse-noise (same as the upload path above) so the
+        // rescan doesn't reinflate the per-row list with duplicate
+        // "Errors" sheet rows. "Error Count Analysis" column E stays
+        // the authoritative count.
+        const rawDetails = gpErrorDetails[gpName] || [];
+        const seenSig = new Set<string>();
+        const details: typeof rawDetails = [];
+        for (const d of rawDetails) {
+          const sig = [
+            (d.errorCode ?? "").toLowerCase().trim(),
+            (d.tableId ?? "").toLowerCase().trim(),
+            (d.gameType ?? "").toLowerCase().trim(),
+            d.date ? new Date(d.date).toISOString().slice(0, 10) : "",
+            (d.description ?? "").toLowerCase().trim(),
+          ].join("|");
+          if (seenSig.has(sig)) continue;
+          seenSig.add(sig);
+          details.push(d);
+        }
         if (details.length > 0) {
           for (const detail of details) {
             await db.createGpError({
