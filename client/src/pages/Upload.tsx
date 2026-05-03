@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/PageHeader";
 import {
   AlertDialog,
@@ -818,25 +819,33 @@ export default function UploadPage() {
         </TabsList>
       </Tabs>
 
-      {/* GP Selector for Attitude */}
+      {/* GP Selector for Attitude — replaced native <select> with the
+          Shadcn Select so it matches every other dropdown in the app
+          and carries proper keyboard navigation / focus rings. */}
       {activeTab === "attitude" && (
-        <div className="p-4 rounded-xl border border-border bg-background">
-          <label className="text-sm font-medium text-foreground block mb-2">
+        <div className="p-4 rounded-xl border border-amber-200/60 bg-amber-50/40">
+          <label className="text-sm font-medium text-foreground block mb-2 flex items-center gap-1.5">
+            <Heart className="h-3.5 w-3.5 text-amber-600" />
             Select Game Presenter <span className="text-red-500">*</span>
           </label>
-          <select
-            className="w-full rounded-lg px-3 py-2.5 border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-            value={selectedGpId || ""}
-            onChange={(e) => setSelectedGpId(e.target.value ? Number(e.target.value) : null)}
+          <Select
+            value={selectedGpId ? String(selectedGpId) : undefined}
+            onValueChange={(v) => setSelectedGpId(v ? Number(v) : null)}
           >
-            <option value="">Choose a GP...</option>
-            {gpList?.map((gp) => (
-              <option key={gp.id} value={gp.id}>{gp.name}</option>
-            ))}
-          </select>
+            <SelectTrigger className="w-full bg-white">
+              <SelectValue placeholder="Choose a GP…" />
+            </SelectTrigger>
+            <SelectContent>
+              {(gpList ?? []).map((gp) => (
+                <SelectItem key={gp.id} value={String(gp.id)}>
+                  {gp.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {!selectedGpId && (
-            <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3" />
+            <p className="text-xs text-amber-700 mt-2 flex items-center gap-1.5">
+              <AlertTriangle className="h-3 w-3 shrink-0" />
               Attitude entries can only be registered against a selected presenter — pick one above to enable upload.
             </p>
           )}
@@ -907,6 +916,18 @@ export default function UploadPage() {
           )}
         </div>
       </div>
+
+      {/* Live status strip — visible breakdown of the current batch.
+          Only renders when there's at least one file, so the page
+          stays calm in the empty state. */}
+      {hasFiles && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <UploadStat icon={ImagePlus} label="Total" value={stats.total} tone="slate" />
+          <UploadStat icon={CheckCircle} label="Processed" value={stats.success} tone="emerald" />
+          <UploadStat icon={Loader2} label="In progress" value={stats.uploading + stats.pending} tone="sky" spin={stats.uploading > 0} />
+          <UploadStat icon={AlertCircle} label="Failed" value={stats.error} tone="rose" />
+        </div>
+      )}
 
       {/* Processing Progress */}
       {isProcessing && (
@@ -1026,6 +1047,39 @@ export default function UploadPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ============================================
+// UploadStat — calm KPI tile for the Upload page header strip. Same
+// design language as the GP Stats / Reports tiles: 0.5px tone accent
+// stripe, tone-coloured icon container, big tabular-nums value.
+// Optional `spin` flag rotates the icon while uploads are in flight.
+// ============================================
+function UploadStat({
+  icon: Icon, label, value, tone, spin,
+}: { icon: React.ComponentType<{ className?: string }>; label: string; value: number; tone: "slate" | "emerald" | "sky" | "rose"; spin?: boolean }) {
+  const accent = tone === "emerald" ? "from-emerald-300 to-emerald-400"
+    : tone === "sky" ? "from-sky-300 to-sky-400"
+      : tone === "rose" ? "from-rose-300 to-rose-400"
+        : "from-slate-300 to-slate-400";
+  const iconBg = tone === "emerald" ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+    : tone === "sky" ? "bg-sky-100 text-sky-700 border-sky-200"
+      : tone === "rose" ? "bg-rose-100 text-rose-700 border-rose-200"
+        : "bg-slate-100 text-slate-600 border-slate-200";
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${accent}`} aria-hidden />
+      <div className="flex items-center gap-2.5">
+        <span className={`h-8 w-8 shrink-0 rounded-lg border flex items-center justify-center ${iconBg}`}>
+          <Icon className={`h-3.5 w-3.5 ${spin ? "animate-spin" : ""}`} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold truncate">{label}</p>
+          <p className="text-lg font-bold tabular-nums text-slate-900 leading-tight">{value}</p>
+        </div>
+      </div>
     </div>
   );
 }
