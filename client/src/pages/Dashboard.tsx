@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { StatCard } from "@/components/ui/stat-card";
 import { GlassCard } from "@/components/ui/glass-card";
 import { useLocation } from "wouter";
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { GPDetailDrawer } from "@/components/GPDetailDrawer";
 import { PageHeader } from "@/components/PageHeader";
 import { useUrlState, urlNumber } from "@/hooks/useUrlState";
@@ -125,6 +125,17 @@ export default function Dashboard() {
     month: selectedMonth,
     year: selectedYear,
     teamId: selectedTeamId,
+  });
+
+  // Unfiltered tenant-wide stats — used by OnboardingChecklist so the
+  // setup milestones don't flicker back to "incomplete" when the FM
+  // selects a team that happens to have no GPs/evals yet. The
+  // checklist is about account-level setup, not the current team's
+  // monthly numbers.
+  const { data: tenantStats } = trpc.dashboard.stats.useQuery({
+    month: selectedMonth,
+    year: selectedYear,
+    teamId: undefined,
   });
 
   // 6-month rolling trend — used for the hero tile sparklines + period
@@ -431,12 +442,16 @@ export default function Dashboard() {
           new FMs (created team, added GPs, first eval recorded,
           first report generated, Studioworks/Persona connected).
           Auto-hides when all five are complete and stays dismissed
-          via localStorage if the FM closes it manually. */}
+          via localStorage if the FM closes it manually.
+          NB: completion flags are read from `tenantStats` (the
+          unfiltered query), NOT the team-scoped `stats`, so the
+          checklist doesn't re-appear when an FM picks a fresh team. */}
       <OnboardingChecklist
+        userId={user?.id ?? null}
         hasTeam={(teams?.length ?? 0) > 0}
-        hasGps={(stats?.totalGPs ?? 0) > 0}
-        hasEvaluations={(stats?.totalEvaluations ?? 0) > 0}
-        hasReports={(stats?.totalReports ?? 0) > 0}
+        hasGps={(tenantStats?.totalGPs ?? 0) > 0}
+        hasEvaluations={(tenantStats?.totalEvaluations ?? 0) > 0}
+        hasReports={(tenantStats?.totalReports ?? 0) > 0}
         onNavigate={setLocation}
       />
 
@@ -2523,30 +2538,51 @@ function ChartTooltip({
 //     right page so the FM never wonders "where do I do that?".
 // ============================================
 function OnboardingChecklist({
+  userId,
   hasTeam,
   hasGps,
   hasEvaluations,
   hasReports,
   onNavigate,
 }: {
+  userId: number | null;
   hasTeam: boolean;
   hasGps: boolean;
   hasEvaluations: boolean;
   hasReports: boolean;
   onNavigate: (path: string) => void;
 }) {
+  // localStorage keys are scoped per user id so signing into a
+  // different account on the same browser doesn't inherit the
+  // previous account's dismissal / integration flags. We deliberately
+  // skip persistence entirely when there's no userId yet (auth still
+  // loading) — the checklist will simply re-evaluate once the user
+  // resolves.
+  const dismissKey = userId != null ? `dashboard.onboarding.dismissed.u${userId}` : null;
+  const integrationKey = userId != null ? `dashboard.onboarding.integration.u${userId}` : null;
+
   const [dismissed, setDismissed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("dashboard.onboarding.dismissed") === "1";
+    if (typeof window === "undefined" || !dismissKey) return false;
+    return window.localStorage.getItem(dismissKey) === "1";
   });
+
+  // Re-read dismiss flag if the user identity changes — for example,
+  // after sign-in or account switch within the same tab.
+  useEffect(() => {
+    if (typeof window === "undefined" || !dismissKey) {
+      setDismissed(false);
+      return;
+    }
+    setDismissed(window.localStorage.getItem(dismissKey) === "1");
+  }, [dismissKey]);
 
   // "Connected an integration" is treated as optional — counted as
   // done when EITHER Persona has been synced OR Studioworks importer
-  // has been used. We approximate via a localStorage flag set when
-  // the FM clicks the corresponding shortcut, since we don't have a
-  // dedicated "first sync" timestamp on the API yet.
-  const hasIntegration = typeof window !== "undefined"
-    && window.localStorage.getItem("dashboard.onboarding.integration") === "1";
+  // has been used. We approximate via a per-user localStorage flag
+  // set when the FM clicks the corresponding shortcut, since we
+  // don't have a dedicated "first sync" timestamp on the API yet.
+  const hasIntegration = typeof window !== "undefined" && integrationKey != null
+    && window.localStorage.getItem(integrationKey) === "1";
 
   const steps = [
     { id: "team", label: "Create your first team", done: hasTeam, cta: "Create team", target: "/admin?tab=teams" },
@@ -2562,8 +2598,8 @@ function OnboardingChecklist({
   if (allDone || dismissed) return null;
 
   const handleAction = (target: string, isIntegration: boolean) => {
-    if (isIntegration && typeof window !== "undefined") {
-      window.localStorage.setItem("dashboard.onboarding.integration", "1");
+    if (isIntegration && typeof window !== "undefined" && integrationKey) {
+      window.localStorage.setItem(integrationKey, "1");
     }
     onNavigate(target);
   };
@@ -2603,7 +2639,9 @@ function OnboardingChecklist({
               type="button"
               onClick={() => {
                 setDismissed(true);
-                if (typeof window !== "undefined") window.localStorage.setItem("dashboard.onboarding.dismissed", "1");
+                if (typeof window !== "undefined" && dismissKey) {
+                  window.localStorage.setItem(dismissKey, "1");
+                }
               }}
               className="h-7 w-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-400 hover:text-slate-600"
               aria-label="Dismiss onboarding checklist"
