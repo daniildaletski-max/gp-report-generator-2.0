@@ -295,16 +295,26 @@ export async function getGpErrorsByMonthGroupedByGpId(
   const db = await getDb();
   if (!db || gpIds.length === 0) return out;
   try {
-    // Resolve gp id -> normalized canonical name in one query so we
-    // can match against gpErrors.gpName (which is plain text from
-    // the Excel parse).
+    // Resolve canonical name -> [gp ids] in one query so we can
+    // match gpErrors.gpName (plain text from the Excel parse).
+    //
+    // game_presenters.name is NOT unique (two real people can share
+    // a stage pseudonym, plus near-duplicates like "Anna" and "Anna "
+    // normalize to the same key). Storing only one id per key would
+    // silently drop rows for the colliding GP. We keep an array per
+    // key so each error row gets attributed to every GP whose
+    // canonical name matches — same behaviour as
+    // getGpErrorsForPortal(gpId, ...) called individually.
     const gpRows = await db
       .select({ id: gamePresenters.id, name: gamePresenters.name })
       .from(gamePresenters)
       .where(inArray(gamePresenters.id, gpIds));
-    const idByNormalizedName = new Map<string, number>();
+    const idsByNormalizedName = new Map<string, number[]>();
     for (const gp of gpRows) {
-      idByNormalizedName.set(normalizeName(gp.name), gp.id);
+      const k = normalizeName(gp.name);
+      const list = idsByNormalizedName.get(k) ?? [];
+      list.push(gp.id);
+      idsByNormalizedName.set(k, list);
     }
     const { start, endExclusive } = monthRange(month, year);
     const effective = sql`COALESCE(${gpErrors.errorDate}, ${gpErrors.createdAt})`;
@@ -314,11 +324,13 @@ export async function getGpErrorsByMonthGroupedByGpId(
       .where(and(gte(effective, start), lt(effective, endExclusive)))
       .orderBy(desc(gpErrors.errorDate));
     for (const row of rows) {
-      const gpId = idByNormalizedName.get(normalizeName(row.gpName));
-      if (gpId == null) continue;
-      const list = out.get(gpId) ?? [];
-      list.push(row);
-      out.set(gpId, list);
+      const matchedIds = idsByNormalizedName.get(normalizeName(row.gpName));
+      if (!matchedIds || matchedIds.length === 0) continue;
+      for (const gpId of matchedIds) {
+        const list = out.get(gpId) ?? [];
+        list.push(row);
+        out.set(gpId, list);
+      }
     }
   } catch (error) {
     log.error("Error grouping GP errors by month", error instanceof Error ? error : undefined);
