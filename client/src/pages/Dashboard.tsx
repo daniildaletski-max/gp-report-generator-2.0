@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, FileCheck, TrendingUp, TrendingDown, FileSpreadsheet, AlertTriangle, Award, Target, Calendar, PieChart, ArrowRight, Upload, Sparkles, RefreshCw, Clock, Zap, BarChart3, CheckCircle2 } from "lucide-react";
+import { Users, FileCheck, TrendingUp, TrendingDown, FileSpreadsheet, AlertTriangle, Award, Target, Calendar, PieChart, ArrowRight, Upload, Sparkles, RefreshCw, Clock, Zap, BarChart3, CheckCircle2, X, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -425,6 +425,19 @@ export default function Dashboard() {
         trend={heroTrend ?? []}
         selectedMonth={selectedMonth}
         selectedYear={selectedYear}
+      />
+
+      {/* Onboarding checklist — surfaces five setup milestones for
+          new FMs (created team, added GPs, first eval recorded,
+          first report generated, Studioworks/Persona connected).
+          Auto-hides when all five are complete and stays dismissed
+          via localStorage if the FM closes it manually. */}
+      <OnboardingChecklist
+        hasTeam={(teams?.length ?? 0) > 0}
+        hasGps={(stats?.totalGPs ?? 0) > 0}
+        hasEvaluations={(stats?.totalEvaluations ?? 0) > 0}
+        hasReports={(stats?.totalReports ?? 0) > 0}
+        onNavigate={setLocation}
       />
 
       {/* Quick actions — five most-used operations promoted from
@@ -2492,6 +2505,149 @@ function ChartTooltip({
       <p className="font-semibold uppercase tracking-wider text-[9px] opacity-70">{point.label}</p>
       <p className="font-bold text-sm leading-tight mt-0.5">{point.y.toFixed(1)}</p>
       <p className="text-[10px] opacity-80 mt-0.5">{point.evals} eval{point.evals === 1 ? "" : "s"} · {point.gps} GP{point.gps === 1 ? "" : "s"}</p>
+    </div>
+  );
+}
+
+// ============================================
+// OnboardingChecklist — five-step setup banner shown above the Quick
+// Actions card on the dashboard. Each row reflects whether the FM has
+// completed that milestone (created team, assigned GPs, recorded an
+// evaluation, generated a report, connected an integration).
+//
+// Behaviour:
+//   - Hides itself entirely once all 5 are done (no nag on stable accounts).
+//   - Stays dismissed via localStorage if the FM clicks the × close
+//     button — they shouldn't have to see it forever.
+//   - Each incomplete row has a primary CTA that deep-links to the
+//     right page so the FM never wonders "where do I do that?".
+// ============================================
+function OnboardingChecklist({
+  hasTeam,
+  hasGps,
+  hasEvaluations,
+  hasReports,
+  onNavigate,
+}: {
+  hasTeam: boolean;
+  hasGps: boolean;
+  hasEvaluations: boolean;
+  hasReports: boolean;
+  onNavigate: (path: string) => void;
+}) {
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("dashboard.onboarding.dismissed") === "1";
+  });
+
+  // "Connected an integration" is treated as optional — counted as
+  // done when EITHER Persona has been synced OR Studioworks importer
+  // has been used. We approximate via a localStorage flag set when
+  // the FM clicks the corresponding shortcut, since we don't have a
+  // dedicated "first sync" timestamp on the API yet.
+  const hasIntegration = typeof window !== "undefined"
+    && window.localStorage.getItem("dashboard.onboarding.integration") === "1";
+
+  const steps = [
+    { id: "team", label: "Create your first team", done: hasTeam, cta: "Create team", target: "/admin?tab=teams" },
+    { id: "gps", label: "Assign Game Presenters to a team", done: hasGps, cta: "Assign GPs", target: "/admin?tab=teams" },
+    { id: "eval", label: "Record your first evaluation", done: hasEvaluations, cta: "Open Workspace", target: "/workspace" },
+    { id: "report", label: "Generate a monthly report", done: hasReports, cta: "Generate report", target: "/reports" },
+    { id: "sync", label: "Connect Persona or Studioworks (optional)", done: hasIntegration, cta: "Set up sync", target: "/admin?tab=studioworks" },
+  ];
+  const doneCount = steps.filter(s => s.done).length;
+  const total = steps.length;
+  const allDone = doneCount === total;
+
+  if (allDone || dismissed) return null;
+
+  const handleAction = (target: string, isIntegration: boolean) => {
+    if (isIntegration && typeof window !== "undefined") {
+      window.localStorage.setItem("dashboard.onboarding.integration", "1");
+    }
+    onNavigate(target);
+  };
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-yellow-50/60 to-white shadow-sm">
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-400" aria-hidden />
+      <div className="px-5 py-4 flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br from-amber-100 to-yellow-100 border border-amber-200 flex items-center justify-center">
+              <Sparkles className="h-4 w-4 text-amber-700" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-slate-900">Get your floor running</h3>
+              <p className="text-[11px] text-slate-600">
+                {doneCount}/{total} steps complete · finish setup so the system can do its job
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Inline progress ring */}
+            <div className="relative h-9 w-9">
+              <svg viewBox="0 0 36 36" className="h-9 w-9 -rotate-90">
+                <circle cx="18" cy="18" r="14" fill="none" stroke="#fcd34d33" strokeWidth="3" />
+                <circle
+                  cx="18" cy="18" r="14" fill="none" stroke="#f59e0b" strokeWidth="3"
+                  strokeDasharray={`${(doneCount / total) * 88} 88`}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-amber-700 tabular-nums">
+                {Math.round((doneCount / total) * 100)}%
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setDismissed(true);
+                if (typeof window !== "undefined") window.localStorage.setItem("dashboard.onboarding.dismissed", "1");
+              }}
+              className="h-7 w-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-400 hover:text-slate-600"
+              aria-label="Dismiss onboarding checklist"
+              title="Dismiss"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+        <ol className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          {steps.map(step => (
+            <li
+              key={step.id}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
+                step.done
+                  ? "bg-emerald-50/60 border-emerald-200/60"
+                  : "bg-white border-slate-200 hover:border-amber-300 transition-colors"
+              }`}
+            >
+              <span className={`h-5 w-5 shrink-0 rounded-full border flex items-center justify-center ${
+                step.done
+                  ? "bg-emerald-500 border-emerald-500 text-white"
+                  : "bg-white border-slate-300 text-transparent"
+              }`}>
+                <CheckCircle2 className="h-3 w-3" />
+              </span>
+              <span className={`text-xs flex-1 min-w-0 truncate ${
+                step.done ? "text-slate-500 line-through" : "text-slate-800 font-medium"
+              }`}>
+                {step.label}
+              </span>
+              {!step.done && (
+                <button
+                  type="button"
+                  onClick={() => handleAction(step.target, step.id === "sync")}
+                  className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 hover:text-amber-900 inline-flex items-center gap-0.5 shrink-0"
+                >
+                  {step.cta} <ChevronRight className="h-3 w-3" />
+                </button>
+              )}
+            </li>
+          ))}
+        </ol>
+      </div>
     </div>
   );
 }
