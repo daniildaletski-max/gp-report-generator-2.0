@@ -10,7 +10,7 @@ import {
   PersonStanding, AlertCircle, TrendingUp, AlertTriangle, Trophy,
   Target, ThumbsUp, ThumbsDown, RefreshCw, ChevronDown, ChevronUp, BarChart3,
   Clock, TrendingDown, Flame, Crown, Medal, Gem, Heart, Shield,
-  MessageSquare, FileText,
+  MessageSquare, FileText, LayoutDashboard,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -23,6 +23,31 @@ import {
   AtAGlanceStrip, GPPortalSkeleton, StreakChip, MonthTabHeader, PerformancePulseHero,
   AICoachCard,
 } from "./gpPortal/components";
+
+/**
+ * scoreColor — single source of truth for "what colour is this score?"
+ * across the GP portal. Replaces the 5+ inline ternaries that all
+ * had subtly different breakpoints (sometimes >=20 / >=18, sometimes
+ * 18.5 etc) and returns a coordinated set of Tailwind classes for
+ * text, bg, and a coloured dot.
+ *
+ * Tiers (% of max):
+ *   90%+ : emerald  (excellent)
+ *   75%+ : amber    (good)
+ *   <75% : rose     (needs work)
+ *   null score → slate (not yet rated)
+ */
+function scoreColor(score: number | null | undefined, max: number): {
+  text: string; bg: string; border: string; dot: string; tier: "excellent" | "good" | "low" | "none";
+} {
+  if (score == null || max <= 0) {
+    return { text: "text-slate-500", bg: "bg-slate-50", border: "border-slate-200", dot: "bg-slate-300", tier: "none" };
+  }
+  const pct = score / max;
+  if (pct >= 0.9) return { text: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", dot: "bg-emerald-500", tier: "excellent" };
+  if (pct >= 0.75) return { text: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", dot: "bg-amber-500", tier: "good" };
+  return { text: "text-rose-700", bg: "bg-rose-50", border: "border-rose-200", dot: "bg-rose-500", tier: "low" };
+}
 
 export default function GPPortal() {
   const { token } = useParams<{ token: string }>();
@@ -295,30 +320,45 @@ export default function GPPortal() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 relative">
       
-      {/* Header */}
-      <header className="relative z-10 border-b border-slate-200 bg-white/90 backdrop-blur-sm sticky top-0">
-        <div className="container py-4 sm:py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-sm">
-              <Star className="h-6 w-6 sm:h-7 sm:w-7 text-white" />
+      {/* Header — sticky personal bar. Surfaces the GP's name, tier
+          badge, current clean-streak, and refresh button so the
+          context stays visible no matter how far they scroll. */}
+      <header className="relative z-20 border-b border-slate-200 bg-white/95 backdrop-blur-md sticky top-0 shadow-sm">
+        <div className="container py-3 sm:py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br ${tier?.color ?? "from-amber-400 to-amber-600"} flex items-center justify-center shadow-sm shrink-0`}>
+              {tier ? <tier.icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" /> : <Star className="h-5 w-5 sm:h-6 sm:w-6 text-white" />}
             </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
-                {data.gpName}
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-500">Performance Dashboard</p>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg sm:text-xl font-bold text-slate-900 truncate">{data.gpName}</h1>
+              <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                {tier && (
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${tier.bg} ${tier.textColor} font-semibold uppercase tracking-wider`}>
+                    <tier.icon className="h-2.5 w-2.5" />
+                    {tier.name}
+                  </span>
+                )}
+                {cleanStreak > 0 && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold uppercase tracking-wider">
+                    <Flame className="h-2.5 w-2.5" />
+                    {cleanStreak} clean
+                  </span>
+                )}
+                <span className="text-slate-500 hidden sm:inline">{greeting}</span>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <span className="text-xs text-slate-400 hidden sm:block">
-              Updated {format(lastRefresh, 'HH:mm')}
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[10px] text-slate-400 hidden md:inline tabular-nums">
+              {format(lastRefresh, 'HH:mm')}
             </span>
             <Button
               variant="outline"
               size="sm"
               onClick={() => refetch()}
               disabled={isFetching}
-              className="bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+              className="h-8 w-8 p-0 bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+              title="Refresh"
             >
               <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
             </Button>
@@ -327,6 +367,42 @@ export default function GPPortal() {
       </header>
 
       <main className="container py-6 sm:py-8 space-y-8 sm:space-y-10 relative z-10">
+
+        {/* Empty state — no evaluations yet. Don't burn the GP with a
+            wall of zeros / "no data" everywhere. Friendly welcome
+            with a clear "what to expect" guide. */}
+        {totalEvals === 0 && (
+          <Card className="bg-gradient-to-br from-amber-50 via-yellow-50/50 to-white border-amber-200 shadow-sm">
+            <CardContent className="p-6 sm:p-8 text-center">
+              <div className="mx-auto mb-4 h-16 w-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow-md">
+                <Sparkles className="h-8 w-8 text-white" />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mb-1">
+                Welcome, {data.gpName.split(" ")[0]}!
+              </h2>
+              <p className="text-sm text-slate-600 max-w-md mx-auto mb-5">
+                Your performance dashboard is ready. As your floor manager evaluates your sessions, your scores, achievements, and trends will appear here.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto text-left">
+                <div className="rounded-xl bg-white border border-amber-100 p-3">
+                  <Star className="h-5 w-5 text-amber-500 mb-1.5" />
+                  <p className="text-xs font-semibold text-slate-800">Get evaluated</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Hair, makeup, posture, dealing & more</p>
+                </div>
+                <div className="rounded-xl bg-white border border-amber-100 p-3">
+                  <TrendingUp className="h-5 w-5 text-emerald-500 mb-1.5" />
+                  <p className="text-xs font-semibold text-slate-800">Track progress</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Per-criterion trends across months</p>
+                </div>
+                <div className="rounded-xl bg-white border border-amber-100 p-3">
+                  <Trophy className="h-5 w-5 text-violet-500 mb-1.5" />
+                  <p className="text-xs font-semibold text-slate-800">Earn achievements</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Top scorer, clean month & more</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Performance Pulse hero — replaces the previous thin tier banner.
             Big circular progress ring + animated score counter + tier badge
@@ -480,11 +556,23 @@ export default function GPPortal() {
             Monthly Details panel (where the date-filter bug fix is visible) is
             never more than one click away. Active tab persists in `?tab=`. */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="bg-white border border-slate-200 shadow-sm h-auto p-1 grid grid-cols-4 w-full sm:w-auto sm:inline-grid">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="trend">Trend</TabsTrigger>
-            <TabsTrigger value="evaluations">Evaluations</TabsTrigger>
-            <TabsTrigger value="month">Month</TabsTrigger>
+          <TabsList className="bg-white border border-slate-200 shadow-sm h-auto p-1 grid grid-cols-4 w-full sm:w-auto sm:inline-flex gap-1">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm py-2 px-3 text-xs sm:text-sm font-semibold">
+              <LayoutDashboard className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Overview</span>
+            </TabsTrigger>
+            <TabsTrigger value="trend" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm py-2 px-3 text-xs sm:text-sm font-semibold">
+              <TrendingUp className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Trend</span>
+            </TabsTrigger>
+            <TabsTrigger value="evaluations" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm py-2 px-3 text-xs sm:text-sm font-semibold">
+              <Eye className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Evaluations</span>
+            </TabsTrigger>
+            <TabsTrigger value="month" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm py-2 px-3 text-xs sm:text-sm font-semibold">
+              <Calendar className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Month</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-6 space-y-6">
@@ -535,39 +623,69 @@ export default function GPPortal() {
                 </CardHeader>
                 <CardContent>
                   {recentEvaluations.length > 0 ? (
-                    <div className="space-y-2.5">
-                      {recentEvaluations.slice(0, 4).map((eval_: any) => (
-                        <div key={eval_.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-3 h-3 rounded-full ${
-                              (eval_.totalScore || 0) >= 20 ? 'bg-green-500' :
-                              (eval_.totalScore || 0) >= 18 ? 'bg-yellow-500' :
-                              'bg-red-500'
-                            }`} />
-                            <div>
-                              <p className="text-sm font-medium text-slate-800">
-                                {eval_.game || 'Game Session'}
-                              </p>
-                              {eval_.evaluatorName && (
-                                <p className="text-xs text-slate-500">by {eval_.evaluatorName}</p>
-                              )}
+                    <div className="space-y-2">
+                      {recentEvaluations.slice(0, 4).map((eval_: any) => {
+                        const sc = scoreColor(eval_.totalScore, MAX_TOTAL_SCORE);
+                        const evalDate = eval_.evaluationDate ? new Date(eval_.evaluationDate) : null;
+                        // Per-criterion mini-tags — only show those that
+                        // have a score so the row stays clean for older
+                        // evaluations missing some categories.
+                        const subs: Array<{ key: string; label: string; value: number; max: number }> = [];
+                        if (eval_.hairScore != null) subs.push({ key: "h", label: "Hair", value: eval_.hairScore, max: SCORE_CONFIG.hair.max });
+                        if (eval_.makeupScore != null) subs.push({ key: "m", label: "Mkup", value: eval_.makeupScore, max: SCORE_CONFIG.makeup.max });
+                        if (eval_.outfitScore != null) subs.push({ key: "o", label: "Out", value: eval_.outfitScore, max: SCORE_CONFIG.outfit.max });
+                        if (eval_.postureScore != null) subs.push({ key: "p", label: "Pos", value: eval_.postureScore, max: SCORE_CONFIG.posture.max });
+                        if (eval_.dealingStyleScore != null) subs.push({ key: "d", label: "Deal", value: eval_.dealingStyleScore, max: SCORE_CONFIG.dealingStyle.max });
+                        if (eval_.gamePerformanceScore != null) subs.push({ key: "g", label: "Perf", value: eval_.gamePerformanceScore, max: SCORE_CONFIG.gamePerformance.max });
+                        return (
+                          <div key={eval_.id} className={`group p-3 rounded-xl border ${sc.border} ${sc.bg} hover:shadow-sm transition-all`}>
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className={`h-2 w-2 rounded-full ${sc.dot} shrink-0`} aria-hidden />
+                                <p className="text-sm font-semibold text-slate-800 truncate">
+                                  {eval_.game || 'Game Session'}
+                                </p>
+                              </div>
+                              <div className="flex items-baseline gap-0.5 shrink-0">
+                                <span className={`text-lg font-bold tabular-nums ${sc.text}`}>{eval_.totalScore}</span>
+                                <span className="text-[10px] text-slate-400">/{MAX_TOTAL_SCORE}</span>
+                              </div>
                             </div>
+                            <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
+                              <span className="flex items-center gap-1.5 min-w-0">
+                                {evalDate && (
+                                  <span className="shrink-0">{format(evalDate, 'MMM d')}</span>
+                                )}
+                                {eval_.evaluatorName && (
+                                  <span className="truncate">· by {eval_.evaluatorName}</span>
+                                )}
+                              </span>
+                            </div>
+                            {/* Per-criterion mini chips — at-a-glance breakdown */}
+                            {subs.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {subs.map(s => {
+                                  const ssc = scoreColor(s.value, s.max);
+                                  return (
+                                    <span
+                                      key={s.key}
+                                      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border bg-white ${ssc.border} ${ssc.text}`}
+                                      title={`${s.label}: ${s.value}/${s.max}`}
+                                    >
+                                      {s.label} <span className="tabular-nums">{s.value}</span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-lg font-bold ${
-                              (eval_.totalScore || 0) >= 20 ? 'text-green-600' :
-                              (eval_.totalScore || 0) >= 18 ? 'text-amber-600' :
-                              'text-red-600'
-                            }`}>{eval_.totalScore}</span>
-                            <span className="text-xs text-slate-400">/{MAX_TOTAL_SCORE}</span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-8">
                       <Clock className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                      <p className="text-slate-500 text-sm">No evaluations yet</p>
+                      <p className="text-slate-500 text-sm">No evaluations yet — they&apos;ll appear here as your FM rates you.</p>
                     </div>
                   )}
                 </CardContent>
@@ -845,7 +963,7 @@ export default function GPPortal() {
                         <div className="flex items-center gap-3">
                           <div className="hidden sm:flex items-center gap-3">
                             <div className="text-right">
-                              <p className={`text-lg font-bold ${monthAvg >= 20 ? 'text-green-600' : monthAvg >= 18 ? 'text-amber-600' : 'text-red-600'}`}>
+                              <p className={`text-lg font-bold ${scoreColor(monthAvg, MAX_TOTAL_SCORE).text}`}>
                                 {monthAvg.toFixed(1)}
                               </p>
                               <p className="text-xs text-slate-400">avg score</p>
@@ -865,10 +983,12 @@ export default function GPPortal() {
                       </button>
 
                       {/* Mobile month summary */}
-                      {isMonthExpanded && (
+                      {isMonthExpanded && (() => {
+                        const sc = scoreColor(monthAvg, MAX_TOTAL_SCORE);
+                        return (
                         <div className="flex gap-2 sm:hidden px-1">
-                          <div className={`flex-1 p-2 rounded-lg text-center ${monthAvg >= 20 ? 'bg-green-50' : monthAvg >= 18 ? 'bg-amber-50' : 'bg-red-50'}`}>
-                            <p className={`text-lg font-bold ${monthAvg >= 20 ? 'text-green-600' : monthAvg >= 18 ? 'text-amber-600' : 'text-red-600'}`}>{monthAvg.toFixed(1)}</p>
+                          <div className={`flex-1 p-2 rounded-lg text-center ${sc.bg}`}>
+                            <p className={`text-lg font-bold ${sc.text}`}>{monthAvg.toFixed(1)}</p>
                             <p className="text-[10px] text-slate-400">avg</p>
                           </div>
                           <div className="flex-1 p-2 rounded-lg text-center bg-emerald-50">
@@ -880,7 +1000,8 @@ export default function GPPortal() {
                             <p className="text-[10px] text-slate-400">game</p>
                           </div>
                         </div>
-                      )}
+                        );
+                      })()}
 
                       {/* Individual evaluations */}
                       {isMonthExpanded && (
@@ -1390,20 +1511,22 @@ function AchievementsRow({
       Number(e.dealingStyleScore) === 5 && Number(e.gamePerformanceScore) === 5,
     );
 
-    if (topScore >= 23) {
+    // Real max is hair(3)+makeup(3)+outfit(3)+posture(3)+dealing(5)+perf(5) = 22.
+    // The previous /24 thresholds never fired for genuine top scorers.
+    if (topScore >= 21) {
       out.push({
         id: "top-scorer",
         label: "Top Scorer",
-        description: `Best evaluation hit ${topScore}/24 — exceptional work.`,
+        description: `Best evaluation hit ${topScore}/22 — exceptional work.`,
         icon: Crown,
         tone: "gold",
       });
     }
-    if (avgScore >= 20) {
+    if (avgScore >= 19) {
       out.push({
         id: "consistent",
         label: "Consistent High",
-        description: `Average ${avgScore.toFixed(1)}/24 across ${evalCount} eval${evalCount === 1 ? "" : "s"}.`,
+        description: `Average ${avgScore.toFixed(1)}/22 across ${evalCount} eval${evalCount === 1 ? "" : "s"}.`,
         icon: Medal,
         tone: "emerald",
       });
