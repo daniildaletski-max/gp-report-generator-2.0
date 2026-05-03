@@ -239,7 +239,7 @@ function FullAdminPanel() {
         </div>
 
         {/* Overview Tab */}
-        <AdminOverviewTab />
+        <AdminOverviewTab onTabChange={setActiveTab} />
 
         {/* Invitations Tab */}
         <InvitationsTab teams={teams || []} />
@@ -300,13 +300,16 @@ function FullAdminPanel() {
 }
 
 // Admin Overview Tab with system stats
-function AdminOverviewTab() {
+function AdminOverviewTab({ onTabChange }: { onTabChange: (tab: AdminTab) => void }) {
   const { data: adminStats, isLoading } = trpc.dashboard.adminStats.useQuery();
   const [, navigate] = useLocation();
-  // Quick Actions card buttons live inside this Overview tab. Each
-  // navigates to its respective admin sub-tab via the `?tab=` URL
-  // param that the parent <Tabs> picks up via useUrlState.
-  const goTab = useCallback((t: string) => navigate(`/admin?tab=${t}`), [navigate]);
+  // Quick Actions: switch sub-tab via the parent's setActiveTab. Using
+  // wouter `navigate('/admin?tab=...')` doesn't work here because the
+  // pathname is unchanged ('/admin') — wouter treats it as a no-op
+  // and the URL-derived tab state never updates. Calling the parent
+  // setter directly is reliable and keeps URL state in sync via the
+  // useUrlState hook in AdminPanel.
+  const goTab = useCallback((t: string) => onTabChange(t as AdminTab), [onTabChange]);
 
   if (isLoading) {
     return (
@@ -320,13 +323,23 @@ function AdminOverviewTab() {
     );
   }
 
-  const statCards = [
-    { title: "Total Users", value: adminStats?.totalUsers || 0, icon: Users, tone: "amber" as const, href: "/admin?tab=users" },
-    { title: "Teams", value: adminStats?.totalTeams || 0, icon: Building2, tone: "indigo" as const, href: "/admin?tab=teams" },
-    { title: "Game Presenters", value: adminStats?.totalGPs || 0, icon: Star, tone: "emerald" as const, href: "/admin?tab=stats" },
-    { title: "Evaluations", value: adminStats?.totalEvaluations || 0, icon: Target, tone: "sky" as const, href: "/evaluations" },
-    { title: "Reports", value: adminStats?.totalReports || 0, icon: FileSpreadsheet, tone: "violet" as const, href: "/reports" },
+  // Each stat card opens a destination. Sub-admin tabs use the parent
+  // setter (kind: "tab"); cross-page targets use wouter navigate (kind: "url").
+  const statCards: Array<{
+    title: string; value: number; icon: React.ComponentType<{ className?: string }>;
+    tone: "amber" | "indigo" | "emerald" | "sky" | "violet";
+    target: { kind: "tab"; tab: AdminTab } | { kind: "url"; url: string };
+  }> = [
+    { title: "Total Users", value: adminStats?.totalUsers || 0, icon: Users, tone: "amber", target: { kind: "tab", tab: "users" } },
+    { title: "Teams", value: adminStats?.totalTeams || 0, icon: Building2, tone: "indigo", target: { kind: "tab", tab: "teams" } },
+    { title: "Game Presenters", value: adminStats?.totalGPs || 0, icon: Star, tone: "emerald", target: { kind: "tab", tab: "stats" } },
+    { title: "Evaluations", value: adminStats?.totalEvaluations || 0, icon: Target, tone: "sky", target: { kind: "url", url: "/evaluations" } },
+    { title: "Reports", value: adminStats?.totalReports || 0, icon: FileSpreadsheet, tone: "violet", target: { kind: "url", url: "/reports" } },
   ];
+  const openStat = (target: typeof statCards[number]["target"]) => {
+    if (target.kind === "tab") onTabChange(target.tab);
+    else navigate(target.url);
+  };
   const toneClasses: Record<string, { bg: string; iconBg: string; iconText: string; ring: string; accent: string }> = {
     amber: { bg: "bg-gradient-to-br from-amber-50 to-amber-50/40 border-amber-200/70", iconBg: "bg-amber-100 border-amber-200", iconText: "text-amber-700", ring: "hover:ring-amber-300/60", accent: "from-amber-400" },
     indigo: { bg: "bg-gradient-to-br from-indigo-50 to-indigo-50/40 border-indigo-200/70", iconBg: "bg-indigo-100 border-indigo-200", iconText: "text-indigo-700", ring: "hover:ring-indigo-300/60", accent: "from-indigo-400" },
@@ -341,11 +354,23 @@ function AdminOverviewTab() {
     { label: "View GP Stats", icon: Star, tone: "emerald" as const, count: adminStats?.totalGPs, target: "stats" },
     { label: "Check Errors", icon: AlertTriangle, tone: "rose" as const, count: undefined, target: "errors" },
   ];
-  const actionToneClasses: Record<string, string> = {
-    amber: "border-amber-200/60 hover:border-amber-300 hover:bg-amber-50 text-slate-700 hover:text-amber-800",
-    indigo: "border-indigo-200/60 hover:border-indigo-300 hover:bg-indigo-50 text-slate-700 hover:text-indigo-800",
-    emerald: "border-emerald-200/60 hover:border-emerald-300 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800",
-    rose: "border-rose-200/60 hover:border-rose-300 hover:bg-rose-50 text-slate-700 hover:text-rose-800",
+  const actionToneClasses: Record<string, { border: string; iconBg: string }> = {
+    amber: {
+      border: "border-amber-200/60 hover:border-amber-300 hover:bg-amber-50 text-slate-700 hover:text-amber-800",
+      iconBg: "bg-amber-100 text-amber-700 border border-amber-200",
+    },
+    indigo: {
+      border: "border-indigo-200/60 hover:border-indigo-300 hover:bg-indigo-50 text-slate-700 hover:text-indigo-800",
+      iconBg: "bg-indigo-100 text-indigo-700 border border-indigo-200",
+    },
+    emerald: {
+      border: "border-emerald-200/60 hover:border-emerald-300 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800",
+      iconBg: "bg-emerald-100 text-emerald-700 border border-emerald-200",
+    },
+    rose: {
+      border: "border-rose-200/60 hover:border-rose-300 hover:bg-rose-50 text-slate-700 hover:text-rose-800",
+      iconBg: "bg-rose-100 text-rose-700 border border-rose-200",
+    },
   };
 
   return (
@@ -358,7 +383,7 @@ function AdminOverviewTab() {
             <button
               key={idx}
               type="button"
-              onClick={() => navigate(stat.href)}
+              onClick={() => openStat(stat.target)}
               className={`relative overflow-hidden rounded-2xl border p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md group ${c.bg} ${c.ring} hover:ring-2`}
             >
               <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${c.accent} via-current/40 to-transparent opacity-50 group-hover:opacity-100 transition-opacity`} aria-hidden />
@@ -393,25 +418,30 @@ function AdminOverviewTab() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {quickActions.map((qa) => (
-              <button
-                key={qa.target}
-                type="button"
-                onClick={() => goTab(qa.target)}
-                className={`group relative h-20 rounded-xl border bg-white px-4 flex items-center gap-3 transition-all duration-200 ${actionToneClasses[qa.tone]}`}
-              >
-                <qa.icon className="h-6 w-6 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                <div className="flex-1 min-w-0 text-left">
-                  <div className="text-xs font-semibold leading-tight">{qa.label}</div>
-                  {qa.count != null && (
-                    <div className="text-[10px] uppercase tracking-wider opacity-70 tabular-nums mt-0.5">
-                      {qa.count.toLocaleString()} {qa.count === 1 ? "item" : "items"}
-                    </div>
-                  )}
-                </div>
-                <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 transition-all" />
-              </button>
-            ))}
+            {quickActions.map((qa) => {
+              const tc = actionToneClasses[qa.tone];
+              return (
+                <button
+                  key={qa.target}
+                  type="button"
+                  onClick={() => goTab(qa.target)}
+                  className={`group relative rounded-xl border bg-white py-3 px-3 flex items-center gap-3 transition-all duration-200 hover:shadow-sm ${tc.border}`}
+                >
+                  <span className={`h-10 w-10 shrink-0 rounded-lg flex items-center justify-center transition-transform duration-200 group-hover:scale-105 ${tc.iconBg}`}>
+                    <qa.icon className="h-5 w-5" />
+                  </span>
+                  <span className="flex-1 min-w-0 text-left">
+                    <span className="block text-sm font-semibold leading-tight truncate">{qa.label}</span>
+                    {qa.count != null && (
+                      <span className="block text-[10px] uppercase tracking-wider opacity-60 tabular-nums mt-0.5">
+                        {qa.count.toLocaleString()} {qa.count === 1 ? "item" : "items"}
+                      </span>
+                    )}
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-30 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                </button>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
@@ -759,21 +789,41 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
 
   return (
     <TabsContent value="teams" className="space-y-4">
-      <div className="unified-card">
-        <div className="unified-card-header">
-          <div className="flex items-center justify-between">
-            <div className="section-header" style={{ paddingLeft: 0 }}>
-              <h3 className="section-title flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
-                Teams Management
-              </h3>
-              <p className="section-subtitle">
-                Create and manage FM teams. Assign Game Presenters to each team.
-              </p>
+      {/* Hero header — replaces the plain text + button row with a
+          proper card-style hero: gradient bg, big icon, title /
+          subtitle, summary chips (teams · GPs · reports), primary
+          Create Team CTA on the right. */}
+      <div className="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50 via-yellow-50/60 to-white shadow-sm">
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-400" aria-hidden />
+        <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <div className="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-amber-100 to-yellow-100 border border-amber-200 flex items-center justify-center">
+              <Building2 className="h-5 w-5 text-amber-700" />
             </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-bold text-slate-900">Teams</h2>
+              <p className="text-xs text-slate-600">Create FM teams and assign Game Presenters.</p>
+              {teamsWithGPs && teamsWithGPs.length > 0 && (() => {
+                const totals = teamsWithGPs.reduce((a: any, t: any) => ({
+                  gp: a.gp + Number(t.gpCount || 0),
+                  rep: a.rep + Number(t.reportCount || 0),
+                  user: a.user + Number(t.assignedUsers?.length || 0),
+                }), { gp: 0, rep: 0, user: 0 });
+                return (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <SummaryChip dotCls="bg-amber-400" label={`${teamsWithGPs.length} teams`} />
+                    <SummaryChip dotCls="bg-emerald-400" label={`${totals.gp} GPs`} />
+                    <SummaryChip dotCls="bg-sky-400" label={`${totals.rep} reports`} />
+                    <SummaryChip dotCls="bg-violet-400" label={`${totals.user} users`} />
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+          <div className="flex items-center">
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
-                <Button>
+                <Button className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md">
                   <Plus className="h-4 w-4 mr-2" />
                   Create Team
                 </Button>
@@ -821,7 +871,10 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
             </Dialog>
           </div>
         </div>
-        <div className="unified-card-body">
+      </div>
+
+      {/* Teams grid — moved out of the previous unified-card wrapper */}
+      <div className="space-y-4">
           {isLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
@@ -1182,7 +1235,6 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
               </Button>
             </div>
           )}
-        </div>
       </div>
 
       {/* Unassigned GPs Section */}
@@ -2878,192 +2930,66 @@ function GPStatsTab({
         </div>
       ) : statsSummary && (
         <>
-          {/* Premium Stats Summary Cards */}
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-5">
-            <div className="premium-stat-card card-blue group">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="stat-label">Total GPs</p>
-                  <p className="stat-value">{statsSummary.total}</p>
-                  <p className="stat-sublabel">
-                    {statsSummary.withAttitudeCount} with ratings
-                  </p>
-                </div>
-                <div className="stat-icon-container" style={{ background: 'linear-gradient(135deg, rgba(96, 165, 250, 0.35) 0%, rgba(59, 130, 246, 0.2) 100%)', borderColor: 'rgba(96, 165, 250, 0.4)', color: '#93bbfd' }}>
-                  <Users className="h-7 w-7" />
-                </div>
-              </div>
-            </div>
-            
-            <div className="premium-stat-card card-green group">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="stat-label">Positive (+1)</p>
-                  <p className="stat-value" style={{ color: '#4ade80' }}>{statsSummary.positiveAttitude}</p>
-                  <p className="stat-sublabel">GPs with positive attitude</p>
-                </div>
-                <div className="stat-icon-container" style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.35) 0%, rgba(22, 163, 74, 0.2) 100%)', borderColor: 'rgba(34, 197, 94, 0.4)', color: '#86efac' }}>
-                  <ThumbsUp className="h-7 w-7" />
-                </div>
-              </div>
-            </div>
-            
-            <div className="premium-stat-card card-gray group">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="stat-label">Neutral (0)</p>
-                  <p className="stat-value">{statsSummary.neutralAttitude}</p>
-                  <p className="stat-sublabel">GPs with no rating</p>
-                </div>
-                <div className="stat-icon-container" style={{ background: 'linear-gradient(135deg, rgba(156, 163, 175, 0.35) 0%, rgba(107, 114, 128, 0.2) 100%)', borderColor: 'rgba(156, 163, 175, 0.4)', color: '#d1d5db' }}>
-                  <Star className="h-7 w-7" />
-                </div>
-              </div>
-            </div>
-            
-            <div className="premium-stat-card card-red group">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="stat-label">Negative (-1)</p>
-                  <p className="stat-value" style={{ color: '#f87171' }}>{statsSummary.negativeAttitude}</p>
-                  <p className="stat-sublabel">
-                    {statsSummary.totalMistakes} total mistakes
-                  </p>
-                </div>
-                <div className="stat-icon-container" style={{ background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.35) 0%, rgba(220, 38, 38, 0.2) 100%)', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#fca5a5' }}>
-                  <ThumbsDown className="h-7 w-7" />
-                </div>
-              </div>
-            </div>
-            
-            <div className="premium-stat-card card-gold group">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="stat-label">Total Games</p>
-                  <p className="stat-value">{statsSummary.totalGames.toLocaleString()}</p>
-                  <p className="stat-sublabel">this month</p>
-                </div>
-                <div className="stat-icon-container">
-                  <Activity className="h-7 w-7" />
-                </div>
-              </div>
-            </div>
+          {/* KPI strip — calmer: smaller icons, single accent dot, no
+              gradient overload, consistent spacing. Pulls all numbers
+              into a single visual rhythm. */}
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+            <KpiTile label="Total GPs" value={statsSummary.total} sub={`${statsSummary.withAttitudeCount} with ratings`} tone="sky" />
+            <KpiTile label="Positive" value={statsSummary.positiveAttitude} sub="positive attitude" tone="emerald" />
+            <KpiTile label="Neutral" value={statsSummary.neutralAttitude} sub="no rating yet" tone="slate" />
+            <KpiTile label="Negative" value={statsSummary.negativeAttitude} sub={`${statsSummary.totalMistakes} mistakes`} tone="rose" />
+            <KpiTile label="Total Games" value={statsSummary.totalGames} sub="this month" tone="amber" />
           </div>
 
-          {/* Premium Charts Row */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Attitude Distribution Chart */}
-            <div className="chart-card">
-              <div className="chart-card-header">
-                <div className="stat-icon-container" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.4) 0%, rgba(184, 134, 11, 0.25) 100%)', borderColor: 'rgba(212, 175, 55, 0.5)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2), 0 0 10px rgba(212, 175, 55, 0.12)' }}>
-                  <Target className="h-5 w-5 text-[#f0d060]" />
-                </div>
-                <div>
-                  <h3 className="chart-title">Attitude Distribution</h3>
-                  <p className="chart-subtitle">Monthly breakdown by rating category</p>
-                </div>
+          {/* Combined Attitude block — single stacked-bar visual + side-by-side
+              leaderboards in one calm card. Removes redundant icons /
+              gradient overload of the previous "premium chart-card" pair. */}
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+              <span className="h-7 w-7 rounded-lg bg-amber-100 border border-amber-200 flex items-center justify-center">
+                <Target className="h-3.5 w-3.5 text-amber-700" />
+              </span>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-slate-800">Attitude pulse</h3>
+                <p className="text-[11px] text-slate-500">{MONTHS[selectedMonth - 1]} {selectedYear}</p>
               </div>
-              <div className="chart-card-body">
-                <div className="space-y-2">
-                  {/* Positive */}
-                  <div className="progress-row">
-                    <div className="progress-label">
-                      <ThumbsUp className="h-5 w-5 text-green-400" />
-                      <span>Positive</span>
-                    </div>
-                    <div className="progress-track">
-                      <div 
-                        className="progress-fill positive"
-                        style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.positiveAttitude / statsSummary.total) * 100, 3) : 3}%` }}
-                      />
-                    </div>
-                    <span className="progress-value text-emerald-400">{statsSummary.positiveAttitude}</span>
-                  </div>
-                  
-                  {/* Neutral */}
-                  <div className="progress-row">
-                    <div className="progress-label">
-                      <Star className="h-5 w-5 text-amber-400" />
-                      <span>Neutral</span>
-                    </div>
-                    <div className="progress-track">
-                      <div 
-                        className="progress-fill neutral"
-                        style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.neutralAttitude / statsSummary.total) * 100, 3) : 3}%` }}
-                      />
-                    </div>
-                    <span className="progress-value text-amber-400">{statsSummary.neutralAttitude}</span>
-                  </div>
-                  
-                  {/* Negative */}
-                  <div className="progress-row">
-                    <div className="progress-label">
-                      <ThumbsDown className="h-5 w-5 text-red-400" />
-                      <span>Negative</span>
-                    </div>
-                    <div className="progress-track">
-                      <div 
-                        className="progress-fill negative"
-                        style={{ width: `${statsSummary.total > 0 ? Math.max((statsSummary.negativeAttitude / statsSummary.total) * 100, 3) : 3}%` }}
-                      />
-                    </div>
-                    <span className="progress-value text-red-400">{statsSummary.negativeAttitude}</span>
-                  </div>
-                </div>
-              </div>
+              <span className="text-[11px] text-slate-500 tabular-nums">
+                {statsSummary.withAttitudeCount}/{statsSummary.total} rated
+              </span>
             </div>
-
-            {/* Leaderboards Card */}
-            <div className="chart-card">
-              <div className="chart-card-header">
-                <div className="stat-icon-container" style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.4) 0%, rgba(184, 134, 11, 0.25) 100%)', borderColor: 'rgba(212, 175, 55, 0.5)', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2), 0 0 10px rgba(212, 175, 55, 0.12)' }}>
-                  <Trophy className="h-5 w-5 text-[#f0d060]" />
+            <div className="p-5 space-y-5">
+              {/* Single stacked horizontal bar replacing 3 separate progress
+                  rows. Width segments are proportional; 2px gap keeps them
+                  visually distinct. Numbers underneath. */}
+              <div>
+                <div className="flex h-2.5 rounded-full overflow-hidden bg-slate-100 gap-[2px]">
+                  {statsSummary.total > 0 ? (
+                    <>
+                      <div className="bg-emerald-400" style={{ width: `${(statsSummary.positiveAttitude / statsSummary.total) * 100}%` }} />
+                      <div className="bg-slate-300" style={{ width: `${(statsSummary.neutralAttitude / statsSummary.total) * 100}%` }} />
+                      <div className="bg-rose-400" style={{ width: `${(statsSummary.negativeAttitude / statsSummary.total) * 100}%` }} />
+                    </>
+                  ) : null}
                 </div>
-                <div>
-                  <h3 className="chart-title">Attitude Overview</h3>
-                  <p className="chart-subtitle">Top performers & those needing attention</p>
+                <div className="grid grid-cols-3 gap-3 mt-3">
+                  <DistroLegend dotCls="bg-emerald-400" label="Positive" value={statsSummary.positiveAttitude} total={statsSummary.total} />
+                  <DistroLegend dotCls="bg-slate-300" label="Neutral" value={statsSummary.neutralAttitude} total={statsSummary.total} />
+                  <DistroLegend dotCls="bg-rose-400" label="Negative" value={statsSummary.negativeAttitude} total={statsSummary.total} />
                 </div>
               </div>
-              <div className="chart-card-body">
-                <div className="grid grid-cols-2 gap-6">
-                  {/* Positive Leaderboard */}
-                  <div className="leaderboard-section">
-                    <h4 className="leaderboard-title positive">
-                      <ThumbsUp className="h-4 w-4" /> Top Performers
-                    </h4>
-                    <div className="space-y-2">
-                      {statsSummary.topByAttitude.slice(0, 5).map((gp: any, idx: number) => (
-                        <div key={gp.id} className="leaderboard-item positive">
-                          <span className="leaderboard-rank positive">#{idx + 1}</span>
-                          <span className="leaderboard-name">{gp.name}</span>
-                          <span className="leaderboard-badge positive">+1</span>
-                        </div>
-                      ))}
-                      {statsSummary.topByAttitude.length === 0 && (
-                        <p className="leaderboard-empty">No positive ratings yet</p>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Negative Leaderboard */}
-                  <div className="leaderboard-section">
-                    <h4 className="leaderboard-title negative">
-                      <ThumbsDown className="h-4 w-4" /> Needs Attention
-                    </h4>
-                    <div className="space-y-2">
-                      {statsSummary.needsAttention?.slice(0, 5).map((gp: any, idx: number) => (
-                        <div key={gp.id} className="leaderboard-item negative">
-                          <span className="leaderboard-rank negative">#{idx + 1}</span>
-                          <span className="leaderboard-name">{gp.name}</span>
-                          <span className="leaderboard-badge negative">-1</span>
-                        </div>
-                      ))}
-                      {(!statsSummary.needsAttention || statsSummary.needsAttention.length === 0) && (
-                        <p className="leaderboard-empty">No negative ratings</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
+
+              {/* Leaderboards — clean two columns, no nested chart-card noise */}
+              <div className="grid gap-5 sm:grid-cols-2 pt-2 border-t border-slate-100">
+                <LeaderColumn
+                  tone="positive"
+                  title="Top performers"
+                  items={statsSummary.topByAttitude}
+                />
+                <LeaderColumn
+                  tone="negative"
+                  title="Needs attention"
+                  items={statsSummary.needsAttention ?? []}
+                />
               </div>
             </div>
           </div>
@@ -3507,6 +3433,105 @@ function GPDetailModal({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ============================================
+// Calm KPI tile used in the GP Stats top strip. Replaces the older
+// `premium-stat-card` CSS-class blocks which were too heavy on
+// gradients, big icons, and redundant decoration. One label, one big
+// number, one optional sub-line. Tone is set by a single 1px accent
+// stripe at the top + a tiny coloured dot next to the label.
+// ============================================
+function KpiTile({
+  label, value, sub, tone,
+}: { label: string; value: number; sub: string; tone: "sky" | "emerald" | "slate" | "rose" | "amber" }) {
+  const dot = tone === "sky" ? "bg-sky-400"
+    : tone === "emerald" ? "bg-emerald-400"
+      : tone === "rose" ? "bg-rose-400"
+        : tone === "amber" ? "bg-amber-400"
+          : "bg-slate-300";
+  const accent = tone === "sky" ? "from-sky-300 to-sky-400"
+    : tone === "emerald" ? "from-emerald-300 to-emerald-400"
+      : tone === "rose" ? "from-rose-300 to-rose-400"
+        : tone === "amber" ? "from-amber-300 to-amber-400"
+          : "from-slate-200 to-slate-300";
+  return (
+    <div className="relative rounded-xl border border-slate-200 bg-white px-4 py-3 overflow-hidden">
+      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${accent}`} aria-hidden />
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
+        {label}
+      </div>
+      <div className="text-2xl font-bold tabular-nums text-slate-900 mt-0.5 leading-tight">
+        {value.toLocaleString()}
+      </div>
+      <div className="text-[11px] text-slate-500 mt-0.5 truncate">{sub}</div>
+    </div>
+  );
+}
+
+// Tiny dot+label chip used in section headers for at-a-glance counts.
+function SummaryChip({ dotCls, label }: { dotCls: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/80 border border-slate-200 text-[11px] text-slate-700 font-medium">
+      <span className={`h-1.5 w-1.5 rounded-full ${dotCls}`} aria-hidden />
+      {label}
+    </span>
+  );
+}
+
+// One legend row for the stacked-bar Attitude pulse — coloured dot,
+// label, value, and a calculated percentage in tabular-nums.
+function DistroLegend({ dotCls, label, value, total }: { dotCls: string; label: string; value: number; total: number }) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className={`h-2 w-2 rounded-full ${dotCls} shrink-0`} aria-hidden />
+      <div className="min-w-0 flex-1">
+        <div className="text-[11px] text-slate-600 font-medium truncate">{label}</div>
+        <div className="text-xs font-semibold tabular-nums text-slate-800">{value} <span className="text-slate-400 font-normal">· {pct}%</span></div>
+      </div>
+    </div>
+  );
+}
+
+// One column of the side-by-side leaderboard. Shows up to 5 GPs with
+// rank initials, name, and a small tone-coded badge. Empty state is
+// short and friendly — no large icons or block paragraphs.
+function LeaderColumn({
+  tone, title, items,
+}: { tone: "positive" | "negative"; title: string; items: Array<{ id: number; name: string; stats?: any }> }) {
+  const accent = tone === "positive"
+    ? { dot: "bg-emerald-400", titleCls: "text-emerald-700", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" }
+    : { dot: "bg-rose-400", titleCls: "text-rose-700", badge: "bg-rose-50 text-rose-700 border-rose-200" };
+  const top = items.slice(0, 5);
+  const initialsOf = (n: string) => String(n || "?").trim().split(/\s+/).slice(0, 2).map(p => p[0]).join("").toUpperCase() || "?";
+  return (
+    <div>
+      <div className={`flex items-center gap-2 text-[11px] uppercase tracking-wider font-semibold ${accent.titleCls} mb-2`}>
+        <span className={`h-1.5 w-1.5 rounded-full ${accent.dot}`} aria-hidden />
+        {title}
+      </div>
+      {top.length === 0 ? (
+        <p className="text-[11px] text-slate-400 italic">— nothing here yet</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {top.map((gp, idx) => (
+            <li key={gp.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white border border-slate-100 hover:border-slate-200 transition-colors">
+              <span className="text-[10px] font-bold tabular-nums text-slate-400 w-4">#{idx + 1}</span>
+              <span className="h-6 w-6 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-600 flex items-center justify-center shrink-0">
+                {initialsOf(gp.name)}
+              </span>
+              <span className="text-xs text-slate-700 flex-1 truncate">{gp.name}</span>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${accent.badge}`}>
+                {tone === "positive" ? `+${Math.abs((gp.stats?.attitude ?? 1))}` : (gp.stats?.attitude ?? -1)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
