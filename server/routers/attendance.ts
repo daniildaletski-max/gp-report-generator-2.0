@@ -2,6 +2,7 @@ import { router, publicProcedure, protectedProcedure, adminProcedure } from "../
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
+import { isTechnicalError, dedupeErrorDetails } from "@shared/errorClassification";
 
 export const attendanceRouter = router({
   // Get or create attendance record for a GP in a specific month
@@ -99,17 +100,82 @@ export const attendanceRouter = router({
       }
 
       const data = await db.getAttendanceByTeamMonth(input.teamId, input.month, input.year);
-      
-      // Calculate totals
-      const totals = data.reduce((acc, item) => ({
-        mistakes: acc.mistakes + (item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0),
+
+      // ========================================================
+      // Filtered mistake count — single source of truth for both
+      // Attendance and the GP Portal. The raw `monthlyGpStats.mistakes`
+      // includes technical / TV / SYS errors, but the GP Portal
+      // explicitly hides those (see gpAccess.getEvaluationsByToken).
+      // Without this re-count the per-row Mistakes column shows a
+      // bigger number than the GP themselves see in their portal —
+      // confusing for both sides. We re-compute the same way:
+      //   1. Pull error screenshots + Excel-imported gpErrors for the
+      //      month.
+      //   2. Drop technical errors (`isTechnicalError`).
+      //   3. Dedupe cross-source pairs (`dedupeErrorDetails`).
+      //   4. Count.
+      // ========================================================
+      const filteredByGp = new Map<number, number>();
+      await Promise.all(data.map(async (item) => {
+        const gpId = item.gamePresenter.id;
+        try {
+          const [screenshotsRaw, gpErrorsRaw] = await Promise.all([
+            db.getErrorScreenshotsForGP(gpId, input.month, input.year).catch(() => [] as any[]),
+            db.getGpErrorsForPortal(gpId, input.month, input.year).catch(() => [] as any[]),
+          ]);
+          const screenshots = screenshotsRaw.filter(e => !isTechnicalError({
+            errorType: e.errorType,
+            errorCategory: e.errorCategory,
+            errorDescription: e.errorDescription,
+          }));
+          const gpErrs = gpErrorsRaw.filter(e => !isTechnicalError({
+            errorCode: e.errorCode,
+            errorDescription: e.errorDescription,
+          }));
+          const merged = [
+            ...screenshots.map(e => ({
+              id: e.id,
+              source: 'screenshot' as const,
+              errorType: e.errorType,
+              errorDescription: e.errorDescription,
+              tableId: e.tableId,
+              errorDate: (e as any).errorDate ?? null,
+              createdAt: e.createdAt,
+            })),
+            ...gpErrs.map(e => ({
+              id: `excel-${e.id}`,
+              source: 'excel' as const,
+              errorType: e.errorCode || 'excel_error',
+              errorDescription: e.errorDescription,
+              tableId: e.tableId,
+              errorDate: e.errorDate,
+              createdAt: e.createdAt,
+            })),
+          ];
+          filteredByGp.set(gpId, dedupeErrorDetails(merged).length);
+        } catch {
+          // Best-effort: if the per-GP fetch blows up, fall back to
+          // the raw stats for that GP rather than killing the whole
+          // request. The next refresh will retry.
+          filteredByGp.set(gpId, item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0);
+        }
+      }));
+
+      // Attach filteredMistakes per row + use it in totals.
+      const items = data.map(item => ({
+        ...item,
+        filteredMistakes: filteredByGp.get(item.gamePresenter.id) ?? 0,
+      }));
+
+      const totals = items.reduce((acc, item) => ({
+        mistakes: acc.mistakes + item.filteredMistakes,
         extraShifts: acc.extraShifts + (item.attendance?.extraShifts ?? 0),
         lateToWork: acc.lateToWork + (item.attendance?.lateToWork ?? 0),
         missedDays: acc.missedDays + (item.attendance?.missedDays ?? 0),
         sickLeaves: acc.sickLeaves + (item.attendance?.sickLeaves ?? 0),
       }), { mistakes: 0, extraShifts: 0, lateToWork: 0, missedDays: 0, sickLeaves: 0 });
 
-      return { items: data, totals, gpCount: data.length };
+      return { items, totals, gpCount: items.length };
     }),
 
   // Get attendance trends for a team across multiple months
