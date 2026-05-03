@@ -127,32 +127,12 @@ export default function Dashboard() {
     teamId: selectedTeamId,
   });
 
-  // Unfiltered tenant-wide stats — used by OnboardingChecklist so the
-  // setup milestones don't flicker back to "incomplete" when the FM
-  // selects a team that happens to have no GPs/evals yet. The
-  // checklist is about account-level setup, not the current team's
-  // monthly numbers.
-  const { data: tenantStats } = trpc.dashboard.stats.useQuery({
-    month: selectedMonth,
-    year: selectedYear,
-    teamId: undefined,
-  });
-
-  // GP roster — used by OnboardingChecklist to count *assigned* GPs
-  // (those with a non-null teamId). `tenantStats.totalGPs` includes
-  // unassigned presenters, which would mark "Assign GPs to a team"
-  // as done before any actual assignment happened.
-  const { data: gpRoster } = trpc.gamePresenter.list.useQuery();
-  const assignedGpCount = useMemo(
-    () => (gpRoster ?? []).filter((gp: any) => gp?.teamId != null).length,
-    [gpRoster],
-  );
-
-  // Integration status — backend-derived signal for the onboarding
-  // checklist's "Connect Persona or Studioworks" step. Replaces the
-  // previous localStorage flag that flipped to "done" the moment the
-  // FM clicked the CTA, even if they never finished setup.
-  const { data: integrationStatus } = trpc.dashboard.integrationStatus.useQuery();
+  // Single lightweight existence-only query for the onboarding
+  // checklist. Replaces the previous trio of (a) a second
+  // dashboard.stats call (b) a full gamePresenter.list scan and
+  // (c) the integrationStatus query that loaded every evaluation
+  // row. All seven flags now come from server-side LIMIT 1 reads.
+  const { data: onboardingStatus } = trpc.dashboard.onboardingStatus.useQuery();
 
   // 6-month rolling trend — used for the hero tile sparklines + period
   // deltas. Same query that TrendSection lower on the page uses, so
@@ -464,11 +444,11 @@ export default function Dashboard() {
           checklist doesn't re-appear when an FM picks a fresh team. */}
       <OnboardingChecklist
         userId={user?.id ?? null}
-        hasTeam={(teams?.length ?? 0) > 0}
-        hasGps={assignedGpCount > 0}
-        hasEvaluations={(tenantStats?.totalEvaluations ?? 0) > 0}
-        hasReports={(tenantStats?.totalReports ?? 0) > 0}
-        hasIntegration={integrationStatus?.hasAny ?? false}
+        hasTeam={onboardingStatus?.hasTeam ?? false}
+        hasGps={onboardingStatus?.hasAssignedGp ?? false}
+        hasEvaluations={onboardingStatus?.hasEvaluation ?? false}
+        hasReports={onboardingStatus?.hasReport ?? false}
+        hasIntegration={onboardingStatus?.hasIntegration ?? false}
         onNavigate={setLocation}
       />
 

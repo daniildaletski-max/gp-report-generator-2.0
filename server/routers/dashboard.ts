@@ -173,50 +173,30 @@ export const dashboardRouter = router({
   }),
 
   /**
-   * Integration status — used by the Dashboard onboarding checklist
-   * to mark "Connect Persona or Studioworks" as done. Driven by real
-   * backend signals (any persona sync log OR any studioworks-source
-   * evaluation) so the milestone only flips after a confirmed sync.
+   * Onboarding status — single lightweight endpoint for the Dashboard
+   * OnboardingChecklist. Returns boolean existence flags for every
+   * setup milestone (team / GP / assigned GP / first eval / first
+   * report / persona sync / studioworks import).
    *
-   * Tenant-scoped: non-admins only see signals from their own teams.
-   * Without this, another tenant's sync could falsely mark a brand-
-   * new FM as "integrated" and hide setup prompts they still need.
+   * Implementation: each flag is a `SELECT id ... LIMIT 1` against
+   * the relevant table — O(1) regardless of evaluation history size.
+   * Replaces the previous path that called dashboard.stats twice and
+   * scanned every evaluation row in memory.
+   *
+   * Tenant scope: non-admin users see only their own data; admins
+   * see tenant-wide.
    */
-  integrationStatus: protectedProcedure.query(async ({ ctx }) => {
-    const isAdmin = ctx.user.role === "admin";
-    const hasStudioworksImportInList = (evals: any[]) => evals.some((e: any) => {
-      const raw = e?.evaluation?.rawExtractedData ?? e?.rawExtractedData;
-      if (!raw) return false;
-      try {
-        const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-        return parsed?.source === "studioworks";
-      } catch {
-        return false;
-      }
+  onboardingStatus: protectedProcedure.query(async ({ ctx }) => {
+    const status = await db.getOnboardingStatus({
+      userId: ctx.user.id,
+      isAdmin: ctx.user.role === "admin",
     });
-
-    if (isAdmin) {
-      // Admins see tenant-wide signals — same data they manage.
-      const [recentSyncs, allEvals] = await Promise.all([
-        db.getAllRecentSyncs(1).catch(() => [] as any[]),
-        db.getAllEvaluations().catch(() => [] as any[]),
-      ]);
-      const hasPersonaSync = recentSyncs.length > 0;
-      const hasStudioworksImport = hasStudioworksImportInList(allEvals);
-      return { hasPersonaSync, hasStudioworksImport, hasAny: hasPersonaSync || hasStudioworksImport };
-    }
-
-    // Non-admin (FM): persona syncs come from the FM's own teams;
-    // studioworks evals come from the FM's own evaluation roster.
-    const ownTeams = await db.getFmTeamsByUser(ctx.user.id).catch(() => [] as any[]);
-    let hasPersonaSync = false;
-    for (const team of ownTeams) {
-      const last = await db.getLastSyncForTeam(team.id).catch(() => null);
-      if (last) { hasPersonaSync = true; break; }
-    }
-    const ownEvals = await db.getAllEvaluationsByUser(ctx.user.id).catch(() => [] as any[]);
-    const hasStudioworksImport = hasStudioworksImportInList(ownEvals);
-    return { hasPersonaSync, hasStudioworksImport, hasAny: hasPersonaSync || hasStudioworksImport };
+    return {
+      ...status,
+      // Convenience: integration is "done" when either backend signal
+      // fires — kept here to keep the client simple.
+      hasIntegration: status.hasPersonaSync || status.hasStudioworksImport,
+    };
   }),
 
   // Server health check (admin-only, calls /api/health internally)
