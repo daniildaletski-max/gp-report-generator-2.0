@@ -174,31 +174,18 @@ export const dashboardRouter = router({
 
   /**
    * Integration status — used by the Dashboard onboarding checklist
-   * to mark "Connect Persona or Studioworks" as done. Replaces the
-   * previous localStorage flag that fired on click rather than on
-   * actual successful sync. Returns booleans for each integration so
-   * the UI can render which one's wired up.
+   * to mark "Connect Persona or Studioworks" as done. Driven by real
+   * backend signals (any persona sync log OR any studioworks-source
+   * evaluation) so the milestone only flips after a confirmed sync.
    *
-   * Done flags:
-   *  - hasPersonaSync: any persona_sync_logs row exists (any team).
-   *  - hasStudioworksImport: at least one evaluation has rawExtractedData.source = "studioworks".
-   * Combined result: hasAny is true when either is true.
-   *
-   * For non-admin users we still scan tenant-wide because integrations
-   * are an account-level setup signal — if the FM's team has been
-   * touched by Persona at any point, that counts.
+   * Tenant-scoped: non-admins only see signals from their own teams.
+   * Without this, another tenant's sync could falsely mark a brand-
+   * new FM as "integrated" and hide setup prompts they still need.
    */
-  integrationStatus: protectedProcedure.query(async () => {
-    const [recentSyncs, recentEvals] = await Promise.all([
-      db.getAllRecentSyncs(1).catch(() => [] as any[]),
-      // We only need to know if any studioworks-source eval exists.
-      // getAllEvaluations is fine here because the result is reduced
-      // to a single boolean — no payload returned to the client.
-      db.getAllEvaluations().catch(() => [] as any[]),
-    ]);
-    const hasPersonaSync = recentSyncs.length > 0;
-    const hasStudioworksImport = recentEvals.some((e: any) => {
-      const raw = e?.rawExtractedData;
+  integrationStatus: protectedProcedure.query(async ({ ctx }) => {
+    const isAdmin = ctx.user.role === "admin";
+    const hasStudioworksImportInList = (evals: any[]) => evals.some((e: any) => {
+      const raw = e?.evaluation?.rawExtractedData ?? e?.rawExtractedData;
       if (!raw) return false;
       try {
         const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -207,11 +194,29 @@ export const dashboardRouter = router({
         return false;
       }
     });
-    return {
-      hasPersonaSync,
-      hasStudioworksImport,
-      hasAny: hasPersonaSync || hasStudioworksImport,
-    };
+
+    if (isAdmin) {
+      // Admins see tenant-wide signals — same data they manage.
+      const [recentSyncs, allEvals] = await Promise.all([
+        db.getAllRecentSyncs(1).catch(() => [] as any[]),
+        db.getAllEvaluations().catch(() => [] as any[]),
+      ]);
+      const hasPersonaSync = recentSyncs.length > 0;
+      const hasStudioworksImport = hasStudioworksImportInList(allEvals);
+      return { hasPersonaSync, hasStudioworksImport, hasAny: hasPersonaSync || hasStudioworksImport };
+    }
+
+    // Non-admin (FM): persona syncs come from the FM's own teams;
+    // studioworks evals come from the FM's own evaluation roster.
+    const ownTeams = await db.getFmTeamsByUser(ctx.user.id).catch(() => [] as any[]);
+    let hasPersonaSync = false;
+    for (const team of ownTeams) {
+      const last = await db.getLastSyncForTeam(team.id).catch(() => null);
+      if (last) { hasPersonaSync = true; break; }
+    }
+    const ownEvals = await db.getAllEvaluationsByUser(ctx.user.id).catch(() => [] as any[]);
+    const hasStudioworksImport = hasStudioworksImportInList(ownEvals);
+    return { hasPersonaSync, hasStudioworksImport, hasAny: hasPersonaSync || hasStudioworksImport };
   }),
 
   // Server health check (admin-only, calls /api/health internally)

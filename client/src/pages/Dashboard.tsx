@@ -2596,15 +2596,23 @@ function OnboardingChecklist({
   }, [dismissKey]);
 
   const steps = [
-    { id: "team", label: "Create your first team", done: hasTeam, cta: "Create team", target: "/admin?tab=teams" },
-    { id: "gps", label: "Assign Game Presenters to a team", done: hasGps, cta: "Assign GPs", target: "/admin?tab=teams" },
-    { id: "eval", label: "Record your first evaluation", done: hasEvaluations, cta: "Open Workspace", target: "/workspace" },
-    { id: "report", label: "Generate a monthly report", done: hasReports, cta: "Generate report", target: "/reports" },
-    { id: "sync", label: "Connect Persona or Studioworks (optional)", done: hasIntegration, cta: "Set up sync", target: "/admin?tab=studioworks" },
+    { id: "team", label: "Create your first team", done: hasTeam, cta: "Create team", target: "/admin?tab=teams", optional: false },
+    { id: "gps", label: "Assign Game Presenters to a team", done: hasGps, cta: "Assign GPs", target: "/admin?tab=teams", optional: false },
+    { id: "eval", label: "Record your first evaluation", done: hasEvaluations, cta: "Open Workspace", target: "/workspace", optional: false },
+    { id: "report", label: "Generate a monthly report", done: hasReports, cta: "Generate report", target: "/reports", optional: false },
+    { id: "sync", label: "Connect Persona or Studioworks (optional)", done: hasIntegration, cta: "Set up sync", target: "/admin?tab=studioworks", optional: true },
   ];
+  // Progress + auto-hide are driven by the REQUIRED steps only.
+  // The sync step is labelled "(optional)" — gating allDone on it
+  // would keep the banner up forever for FMs who finish their core
+  // setup but never wire Persona / Studioworks (a valid choice).
+  const required = steps.filter(s => !s.optional);
+  const requiredDone = required.filter(s => s.done).length;
+  const allDone = requiredDone === required.length;
+  // Display counters use the full step list so the FM can still see
+  // their bonus progress on the optional integration step.
   const doneCount = steps.filter(s => s.done).length;
   const total = steps.length;
-  const allDone = doneCount === total;
 
   if (allDone || dismissed) return null;
 
@@ -2626,7 +2634,7 @@ function OnboardingChecklist({
             <div className="min-w-0">
               <h3 className="text-sm font-bold text-slate-900">Get your floor running</h3>
               <p className="text-[11px] text-slate-600">
-                {doneCount}/{total} steps complete · finish setup so the system can do its job
+                {requiredDone}/{required.length} required steps · {total - required.length > 0 ? `${doneCount - requiredDone}/${total - required.length} optional · ` : ""}finish setup so the system can do its job
               </p>
             </div>
           </div>
@@ -2637,12 +2645,12 @@ function OnboardingChecklist({
                 <circle cx="18" cy="18" r="14" fill="none" stroke="#fcd34d33" strokeWidth="3" />
                 <circle
                   cx="18" cy="18" r="14" fill="none" stroke="#f59e0b" strokeWidth="3"
-                  strokeDasharray={`${(doneCount / total) * 88} 88`}
+                  strokeDasharray={`${(requiredDone / required.length) * 88} 88`}
                   strokeLinecap="round"
                 />
               </svg>
               <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-amber-700 tabular-nums">
-                {Math.round((doneCount / total) * 100)}%
+                {Math.round((requiredDone / required.length) * 100)}%
               </span>
             </div>
             <button
