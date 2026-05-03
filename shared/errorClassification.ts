@@ -102,3 +102,58 @@ export function isTechnicalError(input: ErrorClassificationInput): boolean {
 
   return false;
 }
+
+/**
+ * dedupeErrorDetails — collapses cross-source duplicates (one error
+ * logged via screenshot AND via the monthly Excel file) without
+ * touching same-source duplicates. Each screenshot pulls one
+ * matching excel row out of a FIFO queue:
+ *   2 screenshots + 0 excel  -> 2 entries
+ *   1 screenshot + 1 excel   -> 1 entry  (cross-source paired)
+ *   0 screenshots + 2 excel  -> 2 entries
+ *
+ * Lives in `shared/` so the GP Portal and the FM-side counters
+ * (Attendance summary, dashboard insights) compute the same number.
+ * Without this, the same error could be counted twice in one place
+ * and once in another, and the badges across the app would disagree.
+ */
+export function dedupeErrorDetails<T extends {
+  id: number | string;
+  source: "screenshot" | "excel";
+  errorType?: string | null;
+  errorDescription?: string | null;
+  tableId?: string | null;
+  errorDate?: Date | string | null;
+  createdAt?: Date | string | null;
+}>(items: T[]): T[] {
+  const dayKey = (d: Date | string | null | undefined) => {
+    if (!d) return "";
+    const date = d instanceof Date ? d : new Date(d);
+    return isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  };
+  const keyOf = (e: T) => [
+    (e.errorType ?? "").toLowerCase(),
+    (e.tableId ?? "").toLowerCase(),
+    dayKey(e.errorDate ?? e.createdAt),
+    (e.errorDescription ?? "").slice(0, 80).toLowerCase().trim(),
+  ].join("|");
+  const excelByKey = new Map<string, T[]>();
+  for (const e of items) {
+    if (e.source !== "excel") continue;
+    const k = keyOf(e);
+    const list = excelByKey.get(k) ?? [];
+    list.push(e);
+    excelByKey.set(k, list);
+  }
+  const dropExcelIds = new Set<string | number>();
+  for (const e of items) {
+    if (e.source !== "screenshot") continue;
+    const k = keyOf(e);
+    const list = excelByKey.get(k);
+    if (list && list.length > 0) {
+      const paired = list.shift();
+      if (paired) dropExcelIds.add(paired.id);
+    }
+  }
+  return items.filter(e => !(e.source === "excel" && dropExcelIds.has(e.id)));
+}

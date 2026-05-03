@@ -1233,21 +1233,23 @@ export default function GPPortal() {
                   <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
                     <CardContent className="p-0">
                       <div className="divide-y divide-slate-200">
-                        {errorDetails.map((err: any, index: number) => (
+                        {errorDetails.map((err: any, index: number) => {
+                          // Single source of truth for severity colors —
+                          // replaces 4 inline ternaries that drifted out
+                          // of sync over time.
+                          const sev = (err.severity || 'low').toLowerCase();
+                          const sevTone = sev === 'critical'
+                            ? { bg: 'bg-red-50', text: 'text-red-500', border: 'border-red-200', label: 'Critical' }
+                            : sev === 'high'
+                              ? { bg: 'bg-orange-50', text: 'text-orange-500', border: 'border-orange-200', label: 'High' }
+                              : sev === 'medium'
+                                ? { bg: 'bg-amber-50', text: 'text-amber-500', border: 'border-amber-200', label: 'Medium' }
+                                : { bg: 'bg-yellow-50', text: 'text-yellow-600', border: 'border-yellow-200', label: 'Low' };
+                          return (
                           <div key={err.id || index} className="p-4 hover:bg-slate-50 transition-colors">
                             <div className="flex items-start gap-4">
-                              <div className={`shrink-0 p-2.5 rounded-xl ${
-                                err.severity === 'critical' ? 'bg-red-50' :
-                                err.severity === 'high' ? 'bg-orange-50' :
-                                err.severity === 'medium' ? 'bg-amber-50' :
-                                'bg-yellow-50'
-                              }`}>
-                                <AlertTriangle className={`h-5 w-5 ${
-                                  err.severity === 'critical' ? 'text-red-500' :
-                                  err.severity === 'high' ? 'text-orange-500' :
-                                  err.severity === 'medium' ? 'text-amber-500' :
-                                  'text-yellow-500'
-                                }`} />
+                              <div className={`shrink-0 p-2.5 rounded-xl border ${sevTone.bg} ${sevTone.border}`}>
+                                <AlertTriangle className={`h-5 w-5 ${sevTone.text}`} />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -1261,11 +1263,15 @@ export default function GPPortal() {
                                     <Badge className="bg-slate-100 text-slate-600 border-slate-200">{err.errorCategory}</Badge>
                                   )}
                                   <Badge className={`${
-                                    err.source === 'screenshot' 
-                                      ? 'bg-green-50 text-green-700 border-green-200' 
+                                    err.source === 'screenshot'
+                                      ? 'bg-green-50 text-green-700 border-green-200'
                                       : 'bg-slate-100 text-slate-600 border-slate-200'
                                   }`}>
                                     {err.source === 'screenshot' ? 'Screenshot' : 'Excel'}
+                                  </Badge>
+                                  {/* Severity pill — same tone as the icon. */}
+                                  <Badge className={`${sevTone.bg} ${sevTone.text} ${sevTone.border}`}>
+                                    {sevTone.label}
                                   </Badge>
                                 </div>
                                 <p className="text-slate-800 font-medium text-base">{err.errorDescription || 'Error recorded'}</p>
@@ -1285,7 +1291,8 @@ export default function GPPortal() {
                               </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </CardContent>
                   </Card>

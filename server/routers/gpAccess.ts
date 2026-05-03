@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
 import { nanoid } from "nanoid";
-import { isTechnicalError } from "@shared/errorClassification";
+import { isTechnicalError, dedupeErrorDetails } from "@shared/errorClassification";
 import { invokeLLM } from "../_core/llm";
 import { createLogger } from "../services/logger";
 
@@ -23,55 +23,12 @@ const log = createLogger("gpAccess");
  * earlier dedup collapsed those into one, under-reporting genuine
  * mistakes (codex P1).
  *
- * New strategy: pair screenshots 1:1 with matching excel rows.
- *   - For each key, keep ALL screenshots
- *   - For each screenshot, drop ONE excel row with the same key
- *   - Excess excel rows (more excel than screenshots) are kept
- * So 2 screenshots + 0 excel -> 2 entries; 1 screenshot + 1 excel
- * (cross-source dup) -> 1 entry; 0 screenshots + 2 excel -> 2 entries.
+ * `dedupeErrorDetails` was moved to shared/errorClassification.ts so
+ * the Attendance / Dashboard mistake counters use the exact same
+ * dedup rules. Pair screenshots 1:1 with matching excel rows: each
+ * screenshot drops one excel row with the same key, excess excel
+ * rows are kept.
  */
-function dedupeErrorDetails<T extends {
-  id: number | string;
-  source: "screenshot" | "excel";
-  errorType?: string | null;
-  errorDescription?: string | null;
-  tableId?: string | null;
-  errorDate?: Date | string | null;
-  createdAt?: Date | string | null;
-}>(items: T[]): T[] {
-  const dayKey = (d: Date | string | null | undefined) => {
-    if (!d) return "";
-    const date = d instanceof Date ? d : new Date(d);
-    return isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
-  };
-  const keyOf = (e: T) => [
-    (e.errorType ?? "").toLowerCase(),
-    (e.tableId ?? "").toLowerCase(),
-    dayKey(e.errorDate ?? e.createdAt),
-    (e.errorDescription ?? "").slice(0, 80).toLowerCase().trim(),
-  ].join("|");
-  // Index excel rows by key into a FIFO queue. Each screenshot pulls
-  // ONE matching excel row out of the queue and marks it for removal.
-  const excelByKey = new Map<string, T[]>();
-  for (const e of items) {
-    if (e.source !== "excel") continue;
-    const k = keyOf(e);
-    const list = excelByKey.get(k) ?? [];
-    list.push(e);
-    excelByKey.set(k, list);
-  }
-  const dropExcelIds = new Set<string | number>();
-  for (const e of items) {
-    if (e.source !== "screenshot") continue;
-    const k = keyOf(e);
-    const list = excelByKey.get(k);
-    if (list && list.length > 0) {
-      const paired = list.shift();
-      if (paired) dropExcelIds.add(paired.id);
-    }
-  }
-  return items.filter(e => !(e.source === "excel" && dropExcelIds.has(e.id)));
-}
 
 /**
  * In-memory daily cache for AI Coach insights, keyed by `${gpId}-YYYY-MM-DD`.

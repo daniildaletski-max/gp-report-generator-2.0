@@ -1,7 +1,7 @@
 /**
  * Error Files, GP Errors, Error Screenshots Database Operations
  */
-import { eq, and, gte, lte, lt, desc, sql } from "drizzle-orm";
+import { eq, and, gte, lte, lt, desc, sql, inArray } from "drizzle-orm";
 import {
   errorFiles, InsertErrorFile, ErrorFile,
   gpErrors, InsertGpError, GpError,
@@ -277,6 +277,102 @@ export async function getGpErrorsForPortal(gpId: number, month: number, year: nu
     log.error("Error getting GP errors for portal", error instanceof Error ? error : undefined);
     return [];
   }
+}
+
+/**
+ * Batch sibling of `getGpErrorsForPortal`. Pulls every gpErrors row
+ * for the month ONCE and groups it by gpId via in-memory normalized
+ * name matching. Used by the Attendance team-summary endpoint to
+ * avoid an N+1 of full-month scans (one per GP). Returns a Map keyed
+ * by GP id; GPs without any errors do not appear in the map.
+ */
+export async function getGpErrorsByMonthGroupedByGpId(
+  gpIds: number[],
+  month: number,
+  year: number,
+): Promise<Map<number, GpError[]>> {
+  const out = new Map<number, GpError[]>();
+  const db = await getDb();
+  if (!db || gpIds.length === 0) return out;
+  try {
+    // Resolve canonical name -> [gp ids] in one query so we can
+    // match gpErrors.gpName (plain text from the Excel parse).
+    //
+    // game_presenters.name is NOT unique (two real people can share
+    // a stage pseudonym, plus near-duplicates like "Anna" and "Anna "
+    // normalize to the same key). Storing only one id per key would
+    // silently drop rows for the colliding GP. We keep an array per
+    // key so each error row gets attributed to every GP whose
+    // canonical name matches — same behaviour as
+    // getGpErrorsForPortal(gpId, ...) called individually.
+    const gpRows = await db
+      .select({ id: gamePresenters.id, name: gamePresenters.name })
+      .from(gamePresenters)
+      .where(inArray(gamePresenters.id, gpIds));
+    const idsByNormalizedName = new Map<string, number[]>();
+    for (const gp of gpRows) {
+      const k = normalizeName(gp.name);
+      const list = idsByNormalizedName.get(k) ?? [];
+      list.push(gp.id);
+      idsByNormalizedName.set(k, list);
+    }
+    const { start, endExclusive } = monthRange(month, year);
+    const effective = sql`COALESCE(${gpErrors.errorDate}, ${gpErrors.createdAt})`;
+    const rows = await db
+      .select()
+      .from(gpErrors)
+      .where(and(gte(effective, start), lt(effective, endExclusive)))
+      .orderBy(desc(gpErrors.errorDate));
+    for (const row of rows) {
+      const matchedIds = idsByNormalizedName.get(normalizeName(row.gpName));
+      if (!matchedIds || matchedIds.length === 0) continue;
+      for (const gpId of matchedIds) {
+        const list = out.get(gpId) ?? [];
+        list.push(row);
+        out.set(gpId, list);
+      }
+    }
+  } catch (error) {
+    log.error("Error grouping GP errors by month", error instanceof Error ? error : undefined);
+  }
+  return out;
+}
+
+/**
+ * Batch sibling of `getErrorScreenshotsForGP`. Pulls every screenshot
+ * row for the month + the supplied gpIds in ONE query and groups by
+ * gpId. Same goal as `getGpErrorsByMonthGroupedByGpId`: avoid the
+ * per-GP query loop on hot pages.
+ */
+export async function getErrorScreenshotsByMonthGroupedByGpId(
+  gpIds: number[],
+  month: number,
+  year: number,
+): Promise<Map<number, ErrorScreenshot[]>> {
+  const out = new Map<number, ErrorScreenshot[]>();
+  const db = await getDb();
+  if (!db || gpIds.length === 0) return out;
+  try {
+    const rows = await db
+      .select()
+      .from(errorScreenshots)
+      .where(and(
+        inArray(errorScreenshots.gamePresenterId, gpIds),
+        errorScreenshotMonthFilter(month, year),
+      ))
+      .orderBy(desc(errorScreenshots.createdAt));
+    for (const row of rows) {
+      // gamePresenterId is nullable in the schema (orphan screenshots);
+      // skip those — they wouldn't match any team GP anyway.
+      if (row.gamePresenterId == null) continue;
+      const list = out.get(row.gamePresenterId) ?? [];
+      list.push(row);
+      out.set(row.gamePresenterId, list);
+    }
+  } catch (error) {
+    log.error("Error grouping error screenshots by month", error instanceof Error ? error : undefined);
+  }
+  return out;
 }
 
 function normalizeName(name: string): string {

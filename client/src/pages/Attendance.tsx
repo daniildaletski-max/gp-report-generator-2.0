@@ -111,7 +111,11 @@ export default function AttendancePage() {
     setRows(attendanceData.items.map(item => ({
       gpId: item.gamePresenter.id,
       gpName: item.gamePresenter.name,
-      mistakes: item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0,
+      // Use the server-side filtered mistake count so what the FM
+      // sees in the row matches what the GP sees in their portal.
+      // Falls back to the raw stats column if the new field is
+      // missing (older API response on first refresh).
+      mistakes: (item as any).filteredMistakes ?? item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0,
       extraShifts: item.attendance?.extraShifts ?? 0,
       lateToWork: item.attendance?.lateToWork ?? 0,
       missedDays: item.attendance?.missedDays ?? 0,
@@ -175,7 +179,7 @@ export default function AttendancePage() {
       setRows(attendanceData.items.map(item => ({
         gpId: item.gamePresenter.id,
         gpName: item.gamePresenter.name,
-        mistakes: item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0,
+        mistakes: (item as any).filteredMistakes ?? item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0,
         extraShifts: item.attendance?.extraShifts ?? 0,
         lateToWork: item.attendance?.lateToWork ?? 0,
         missedDays: item.attendance?.missedDays ?? 0,
@@ -623,8 +627,8 @@ function AttendanceTableRow({
             }`}>
               {row.mistakes}
             </span>
-            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-card border border-border rounded px-2 py-1 text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-              Auto-populated from error files
+            <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-card border border-border rounded-md px-2.5 py-1.5 text-[10px] text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-md max-w-[200px]">
+              Auto-populated from error files (technical/TV errors filtered out — matches the GP&apos;s portal view).
             </div>
           </div>
         </td>
