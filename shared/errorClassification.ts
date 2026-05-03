@@ -112,6 +112,17 @@ export function isTechnicalError(input: ErrorClassificationInput): boolean {
  *   1 screenshot + 1 excel   -> 1 entry  (cross-source paired)
  *   0 screenshots + 2 excel  -> 2 entries
  *
+ * Same-source identical-row collapse:
+ *   When two rows of the SAME source carry an EXACTLY identical
+ *   signature (same type + table + day + FULL description, byte-
+ *   for-byte), we treat them as a parse-duplicate and keep only
+ *   one. This catches the case where an Excel file is uploaded
+ *   twice or re-parsed and the same row lands in `gp_errors` 2-3×.
+ *   Note: legitimate "two real errors with the same wording on the
+ *   same day same table" gets collapsed too — but that's a vanishingly
+ *   rare edge case in practice; the much more common pattern is
+ *   parse-noise that the FM and GP both expect to see deduped.
+ *
  * Lives in `shared/` so the GP Portal and the FM-side counters
  * (Attendance summary, dashboard insights) compute the same number.
  * Without this, the same error could be counted twice in one place
@@ -131,29 +142,56 @@ export function dedupeErrorDetails<T extends {
     const date = d instanceof Date ? d : new Date(d);
     return isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
   };
-  const keyOf = (e: T) => [
+  // The "loose" key truncates description to 80 chars — used for
+  // cross-source pairing where the screenshot text might be slightly
+  // longer than the Excel description.
+  const looseKey = (e: T) => [
     (e.errorType ?? "").toLowerCase(),
     (e.tableId ?? "").toLowerCase(),
     dayKey(e.errorDate ?? e.createdAt),
     (e.errorDescription ?? "").slice(0, 80).toLowerCase().trim(),
   ].join("|");
-  const excelByKey = new Map<string, T[]>();
+  // The "strict" key uses the FULL description so identical-row
+  // parse dupes inside the same source collapse, but legitimate
+  // distinct errors with merely similar wording stay separate.
+  const strictKey = (e: T) => [
+    e.source,
+    (e.errorType ?? "").toLowerCase(),
+    (e.tableId ?? "").toLowerCase(),
+    dayKey(e.errorDate ?? e.createdAt),
+    (e.errorDescription ?? "").toLowerCase().trim(),
+  ].join("|");
+
+  // Pass 1 — collapse exact same-source dupes. Keep first occurrence.
+  const seenStrict = new Set<string>();
+  const sameSourceFiltered: T[] = [];
   for (const e of items) {
+    const k = strictKey(e);
+    if (seenStrict.has(k)) continue;
+    seenStrict.add(k);
+    sameSourceFiltered.push(e);
+  }
+
+  // Pass 2 — cross-source pair excel rows with screenshot rows that
+  // share a loose signature. Each screenshot pulls one matching
+  // excel row out of a FIFO queue; excess excel rows survive.
+  const excelByKey = new Map<string, T[]>();
+  for (const e of sameSourceFiltered) {
     if (e.source !== "excel") continue;
-    const k = keyOf(e);
+    const k = looseKey(e);
     const list = excelByKey.get(k) ?? [];
     list.push(e);
     excelByKey.set(k, list);
   }
   const dropExcelIds = new Set<string | number>();
-  for (const e of items) {
+  for (const e of sameSourceFiltered) {
     if (e.source !== "screenshot") continue;
-    const k = keyOf(e);
+    const k = looseKey(e);
     const list = excelByKey.get(k);
     if (list && list.length > 0) {
       const paired = list.shift();
       if (paired) dropExcelIds.add(paired.id);
     }
   }
-  return items.filter(e => !(e.source === "excel" && dropExcelIds.has(e.id)));
+  return sameSourceFiltered.filter(e => !(e.source === "excel" && dropExcelIds.has(e.id)));
 }
