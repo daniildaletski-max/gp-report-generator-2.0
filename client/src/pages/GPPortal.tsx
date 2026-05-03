@@ -316,6 +316,8 @@ export default function GPPortal() {
   const attitudeDetails = monthDetails?.attitudeDetails || [];
   const technicalErrorsHidden = monthDetails?.technicalErrorsHidden ?? 0;
   const hiddenTechnicalErrors = (monthDetails?.hiddenTechnicalErrors ?? []) as any[];
+  // Count badge mirrors Excel "Error Count Analysis" column E exactly.
+  const mistakeCount = monthDetails?.stats?.mistakes ?? 0;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 relative">
@@ -1137,13 +1139,13 @@ export default function GPPortal() {
               selectedYear={detailYear}
               onChange={(m, y) => { setDetailMonth(m); setDetailYear(y); }}
               evalCount={(monthDetails?.evaluations || []).length}
-              errorCount={errorDetails.length}
+              errorCount={mistakeCount}
               attitudeScore={attitudeDetails.reduce((s: number, a: any) => s + (a.attitudeScore || 0), 0)}
             />
 
             <AchievementsRow
               evaluations={(monthDetails?.evaluations ?? []) as any[]}
-              errorCount={errorDetails.length}
+              errorCount={mistakeCount}
               attitudeScore={attitudeDetails.reduce((s: number, a: any) => s + (a.attitudeScore || 0), 0)}
               previousAvg={(() => {
                 const hist = (data.monthlyHistory ?? []) as any[];
@@ -1170,13 +1172,13 @@ export default function GPPortal() {
                       <AlertTriangle className="h-3.5 w-3.5 text-rose-600" />
                     </span>
                     Errors & Mistakes
-                    {errorDetails.length > 0 && (
+                    {mistakeCount > 0 && (
                       <Badge className="ml-1 bg-rose-50 text-rose-700 border-rose-200 tabular-nums">
-                        {errorDetails.length}
+                        {mistakeCount}
                       </Badge>
                     )}
                   </h3>
-                  {errorDetails.length === 0 && (
+                  {mistakeCount === 0 && (
                     <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                       Clean month
                     </span>
