@@ -114,15 +114,23 @@ export const attendanceRouter = router({
       //   2. Drop technical errors (`isTechnicalError`).
       //   3. Dedupe cross-source pairs (`dedupeErrorDetails`).
       //   4. Count.
+      //
+      // PERF: previously this fired one query per GP for both
+      // gpErrors AND error screenshots — N+1 of full-month scans.
+      // Now we batch via two month-wide grouped queries (one for
+      // each table) and group by gpId in memory before scoring.
       // ========================================================
+      const gpIds = data.map(d => d.gamePresenter.id);
       const filteredByGp = new Map<number, number>();
-      await Promise.all(data.map(async (item) => {
-        const gpId = item.gamePresenter.id;
-        try {
-          const [screenshotsRaw, gpErrorsRaw] = await Promise.all([
-            db.getErrorScreenshotsForGP(gpId, input.month, input.year).catch(() => [] as any[]),
-            db.getGpErrorsForPortal(gpId, input.month, input.year).catch(() => [] as any[]),
-          ]);
+      try {
+        const [gpErrorsByGp, screenshotsByGp] = await Promise.all([
+          db.getGpErrorsByMonthGroupedByGpId(gpIds, input.month, input.year),
+          db.getErrorScreenshotsByMonthGroupedByGpId(gpIds, input.month, input.year),
+        ]);
+        for (const item of data) {
+          const gpId = item.gamePresenter.id;
+          const screenshotsRaw = screenshotsByGp.get(gpId) ?? [];
+          const gpErrorsRaw = gpErrorsByGp.get(gpId) ?? [];
           const screenshots = screenshotsRaw.filter(e => !isTechnicalError({
             errorType: e.errorType,
             errorCategory: e.errorCategory,
@@ -153,13 +161,18 @@ export const attendanceRouter = router({
             })),
           ];
           filteredByGp.set(gpId, dedupeErrorDetails(merged).length);
-        } catch {
-          // Best-effort: if the per-GP fetch blows up, fall back to
-          // the raw stats for that GP rather than killing the whole
-          // request. The next refresh will retry.
-          filteredByGp.set(gpId, item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0);
         }
-      }));
+      } catch {
+        // Best-effort: if the batch query throws, fall back to the
+        // raw stats column rather than killing the whole request.
+        // Next refresh retries.
+        for (const item of data) {
+          filteredByGp.set(
+            item.gamePresenter.id,
+            item.monthlyStats?.mistakes ?? item.attendance?.mistakes ?? 0,
+          );
+        }
+      }
 
       // Attach filteredMistakes per row + use it in totals.
       const items = data.map(item => ({

@@ -86,6 +86,7 @@ export {
   deleteErrorFile, getErrorFilesByUser, deleteErrorFileByUser,
   createGpError, deleteGpErrorsByMonthYear, getErrorCountByGP,
   updateGPMistakesFromErrors, updateGPMistakesDirectly, getGpErrorsForPortal,
+  getGpErrorsByMonthGroupedByGpId, getErrorScreenshotsByMonthGroupedByGpId,
   pruneOrphanGpErrors,
   createErrorScreenshot, getErrorScreenshots, getErrorScreenshotsByGpId,
   deleteErrorScreenshot, getErrorScreenshotStats, getErrorScreenshotsForGP,
