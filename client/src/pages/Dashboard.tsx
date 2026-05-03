@@ -138,6 +138,16 @@ export default function Dashboard() {
     teamId: undefined,
   });
 
+  // GP roster — used by OnboardingChecklist to count *assigned* GPs
+  // (those with a non-null teamId). `tenantStats.totalGPs` includes
+  // unassigned presenters, which would mark "Assign GPs to a team"
+  // as done before any actual assignment happened.
+  const { data: gpRoster } = trpc.gamePresenter.list.useQuery();
+  const assignedGpCount = useMemo(
+    () => (gpRoster ?? []).filter((gp: any) => gp?.teamId != null).length,
+    [gpRoster],
+  );
+
   // 6-month rolling trend — used for the hero tile sparklines + period
   // deltas. Same query that TrendSection lower on the page uses, so
   // tRPC's cache collapses it into one network request.
@@ -449,7 +459,7 @@ export default function Dashboard() {
       <OnboardingChecklist
         userId={user?.id ?? null}
         hasTeam={(teams?.length ?? 0) > 0}
-        hasGps={(tenantStats?.totalGPs ?? 0) > 0}
+        hasGps={assignedGpCount > 0}
         hasEvaluations={(tenantStats?.totalEvaluations ?? 0) > 0}
         hasReports={(tenantStats?.totalReports ?? 0) > 0}
         onNavigate={setLocation}
