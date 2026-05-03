@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, FileCheck, TrendingUp, TrendingDown, FileSpreadsheet, AlertTriangle, Award, Target, Calendar, PieChart, ArrowRight, Upload, Sparkles, RefreshCw, Clock, Zap, BarChart3, CheckCircle2 } from "lucide-react";
+import { Users, FileCheck, TrendingUp, TrendingDown, FileSpreadsheet, AlertTriangle, Award, Target, Calendar, PieChart, ArrowRight, Upload, Sparkles, RefreshCw, Clock, Zap, BarChart3, CheckCircle2, X, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { StatCard } from "@/components/ui/stat-card";
 import { GlassCard } from "@/components/ui/glass-card";
 import { useLocation } from "wouter";
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { GPDetailDrawer } from "@/components/GPDetailDrawer";
 import { PageHeader } from "@/components/PageHeader";
 import { useUrlState, urlNumber } from "@/hooks/useUrlState";
@@ -126,6 +126,13 @@ export default function Dashboard() {
     year: selectedYear,
     teamId: selectedTeamId,
   });
+
+  // Single lightweight existence-only query for the onboarding
+  // checklist. Replaces the previous trio of (a) a second
+  // dashboard.stats call (b) a full gamePresenter.list scan and
+  // (c) the integrationStatus query that loaded every evaluation
+  // row. All seven flags now come from server-side LIMIT 1 reads.
+  const { data: onboardingStatus } = trpc.dashboard.onboardingStatus.useQuery();
 
   // 6-month rolling trend — used for the hero tile sparklines + period
   // deltas. Same query that TrendSection lower on the page uses, so
@@ -425,6 +432,25 @@ export default function Dashboard() {
         trend={heroTrend ?? []}
         selectedMonth={selectedMonth}
         selectedYear={selectedYear}
+      />
+
+      {/* Onboarding checklist — surfaces five setup milestones for
+          new FMs (created team, added GPs, first eval recorded,
+          first report generated, Studioworks/Persona connected).
+          Auto-hides when all five are complete and stays dismissed
+          via localStorage if the FM closes it manually.
+          NB: completion flags are read from `tenantStats` (the
+          unfiltered query), NOT the team-scoped `stats`, so the
+          checklist doesn't re-appear when an FM picks a fresh team. */}
+      <OnboardingChecklist
+        userId={user?.id ?? null}
+        userRole={user?.role ?? "fm"}
+        hasTeam={onboardingStatus?.hasTeam ?? false}
+        hasGps={onboardingStatus?.hasAssignedGp ?? false}
+        hasEvaluations={onboardingStatus?.hasEvaluation ?? false}
+        hasReports={onboardingStatus?.hasReport ?? false}
+        hasIntegration={onboardingStatus?.hasIntegration ?? false}
+        onNavigate={setLocation}
       />
 
       {/* Quick actions — five most-used operations promoted from
@@ -2492,6 +2518,220 @@ function ChartTooltip({
       <p className="font-semibold uppercase tracking-wider text-[9px] opacity-70">{point.label}</p>
       <p className="font-bold text-sm leading-tight mt-0.5">{point.y.toFixed(1)}</p>
       <p className="text-[10px] opacity-80 mt-0.5">{point.evals} eval{point.evals === 1 ? "" : "s"} · {point.gps} GP{point.gps === 1 ? "" : "s"}</p>
+    </div>
+  );
+}
+
+// ============================================
+// OnboardingChecklist — five-step setup banner shown above the Quick
+// Actions card on the dashboard. Each row reflects whether the FM has
+// completed that milestone (created team, assigned GPs, recorded an
+// evaluation, generated a report, connected an integration).
+//
+// Behaviour:
+//   - Hides itself entirely once all 5 are done (no nag on stable accounts).
+//   - Stays dismissed via localStorage if the FM clicks the × close
+//     button — they shouldn't have to see it forever.
+//   - Each incomplete row has a primary CTA that deep-links to the
+//     right page so the FM never wonders "where do I do that?".
+// ============================================
+function OnboardingChecklist({
+  userId,
+  userRole,
+  hasTeam,
+  hasGps,
+  hasEvaluations,
+  hasReports,
+  hasIntegration,
+  onNavigate,
+}: {
+  userId: number | null;
+  /** "admin" can hit team/sync admin tabs; FMs can't (FMRestrictedView
+   *  only allows stats/action-items/access). Used to route CTAs to
+   *  destinations the current user can actually open instead of
+   *  bouncing them to a dead-end stats page. */
+  userRole: string;
+  hasTeam: boolean;
+  hasGps: boolean;
+  hasEvaluations: boolean;
+  hasReports: boolean;
+  /** Backend-derived: any persona sync log OR any studioworks-source
+   *  evaluation exists. Replaces the earlier localStorage hack that
+   *  flipped to "done" on click rather than on actual successful sync. */
+  hasIntegration: boolean;
+  onNavigate: (path: string) => void;
+}) {
+  // The dismissal flag is the only piece of state still kept in
+  // localStorage — it's a pure UI preference (FM doesn't want to see
+  // the banner) so persisting it client-side is fine. Scoped per
+  // user id so a different account on the same browser starts fresh.
+  const dismissKey = userId != null ? `dashboard.onboarding.dismissed.u${userId}` : null;
+
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    if (typeof window === "undefined" || !dismissKey) return false;
+    return window.localStorage.getItem(dismissKey) === "1";
+  });
+
+  // Re-read dismiss flag if the user identity changes — for example,
+  // after sign-in or account switch within the same tab.
+  useEffect(() => {
+    if (typeof window === "undefined" || !dismissKey) {
+      setDismissed(false);
+      return;
+    }
+    setDismissed(window.localStorage.getItem(dismissKey) === "1");
+  }, [dismissKey]);
+
+  // CTA routing depends on role. FMs see FMRestrictedView at
+  // /admin which only accepts the `stats / action-items / access`
+  // tabs — sending them to `/admin?tab=teams` or `?tab=studioworks`
+  // would silently land on `stats` and become a dead end. For FMs
+  // we either swap the destination (setup steps that aren't
+  // actionable for them get info-only treatment with no CTA) or
+  // route to a tab they can actually open.
+  const isAdmin = userRole === "admin";
+  type Step = {
+    id: string; label: string; done: boolean; optional: boolean;
+    cta?: string; target?: string;
+  };
+  const steps: Step[] = [
+    {
+      id: "team",
+      label: isAdmin ? "Create your first team" : "Get assigned to a team",
+      done: hasTeam,
+      optional: false,
+      cta: isAdmin ? "Create team" : undefined,
+      target: isAdmin ? "/admin?tab=teams" : undefined,
+    },
+    {
+      id: "gps",
+      label: isAdmin ? "Assign Game Presenters to a team" : "Get Game Presenters assigned to your team",
+      done: hasGps,
+      optional: false,
+      cta: isAdmin ? "Assign GPs" : undefined,
+      target: isAdmin ? "/admin?tab=teams" : undefined,
+    },
+    { id: "eval",   label: "Record your first evaluation", done: hasEvaluations, cta: "Open Workspace",  target: "/workspace", optional: false },
+    { id: "report", label: "Generate a monthly report",     done: hasReports,     cta: "Generate report", target: "/reports",   optional: false },
+    {
+      id: "sync",
+      label: "Connect Persona or Studioworks (optional)",
+      done: hasIntegration,
+      optional: true,
+      // Only admins see the CTA — FMs can't open the studioworks
+      // admin tab. Step still renders so the admin team can see at
+      // a glance whether sync is configured.
+      cta: isAdmin ? "Set up sync" : undefined,
+      target: isAdmin ? "/admin?tab=studioworks" : undefined,
+    },
+  ];
+  // Progress + auto-hide are driven by the REQUIRED steps only.
+  // The sync step is labelled "(optional)" — gating allDone on it
+  // would keep the banner up forever for FMs who finish their core
+  // setup but never wire Persona / Studioworks (a valid choice).
+  const required = steps.filter(s => !s.optional);
+  const requiredDone = required.filter(s => s.done).length;
+  const allDone = requiredDone === required.length;
+  // Display counters use the full step list so the FM can still see
+  // their bonus progress on the optional integration step.
+  const doneCount = steps.filter(s => s.done).length;
+  const total = steps.length;
+
+  if (allDone || dismissed) return null;
+
+  const handleAction = (target: string) => {
+    // No more pre-marking on click — the integration milestone is now
+    // driven by the backend `dashboard.integrationStatus` query.
+    onNavigate(target);
+  };
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-yellow-50/60 to-white shadow-sm">
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-400" aria-hidden />
+      <div className="px-5 py-4 flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br from-amber-100 to-yellow-100 border border-amber-200 flex items-center justify-center">
+              <Sparkles className="h-4 w-4 text-amber-700" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-slate-900">Get your floor running</h3>
+              <p className="text-[11px] text-slate-600">
+                {requiredDone}/{required.length} required steps · {total - required.length > 0 ? `${doneCount - requiredDone}/${total - required.length} optional · ` : ""}finish setup so the system can do its job
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Inline progress ring */}
+            <div className="relative h-9 w-9">
+              <svg viewBox="0 0 36 36" className="h-9 w-9 -rotate-90">
+                <circle cx="18" cy="18" r="14" fill="none" stroke="#fcd34d33" strokeWidth="3" />
+                <circle
+                  cx="18" cy="18" r="14" fill="none" stroke="#f59e0b" strokeWidth="3"
+                  strokeDasharray={`${(requiredDone / required.length) * 88} 88`}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-amber-700 tabular-nums">
+                {Math.round((requiredDone / required.length) * 100)}%
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setDismissed(true);
+                if (typeof window !== "undefined" && dismissKey) {
+                  window.localStorage.setItem(dismissKey, "1");
+                }
+              }}
+              className="h-7 w-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center text-slate-400 hover:text-slate-600"
+              aria-label="Dismiss onboarding checklist"
+              title="Dismiss"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+        <ol className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          {steps.map(step => (
+            <li
+              key={step.id}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
+                step.done
+                  ? "bg-emerald-50/60 border-emerald-200/60"
+                  : "bg-white border-slate-200 hover:border-amber-300 transition-colors"
+              }`}
+            >
+              <span className={`h-5 w-5 shrink-0 rounded-full border flex items-center justify-center ${
+                step.done
+                  ? "bg-emerald-500 border-emerald-500 text-white"
+                  : "bg-white border-slate-300 text-transparent"
+              }`}>
+                <CheckCircle2 className="h-3 w-3" />
+              </span>
+              <span className={`text-xs flex-1 min-w-0 truncate ${
+                step.done ? "text-slate-500 line-through" : "text-slate-800 font-medium"
+              }`}>
+                {step.label}
+              </span>
+              {!step.done && step.cta && step.target && (
+                <button
+                  type="button"
+                  onClick={() => handleAction(step.target!)}
+                  className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 hover:text-amber-900 inline-flex items-center gap-0.5 shrink-0"
+                >
+                  {step.cta} <ChevronRight className="h-3 w-3" />
+                </button>
+              )}
+              {!step.done && !step.cta && (
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 italic shrink-0">
+                  waiting on admin
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      </div>
     </div>
   );
 }

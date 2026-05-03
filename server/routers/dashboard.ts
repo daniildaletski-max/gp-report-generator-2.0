@@ -172,6 +172,33 @@ export const dashboardRouter = router({
     );
   }),
 
+  /**
+   * Onboarding status — single lightweight endpoint for the Dashboard
+   * OnboardingChecklist. Returns boolean existence flags for every
+   * setup milestone (team / GP / assigned GP / first eval / first
+   * report / persona sync / studioworks import).
+   *
+   * Implementation: each flag is a `SELECT id ... LIMIT 1` against
+   * the relevant table — O(1) regardless of evaluation history size.
+   * Replaces the previous path that called dashboard.stats twice and
+   * scanned every evaluation row in memory.
+   *
+   * Tenant scope: non-admin users see only their own data; admins
+   * see tenant-wide.
+   */
+  onboardingStatus: protectedProcedure.query(async ({ ctx }) => {
+    const status = await db.getOnboardingStatus({
+      userId: ctx.user.id,
+      isAdmin: ctx.user.role === "admin",
+    });
+    return {
+      ...status,
+      // Convenience: integration is "done" when either backend signal
+      // fires — kept here to keep the client simple.
+      hasIntegration: status.hasPersonaSync || status.hasStudioworksImport,
+    };
+  }),
+
   // Server health check (admin-only, calls /api/health internally)
   serverHealth: adminProcedure.query(async () => {
     const startTime = Date.now();

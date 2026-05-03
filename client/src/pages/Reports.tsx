@@ -671,44 +671,14 @@ export default function ReportsPage() {
           </DialogContent>
         </Dialog>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-stagger">
-        <div className="stat-card-enhanced stat-card-violet">
-          <div className="icon-box">
-            <FileSpreadsheet className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Total Reports</p>
-            <p className="text-2xl font-bold">{stats.total}</p>
-          </div>
-        </div>
-        <div className="stat-card-enhanced stat-card-indigo">
-          <div className="icon-box">
-            <Calendar className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">This Month</p>
-            <p className="text-2xl font-bold">{stats.thisMonth}</p>
-          </div>
-        </div>
-        <div className="stat-card-enhanced stat-card-green">
-          <div className="icon-box">
-            <CheckCircle className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Finalized</p>
-            <p className="text-2xl font-bold text-green-400">{stats.finalized}</p>
-          </div>
-        </div>
-        <div className="stat-card-enhanced stat-card-violet">
-          <div className="icon-box">
-            <Download className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Exported</p>
-            <p className="text-2xl font-bold">{stats.exported}</p>
-          </div>
-        </div>
+      {/* Stats strip — calmer KPI tiles with semantic accent stripes,
+          replaces the heavier stat-card-enhanced blocks. Same data,
+          much less visual noise. */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <ReportKpi icon={FileSpreadsheet} label="Total Reports" value={stats.total} tone="violet" />
+        <ReportKpi icon={Calendar} label="This Month" value={stats.thisMonth} tone="sky" />
+        <ReportKpi icon={CheckCircle} label="Finalized" value={stats.finalized} tone="emerald" />
+        <ReportKpi icon={Download} label="Exported" value={stats.exported} tone="amber" />
       </div>
 
       {/* Coverage Matrix — at-a-glance month × team grid showing report
@@ -1413,5 +1383,37 @@ function CoverageRow({
         );
       })}
     </>
+  );
+}
+
+// ============================================
+// ReportKpi — calm KPI tile for the Reports page header. One label,
+// one big number, semantic accent stripe + dot. Replaces the heavier
+// stat-card-enhanced blocks the page used to render.
+// ============================================
+function ReportKpi({
+  icon: Icon, label, value, tone,
+}: { icon: React.ComponentType<{ className?: string }>; label: string; value: number; tone: "violet" | "sky" | "emerald" | "amber" }) {
+  const accent = tone === "violet" ? "from-violet-300 to-violet-400"
+    : tone === "sky" ? "from-sky-300 to-sky-400"
+      : tone === "emerald" ? "from-emerald-300 to-emerald-400"
+        : "from-amber-300 to-amber-400";
+  const iconBg = tone === "violet" ? "bg-violet-100 text-violet-700 border-violet-200"
+    : tone === "sky" ? "bg-sky-100 text-sky-700 border-sky-200"
+      : tone === "emerald" ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+        : "bg-amber-100 text-amber-700 border-amber-200";
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${accent}`} aria-hidden />
+      <div className="flex items-center gap-3">
+        <span className={`h-9 w-9 shrink-0 rounded-lg border flex items-center justify-center ${iconBg}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold truncate">{label}</p>
+          <p className="text-xl font-bold tabular-nums text-slate-900 leading-tight">{value.toLocaleString()}</p>
+        </div>
+      </div>
+    </div>
   );
 }

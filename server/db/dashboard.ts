@@ -806,3 +806,86 @@ export async function getDashboardActivityFeed(opts: {
   items.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   return items.slice(0, opts.limit);
 }
+
+/**
+ * Lightweight existence-only check used by the Dashboard
+ * OnboardingChecklist. Replaces the heavier dashboard.stats +
+ * full-evaluation-scan path with five DB-level LIMIT 1 reads. Each
+ * check returns the moment a single matching row is found, so the
+ * cost is O(1) regardless of evaluation history size.
+ *
+ * Tenant scope:
+ *   - admin gets tenant-wide existence (any tenant matters).
+ *   - non-admin sees only their own teams / GPs / evaluations.
+ */
+export async function getOnboardingStatus(opts: {
+  userId: number;
+  isAdmin: boolean;
+}): Promise<{
+  hasTeam: boolean;
+  hasGp: boolean;
+  hasAssignedGp: boolean;
+  hasEvaluation: boolean;
+  hasReport: boolean;
+  hasPersonaSync: boolean;
+  hasStudioworksImport: boolean;
+}> {
+  const db = await getDb();
+  if (!db) {
+    return {
+      hasTeam: false, hasGp: false, hasAssignedGp: false,
+      hasEvaluation: false, hasReport: false,
+      hasPersonaSync: false, hasStudioworksImport: false,
+    };
+  }
+  const ownerScope = opts.isAdmin ? undefined : opts.userId;
+  // Helper — true when SELECT … LIMIT 1 returns a row.
+  const exists = async <T>(promise: Promise<T[]>): Promise<boolean> => {
+    try { return (await promise).length > 0; } catch { return false; }
+  };
+  const teamCond = ownerScope != null ? eq(fmTeams.userId, ownerScope) : undefined;
+  const gpCond = ownerScope != null ? eq(gamePresenters.userId, ownerScope) : undefined;
+  const evalCond = ownerScope != null ? eq(evaluations.userId, ownerScope) : undefined;
+  const reportCond = ownerScope != null ? eq(reports.userId, ownerScope) : undefined;
+  // For persona syncs we don't have a userId column; instead we
+  // intersect via the team's userId. For admins we just look at any
+  // sync row.
+  const personaSyncQuery = ownerScope != null
+    ? db.select({ id: personaSyncLogs.id })
+        .from(personaSyncLogs)
+        .innerJoin(fmTeams, eq(fmTeams.id, personaSyncLogs.teamId))
+        .where(eq(fmTeams.userId, ownerScope))
+        .limit(1)
+    : db.select({ id: personaSyncLogs.id }).from(personaSyncLogs).limit(1);
+  // Studioworks-source check uses a JSON path predicate on the
+  // rawExtractedData column (MySQL JSON_EXTRACT).
+  const studioCond = sql`JSON_EXTRACT(${evaluations.rawExtractedData}, '$.source') = 'studioworks'`;
+  const studioQuery = ownerScope != null
+    ? db.select({ id: evaluations.id })
+        .from(evaluations)
+        .where(and(eq(evaluations.userId, ownerScope), studioCond))
+        .limit(1)
+    : db.select({ id: evaluations.id }).from(evaluations).where(studioCond).limit(1);
+
+  const [
+    hasTeam, hasGp, hasAssignedGp, hasEvaluation, hasReport,
+    hasPersonaSync, hasStudioworksImport,
+  ] = await Promise.all([
+    exists(db.select({ id: fmTeams.id }).from(fmTeams).where(teamCond as any).limit(1)),
+    exists(db.select({ id: gamePresenters.id }).from(gamePresenters).where(gpCond as any).limit(1)),
+    exists(db.select({ id: gamePresenters.id }).from(gamePresenters).where(
+      ownerScope != null
+        ? and(eq(gamePresenters.userId, ownerScope), sql`${gamePresenters.teamId} IS NOT NULL`)
+        : sql`${gamePresenters.teamId} IS NOT NULL`,
+    ).limit(1)),
+    exists(db.select({ id: evaluations.id }).from(evaluations).where(evalCond as any).limit(1)),
+    exists(db.select({ id: reports.id }).from(reports).where(reportCond as any).limit(1)),
+    exists(personaSyncQuery as any),
+    exists(studioQuery as any),
+  ]);
+
+  return {
+    hasTeam, hasGp, hasAssignedGp, hasEvaluation, hasReport,
+    hasPersonaSync, hasStudioworksImport,
+  };
+}

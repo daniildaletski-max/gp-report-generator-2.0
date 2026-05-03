@@ -113,7 +113,7 @@ export {
 export {
   getDashboardStats, getDashboardStatsByTeam, getDashboardStatsByUser,
   getAdminDashboardStats, getMonthlyTrendData, getTeamComparisonData,
-  computeDashboardInsights, getDashboardActivityFeed,
+  computeDashboardInsights, getDashboardActivityFeed, getOnboardingStatus,
 } from "./dashboard";
 export type { DashboardInsight, InsightSeverity, InsightKind, ActivityItem, ActivityKind } from "./dashboard";
 
