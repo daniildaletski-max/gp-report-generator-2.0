@@ -293,6 +293,41 @@ export function PersonaImporter({
     });
   }, [pasteText, importMutation, teamId, month, year]);
 
+  // Live preview of the pasted JSON — recomputed on every keystroke
+  // so the FM sees worker count + event totals before committing.
+  // Used to catch the "0 events for everyone" case (DOM selectors
+  // missed the shift data) before it produces a no-op import.
+  const pastePreview = useMemo(() => {
+    const trimmed = pasteText.trim();
+    if (!trimmed) return null;
+    let parsed: any;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      return null;
+    }
+    const payload = parsed?.json ?? parsed;
+    const workers: any[] = Array.isArray(payload?.workers) ? payload.workers : [];
+    if (workers.length === 0) return null;
+    let bySick = 0, byMissed = 0, byLate = 0, byExtra = 0;
+    let workersWithEvents = 0;
+    for (const w of workers) {
+      const sick = Number(w?.sickLeaves ?? 0);
+      const missed = Number(w?.missedDays ?? 0);
+      const late = Number(w?.lateToWork ?? 0);
+      const extra = Number(w?.extraShifts ?? 0);
+      bySick += sick; byMissed += missed; byLate += late; byExtra += extra;
+      if (sick + missed + late + extra > 0) workersWithEvents++;
+    }
+    const totalEvents = bySick + byMissed + byLate + byExtra;
+    return {
+      workerCount: workers.length,
+      workersWithEvents,
+      totalEvents,
+      bySick, byMissed, byLate, byExtra,
+    };
+  }, [pasteText]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -430,6 +465,42 @@ export function PersonaImporter({
                 placeholder='Paste the JSON the bookmarklet copied (starts with {"teamId":...)'
                 className="font-mono text-[10px] h-40"
               />
+              {/* Pre-submit preview — shows what we parsed so the FM
+                  catches a "0 events for everyone" scenario BEFORE
+                  submitting. The bookmarklet's DOM selectors guess
+                  Persona's structure; if they miss, every worker
+                  comes back with empty buckets and the import looks
+                  successful but writes nothing. The preview surfaces
+                  that case as a red warning instead of silent zero. */}
+              {pastePreview && (
+                <div className={`rounded-lg border px-3 py-2.5 text-xs ${
+                  pastePreview.totalEvents === 0
+                    ? "border-rose-200 bg-rose-50/60 text-rose-800"
+                    : "border-emerald-200 bg-emerald-50/60 text-emerald-800"
+                }`}>
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <span className="font-semibold">
+                      {pastePreview.workerCount} worker{pastePreview.workerCount === 1 ? "" : "s"} · {pastePreview.totalEvents} event{pastePreview.totalEvents === 1 ? "" : "s"} parsed
+                    </span>
+                    <span className="text-[10px] uppercase tracking-wider opacity-80">
+                      {pastePreview.workersWithEvents}/{pastePreview.workerCount} have events
+                    </span>
+                  </div>
+                  {pastePreview.totalEvents === 0 ? (
+                    <p className="text-[11px]">
+                      <strong>0 events for everyone.</strong> The bookmarklet ran but couldn&apos;t find shift data in Persona&apos;s DOM.
+                      Importing now will not change attendance counts. Open the monthly schedule view in Persona before re-running the bookmarklet, or fall through to the server-side scrape.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      <span>🤒 {pastePreview.bySick} sick</span>
+                      <span>❌ {pastePreview.byMissed} missed</span>
+                      <span>⏰ {pastePreview.byLate} late</span>
+                      <span>➕ {pastePreview.byExtra} extra</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Button onClick={onImportPasted} disabled={!pasteText.trim() || importMutation.isPending} className="gap-1.5">
                   {importMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
@@ -442,25 +513,56 @@ export function PersonaImporter({
             </TabsContent>
           </div>
 
-          {importMutation.data && (
-            <div className="border-t border-slate-200 pt-3 space-y-2">
-              <h4 className="text-sm font-semibold flex items-center gap-2">
-                <ChevronRight className="h-3.5 w-3.5 text-primary" />
-                Last import
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                <Badge className="bg-emerald-50 border-emerald-200 text-emerald-700 gap-1">
-                  <Check className="h-3 w-3" /> {importMutation.data.matched} matched
-                </Badge>
-                <Badge className="bg-amber-50 border-amber-200 text-amber-700 gap-1">
-                  <AlertTriangle className="h-3 w-3" /> {importMutation.data.unmatched} unmatched
-                </Badge>
-                <Badge className="bg-slate-100 border-slate-200 text-slate-700 gap-1">
-                  {importMutation.data.totalPersonaWorkers} total workers
-                </Badge>
+          {importMutation.data && (() => {
+            // Distinguish "matched and applied" from "matched but
+            // nothing changed". The server returns matchDetails with
+            // a per-row `applied` flag that's true when ANY write
+            // happened — including breakdown-only writes where the
+            // monthly totals didn't move but a sick day shifted from
+            // the 3rd to the 7th (Codex P2 on PR #80). Falls back to
+            // counting non-empty `changes` for older API payloads
+            // that predate the `applied` flag.
+            const data = importMutation.data as any;
+            const details: any[] = Array.isArray(data.matchDetails) ? data.matchDetails : [];
+            const updated = details.filter(d => {
+              if (!d.matched) return false;
+              if (typeof d.applied === "boolean") return d.applied;
+              return d.changes && Object.keys(d.changes).length > 0;
+            }).length;
+            const matchedNoChange = (data.matched ?? 0) - updated;
+            const allNoChange = data.matched > 0 && updated === 0;
+            return (
+              <div className="border-t border-slate-200 pt-3 space-y-2">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <ChevronRight className="h-3.5 w-3.5 text-primary" />
+                  Last import
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  <Badge className="bg-emerald-50 border-emerald-200 text-emerald-700 gap-1">
+                    <Check className="h-3 w-3" /> {updated} updated
+                  </Badge>
+                  {matchedNoChange > 0 && (
+                    <Badge className="bg-slate-100 border-slate-200 text-slate-600 gap-1">
+                      {matchedNoChange} matched · no change
+                    </Badge>
+                  )}
+                  <Badge className="bg-amber-50 border-amber-200 text-amber-700 gap-1">
+                    <AlertTriangle className="h-3 w-3" /> {data.unmatched} unmatched
+                  </Badge>
+                  <Badge className="bg-slate-100 border-slate-200 text-slate-700 gap-1">
+                    {data.totalPersonaWorkers} total
+                  </Badge>
+                </div>
+                {allNoChange && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+                    Every matched worker was already up-to-date — no attendance rows were written.
+                    If Attendance still shows zeros, the bookmarklet likely couldn&apos;t parse Persona&apos;s shift data.
+                    Re-run on the monthly schedule view; the Paste preview above should report a non-zero event total.
+                  </p>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
         </Tabs>
 
         <DialogFooter className="border-t border-slate-200 pt-3">
