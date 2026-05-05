@@ -226,6 +226,11 @@ export function PersonaImporter({
   // clipboard, FM pastes it here, we POST same-origin. Always works
   // even when cross-origin auth is blocked.
   const [pasteText, setPasteText] = useState("");
+  // Manual TSV mode — the FM types worker rows directly. Bypasses
+  // bookmarklet DOM scraping and cross-origin auth entirely; the
+  // most reliable path when Persona's markup is unfamiliar or the
+  // user just wants to enter the numbers off the screen.
+  const [manualText, setManualText] = useState("");
 
   const importMutation = trpc.personaSync.importBatchForTeam.useMutation({
     onSuccess: (res) => {
@@ -292,6 +297,116 @@ export function PersonaImporter({
       workers: payload.workers,
     });
   }, [pasteText, importMutation, teamId, month, year]);
+
+  // ============================================================
+  // Manual TSV parser — accepts tab- OR multi-space-separated rows
+  // in `name <ws> sick <ws> missed <ws> late <ws> extra` form. The
+  // last 4 numeric tokens are the counts, everything before them is
+  // the worker name (so multi-word names like "Alicia Bel-Haj" work
+  // without quoting). Header rows are auto-detected and skipped.
+  // ============================================================
+  type ParsedRow = { name: string; sick: number; missed: number; late: number; extra: number };
+  type ParsedTSV = { rows: ParsedRow[]; skippedLines: number };
+  const parseManualTSV = useCallback((text: string): ParsedTSV => {
+    const out: ParsedRow[] = [];
+    let skippedLines = 0;
+    const lines = text.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      // Tab-split first; fall back to 2+ whitespace.
+      const tokens = line.includes("\t")
+        ? line.split(/\t+/).map(t => t.trim()).filter(t => t.length > 0)
+        : line.split(/\s{2,}|\s+(?=\d)/).map(t => t.trim()).filter(t => t.length > 0);
+      if (tokens.length < 5) {
+        // Allow 1-3 numeric trailing tokens by padding with zeros
+        // (FM might omit zeros), but only when at least name + 1
+        // number is present.
+        const numericTail: number[] = [];
+        for (let j = tokens.length - 1; j >= 0; j--) {
+          const n = Number(tokens[j]);
+          if (Number.isFinite(n)) {
+            numericTail.unshift(n);
+          } else break;
+        }
+        if (numericTail.length === 0) { skippedLines++; continue; }
+        const nameTokens = tokens.slice(0, tokens.length - numericTail.length);
+        if (nameTokens.length === 0) { skippedLines++; continue; }
+        const padded = [...numericTail];
+        while (padded.length < 4) padded.push(0);
+        const [sick, missed, late, extra] = padded;
+        const candidateName = nameTokens.join(" ").trim();
+        if (i === 0 && /^name$/i.test(candidateName)) { skippedLines++; continue; }
+        out.push({ name: candidateName, sick, missed, late, extra });
+        continue;
+      }
+      const [extra, late, missed, sick] = [
+        Number(tokens[tokens.length - 1]),
+        Number(tokens[tokens.length - 2]),
+        Number(tokens[tokens.length - 3]),
+        Number(tokens[tokens.length - 4]),
+      ];
+      if (![sick, missed, late, extra].every(n => Number.isFinite(n))) {
+        skippedLines++;
+        continue;
+      }
+      const name = tokens.slice(0, tokens.length - 4).join(" ").trim();
+      if (!name) { skippedLines++; continue; }
+      // Header detection: row starts with "name" AND has all-zero numbers
+      if (i === 0 && /^name$/i.test(name)) { skippedLines++; continue; }
+      out.push({ name, sick, missed, late, extra });
+    }
+    return { rows: out, skippedLines };
+  }, []);
+
+  const manualPreview = useMemo(() => {
+    if (!manualText.trim()) return null;
+    const { rows, skippedLines } = parseManualTSV(manualText);
+    if (rows.length === 0 && skippedLines === 0) return null;
+    let bySick = 0, byMissed = 0, byLate = 0, byExtra = 0;
+    for (const r of rows) {
+      bySick += r.sick; byMissed += r.missed; byLate += r.late; byExtra += r.extra;
+    }
+    return {
+      workerCount: rows.length,
+      totalEvents: bySick + byMissed + byLate + byExtra,
+      bySick, byMissed, byLate, byExtra,
+      skippedLines,
+    };
+  }, [manualText, parseManualTSV]);
+
+  const onImportManual = useCallback(() => {
+    if (!teamId) {
+      toast.error("Pick a team first");
+      return;
+    }
+    const { rows } = parseManualTSV(manualText);
+    if (rows.length === 0) {
+      toast.error("Couldn't parse any worker rows. Make sure each line has name + 4 numbers.");
+      return;
+    }
+    const workers = rows.map(r => ({
+      name: r.name,
+      workerId: 0,
+      projectId: 0,
+      sickLeaves: r.sick,
+      missedDays: r.missed,
+      extraShifts: r.extra,
+      lateToWork: r.late,
+      // Manual mode doesn't capture per-day breakdown — leave empty.
+      // Server's no-change check will still write counts when totals
+      // differ from what's already in the row.
+      dayBreakdown: { sick: [], missed: [], extra: [], late: [] },
+    }));
+    importMutation.mutate({
+      teamId,
+      month,
+      year,
+      workers,
+    }, {
+      onSuccess: () => setManualText(""),
+    });
+  }, [manualText, parseManualTSV, importMutation, teamId, month, year]);
 
   // Live preview of the pasted JSON — recomputed on every keystroke
   // so the FM sees worker count + event totals before committing.
@@ -388,8 +503,11 @@ export function PersonaImporter({
           </div>
         </div>
 
-        <Tabs defaultValue="bookmarklet" className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid grid-cols-3 w-full">
+        <Tabs defaultValue="manual" className="flex-1 overflow-hidden flex flex-col">
+          <TabsList className="grid grid-cols-4 w-full">
+            <TabsTrigger value="manual" className="gap-1.5">
+              <Send className="h-3.5 w-3.5" /> Manual
+            </TabsTrigger>
             <TabsTrigger value="bookmarklet" className="gap-1.5">
               <Bookmark className="h-3.5 w-3.5" /> Bookmarklet
             </TabsTrigger>
@@ -397,11 +515,69 @@ export function PersonaImporter({
               <Terminal className="h-3.5 w-3.5" /> Console
             </TabsTrigger>
             <TabsTrigger value="paste" className="gap-1.5">
-              <Send className="h-3.5 w-3.5" /> Paste
+              <Send className="h-3.5 w-3.5" /> Paste JSON
             </TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto pt-3">
+            {/* Manual TSV/CSV — the most reliable path. The FM types
+                or pastes worker rows in `name<tab>sick<tab>missed<tab>
+                late<tab>extra` format and we POST same-origin. No DOM
+                scraping, no cross-origin auth — works regardless of
+                Persona's HTML or the browser's cookie / CORS policy. */}
+            <TabsContent value="manual" className="space-y-3">
+              <p className="text-sm text-slate-700">
+                Type or paste worker rows below. <strong>Tab-separated</strong> or
+                multiple-spaces-separated. The header row is optional.
+              </p>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600 font-mono">
+                Name &nbsp;&nbsp; Sick &nbsp;&nbsp; Missed &nbsp;&nbsp; Late &nbsp;&nbsp; Extra<br />
+                Alicia Bel-Haj &nbsp;&nbsp; 1 &nbsp;&nbsp; 0 &nbsp;&nbsp; 0 &nbsp;&nbsp; 0<br />
+                Anastassija Fomenkova &nbsp;&nbsp; 2 &nbsp;&nbsp; 0 &nbsp;&nbsp; 0 &nbsp;&nbsp; 0
+              </div>
+              <Textarea
+                value={manualText}
+                onChange={(e) => setManualText(e.target.value)}
+                placeholder={"Alicia Bel-Haj\t1\t0\t0\t0\nAnastassija Fomenkova\t2\t0\t0\t0"}
+                className="font-mono text-xs h-44"
+              />
+              {manualPreview && (
+                <div className={`rounded-lg border px-3 py-2 text-xs ${
+                  manualPreview.totalEvents === 0
+                    ? "border-amber-200 bg-amber-50/60 text-amber-800"
+                    : "border-emerald-200 bg-emerald-50/60 text-emerald-800"
+                }`}>
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <span className="font-semibold">
+                      {manualPreview.workerCount} worker{manualPreview.workerCount === 1 ? "" : "s"} parsed
+                      {" · "}
+                      {manualPreview.totalEvents} event{manualPreview.totalEvents === 1 ? "" : "s"}
+                    </span>
+                    {manualPreview.skippedLines > 0 && (
+                      <span className="text-[10px] uppercase tracking-wider opacity-80">
+                        {manualPreview.skippedLines} line{manualPreview.skippedLines === 1 ? "" : "s"} skipped
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[11px]">
+                    <span>🤒 {manualPreview.bySick}</span>
+                    <span>❌ {manualPreview.byMissed}</span>
+                    <span>⏰ {manualPreview.byLate}</span>
+                    <span>➕ {manualPreview.byExtra}</span>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Button onClick={onImportManual} disabled={!manualText.trim() || importMutation.isPending} className="gap-1.5">
+                  {importMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  Submit attendance
+                </Button>
+                {manualText.trim() && (
+                  <Button variant="ghost" size="sm" onClick={() => setManualText("")}>Clear</Button>
+                )}
+              </div>
+            </TabsContent>
+
             <TabsContent value="bookmarklet" className="space-y-3">
               <ol className="space-y-2 text-sm text-slate-700 list-decimal list-inside">
                 <li>Pick the team / month / year above.</li>
