@@ -195,9 +195,6 @@ export const errorFileRouter = router({
       // as that would wipe out errors from the other error type (playgon vs MG).
       
       // Update GP mistakes directly from parsed error counts
-      const notFoundGPs: string[] = [];
-      const ambiguousGPs: string[] = [];
-      const updatedGPs: string[] = [];
       const createdErrorRecords: number[] = [];
 
       // GP match scope: admins upload tenant-wide files (one Excel
@@ -207,19 +204,19 @@ export const errorFileRouter = router({
       // only their own (tenant isolation).
       const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
 
+      // Batch update — single gamePresenters read for the whole file
+      // instead of one read per GP name.
+      const batch = await db.updateGPMistakesBatch(
+        Object.entries(gpErrorCounts),
+        input.month,
+        input.year,
+        matchScopeUserId,
+      );
+      const updatedGPs = batch.matched;
+      const notFoundGPs = batch.notFound;
+      const ambiguousGPs = batch.ambiguous;
+
       for (const [gpName, count] of Object.entries(gpErrorCounts)) {
-        // Find GP by name and update their mistakes count
-        const result = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, matchScopeUserId);
-        if (result.matched) {
-          updatedGPs.push(gpName);
-        } else if (result.ambiguous) {
-          // Two or more GPs share this name — refuse to write so we
-          // don't poison the wrong row. Surface to the operator so
-          // they can rename one of the colliding pseudonyms.
-          ambiguousGPs.push(gpName);
-        } else {
-          notFoundGPs.push(gpName);
-        }
         
         // Create individual error records with descriptions if available
         const rawDetails = gpErrorDetails[gpName] || [];
@@ -392,23 +389,18 @@ export const errorFileRouter = router({
         }
       }
 
-      // Update monthlyGpStats.mistakes with recalculated counts
-      const updatedGPs: string[] = [];
-      const notFoundGPs: string[] = [];
-      const ambiguousGPs: string[] = [];
+      // Update monthlyGpStats.mistakes with recalculated counts.
       // Admin recalc covers every team's GPs; FM recalc stays scoped.
       const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
-
-      for (const [gpName, count] of Object.entries(gpErrorCounts)) {
-        const result = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, matchScopeUserId);
-        if (result.matched) {
-          updatedGPs.push(gpName);
-        } else if (result.ambiguous) {
-          ambiguousGPs.push(gpName);
-        } else {
-          notFoundGPs.push(gpName);
-        }
-      }
+      const batch = await db.updateGPMistakesBatch(
+        Object.entries(gpErrorCounts),
+        input.month,
+        input.year,
+        matchScopeUserId,
+      );
+      const updatedGPs = batch.matched;
+      const notFoundGPs = batch.notFound;
+      const ambiguousGPs = batch.ambiguous;
 
       log.info(`Recalculated error counts for ${input.month}/${input.year}: ${updatedGPs.length} updated, ${notFoundGPs.length} not found, ${ambiguousGPs.length} ambiguous`);
 
@@ -567,18 +559,22 @@ export const errorFileRouter = router({
       // Wipe existing gpErrors tied to this errorFile, then re-create.
       await db.deleteGpErrorsByMonthYear(file.month, file.year, ctx.user.id, file.id);
 
-      const updatedGPs: string[] = [];
-      const notFoundGPs: string[] = [];
-      const ambiguousGPs: string[] = [];
       let recordsCreated = 0;
       // Admin rescan covers every team's GPs; FM rescan stays scoped.
       const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
+      // Batch update — single gamePresenters read up front, then we
+      // iterate the entries again below to recreate the per-row
+      // gpErrors detail records (after parse-time dedup).
+      const batch = await db.updateGPMistakesBatch(
+        Object.entries(gpErrorCounts),
+        file.month,
+        file.year,
+        matchScopeUserId,
+      );
+      const updatedGPs = batch.matched;
+      const notFoundGPs = batch.notFound;
+      const ambiguousGPs = batch.ambiguous;
       for (const [gpName, count] of Object.entries(gpErrorCounts)) {
-        const result = await db.updateGPMistakesDirectly(gpName, count, file.month, file.year, matchScopeUserId);
-        if (result.matched) updatedGPs.push(gpName);
-        else if (result.ambiguous) ambiguousGPs.push(gpName);
-        else notFoundGPs.push(gpName);
-
         // Dedupe parse-noise (same as the upload path above) so the
         // rescan doesn't reinflate the per-row list with duplicate
         // "Errors" sheet rows. "Error Count Analysis" column E stays

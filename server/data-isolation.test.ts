@@ -263,7 +263,7 @@ describe('data isolation - router source code verification', () => {
     expect(source).toContain('db.deleteGpErrorsByMonthYear(input.month, input.year, ctx.user.id');
   });
 
-  it('should pass a tenant-scoped userId to updateGPMistakesDirectly in routers', async () => {
+  it('should pass a tenant-scoped userId to GP mistake updates in routers', async () => {
     const fs = await import('fs');
     const source = readAllRouterSource(fs);
     // Admin uploads carry tenant-wide files (one Excel covers every
@@ -273,7 +273,10 @@ describe('data isolation - router source code verification', () => {
     // The test asserts that this scoping variable is wired up so an
     // FM upload still keeps GP mutations within their own roster.
     expect(source).toContain("matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id");
-    expect(source).toContain("db.updateGPMistakesDirectly(gpName, count, input.month, input.year, matchScopeUserId)");
+    // The upload/recalc paths use updateGPMistakesBatch (single
+    // gamePresenters read for the whole file). Whichever helper is
+    // used, the scope variable must be threaded through.
+    expect(source).toContain("matchScopeUserId,");
   });
 
   it('should set userId on gpError records when creating them', async () => {

@@ -261,6 +261,75 @@ export async function updateGPMistakesDirectly(
 }
 
 /**
+ * Batch sibling of `updateGPMistakesDirectly`. The Excel parser hands
+ * us a whole month's worth of `{ gpName: count }` entries; the per-row
+ * helper would scan `gamePresenters` once per name, giving an
+ * O(names × table) read pattern that degrades badly as the GP roster
+ * grows.
+ *
+ * This helper:
+ *   1. Reads `gamePresenters` ONCE (scoped to userId for FM uploads,
+ *      tenant-wide for admin uploads).
+ *   2. Builds an in-memory Map<normalized name, gp[]> for O(1) lookup.
+ *   3. Iterates the Excel entries, classifying each as
+ *      matched / not-found / ambiguous (2+ rows share the name —
+ *      same fail-safe as the per-row helper).
+ *   4. Writes monthly_gp_stats + attendance for the matched GPs.
+ *
+ * Returns lists of names per category so the caller can surface them
+ * in the upload response.
+ */
+export async function updateGPMistakesBatch(
+  entries: Array<readonly [string, number]>,
+  month: number,
+  year: number,
+  userId?: number,
+): Promise<{ matched: string[]; notFound: string[]; ambiguous: string[] }> {
+  const out = { matched: [] as string[], notFound: [] as string[], ambiguous: [] as string[] };
+  const db = await getDb();
+  if (!db) return out;
+
+  // Single read of the GP roster — scoped to FM's own when userId is
+  // set, tenant-wide when admin (userId=undefined).
+  const rows = userId
+    ? await db.select().from(gamePresenters).where(eq(gamePresenters.userId, userId))
+    : await db.select().from(gamePresenters);
+
+  const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+  const byName = new Map<string, typeof rows>();
+  for (const gp of rows) {
+    const k = norm(gp.name);
+    const list = byName.get(k) ?? [];
+    list.push(gp);
+    byName.set(k, list);
+  }
+
+  for (const [gpName, count] of entries) {
+    const matches = byName.get(norm(gpName)) ?? [];
+    if (matches.length === 0) {
+      out.notFound.push(gpName);
+      continue;
+    }
+    if (matches.length > 1) {
+      log.warn(
+        `updateGPMistakesBatch: ambiguous name "${gpName}" matched ` +
+        `${matches.length} GPs (ids: ${matches.map(m => m.id).join(", ")}). ` +
+        `Skipping — operator must disambiguate.`,
+      );
+      out.ambiguous.push(gpName);
+      continue;
+    }
+    const gp = matches[0];
+    const stats = await getOrCreateMonthlyGpStats(gp.id, month, year);
+    await db.update(monthlyGpStats).set({ mistakes: count }).where(eq(monthlyGpStats.id, stats.id));
+    const attendance = await getOrCreateAttendance(gp.id, month, year);
+    await updateAttendance(attendance.id, { mistakes: count });
+    out.matched.push(gpName);
+  }
+  return out;
+}
+
+/**
  * Pull every Excel-imported error for a GP in a given month.
  *
  * Two leak vectors that this function used to suffer from:
