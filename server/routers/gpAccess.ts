@@ -372,22 +372,23 @@ export const gpAccessRouter = router({
         if (gp.teamId) {
           const teamGps = await db.getGamePresentersByTeam(gp.teamId);
           if (teamGps.length > 1) {
-            // Fetch avg scores for everyone on the team (last 6 months).
-            const teamAvgs = await Promise.all(teamGps.map(async (peer) => {
-              const hist = await db.getGpMonthlyHistory(peer.id, 6).catch(() => [] as any[]);
-              const withData = hist.filter((m: any) => Number(m.evalCount || 0) > 0);
-              if (withData.length === 0) return { id: peer.id, total: 0, appearance: 0, performance: 0, hasData: false };
-              const avg = (key: string) =>
-                withData.reduce((s: number, m: any) => s + Number(m[key] || 0), 0) / withData.length;
-              return {
-                id: peer.id,
-                total: avg("avgTotal"),
-                appearance: avg("avgAppearance"),
-                performance: avg("avgPerformance"),
-                hasData: true,
-              };
-            }));
-            const ranked = teamAvgs.filter(t => t.hasData);
+            // ONE query for the whole team's last-6-months averages,
+            // grouped in memory. Replaces a per-peer × per-month
+            // fan-out that ran hundreds of selects on big rosters
+            // (Codex P1 on PR #78).
+            const peerAvgs = await db.getTeamPeerAverages({ teamId: gp.teamId, monthsBack: 6 });
+            const ranked = teamGps
+              .map(peer => {
+                const a = peerAvgs.get(peer.id);
+                if (!a) return null;
+                return {
+                  id: peer.id,
+                  total: a.total,
+                  appearance: a.appearance,
+                  performance: a.performance,
+                };
+              })
+              .filter((t): t is NonNullable<typeof t> => t !== null);
             // Percentile: how many peers does this GP outrank
             // (higher score = better). Uses standard "percentile of"
             // formula: (count below + 0.5 × count tied) / total.

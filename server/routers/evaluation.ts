@@ -227,7 +227,7 @@ export const evaluationRouter = router({
         const daysSince = lastDate ? Math.floor((now.getTime() - new Date(lastDate).getTime()) / 86400000) : null;
         const last3 = evals.slice(0, 3);
         const avg = (key: keyof typeof evals[0]) => {
-          const vals = last3.map(e => Number((e as any)[key])).filter(v => Number.isFinite(v) && v > 0);
+          const vals = last3.map(e => Number((e as any)[key])).filter(v => Number.isFinite(v) && v >= 0);
           if (vals.length === 0) return null;
           return vals.reduce((s, v) => s + v, 0) / vals.length;
         };
@@ -297,7 +297,7 @@ export const evaluationRouter = router({
             let totalWeight = 0;
             for (let i = 0; i < sample.length; i++) {
               const v = Number((sample[i] as any)[key]);
-              if (Number.isFinite(v) && v > 0) {
+              if (Number.isFinite(v) && v >= 0) {
                 sum += v * weights[i];
                 totalWeight += weights[i];
               }
@@ -307,7 +307,7 @@ export const evaluationRouter = router({
           };
           // Variance across sample → low variance = high confidence.
           const variance = (key: keyof typeof evals[0]): number => {
-            const vals = sample.map(e => Number((e as any)[key])).filter(v => Number.isFinite(v) && v > 0);
+            const vals = sample.map(e => Number((e as any)[key])).filter(v => Number.isFinite(v) && v >= 0);
             if (vals.length < 2) return 0;
             const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
             return vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length;
