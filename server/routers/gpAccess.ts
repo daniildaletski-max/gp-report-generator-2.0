@@ -395,10 +395,16 @@ export const gpAccessRouter = router({
               const me = ranked.find(t => t.id === gp.id);
               if (!me) return null;
               const myScore = me[key];
-              const below = ranked.filter(t => t.id !== gp.id && t[key] < myScore).length;
-              const tied = ranked.filter(t => t.id !== gp.id && t[key] === myScore).length;
-              const denom = ranked.length;
-              const pct = Math.round(((below + 0.5 * tied) / denom) * 100);
+              const peers = ranked.filter(t => t.id !== gp.id);
+              if (peers.length === 0) return null;
+              const below = peers.filter(t => t[key] < myScore).length;
+              const tied = peers.filter(t => t[key] === myScore).length;
+              // Denominator must match the population we're scoring
+              // against. Both `below` and `tied` exclude the current
+              // GP, so the denominator must too — otherwise the top
+              // GP in a 2-person team gets capped at 50% instead of
+              // 100% (Codex P1 on PR #78).
+              const pct = Math.round(((below + 0.5 * tied) / peers.length) * 100);
               const rank = ranked.filter(t => t[key] > myScore).length + 1;
               return { rank, percentile: pct };
             };
