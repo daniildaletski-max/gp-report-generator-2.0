@@ -20,7 +20,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import * as db from "../db";
-import { syncPersonaAttendance, testPersonaConnection } from "../services/personaScraper";
+import { syncPersonaAttendance, testPersonaConnection, type PersonaWorkerAttendance } from "../services/personaScraper";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("PersonaSync");
@@ -154,6 +154,12 @@ export async function runPersonaSyncForTeam(opts: {
   triggeredById: number | null;
   source: "manual" | "scheduled";
   dryRun?: boolean;
+  /** When supplied, skip the server-side Puppeteer scrape and use
+   *  this caller-extracted worker list. Used by the client-side
+   *  bookmarklet path that scrapes Persona DOM in the FM's already-
+   *  authenticated browser session, bypassing the Chromium runtime
+   *  blocker on the deploy host. */
+  prefetchedWorkers?: PersonaWorkerAttendance[];
 }): Promise<{
   matched: number;
   unmatched: number;
@@ -195,14 +201,27 @@ export async function runPersonaSyncForTeam(opts: {
 
   try {
     const projectId = (team as any).personaProjectId as number | null;
-    const result = await syncPersonaAttendance(opts.month, opts.year, projectId);
+    // Two paths to the worker list:
+    //   1. prefetchedWorkers — caller already extracted the data
+    //      (typically client-side bookmarklet on the FM's browser)
+    //      so we skip the Puppeteer scrape entirely. Avoids the
+    //      "Chromium runtime libs missing" deploy blocker.
+    //   2. fallback — run the server-side scraper. Requires Chromium
+    //      libs on the host.
+    const result = opts.prefetchedWorkers
+      ? {
+          success: true,
+          workers: opts.prefetchedWorkers,
+          source: "client-prefetch" as const,
+        }
+      : await syncPersonaAttendance(opts.month, opts.year, projectId);
 
     if (!result.success) {
       if (logRow) {
         await tryLog(
           () => db.updateSyncLog(logRow.id, {
             status: "failed",
-            errorMessage: result.error || "Persona scrape returned success=false",
+            errorMessage: (result as any).error || "Persona scrape returned success=false",
             completedAt: new Date(),
           }),
           "updateSyncLog (failure path) failed",
@@ -214,7 +233,7 @@ export async function runPersonaSyncForTeam(opts: {
         totalPersonaWorkers: 0,
         matchDetails: [],
         status: "failed",
-        error: result.error || "Failed to sync from Persona",
+        error: (result as any).error || "Failed to sync from Persona",
       };
     }
 
@@ -407,7 +426,7 @@ export async function runPersonaSyncForTeam(opts: {
       totalPersonaWorkers: result.workers.length,
       matchDetails,
       status,
-      parserDiagnostics: result.diagnostics,
+      parserDiagnostics: (result as any).diagnostics,
     };
   } catch (error) {
     const errMessage = error instanceof Error ? error.message : String(error);
@@ -459,6 +478,68 @@ export const personaSyncRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: error instanceof Error ? error.message : "Sync failed",
+        });
+      }
+    }),
+
+  /**
+   * Client-side import — accepts a worker list extracted by the FM's
+   * already-authenticated browser (typically via a bookmarklet) and
+   * runs it through the SAME match / dedup / DB-write path as the
+   * server-side scraper. Bypasses the "Chromium runtime libs missing"
+   * blocker on the deploy host.
+   *
+   * Same auth model as syncTeam — admin can write into any team,
+   * FMs only their own.
+   */
+  importBatchForTeam: protectedProcedure
+    .input(z.object({
+      teamId: z.number().positive(),
+      month: z.number().min(1).max(12),
+      year: z.number().min(2020).max(2100),
+      workers: z.array(z.object({
+        name: z.string().min(1).max(255),
+        workerId: z.number().int().nonnegative().optional().default(0),
+        projectId: z.number().int().nonnegative().optional().default(0),
+        sickLeaves: z.number().int().min(0).default(0),
+        missedDays: z.number().int().min(0).default(0),
+        extraShifts: z.number().int().min(0).default(0),
+        lateToWork: z.number().int().min(0).default(0),
+        dayBreakdown: z.object({
+          sick: z.array(z.string()).default([]),
+          missed: z.array(z.string()).default([]),
+          extra: z.array(z.string()).default([]),
+          late: z.array(z.string()).default([]),
+        }).default({ sick: [], missed: [], extra: [], late: [] }),
+      })).min(1).max(500),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const team = await db.getFmTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
+      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+
+      try {
+        const result = await runPersonaSyncForTeam({
+          teamId: input.teamId,
+          month: input.month,
+          year: input.year,
+          triggeredById: ctx.user.id,
+          source: "manual",
+          // Coerce fully — z.default fills gaps; the union just keeps
+          // the underlying scraper interface happy.
+          prefetchedWorkers: input.workers as PersonaWorkerAttendance[],
+        });
+        if (result.status === "failed") {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: result.error || "Import failed" });
+        }
+        return { success: true, ...result, month: input.month, year: input.year };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: error instanceof Error ? error.message : "Import failed",
         });
       }
     }),

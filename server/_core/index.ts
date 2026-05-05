@@ -189,6 +189,58 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+  // CORS for the bookmarklet-driven importer endpoints. The
+  // bookmarklets run inside the Persona / Studioworks browser tabs
+  // and POST cross-origin to our tRPC API; without these headers
+  // the browser blocks the preflight before the mutation even
+  // executes (Codex P1 on PR #79).
+  //
+  // Scope is intentionally narrow:
+  //   - Only the two import endpoints get the CORS middleware.
+  //   - Only the FM-source domains (and their subdomains) are
+  //     allowed as Origin.
+  //   - Credentials are NOT included — the bookmarklet sends a
+  //     stateless payload; the FM still authenticates inside our
+  //     own UI to *use* the imported data.
+  const importCorsAllowList = new Set([
+    "https://reports.persona.ee",
+    "https://persona.ee",
+    "https://team.studioworks.ee",
+    "https://studioworks.ee",
+    // Local-dev convenience
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+  ]);
+  const importCorsRoutes = [
+    "/api/trpc/personaSync.importBatchForTeam",
+    "/api/trpc/studioworksSync.importBatch",
+  ];
+  for (const route of importCorsRoutes) {
+    app.use(route, (req, res, next) => {
+      const origin = req.headers.origin as string | undefined;
+      if (origin && importCorsAllowList.has(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Vary", "Origin");
+        res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        // Required for the bookmarklet to send the session cookie on
+        // a cross-origin POST. Note: the cookie itself must be set
+        // with SameSite=None; Secure for the browser to actually
+        // include it. Older browsers / SameSite=Lax sessions will
+        // still fall through to the paste-mode fallback in the UI.
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+        res.setHeader("Access-Control-Max-Age", "86400");
+      }
+      if (req.method === "OPTIONS") {
+        res.status(204).end();
+        return;
+      }
+      next();
+    });
+  }
+
   // Stricter rate limit for file upload routes
   app.use("/api/trpc/evaluation.uploadAndExtract", rateLimiter({ windowMs: 60_000, max: 30, keyPrefix: "upload" }));
   app.use("/api/trpc/errorScreenshot.upload", rateLimiter({ windowMs: 60_000, max: 30, keyPrefix: "upload" }));
