@@ -5,6 +5,7 @@ import * as db from "../db";
 import { nanoid } from "nanoid";
 import { invokeLLM } from "../_core/llm";
 import { createLogger } from "../services/logger";
+import { isTechnicalError, dedupeErrorDetails } from "@shared/errorClassification";
 
 const log = createLogger("gpAccess");
 
@@ -151,9 +152,24 @@ export const gpAccessRouter = router({
       // We trust it as-is — no filtering, no dedup, no cross-source merge.
       const stats = await db.getMonthlyGpStats(accessToken.gamePresenterId, input.month, input.year);
 
-      const errorScreenshots = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
+      // Filter technical / TV / SYS errors out of the detail list so
+      // the GP only sees mistakes that count against them — matches
+      // the "Error Count Analysis" sheet column E count semantics.
+      // Cross-source dedup also collapses the case where the FM
+      // uploaded a screenshot AND the monthly Excel parsed the same
+      // mistake.
+      const errorScreenshotsRaw = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
+      const errorScreenshots = errorScreenshotsRaw.filter(e => !isTechnicalError({
+        errorType: e.errorType,
+        errorCategory: e.errorCategory,
+        errorDescription: e.errorDescription,
+      }));
       const attitudeDetails = await db.getAttitudeScreenshotsForGP(accessToken.gamePresenterId, input.month, input.year);
-      const gpErrors = await db.getGpErrorsForPortal(accessToken.gamePresenterId, input.month, input.year);
+      const gpErrorsRaw = await db.getGpErrorsForPortal(accessToken.gamePresenterId, input.month, input.year);
+      const gpErrors = gpErrorsRaw.filter(e => !isTechnicalError({
+        errorCode: e.errorCode,
+        errorDescription: e.errorDescription,
+      }));
 
       // Get evaluations for this specific month
       const allEvals = await db.getGpEvaluationsForPortal(accessToken.gamePresenterId);
@@ -163,7 +179,7 @@ export const gpAccessRouter = router({
         return d.getMonth() + 1 === input.month && d.getFullYear() === input.year;
       });
 
-      const errorDetails = [
+      const errorDetailsRaw = [
         ...errorScreenshots.map(e => ({
           id: e.id,
           source: 'screenshot' as const,
@@ -191,6 +207,10 @@ export const gpAccessRouter = router({
           createdAt: e.createdAt,
         })),
       ];
+      // Collapse cross-source dupes (FM uploaded a screenshot + the
+      // same row appears in the monthly Excel) plus byte-identical
+      // same-source dupes (parse-noise from re-uploads).
+      const errorDetails = dedupeErrorDetails(errorDetailsRaw);
 
       const reportedMistakes = stats?.mistakes ?? 0;
 
@@ -288,11 +308,24 @@ export const gpAccessRouter = router({
       // Get monthly history for trend charts (last 6 months)
       const monthlyHistory = await db.getGpMonthlyHistory(accessToken.gamePresenterId, 6);
 
-      const errorScreenshots = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
+      // Same TV/technical filter + dedupe path as getMonthDetails so
+      // both endpoints surface the exact same set of "real" mistakes
+      // — what the GP sees in the Errors & Mistakes section matches
+      // the count derived from the Excel "Error Count Analysis" sheet.
+      const errorScreenshotsRaw = await db.getErrorScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
+      const errorScreenshots = errorScreenshotsRaw.filter(e => !isTechnicalError({
+        errorType: e.errorType,
+        errorCategory: e.errorCategory,
+        errorDescription: e.errorDescription,
+      }));
       const attitudeDetails = await db.getAttitudeScreenshotsForGP(accessToken.gamePresenterId, currentMonth, currentYear);
-      const gpErrors = await db.getGpErrorsForPortal(accessToken.gamePresenterId, currentMonth, currentYear);
+      const gpErrorsRaw = await db.getGpErrorsForPortal(accessToken.gamePresenterId, currentMonth, currentYear);
+      const gpErrors = gpErrorsRaw.filter(e => !isTechnicalError({
+        errorCode: e.errorCode,
+        errorDescription: e.errorDescription,
+      }));
 
-      const errorDetails = [
+      const errorDetailsRaw = [
         ...errorScreenshots.map(e => ({
           id: e.id,
           source: 'screenshot' as const,
@@ -320,6 +353,7 @@ export const gpAccessRouter = router({
           errorDate: e.errorDate,
         })),
       ];
+      const errorDetails = dedupeErrorDetails(errorDetailsRaw);
 
       return {
         gpName: gp.name,
