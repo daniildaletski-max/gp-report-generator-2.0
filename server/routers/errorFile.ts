@@ -199,9 +199,16 @@ export const errorFileRouter = router({
       const updatedGPs: string[] = [];
       const createdErrorRecords: number[] = [];
       
+      // GP match scope: admins upload tenant-wide files (one Excel
+      // covers every team), so matching against the uploader's
+      // own GPs only would silently miss every GP that belongs to
+      // a different FM. Admin -> match across ALL GPs. FM -> match
+      // only their own (tenant isolation).
+      const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
+
       for (const [gpName, count] of Object.entries(gpErrorCounts)) {
         // Find GP by name and update their mistakes count
-        const updated = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, ctx.user.id);
+        const updated = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, matchScopeUserId);
         if (updated) {
           updatedGPs.push(gpName);
         } else {
@@ -381,9 +388,11 @@ export const errorFileRouter = router({
       // Update monthlyGpStats.mistakes with recalculated counts
       const updatedGPs: string[] = [];
       const notFoundGPs: string[] = [];
-      
+      // Admin recalc covers every team's GPs; FM recalc stays scoped.
+      const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
+
       for (const [gpName, count] of Object.entries(gpErrorCounts)) {
-        const updated = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, ctx.user.id);
+        const updated = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, matchScopeUserId);
         if (updated) {
           updatedGPs.push(gpName);
         } else {
@@ -550,8 +559,10 @@ export const errorFileRouter = router({
       const updatedGPs: string[] = [];
       const notFoundGPs: string[] = [];
       let recordsCreated = 0;
+      // Admin rescan covers every team's GPs; FM rescan stays scoped.
+      const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
       for (const [gpName, count] of Object.entries(gpErrorCounts)) {
-        const updated = await db.updateGPMistakesDirectly(gpName, count, file.month, file.year, ctx.user.id);
+        const updated = await db.updateGPMistakesDirectly(gpName, count, file.month, file.year, matchScopeUserId);
         if (updated) updatedGPs.push(gpName); else notFoundGPs.push(gpName);
 
         // Dedupe parse-noise (same as the upload path above) so the
