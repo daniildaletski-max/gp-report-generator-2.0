@@ -123,8 +123,10 @@ function buildBookmarkletScript(opts: {
         const bucket = bucketFor(text);
         if (bucket) buckets[bucket].push(iso);
       }
-      const total = buckets.sick.length + buckets.missed.length + buckets.extra.length + buckets.late.length;
-      if (total === 0) continue; // skip workers with no events
+      // Push every worker — including those with zero events for
+      // the month. Skipping zero-event workers means previously-
+      // non-zero attendance rows would never be reset back to zero
+      // when someone has a clean month (Codex P2 on PR #79).
       workers.push({
         name,
         workerId,
@@ -142,34 +144,50 @@ function buildBookmarkletScript(opts: {
       return;
     }
 
+    // Build the payload first. We ALWAYS attempt to copy it to the
+    // clipboard so the FM has a paste-mode fallback even when the
+    // cross-origin POST fails (browsers with SameSite=Lax cookies
+    // refuse to forward our session on cross-origin requests, which
+    // means CORS preflight succeeds but auth fails on the import).
+    const payload = { teamId: TEAM, month: MONTH, year: YEAR, workers: workers };
+    let clipboardCopied = false;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(payload));
+      clipboardCopied = true;
+    } catch (e) { /* clipboard may be blocked; non-fatal */ }
+
     banner("Found " + workers.length + " workers. Sending to GP Report…", "#0ea5e9");
-    const res = await fetch(API + "/api/trpc/personaSync.importBatchForTeam?batch=1", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        "0": {
-          json: {
-            teamId: TEAM,
-            month: MONTH,
-            year: YEAR,
-            workers: workers,
-          },
-        },
-      }),
-    });
-    if (!res.ok) {
-      const t = await res.text();
-      banner("Import failed: " + res.status + " " + t.slice(0, 120), "#dc2626");
+    let postOk = false;
+    let postSummary = "";
+    try {
+      const res = await fetch(API + "/api/trpc/personaSync.importBatchForTeam?batch=1", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ "0": { json: payload } }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const sum = data?.[0]?.result?.data?.json;
+        if (sum) {
+          postSummary = "Imported " + sum.matched + " matched, " + sum.unmatched + " unmatched";
+          postOk = true;
+        }
+      }
+    } catch (e) { /* network / CORS / cookie failure → fall through to paste-mode */ }
+
+    if (postOk) {
+      banner(postSummary, "#16a34a");
       return;
     }
-    const data = await res.json();
-    const sum = data?.[0]?.result?.data?.json;
-    if (sum) {
-      banner("Imported " + sum.matched + " matched, " + sum.unmatched + " unmatched", "#16a34a");
-    } else {
-      banner("Done. Switch back to GP Report to see results.", "#16a34a");
+    if (clipboardCopied) {
+      banner("Cross-origin auth blocked — JSON copied. Switch to GP Report → Persona → Paste tab.", "#7c3aed");
+      return;
     }
+    banner("Couldn't auto-send. Open browser console: copy(" + JSON.stringify(payload).length + " bytes) — fall back to paste mode.", "#dc2626");
+    // Last-ditch: stash the payload on window so the FM can grab it
+    // via the console even when navigator.clipboard isn't available.
+    (window as any).__personaImportPayload = payload;
   } catch (e) {
     banner("Error: " + (e && e.message ? e.message : e), "#dc2626");
   }
@@ -204,10 +222,15 @@ export function PersonaImporter({
   const [teamId, setTeamId] = useState<number | null>(defaultTeamId ?? teams[0]?.id ?? null);
   const [month, setMonth] = useState<number>(defaultMonth);
   const [year, setYear] = useState<number>(defaultYear);
+  // Paste-mode fallback: bookmarklet copies the JSON payload to the
+  // clipboard, FM pastes it here, we POST same-origin. Always works
+  // even when cross-origin auth is blocked.
+  const [pasteText, setPasteText] = useState("");
 
   const importMutation = trpc.personaSync.importBatchForTeam.useMutation({
     onSuccess: (res) => {
       toast.success(`Imported ${res.matched} matched, ${res.unmatched} unmatched`);
+      setPasteText("");
       onImported?.();
     },
     onError: (err) => toast.error(`Import failed: ${err.message}`),
@@ -244,6 +267,31 @@ export function PersonaImporter({
       toast.error("Couldn't copy — copy manually from the textarea below.");
     }
   }, [script]);
+
+  const onImportPasted = useCallback(() => {
+    const trimmed = pasteText.trim();
+    if (!trimmed) return;
+    let parsed: any;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      toast.error("Couldn't parse JSON — make sure you copied the entire payload from the bookmarklet banner.");
+      return;
+    }
+    // Accept either the raw payload object OR something wrapped in
+    // `{ json: { ... } }` (legacy clipboard format).
+    const payload = parsed?.json ?? parsed;
+    if (!payload || !Array.isArray(payload.workers)) {
+      toast.error("Pasted JSON doesn't contain a workers array.");
+      return;
+    }
+    importMutation.mutate({
+      teamId: payload.teamId ?? teamId ?? 0,
+      month: payload.month ?? month,
+      year: payload.year ?? year,
+      workers: payload.workers,
+    });
+  }, [pasteText, importMutation, teamId, month, year]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -306,12 +354,15 @@ export function PersonaImporter({
         </div>
 
         <Tabs defaultValue="bookmarklet" className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid grid-cols-2 w-full">
+          <TabsList className="grid grid-cols-3 w-full">
             <TabsTrigger value="bookmarklet" className="gap-1.5">
               <Bookmark className="h-3.5 w-3.5" /> Bookmarklet
             </TabsTrigger>
             <TabsTrigger value="console" className="gap-1.5">
               <Terminal className="h-3.5 w-3.5" /> Console
+            </TabsTrigger>
+            <TabsTrigger value="paste" className="gap-1.5">
+              <Send className="h-3.5 w-3.5" /> Paste
             </TabsTrigger>
           </TabsList>
 
@@ -360,6 +411,34 @@ export function PersonaImporter({
                 <Copy className="h-3.5 w-3.5" /> Copy snippet
               </Button>
               <Textarea readOnly value={script} className="font-mono text-[10px] h-40 resize-none" />
+            </TabsContent>
+
+            {/* Paste fallback — for environments where the cross-origin
+                POST is blocked (SameSite cookies, no CORS proxy). The
+                bookmarklet copies the JSON payload to the clipboard
+                and the FM pastes it here. Same-origin POST = no auth
+                drama. */}
+            <TabsContent value="paste" className="space-y-3">
+              <ol className="space-y-2 text-sm text-slate-700 list-decimal list-inside">
+                <li>Run the bookmarklet on Persona — when its banner says <em>"JSON copied"</em>, the payload is on your clipboard.</li>
+                <li>Switch back here and paste below.</li>
+                <li>Click <strong>Import pasted data</strong>. Same-origin POST so this works regardless of cookie / CORS settings.</li>
+              </ol>
+              <Textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder='Paste the JSON the bookmarklet copied (starts with {"teamId":...)'
+                className="font-mono text-[10px] h-40"
+              />
+              <div className="flex items-center gap-2">
+                <Button onClick={onImportPasted} disabled={!pasteText.trim() || importMutation.isPending} className="gap-1.5">
+                  {importMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  Import pasted data
+                </Button>
+                {pasteText.trim() && (
+                  <Button variant="ghost" size="sm" onClick={() => setPasteText("")}>Clear</Button>
+                )}
+              </div>
             </TabsContent>
           </div>
 
