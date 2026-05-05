@@ -514,17 +514,21 @@ export function PersonaImporter({
           </div>
 
           {importMutation.data && (() => {
-            // Distinguish "matched and updated" from "matched but
+            // Distinguish "matched and applied" from "matched but
             // nothing changed". The server returns matchDetails with
-            // a per-row `changes` object — empty object means the row
-            // was found but its existing counts already matched the
-            // new payload. This catches the user-reported "synced
-            // but nothing saves" case: every match was a no-op.
+            // a per-row `applied` flag that's true when ANY write
+            // happened — including breakdown-only writes where the
+            // monthly totals didn't move but a sick day shifted from
+            // the 3rd to the 7th (Codex P2 on PR #80). Falls back to
+            // counting non-empty `changes` for older API payloads
+            // that predate the `applied` flag.
             const data = importMutation.data as any;
             const details: any[] = Array.isArray(data.matchDetails) ? data.matchDetails : [];
-            const updated = details.filter(d =>
-              d.matched && d.changes && Object.keys(d.changes).length > 0,
-            ).length;
+            const updated = details.filter(d => {
+              if (!d.matched) return false;
+              if (typeof d.applied === "boolean") return d.applied;
+              return d.changes && Object.keys(d.changes).length > 0;
+            }).length;
             const matchedNoChange = (data.matched ?? 0) - updated;
             const allNoChange = data.matched > 0 && updated === 0;
             return (

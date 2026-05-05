@@ -130,6 +130,18 @@ interface MatchDetail {
     lateToWork?: { from: number; to: number };
   };
   /**
+   * True when we actually wrote a row to the DB for this match —
+   * either because monthly counts changed OR the per-day breakdown
+   * changed (a sick day moved from the 3rd to the 7th, same monthly
+   * total). The client uses this instead of `Object.keys(changes)`
+   * so a breakdown-only write isn't miscounted as "no change".
+   */
+  applied?: boolean;
+  /** True when only the dayBreakdown moved but counts stayed the
+   *  same — purely informational so the UI can label "dates shifted"
+   *  separately from numeric changes if it wants to. */
+  breakdownChanged?: boolean;
+  /**
    * Diagnostic info for unmatched rows so the admin can tell at a
    * glance WHY each Persona worker didn't match: closest GP candidate
    * (name + similarity) plus a one-word reason (`below-threshold` |
@@ -351,6 +363,13 @@ export async function runPersonaSyncForTeam(opts: {
           matched: true,
           similarity: match.similarity,
           changes,
+          // Surface the actual write outcome so the client UI can
+          // distinguish "matched + applied" from "matched + no-op".
+          // breakdownChanged covers the case where day-level breakdown
+          // moved but monthly totals stayed the same — still a real
+          // write, but Object.keys(changes) wouldn't catch it.
+          applied: !opts.dryRun && shouldWrite,
+          breakdownChanged: !!breakdownChanged,
         });
 
         // Anomaly detection — when the absence count for this GP rises
