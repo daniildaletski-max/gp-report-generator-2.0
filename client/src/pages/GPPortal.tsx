@@ -1814,7 +1814,12 @@ function PeerBenchmarkRow({
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-slate-900 tabular-nums">
-                  Top {Math.max(1, 100 - v.percentile)}%
+                  {/* Compute from rank, not 100−percentile. Percentile
+                      is a peer-relative metric (% of peers I outrank);
+                      "Top X%" means "X% of the team is at-or-above
+                      me" which is rank/teamSize × 100. For rank 1 of
+                      2 that's 50%, not 1% (Codex P2 on PR #78). */}
+                  Top {Math.max(1, Math.ceil((v.rank / benchmark.teamSize) * 100))}%
                 </span>
                 <span className="text-xs text-slate-500">in team</span>
               </div>

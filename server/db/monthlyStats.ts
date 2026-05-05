@@ -260,9 +260,14 @@ export async function getTeamPeerAverages(opts: {
     })
     .from(evs)
     .innerJoin(gps, eq(gps.id, evs.gamePresenterId))
+    // COALESCE on (evaluationDate, createdAt): legacy / partially-
+    // parsed rows often have a null evaluationDate but a valid
+    // createdAt. Using a strict gte(evaluationDate, ...) silently
+    // drops those rows from the benchmark pool, shrinking the
+    // comparison and skewing percentiles (Codex P2 on PR #78).
     .where(and(
       eq(gps.teamId, opts.teamId),
-      gte(evs.evaluationDate, winStart),
+      gte(sql`COALESCE(${evs.evaluationDate}, ${evs.createdAt})`, winStart),
     ));
   // Group + aggregate in memory. Cheap — even huge teams have at most
   // a few hundred evals across 6 months.
