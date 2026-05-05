@@ -76,7 +76,7 @@ export {
   getGamePresentersByTeamWithStats,
   bulkUpdateMonthlyGpStats, bulkSetAttitude, bulkResetMistakes,
   incrementGPMistakes, updateGPAttitude,
-  getGpMonthlyHistory, syncErrorsFromGoogleSheets,
+  getGpMonthlyHistory, getTeamPeerAverages, syncErrorsFromGoogleSheets,
 } from "./monthlyStats";
 export type { BulkGpStatsUpdate, GoogleSheetsErrorData } from "./monthlyStats";
 

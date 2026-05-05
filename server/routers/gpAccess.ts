@@ -355,10 +355,77 @@ export const gpAccessRouter = router({
       ];
       const errorDetails = dedupeErrorDetails(errorDetailsRaw);
 
+      // Peer benchmark — compute the GP's percentile rank within
+      // their own team for the last 6 months of avg scores. Anonymous
+      // (only the GP's own rank surfaces; no individual peer data
+      // leaks). Used by the GP Portal to show "you're top X% in
+      // Dealing Style this month" — gentle motivator without
+      // shaming. Best-effort: failures are swallowed so the portal
+      // always renders.
+      let peerBenchmark: {
+        teamSize: number;
+        total: { rank: number; percentile: number } | null;
+        appearance: { rank: number; percentile: number } | null;
+        performance: { rank: number; percentile: number } | null;
+      } | null = null;
+      try {
+        if (gp.teamId) {
+          const teamGps = await db.getGamePresentersByTeam(gp.teamId);
+          if (teamGps.length > 1) {
+            // ONE query for the whole team's last-6-months averages,
+            // grouped in memory. Replaces a per-peer × per-month
+            // fan-out that ran hundreds of selects on big rosters
+            // (Codex P1 on PR #78).
+            const peerAvgs = await db.getTeamPeerAverages({ teamId: gp.teamId, monthsBack: 6 });
+            const ranked = teamGps
+              .map(peer => {
+                const a = peerAvgs.get(peer.id);
+                if (!a) return null;
+                return {
+                  id: peer.id,
+                  total: a.total,
+                  appearance: a.appearance,
+                  performance: a.performance,
+                };
+              })
+              .filter((t): t is NonNullable<typeof t> => t !== null);
+            // Percentile: how many peers does this GP outrank
+            // (higher score = better). Uses standard "percentile of"
+            // formula: (count below + 0.5 × count tied) / total.
+            const pctOf = (key: "total" | "appearance" | "performance") => {
+              const me = ranked.find(t => t.id === gp.id);
+              if (!me) return null;
+              const myScore = me[key];
+              const peers = ranked.filter(t => t.id !== gp.id);
+              if (peers.length === 0) return null;
+              const below = peers.filter(t => t[key] < myScore).length;
+              const tied = peers.filter(t => t[key] === myScore).length;
+              // Denominator must match the population we're scoring
+              // against. Both `below` and `tied` exclude the current
+              // GP, so the denominator must too — otherwise the top
+              // GP in a 2-person team gets capped at 50% instead of
+              // 100% (Codex P1 on PR #78).
+              const pct = Math.round(((below + 0.5 * tied) / peers.length) * 100);
+              const rank = ranked.filter(t => t[key] > myScore).length + 1;
+              return { rank, percentile: pct };
+            };
+            peerBenchmark = {
+              teamSize: ranked.length,
+              total: pctOf("total"),
+              appearance: pctOf("appearance"),
+              performance: pctOf("performance"),
+            };
+          }
+        }
+      } catch (e) {
+        log.warn(`peerBenchmark failed for gp ${gp.id}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+
       return {
         gpName: gp.name,
         gpId: gp.id,
         evaluations,
+        peerBenchmark,
         monthlyStats: {
           current: currentMonthStats ? {
             month: currentMonth,

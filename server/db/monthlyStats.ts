@@ -2,7 +2,7 @@
  * Monthly GP Stats Database Operations
  * Handles attitude, mistakes, bulk operations, and GP history
  */
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, gte } from "drizzle-orm";
 import { monthlyGpStats, InsertMonthlyGpStats, MonthlyGpStats, gamePresenters } from "../../drizzle/schema";
 import { getDb } from "./connection";
 import { getOrCreateAttendance, updateAttendance } from "./attendance";
@@ -225,4 +225,72 @@ export async function syncErrorsFromGoogleSheets(errors: GoogleSheetsErrorData[]
     }
   }
   return { updated, notFound };
+}
+
+/**
+ * Batch sibling of `getGpMonthlyHistory` for the peer-benchmark
+ * widget on the GP Portal. Returns each GP's average total /
+ * appearance / performance over the last `monthsBack` months in a
+ * single team-scoped query, instead of running getGpMonthlyHistory
+ * once per peer (which itself fans out to 2 queries per month).
+ *
+ * Returns a Map<gpId, { total, appearance, performance, evalCount }>
+ * where avg fields are 0 when the GP has no evals in the window.
+ */
+export async function getTeamPeerAverages(opts: {
+  teamId: number;
+  monthsBack?: number;
+}): Promise<Map<number, { total: number; appearance: number; performance: number; evalCount: number }>> {
+  const out = new Map<number, { total: number; appearance: number; performance: number; evalCount: number }>();
+  const db = await getDb();
+  if (!db) return out;
+  const months = opts.monthsBack ?? 6;
+  const { evaluations: evs, gamePresenters: gps } = await import("../../drizzle/schema");
+  const now = new Date();
+  // Window start: first day of the month `monthsBack-1` ago.
+  const winStart = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+  // ONE query: every relevant eval row for everyone on the team in
+  // the window. Joined to gamePresenters so we can filter by team.
+  const rows = await db
+    .select({
+      gpId: evs.gamePresenterId,
+      total: evs.totalScore,
+      appearance: evs.appearanceScore,
+      perf: evs.gamePerformanceTotalScore,
+    })
+    .from(evs)
+    .innerJoin(gps, eq(gps.id, evs.gamePresenterId))
+    // COALESCE on (evaluationDate, createdAt): legacy / partially-
+    // parsed rows often have a null evaluationDate but a valid
+    // createdAt. Using a strict gte(evaluationDate, ...) silently
+    // drops those rows from the benchmark pool, shrinking the
+    // comparison and skewing percentiles (Codex P2 on PR #78).
+    .where(and(
+      eq(gps.teamId, opts.teamId),
+      gte(sql`COALESCE(${evs.evaluationDate}, ${evs.createdAt})`, winStart),
+    ));
+  // Group + aggregate in memory. Cheap — even huge teams have at most
+  // a few hundred evals across 6 months.
+  type Acc = { total: number; appearance: number; performance: number; evalCount: number };
+  const sums = new Map<number, Acc>();
+  for (const r of rows) {
+    const id = r.gpId;
+    if (id == null) continue;
+    const a = sums.get(id) ?? { total: 0, appearance: 0, performance: 0, evalCount: 0 };
+    a.total += Number(r.total ?? 0);
+    a.appearance += Number(r.appearance ?? 0);
+    a.performance += Number(r.perf ?? 0);
+    a.evalCount += 1;
+    sums.set(id, a);
+  }
+  sums.forEach((a, id) => {
+    if (a.evalCount === 0) return;
+    out.set(id, {
+      total: a.total / a.evalCount,
+      appearance: a.appearance / a.evalCount,
+      performance: a.performance / a.evalCount,
+      evalCount: a.evalCount,
+    });
+  });
+  return out;
 }
