@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
 import { ActionItemsBoardTab } from "@/components/admin/ActionItemsBoardTab";
 import { StudioworksImportButton } from "@/components/StudioworksImporter";
+import { PersonaImportButton } from "@/components/PersonaImporter";
 
 const ADMIN_TABS = ["overview", "invitations", "users", "teams", "stats", "action-items", "access", "errors", "persona", "studioworks"] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
@@ -4346,16 +4347,28 @@ function PersonaSyncTab({
 
   return (
     <TabsContent value="persona" className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="icon-box p-3">
-          <RefreshCw className="h-5 w-5" />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="icon-box p-3">
+            <RefreshCw className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Persona HR Sync</h2>
+            <p className="text-sm text-muted-foreground">
+              Automatically import sick leaves, missed days, and extra shifts from Persona schedule
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-xl font-bold">Persona HR Sync</h2>
-          <p className="text-sm text-muted-foreground">
-            Automatically import sick leaves, missed days, and extra shifts from Persona schedule
-          </p>
-        </div>
+        {/* Client-side bookmarklet importer — bypasses the Chromium
+            runtime libs blocker on the deploy host. Same match path
+            as the server scraper, but runs in the FM's already-
+            authenticated Persona browser tab. */}
+        <PersonaImportButton
+          teams={teams as any}
+          defaultTeamId={selectedTeamId ?? undefined}
+          defaultMonth={selectedMonth}
+          defaultYear={selectedYear}
+        />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
