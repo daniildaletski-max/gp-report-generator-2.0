@@ -201,30 +201,132 @@ export async function updateGPMistakesFromErrors(month: number, year: number): P
   }
 }
 
-export async function updateGPMistakesDirectly(gpName: string, mistakesCount: number, month: number, year: number, userId?: number): Promise<boolean> {
+/**
+ * Apply a month's mistake count to the GP whose canonical name
+ * matches the Excel "Employee Name". Behaviour by scope:
+ *
+ *   - userId set (FM upload): match restricted to the FM's own
+ *     GPs. Tenant isolation preserved — an FM can only affect
+ *     their own roster.
+ *   - userId omitted (admin upload): match scans every GP. Excel
+ *     files are tenant-wide, so admin's matcher must be too.
+ *
+ * Ambiguity guard: if two presenters share the same canonical name
+ * (allowed by schema — `gamePresenters.name` isn't unique), we
+ * return false with `ambiguous: true` instead of arbitrarily picking
+ * the row the DB returned first. Otherwise the count would be
+ * applied to whichever GP happened to win the LIMIT 1 race, leaking
+ * one team's number into another's. The caller surfaces the
+ * ambiguous names so the operator can rename one of the colliding
+ * pseudonyms or set `realName` to disambiguate.
+ */
+export async function updateGPMistakesDirectly(
+  gpName: string,
+  mistakesCount: number,
+  month: number,
+  year: number,
+  userId?: number,
+): Promise<{ matched: boolean; ambiguous: boolean }> {
   const db = await getDb();
-  if (!db) return false;
-  const conditions: any[] = [eq(gamePresenters.name, gpName.trim())];
-  if (userId) conditions.push(eq(gamePresenters.userId, userId));
-  const gp = await db.select().from(gamePresenters).where(and(...conditions)).limit(1);
-  if (gp.length === 0) {
-    const normalizedName = gpName.trim().replace(/\s+/g, ' ');
-    const allGPs = userId
-      ? await db.select().from(gamePresenters).where(eq(gamePresenters.userId, userId))
-      : await db.select().from(gamePresenters);
-    const matchedGP = allGPs.find(g => g.name.toLowerCase().replace(/\s+/g, ' ') === normalizedName.toLowerCase());
-    if (!matchedGP) return false;
-    const stats = await getOrCreateMonthlyGpStats(matchedGP.id, month, year);
-    await db.update(monthlyGpStats).set({ mistakes: mistakesCount }).where(eq(monthlyGpStats.id, stats.id));
-    const attendance = await getOrCreateAttendance(matchedGP.id, month, year);
-    await updateAttendance(attendance.id, { mistakes: mistakesCount });
-    return true;
+  if (!db) return { matched: false, ambiguous: false };
+  const normalized = gpName.trim().replace(/\s+/g, ' ').toLowerCase();
+
+  // Tenant scope: FM uploads stay restricted; admin uploads scan all.
+  const allRows = userId
+    ? await db.select().from(gamePresenters).where(eq(gamePresenters.userId, userId))
+    : await db.select().from(gamePresenters);
+
+  // Strict canonical-name match (case + whitespace insensitive). We
+  // deliberately don't fuzzy-match here — the Excel parser would
+  // otherwise silently re-route mistakes to a near-name GP and the
+  // operator wouldn't see the mismatch.
+  const matches = allRows.filter(g =>
+    g.name.trim().replace(/\s+/g, ' ').toLowerCase() === normalized,
+  );
+  if (matches.length === 0) return { matched: false, ambiguous: false };
+  if (matches.length > 1) {
+    log.warn(
+      `updateGPMistakesDirectly: ambiguous name "${gpName}" matched ` +
+      `${matches.length} GPs (ids: ${matches.map(m => m.id).join(", ")}). ` +
+      `Skipping — operator must disambiguate (rename pseudonym or set realName).`,
+    );
+    return { matched: false, ambiguous: true };
   }
-  const stats = await getOrCreateMonthlyGpStats(gp[0].id, month, year);
+  const matched = matches[0];
+  const stats = await getOrCreateMonthlyGpStats(matched.id, month, year);
   await db.update(monthlyGpStats).set({ mistakes: mistakesCount }).where(eq(monthlyGpStats.id, stats.id));
-  const attendance = await getOrCreateAttendance(gp[0].id, month, year);
+  const attendance = await getOrCreateAttendance(matched.id, month, year);
   await updateAttendance(attendance.id, { mistakes: mistakesCount });
-  return true;
+  return { matched: true, ambiguous: false };
+}
+
+/**
+ * Batch sibling of `updateGPMistakesDirectly`. The Excel parser hands
+ * us a whole month's worth of `{ gpName: count }` entries; the per-row
+ * helper would scan `gamePresenters` once per name, giving an
+ * O(names × table) read pattern that degrades badly as the GP roster
+ * grows.
+ *
+ * This helper:
+ *   1. Reads `gamePresenters` ONCE (scoped to userId for FM uploads,
+ *      tenant-wide for admin uploads).
+ *   2. Builds an in-memory Map<normalized name, gp[]> for O(1) lookup.
+ *   3. Iterates the Excel entries, classifying each as
+ *      matched / not-found / ambiguous (2+ rows share the name —
+ *      same fail-safe as the per-row helper).
+ *   4. Writes monthly_gp_stats + attendance for the matched GPs.
+ *
+ * Returns lists of names per category so the caller can surface them
+ * in the upload response.
+ */
+export async function updateGPMistakesBatch(
+  entries: Array<readonly [string, number]>,
+  month: number,
+  year: number,
+  userId?: number,
+): Promise<{ matched: string[]; notFound: string[]; ambiguous: string[] }> {
+  const out = { matched: [] as string[], notFound: [] as string[], ambiguous: [] as string[] };
+  const db = await getDb();
+  if (!db) return out;
+
+  // Single read of the GP roster — scoped to FM's own when userId is
+  // set, tenant-wide when admin (userId=undefined).
+  const rows = userId
+    ? await db.select().from(gamePresenters).where(eq(gamePresenters.userId, userId))
+    : await db.select().from(gamePresenters);
+
+  const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+  const byName = new Map<string, typeof rows>();
+  for (const gp of rows) {
+    const k = norm(gp.name);
+    const list = byName.get(k) ?? [];
+    list.push(gp);
+    byName.set(k, list);
+  }
+
+  for (const [gpName, count] of entries) {
+    const matches = byName.get(norm(gpName)) ?? [];
+    if (matches.length === 0) {
+      out.notFound.push(gpName);
+      continue;
+    }
+    if (matches.length > 1) {
+      log.warn(
+        `updateGPMistakesBatch: ambiguous name "${gpName}" matched ` +
+        `${matches.length} GPs (ids: ${matches.map(m => m.id).join(", ")}). ` +
+        `Skipping — operator must disambiguate.`,
+      );
+      out.ambiguous.push(gpName);
+      continue;
+    }
+    const gp = matches[0];
+    const stats = await getOrCreateMonthlyGpStats(gp.id, month, year);
+    await db.update(monthlyGpStats).set({ mistakes: count }).where(eq(monthlyGpStats.id, stats.id));
+    const attendance = await getOrCreateAttendance(gp.id, month, year);
+    await updateAttendance(attendance.id, { mistakes: count });
+    out.matched.push(gpName);
+  }
+  return out;
 }
 
 /**

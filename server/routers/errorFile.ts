@@ -195,18 +195,28 @@ export const errorFileRouter = router({
       // as that would wipe out errors from the other error type (playgon vs MG).
       
       // Update GP mistakes directly from parsed error counts
-      const notFoundGPs: string[] = [];
-      const updatedGPs: string[] = [];
       const createdErrorRecords: number[] = [];
-      
+
+      // GP match scope: admins upload tenant-wide files (one Excel
+      // covers every team), so matching against the uploader's
+      // own GPs only would silently miss every GP that belongs to
+      // a different FM. Admin -> match across ALL GPs. FM -> match
+      // only their own (tenant isolation).
+      const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
+
+      // Batch update — single gamePresenters read for the whole file
+      // instead of one read per GP name.
+      const batch = await db.updateGPMistakesBatch(
+        Object.entries(gpErrorCounts),
+        input.month,
+        input.year,
+        matchScopeUserId,
+      );
+      const updatedGPs = batch.matched;
+      const notFoundGPs = batch.notFound;
+      const ambiguousGPs = batch.ambiguous;
+
       for (const [gpName, count] of Object.entries(gpErrorCounts)) {
-        // Find GP by name and update their mistakes count
-        const updated = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, ctx.user.id);
-        if (updated) {
-          updatedGPs.push(gpName);
-        } else {
-          notFoundGPs.push(gpName);
-        }
         
         // Create individual error records with descriptions if available
         const rawDetails = gpErrorDetails[gpName] || [];
@@ -257,13 +267,14 @@ export const errorFileRouter = router({
         }
       }
 
-      return { 
-        ...errorFile, 
-        parsedErrors: totalErrorsCount, 
+      return {
+        ...errorFile,
+        parsedErrors: totalErrorsCount,
         gpErrorCounts,
         gpErrorDetails,
         updatedGPs,
         notFoundGPs,
+        ambiguousGPs,
         createdErrorRecords: createdErrorRecords.length,
         replacedFileId,
       };
@@ -378,20 +389,20 @@ export const errorFileRouter = router({
         }
       }
 
-      // Update monthlyGpStats.mistakes with recalculated counts
-      const updatedGPs: string[] = [];
-      const notFoundGPs: string[] = [];
-      
-      for (const [gpName, count] of Object.entries(gpErrorCounts)) {
-        const updated = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, ctx.user.id);
-        if (updated) {
-          updatedGPs.push(gpName);
-        } else {
-          notFoundGPs.push(gpName);
-        }
-      }
+      // Update monthlyGpStats.mistakes with recalculated counts.
+      // Admin recalc covers every team's GPs; FM recalc stays scoped.
+      const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
+      const batch = await db.updateGPMistakesBatch(
+        Object.entries(gpErrorCounts),
+        input.month,
+        input.year,
+        matchScopeUserId,
+      );
+      const updatedGPs = batch.matched;
+      const notFoundGPs = batch.notFound;
+      const ambiguousGPs = batch.ambiguous;
 
-      log.info(`Recalculated error counts for ${input.month}/${input.year}: ${updatedGPs.length} GPs updated, ${notFoundGPs.length} not found`);
+      log.info(`Recalculated error counts for ${input.month}/${input.year}: ${updatedGPs.length} updated, ${notFoundGPs.length} not found, ${ambiguousGPs.length} ambiguous`);
 
       return {
         success: true,
@@ -400,6 +411,7 @@ export const errorFileRouter = router({
         gpErrorCounts,
         updatedGPs,
         notFoundGPs,
+        ambiguousGPs,
         recalculated: updatedGPs.length,
       };
     }),
@@ -547,13 +559,22 @@ export const errorFileRouter = router({
       // Wipe existing gpErrors tied to this errorFile, then re-create.
       await db.deleteGpErrorsByMonthYear(file.month, file.year, ctx.user.id, file.id);
 
-      const updatedGPs: string[] = [];
-      const notFoundGPs: string[] = [];
       let recordsCreated = 0;
+      // Admin rescan covers every team's GPs; FM rescan stays scoped.
+      const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
+      // Batch update — single gamePresenters read up front, then we
+      // iterate the entries again below to recreate the per-row
+      // gpErrors detail records (after parse-time dedup).
+      const batch = await db.updateGPMistakesBatch(
+        Object.entries(gpErrorCounts),
+        file.month,
+        file.year,
+        matchScopeUserId,
+      );
+      const updatedGPs = batch.matched;
+      const notFoundGPs = batch.notFound;
+      const ambiguousGPs = batch.ambiguous;
       for (const [gpName, count] of Object.entries(gpErrorCounts)) {
-        const updated = await db.updateGPMistakesDirectly(gpName, count, file.month, file.year, ctx.user.id);
-        if (updated) updatedGPs.push(gpName); else notFoundGPs.push(gpName);
-
         // Dedupe parse-noise (same as the upload path above) so the
         // rescan doesn't reinflate the per-row list with duplicate
         // "Errors" sheet rows. "Error Count Analysis" column E stays
@@ -606,6 +627,7 @@ export const errorFileRouter = router({
         recordsCreated,
         updatedGPs,
         notFoundGPs,
+        ambiguousGPs,
         totalErrorsCounted: Object.values(gpErrorCounts).reduce((s, n) => s + n, 0),
       };
     }),
