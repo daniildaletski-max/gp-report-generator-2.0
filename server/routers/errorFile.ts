@@ -196,9 +196,10 @@ export const errorFileRouter = router({
       
       // Update GP mistakes directly from parsed error counts
       const notFoundGPs: string[] = [];
+      const ambiguousGPs: string[] = [];
       const updatedGPs: string[] = [];
       const createdErrorRecords: number[] = [];
-      
+
       // GP match scope: admins upload tenant-wide files (one Excel
       // covers every team), so matching against the uploader's
       // own GPs only would silently miss every GP that belongs to
@@ -208,9 +209,14 @@ export const errorFileRouter = router({
 
       for (const [gpName, count] of Object.entries(gpErrorCounts)) {
         // Find GP by name and update their mistakes count
-        const updated = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, matchScopeUserId);
-        if (updated) {
+        const result = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, matchScopeUserId);
+        if (result.matched) {
           updatedGPs.push(gpName);
+        } else if (result.ambiguous) {
+          // Two or more GPs share this name — refuse to write so we
+          // don't poison the wrong row. Surface to the operator so
+          // they can rename one of the colliding pseudonyms.
+          ambiguousGPs.push(gpName);
         } else {
           notFoundGPs.push(gpName);
         }
@@ -264,13 +270,14 @@ export const errorFileRouter = router({
         }
       }
 
-      return { 
-        ...errorFile, 
-        parsedErrors: totalErrorsCount, 
+      return {
+        ...errorFile,
+        parsedErrors: totalErrorsCount,
         gpErrorCounts,
         gpErrorDetails,
         updatedGPs,
         notFoundGPs,
+        ambiguousGPs,
         createdErrorRecords: createdErrorRecords.length,
         replacedFileId,
       };
@@ -388,19 +395,22 @@ export const errorFileRouter = router({
       // Update monthlyGpStats.mistakes with recalculated counts
       const updatedGPs: string[] = [];
       const notFoundGPs: string[] = [];
+      const ambiguousGPs: string[] = [];
       // Admin recalc covers every team's GPs; FM recalc stays scoped.
       const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
 
       for (const [gpName, count] of Object.entries(gpErrorCounts)) {
-        const updated = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, matchScopeUserId);
-        if (updated) {
+        const result = await db.updateGPMistakesDirectly(gpName, count, input.month, input.year, matchScopeUserId);
+        if (result.matched) {
           updatedGPs.push(gpName);
+        } else if (result.ambiguous) {
+          ambiguousGPs.push(gpName);
         } else {
           notFoundGPs.push(gpName);
         }
       }
 
-      log.info(`Recalculated error counts for ${input.month}/${input.year}: ${updatedGPs.length} GPs updated, ${notFoundGPs.length} not found`);
+      log.info(`Recalculated error counts for ${input.month}/${input.year}: ${updatedGPs.length} updated, ${notFoundGPs.length} not found, ${ambiguousGPs.length} ambiguous`);
 
       return {
         success: true,
@@ -409,6 +419,7 @@ export const errorFileRouter = router({
         gpErrorCounts,
         updatedGPs,
         notFoundGPs,
+        ambiguousGPs,
         recalculated: updatedGPs.length,
       };
     }),
@@ -558,12 +569,15 @@ export const errorFileRouter = router({
 
       const updatedGPs: string[] = [];
       const notFoundGPs: string[] = [];
+      const ambiguousGPs: string[] = [];
       let recordsCreated = 0;
       // Admin rescan covers every team's GPs; FM rescan stays scoped.
       const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
       for (const [gpName, count] of Object.entries(gpErrorCounts)) {
-        const updated = await db.updateGPMistakesDirectly(gpName, count, file.month, file.year, matchScopeUserId);
-        if (updated) updatedGPs.push(gpName); else notFoundGPs.push(gpName);
+        const result = await db.updateGPMistakesDirectly(gpName, count, file.month, file.year, matchScopeUserId);
+        if (result.matched) updatedGPs.push(gpName);
+        else if (result.ambiguous) ambiguousGPs.push(gpName);
+        else notFoundGPs.push(gpName);
 
         // Dedupe parse-noise (same as the upload path above) so the
         // rescan doesn't reinflate the per-row list with duplicate
@@ -617,6 +631,7 @@ export const errorFileRouter = router({
         recordsCreated,
         updatedGPs,
         notFoundGPs,
+        ambiguousGPs,
         totalErrorsCounted: Object.values(gpErrorCounts).reduce((s, n) => s + n, 0),
       };
     }),

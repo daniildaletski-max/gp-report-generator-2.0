@@ -201,30 +201,63 @@ export async function updateGPMistakesFromErrors(month: number, year: number): P
   }
 }
 
-export async function updateGPMistakesDirectly(gpName: string, mistakesCount: number, month: number, year: number, userId?: number): Promise<boolean> {
+/**
+ * Apply a month's mistake count to the GP whose canonical name
+ * matches the Excel "Employee Name". Behaviour by scope:
+ *
+ *   - userId set (FM upload): match restricted to the FM's own
+ *     GPs. Tenant isolation preserved — an FM can only affect
+ *     their own roster.
+ *   - userId omitted (admin upload): match scans every GP. Excel
+ *     files are tenant-wide, so admin's matcher must be too.
+ *
+ * Ambiguity guard: if two presenters share the same canonical name
+ * (allowed by schema — `gamePresenters.name` isn't unique), we
+ * return false with `ambiguous: true` instead of arbitrarily picking
+ * the row the DB returned first. Otherwise the count would be
+ * applied to whichever GP happened to win the LIMIT 1 race, leaking
+ * one team's number into another's. The caller surfaces the
+ * ambiguous names so the operator can rename one of the colliding
+ * pseudonyms or set `realName` to disambiguate.
+ */
+export async function updateGPMistakesDirectly(
+  gpName: string,
+  mistakesCount: number,
+  month: number,
+  year: number,
+  userId?: number,
+): Promise<{ matched: boolean; ambiguous: boolean }> {
   const db = await getDb();
-  if (!db) return false;
-  const conditions: any[] = [eq(gamePresenters.name, gpName.trim())];
-  if (userId) conditions.push(eq(gamePresenters.userId, userId));
-  const gp = await db.select().from(gamePresenters).where(and(...conditions)).limit(1);
-  if (gp.length === 0) {
-    const normalizedName = gpName.trim().replace(/\s+/g, ' ');
-    const allGPs = userId
-      ? await db.select().from(gamePresenters).where(eq(gamePresenters.userId, userId))
-      : await db.select().from(gamePresenters);
-    const matchedGP = allGPs.find(g => g.name.toLowerCase().replace(/\s+/g, ' ') === normalizedName.toLowerCase());
-    if (!matchedGP) return false;
-    const stats = await getOrCreateMonthlyGpStats(matchedGP.id, month, year);
-    await db.update(monthlyGpStats).set({ mistakes: mistakesCount }).where(eq(monthlyGpStats.id, stats.id));
-    const attendance = await getOrCreateAttendance(matchedGP.id, month, year);
-    await updateAttendance(attendance.id, { mistakes: mistakesCount });
-    return true;
+  if (!db) return { matched: false, ambiguous: false };
+  const normalized = gpName.trim().replace(/\s+/g, ' ').toLowerCase();
+
+  // Tenant scope: FM uploads stay restricted; admin uploads scan all.
+  const allRows = userId
+    ? await db.select().from(gamePresenters).where(eq(gamePresenters.userId, userId))
+    : await db.select().from(gamePresenters);
+
+  // Strict canonical-name match (case + whitespace insensitive). We
+  // deliberately don't fuzzy-match here — the Excel parser would
+  // otherwise silently re-route mistakes to a near-name GP and the
+  // operator wouldn't see the mismatch.
+  const matches = allRows.filter(g =>
+    g.name.trim().replace(/\s+/g, ' ').toLowerCase() === normalized,
+  );
+  if (matches.length === 0) return { matched: false, ambiguous: false };
+  if (matches.length > 1) {
+    log.warn(
+      `updateGPMistakesDirectly: ambiguous name "${gpName}" matched ` +
+      `${matches.length} GPs (ids: ${matches.map(m => m.id).join(", ")}). ` +
+      `Skipping — operator must disambiguate (rename pseudonym or set realName).`,
+    );
+    return { matched: false, ambiguous: true };
   }
-  const stats = await getOrCreateMonthlyGpStats(gp[0].id, month, year);
+  const matched = matches[0];
+  const stats = await getOrCreateMonthlyGpStats(matched.id, month, year);
   await db.update(monthlyGpStats).set({ mistakes: mistakesCount }).where(eq(monthlyGpStats.id, stats.id));
-  const attendance = await getOrCreateAttendance(gp[0].id, month, year);
+  const attendance = await getOrCreateAttendance(matched.id, month, year);
   await updateAttendance(attendance.id, { mistakes: mistakesCount });
-  return true;
+  return { matched: true, ambiguous: false };
 }
 
 /**
