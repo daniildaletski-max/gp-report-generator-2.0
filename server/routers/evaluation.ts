@@ -280,6 +280,56 @@ export const evaluationRouter = router({
         else if (daysSince != null && daysSince >= 21) urgency = "overdue";
         else if (daysSince != null && daysSince >= 14) urgency = "due-soon";
 
+        // Smart auto-suggest — weighted average of the last 3 evals'
+        // sub-scores. Most-recent eval has the highest weight, so
+        // recent improvements bubble up. Confidence is derived from
+        // (a) sample size (more evals = higher confidence) and (b)
+        // variance (stable scores = higher confidence). FM gets a
+        // pre-filled form they can confirm with one keypress.
+        const suggestedScores = (() => {
+          if (evals.length === 0) return null;
+          const sample = evals.slice(0, 3);
+          const weights = sample.length === 1 ? [1.0]
+            : sample.length === 2 ? [0.65, 0.35]
+            : [0.5, 0.3, 0.2];
+          const weightedAvg = (key: keyof typeof evals[0]): number | null => {
+            let sum = 0;
+            let totalWeight = 0;
+            for (let i = 0; i < sample.length; i++) {
+              const v = Number((sample[i] as any)[key]);
+              if (Number.isFinite(v) && v > 0) {
+                sum += v * weights[i];
+                totalWeight += weights[i];
+              }
+            }
+            if (totalWeight === 0) return null;
+            return Math.round((sum / totalWeight) * 10) / 10;
+          };
+          // Variance across sample → low variance = high confidence.
+          const variance = (key: keyof typeof evals[0]): number => {
+            const vals = sample.map(e => Number((e as any)[key])).filter(v => Number.isFinite(v) && v > 0);
+            if (vals.length < 2) return 0;
+            const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
+            return vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length;
+          };
+          const totalVariance = variance("hairScore") + variance("makeupScore") + variance("outfitScore")
+            + variance("postureScore") + variance("dealingStyleScore") + variance("gamePerformanceScore");
+          let confidence: "low" | "medium" | "high" = "medium";
+          if (sample.length === 1) confidence = "low";
+          else if (sample.length >= 3 && totalVariance < 1.5) confidence = "high";
+          else if (totalVariance > 5) confidence = "low";
+          return {
+            hair: weightedAvg("hairScore"),
+            makeup: weightedAvg("makeupScore"),
+            outfit: weightedAvg("outfitScore"),
+            posture: weightedAvg("postureScore"),
+            dealing: weightedAvg("dealingStyleScore"),
+            perf: weightedAvg("gamePerformanceScore"),
+            sampleSize: sample.length,
+            confidence,
+          };
+        })();
+
         return {
           gpId: gp.id,
           gpName: gp.name,
@@ -296,6 +346,7 @@ export const evaluationRouter = router({
             dealing: last.dealingStyleScore ?? null,
             perf: last.gamePerformanceScore ?? null,
           } : null,
+          suggestedScores,
           recentEvals: evals.slice(0, 3).map(e => ({
             id: e.id,
             date: e.evaluationDate ?? e.createdAt,

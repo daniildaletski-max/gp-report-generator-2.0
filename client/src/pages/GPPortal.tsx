@@ -16,6 +16,7 @@ import { useState, useEffect, useMemo } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { MAX_TOTAL_SCORE, MAX_APPEARANCE_SCORE, MAX_GAME_PERFORMANCE_SCORE, SCORE_CONFIG, MONTH_NAMES } from "../../../shared/const";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
+import { getTips } from "@/lib/improvementTips";
 
 import { useIsMobile } from "@/hooks/useMobile";
 import {
@@ -168,25 +169,30 @@ export default function GPPortal() {
       if (e.gamePerformanceScore != null) { totals.gamePerformance += Number(e.gamePerformanceScore); counts.gamePerformance++; }
     }
     type Cat = "hair" | "makeup" | "outfit" | "posture" | "dealingStyle" | "gamePerformance";
-    const meta: Record<Cat, { label: string; max: number; tip: string }> = {
-      hair: { label: "Hair", max: 3, tip: "Tidy ponytail or smooth styling holds up under studio lights." },
-      makeup: { label: "Makeup", max: 3, tip: "Refresh between shifts — even coverage reads better on camera." },
-      outfit: { label: "Outfit", max: 3, tip: "Check for wrinkles and ensure team uniform is fully buttoned." },
-      posture: { label: "Posture", max: 3, tip: "Shoulders back, weight even — sit/stand tall the full session." },
-      dealingStyle: { label: "Dealing Style", max: 5, tip: "Slow down on splits and pays — clear hand movements > speed." },
-      gamePerformance: { label: "Game Performance", max: 5, tip: "Announce results and outcomes clearly; engage with the chat." },
+    const meta: Record<Cat, { label: string; max: number }> = {
+      hair: { label: "Hair", max: 3 },
+      makeup: { label: "Makeup", max: 3 },
+      outfit: { label: "Outfit", max: 3 },
+      posture: { label: "Posture", max: 3 },
+      dealingStyle: { label: "Dealing Style", max: 5 },
+      gamePerformance: { label: "Game Performance", max: 5 },
     };
     const cats: Cat[] = ["hair", "makeup", "outfit", "posture", "dealingStyle", "gamePerformance"];
     const ranked = cats
       .filter(c => counts[c] > 0)
-      .map(c => ({
-        key: c,
-        label: meta[c].label,
-        avg: totals[c] / counts[c],
-        max: meta[c].max,
-        pct: (totals[c] / counts[c]) / meta[c].max,
-        tip: meta[c].tip,
-      }))
+      .map(c => {
+        const avg = totals[c] / counts[c];
+        const tipBundle = getTips(c, avg, meta[c].max);
+        return {
+          key: c,
+          label: meta[c].label,
+          avg,
+          max: meta[c].max,
+          pct: avg / meta[c].max,
+          tipTitle: tipBundle?.title ?? null,
+          tips: tipBundle?.tips ?? [],
+        };
+      })
       .sort((a, b) => a.pct - b.pct)
       .slice(0, 2);
     // Only show as "focus" if scoring under 80% on average — otherwise
@@ -497,6 +503,13 @@ export default function GPPortal() {
           </div>
         </section>
 
+        {/* Peer benchmark — anonymous percentile rank within team for
+            each score family. Doesn't show others' actual numbers,
+            just the GP's standing. Strong gentle motivator. */}
+        {(data as any).peerBenchmark && (
+          <PeerBenchmarkRow benchmark={(data as any).peerBenchmark} />
+        )}
+
         {planItems && planItems.length > 0 && <ActionPlanCard items={planItems} />}
 
         {/* Personal best + focus areas */}
@@ -537,14 +550,30 @@ export default function GPPortal() {
                   </div>
                   <div className="space-y-2.5">
                     {focusAreas.map(f => (
-                      <div key={f.key} className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-slate-800">{f.label}</span>
-                          <span className="text-xs text-slate-500">
+                      <div key={f.key} className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-semibold text-slate-800">{f.label}</span>
+                          <span className="text-xs tabular-nums font-semibold text-violet-700">
                             {f.avg.toFixed(1)}/{f.max}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-600 leading-relaxed">{f.tip}</p>
+                        {f.tipTitle && (
+                          <p className="text-[11px] uppercase tracking-wider text-violet-700 font-semibold mb-1.5">
+                            {f.tipTitle}
+                          </p>
+                        )}
+                        {f.tips.length > 0 ? (
+                          <ul className="space-y-1">
+                            {f.tips.map((tip, i) => (
+                              <li key={i} className="flex items-start gap-1.5 text-[11px] text-slate-600 leading-relaxed">
+                                <span className="text-violet-500 mt-0.5 shrink-0">•</span>
+                                <span>{tip}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-[11px] text-slate-500 italic">Keep practising — small consistent improvements compound.</p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1729,5 +1758,73 @@ function CriterionBreakdown({ evaluations }: { evaluations: any[] }) {
         })}
       </div>
     </div>
+  );
+}
+
+// ============================================
+// PeerBenchmarkRow — anonymous percentile rank within the GP's own
+// team for each score family (Total / Appearance / Performance).
+// Doesn't reveal others' numbers, only the GP's own standing.
+// Skips families where the GP doesn't have evaluation data yet.
+// ============================================
+function PeerBenchmarkRow({
+  benchmark,
+}: {
+  benchmark: {
+    teamSize: number;
+    total: { rank: number; percentile: number } | null;
+    appearance: { rank: number; percentile: number } | null;
+    performance: { rank: number; percentile: number } | null;
+  };
+}) {
+  const items = [
+    { key: "total", label: "Overall Score", value: benchmark.total, accent: "amber" as const },
+    { key: "appearance", label: "Appearance", value: benchmark.appearance, accent: "emerald" as const },
+    { key: "performance", label: "Game Performance", value: benchmark.performance, accent: "blue" as const },
+  ].filter(i => i.value != null);
+  if (items.length === 0 || benchmark.teamSize < 2) return null;
+
+  // Translate percentile into a friendly tier copy. Percentile is the
+  // share of teammates this GP outranks (higher = better).
+  const tierFor = (pct: number) => {
+    if (pct >= 80) return { label: "Top performer", tone: "emerald" as const };
+    if (pct >= 60) return { label: "Above average", tone: "sky" as const };
+    if (pct >= 40) return { label: "On par", tone: "slate" as const };
+    return { label: "Room to grow", tone: "amber" as const };
+  };
+
+  return (
+    <section>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {items.map(item => {
+          const v = item.value!;
+          const tier = tierFor(v.percentile);
+          const toneCls =
+            tier.tone === "emerald" ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+            : tier.tone === "sky" ? "bg-sky-50 border-sky-200 text-sky-700"
+            : tier.tone === "amber" ? "bg-amber-50 border-amber-200 text-amber-700"
+            : "bg-slate-50 border-slate-200 text-slate-700";
+          return (
+            <div key={item.key} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{item.label}</span>
+                <span className={`text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full border ${toneCls}`}>
+                  {tier.label}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-slate-900 tabular-nums">
+                  Top {Math.max(1, 100 - v.percentile)}%
+                </span>
+                <span className="text-xs text-slate-500">in team</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Rank #{v.rank} of {benchmark.teamSize}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

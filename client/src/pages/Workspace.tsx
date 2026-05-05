@@ -64,6 +64,20 @@ type CadenceGP = {
     dealing: number | null;
     perf: number | null;
   } | null;
+  /** Smart auto-suggest from the server: weighted average of last 3
+   *  evals per criterion, plus an aggregate confidence label. Used
+   *  to pre-fill the Quick Evaluate form so the FM only has to
+   *  confirm or adjust instead of scoring from scratch. */
+  suggestedScores: {
+    hair: number | null;
+    makeup: number | null;
+    outfit: number | null;
+    posture: number | null;
+    dealing: number | null;
+    perf: number | null;
+    sampleSize: number;
+    confidence: "low" | "medium" | "high";
+  } | null;
   recentEvals: Array<{
     id: number;
     date: Date | string | null;
@@ -267,13 +281,20 @@ export default function WorkspacePage() {
   // a sensible starting point. The FM bumps from there.
   useEffect(() => {
     if (!selectedGp) return;
+    // Pre-fill: prefer the server-side weighted average across the
+    // GP's last 3 evals (smarter than the previous "last eval only"
+    // fill), round to nearest integer for the score buttons. Fall
+    // back to the single last eval when no suggestion is available.
+    const round = (v: number | null): number | null =>
+      v == null ? null : Math.round(v);
+    const sg = selectedGp.suggestedScores;
     setScores({
-      hair: selectedGp.lastSubscores?.hair ?? null,
-      makeup: selectedGp.lastSubscores?.makeup ?? null,
-      outfit: selectedGp.lastSubscores?.outfit ?? null,
-      posture: selectedGp.lastSubscores?.posture ?? null,
-      dealing: selectedGp.lastSubscores?.dealing ?? null,
-      perf: selectedGp.lastSubscores?.perf ?? null,
+      hair: round(sg?.hair ?? null) ?? selectedGp.lastSubscores?.hair ?? null,
+      makeup: round(sg?.makeup ?? null) ?? selectedGp.lastSubscores?.makeup ?? null,
+      outfit: round(sg?.outfit ?? null) ?? selectedGp.lastSubscores?.outfit ?? null,
+      posture: round(sg?.posture ?? null) ?? selectedGp.lastSubscores?.posture ?? null,
+      dealing: round(sg?.dealing ?? null) ?? selectedGp.lastSubscores?.dealing ?? null,
+      perf: round(sg?.perf ?? null) ?? selectedGp.lastSubscores?.perf ?? null,
     });
     setComments({ hair: "", makeup: "", outfit: "", posture: "", dealing: "", perf: "" });
     setGame("");
@@ -559,6 +580,29 @@ export default function WorkspacePage() {
                         ? "Never evaluated yet — establish baseline."
                         : `Last evaluated ${selectedGp.daysSince != null ? `${selectedGp.daysSince}d ago` : "—"} · ${selectedGp.evalCount} total evals`}
                     </p>
+                    {/* Smart-suggest confidence pill — surfaces that the
+                        score buttons were pre-filled from the GP's recent
+                        history so the FM only confirms or adjusts. */}
+                    {selectedGp.suggestedScores && (
+                      <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-white">
+                        <Sparkles className={`h-3 w-3 ${
+                          selectedGp.suggestedScores.confidence === "high" ? "text-emerald-600"
+                          : selectedGp.suggestedScores.confidence === "medium" ? "text-amber-600"
+                          : "text-slate-500"
+                        }`} />
+                        <span className="text-slate-700">Auto-filled</span>
+                        <span className={`uppercase tracking-wider ${
+                          selectedGp.suggestedScores.confidence === "high" ? "text-emerald-700"
+                          : selectedGp.suggestedScores.confidence === "medium" ? "text-amber-700"
+                          : "text-slate-600"
+                        }`}>
+                          {selectedGp.suggestedScores.confidence} conf
+                        </span>
+                        <span className="text-slate-400">
+                          · {selectedGp.suggestedScores.sampleSize} eval{selectedGp.suggestedScores.sampleSize === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="text-right">
