@@ -1195,16 +1195,21 @@ function CoverageMatrix({
   onOpenReport: (report: ReportListItem) => void;
   onCreateForCell: (teamId: number, month: number, year: number) => void;
 }) {
-  // 6-month window: 5 prior months + current, oldest-left to newest-right
+  // 6-month window: 5 prior months + current, oldest-left to newest-right.
+  // We split the label and the year tag into two lines: the prior
+  // header was a one-liner like "MAY 26", which read as "May 26th"
+  // because there's no visual cue that "26" is a year suffix. Two
+  // lines (month on top, year below) removes the ambiguity entirely.
   const months = useMemo(() => {
     const now = new Date();
-    const out: { month: number; year: number; label: string }[] = [];
+    const out: { month: number; year: number; label: string; sub: string }[] = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       out.push({
         month: d.getMonth() + 1,
         year: d.getFullYear(),
-        label: d.toLocaleString("en-US", { month: "short", year: "2-digit" }),
+        label: d.toLocaleString("en-US", { month: "short" }),
+        sub: String(d.getFullYear()),
       });
     }
     return out;
@@ -1290,13 +1295,16 @@ function CoverageMatrix({
           {months.map((m, i) => (
             <div
               key={`h-${i}`}
-              className={`text-[11px] font-semibold uppercase tracking-wider text-center py-2.5 border-b ${
+              className={`text-[11px] font-semibold uppercase tracking-wider text-center py-2 border-b leading-tight ${
                 i === months.length - 1
                   ? "text-amber-700 bg-amber-50/60 border-amber-200/50"
                   : "text-slate-400 bg-slate-50/40 border-slate-200/50"
               }`}
             >
-              {m.label}
+              <div>{m.label}</div>
+              <div className={`text-[9px] font-normal mt-0.5 ${
+                i === months.length - 1 ? "text-amber-600/70" : "text-slate-300"
+              }`}>{m.sub}</div>
             </div>
           ))}
 
