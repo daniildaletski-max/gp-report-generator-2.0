@@ -619,9 +619,33 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
             additionalComments: null,
             reportData: {},
             status: "generated",
+            // Mark the report as owned by the team's FM so per-user
+            // listing shows it under the right account. The admin who
+            // triggered this is captured separately in `generatedById`
+            // when admins are doing bulk runs.
             generatedById: ctx.user.id,
+            userId: team.userId ?? ctx.user.id,
           });
-          const result = await generateExcelAndEmail(ctx, report.id);
+          // Email recipient: when an admin runs the bulk job they
+          // shouldn't get every team's email — each report belongs to
+          // a different FM. Look up the team owner's email/name so
+          // generateExcelAndEmail addresses the message to them. Fall
+          // back to the caller's email when the team has no owner.
+          let recipientCtx: { user: { id: number; role: string; email?: string | null; name?: string | null } } = ctx;
+          if (team.userId && team.userId !== ctx.user.id) {
+            const owner = await db.getUserById(team.userId);
+            if (owner?.email) {
+              recipientCtx = {
+                user: {
+                  id: owner.id,
+                  role: owner.role ?? "fm",
+                  email: owner.email,
+                  name: owner.name ?? null,
+                },
+              };
+            }
+          }
+          const result = await generateExcelAndEmail(recipientCtx, report.id);
           results.push({
             teamId: team.id,
             teamName: team.teamName,
