@@ -386,3 +386,31 @@ export const personaSyncLogs = mysqlTable("persona_sync_logs", {
 export type PersonaSyncLog = typeof personaSyncLogs.$inferSelect;
 export type InsertPersonaSyncLog = typeof personaSyncLogs.$inferInsert;
 
+/**
+ * Persona Name Aliases
+ *
+ * Persistent map from a Persona-side worker name to a GP id. When sync
+ * encounters a name in this table for the team, the alias wins and we
+ * skip the fuzzy matcher entirely — solves the "every month, the same
+ * 12 names fail to fuzzy-match" pain point. FMs add aliases via the
+ * Reconcile panel after a sync surfaces unmatched names.
+ *
+ * Scoped to (teamId, personaName) — same Persona name can map to
+ * different GPs in different teams (rare but possible).
+ */
+export const personaNameAliases = mysqlTable("persona_name_aliases", {
+  id: int("id").autoincrement().primaryKey(),
+  teamId: int("teamId").notNull(),
+  personaName: varchar("personaName", { length: 255 }).notNull(),
+  /** GP this Persona name resolves to. */
+  gamePresenterId: int("gamePresenterId").notNull(),
+  /** User who created the alias — usually the FM resolving the
+   *  mismatch. Used for an audit trail when admin reviews stale
+   *  mappings. */
+  createdById: int("createdById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type PersonaNameAlias = typeof personaNameAliases.$inferSelect;
+export type InsertPersonaNameAlias = typeof personaNameAliases.$inferInsert;
+

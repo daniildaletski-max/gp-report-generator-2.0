@@ -141,6 +141,11 @@ interface MatchDetail {
    *  same — purely informational so the UI can label "dates shifted"
    *  separately from numeric changes if it wants to. */
   breakdownChanged?: boolean;
+  /** True when the match was resolved via a saved alias rather than
+   *  the fuzzy matcher. The UI badges these so the FM sees that
+   *  "manual mapping is doing the work" — useful when investigating
+   *  why a previously-fuzzy-mismatched name now sticks. */
+  viaAlias?: boolean;
   /**
    * Diagnostic info for unmatched rows so the admin can tell at a
    * glance WHY each Persona worker didn't match: closest GP candidate
@@ -152,6 +157,29 @@ interface MatchDetail {
   closestGpId?: number | null;
   closestGpTeam?: number | null;
   closestSimilarity?: number;
+  /**
+   * Top-N closest GPs for this team (sorted by similarity desc).
+   * Powers the "Reconcile" UI's candidate list — the FM picks one
+   * with a click and we save the alias plus apply this row's data.
+   * Computed only for unmatched rows; max 5.
+   */
+  candidates?: Array<{
+    gpId: number;
+    gpName: string;
+    similarity: number;
+  }>;
+  /**
+   * Per-worker counts/breakdown the row would have written — kept
+   * alongside unmatched rows so the Reconcile UI can apply the data
+   * the moment the FM picks a GP, without a full re-sync.
+   */
+  pendingData?: {
+    sickLeaves: number;
+    missedDays: number;
+    extraShifts: number;
+    lateToWork: number;
+    dayBreakdown: { sick: string[]; missed: string[]; extra: string[]; late: string[] };
+  };
 }
 
 /**
@@ -254,14 +282,38 @@ export async function runPersonaSyncForTeam(opts: {
     const matchDetails: MatchDetail[] = [];
     const userId = team.userId ?? undefined;
 
+    // Pre-load the team's saved Persona-name aliases so each worker
+    // costs O(1) lookup instead of an extra DB round-trip + fuzzy
+    // pass. Aliases short-circuit the fuzzy matcher whenever the FM
+    // has previously linked a Persona name to a specific GP — solves
+    // the "every month, the same 12 names fuzzy-fail" problem.
+    const aliasMap = await db.loadAliasMapForTeam(opts.teamId);
+
     for (const worker of result.workers) {
-      // Use the same fuzzy matcher the rest of the app uses.
+      // ── Alias short-circuit ──────────────────────────────────────
+      // If the FM has previously linked this Persona name → GP for
+      // this team, skip fuzzy matching entirely. The alias only wins
+      // when the linked GP still belongs to this team (FMs can move
+      // GPs between teams; we don't want a stale alias to bind data
+      // to the wrong team's GP).
+      let aliasMatch: { gamePresenter: any; similarity: number } | null = null;
+      const aliasGpId = aliasMap.get(worker.name.trim().toLowerCase());
+      if (aliasGpId) {
+        const gp = await db.getGamePresenterById(aliasGpId);
+        if (gp && gp.teamId === opts.teamId) {
+          aliasMatch = { gamePresenter: gp, similarity: 1 };
+        }
+      }
+
+      // Fall back to the fuzzy matcher only when no alias resolved.
       // Threshold 0.7 mirrors what evaluation upload uses.
-      // NOTE: findBestMatchingGPByUser signature is (name, threshold, userId)
-      // — keep the argument order in sync with that.
-      const match = userId
-        ? await db.findBestMatchingGPByUser(worker.name, 0.7, userId)
-        : await db.findBestMatchingGP(worker.name, 0.7);
+      const fuzzyMatch = aliasMatch
+        ? null
+        : (userId
+            ? await db.findBestMatchingGPByUser(worker.name, 0.7, userId)
+            : await db.findBestMatchingGP(worker.name, 0.7));
+
+      const match = aliasMatch ?? fuzzyMatch;
 
       // For diagnostic logging: when the strict 0.7 match fails OR
       // matches the wrong team, ALSO compute the closest fuzzy match
@@ -370,6 +422,7 @@ export async function runPersonaSyncForTeam(opts: {
           // write, but Object.keys(changes) wouldn't catch it.
           applied: !opts.dryRun && shouldWrite,
           breakdownChanged: !!breakdownChanged,
+          viaAlias: aliasMatch !== null,
         });
 
         // Anomaly detection — when the absence count for this GP rises
@@ -408,6 +461,26 @@ export async function runPersonaSyncForTeam(opts: {
           reason = "below-threshold";
         }
         const closest = match || closestForDebug;
+
+        // Build the top-5 candidate list scoped to THIS team. Powers
+        // the Reconcile UI: the FM clicks the right candidate and we
+        // both save an alias and apply the row's data, so next month
+        // this name resolves automatically. Threshold 0 so even weak
+        // candidates show up — better to surface them than leave the
+        // FM picking from a dropdown of 200 GPs.
+        const teamCandidates = userId
+          ? (await db.findAllMatchingGPsByUser(worker.name, 0, userId)).filter(c => c.gamePresenter.teamId === opts.teamId)
+          : (await db.findAllMatchingGPs(worker.name, 0)).filter(c => c.gamePresenter.teamId === opts.teamId);
+        const candidates = teamCandidates.slice(0, 5).map(c => ({
+          gpId: c.gamePresenter.id,
+          gpName: c.gamePresenter.name,
+          similarity: c.similarity,
+        }));
+
+        const workerLate = (worker as any).lateToWork ?? 0;
+        const workerBreakdown: { sick: string[]; missed: string[]; extra: string[]; late: string[] } =
+          (worker as any).dayBreakdown ?? { sick: [], missed: [], extra: [], late: [] };
+
         matchDetails.push({
           gpId: null,
           gpName: "",
@@ -420,6 +493,14 @@ export async function runPersonaSyncForTeam(opts: {
           closestGpId: closest?.gamePresenter.id ?? null,
           closestGpTeam: closest?.gamePresenter.teamId,
           closestSimilarity: closest?.similarity,
+          candidates,
+          pendingData: {
+            sickLeaves: worker.sickLeaves,
+            missedDays: worker.missedDays,
+            extraShifts: worker.extraShifts,
+            lateToWork: workerLate,
+            dayBreakdown: workerBreakdown,
+          },
         });
       }
     }
@@ -730,4 +811,261 @@ export const personaSyncRouter = router({
   testConnection: adminProcedure.mutation(async () => {
     return await testPersonaConnection();
   }),
+
+  /**
+   * Roster snapshot — returns the team's GPs paired with their
+   * existing attendance row for (month, year). Drives the Roster-First
+   * Manual Entry UI: the FM sees a table of HER GPs with current
+   * counts pre-filled, edits inline, hits Submit. Sidesteps every
+   * name-matching pain point because we already know the GPs.
+   */
+  roster: protectedProcedure
+    .input(monthYear)
+    .query(async ({ ctx, input }) => {
+      const team = await db.getFmTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
+      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      const gps = await db.getGamePresentersByTeam(input.teamId);
+      const rows = await Promise.all(gps.map(async gp => {
+        const att = await db.findAttendance(gp.id, input.month, input.year);
+        return {
+          gpId: gp.id,
+          gpName: gp.name,
+          realName: gp.realName ?? null,
+          sickLeaves: att?.sickLeaves ?? 0,
+          missedDays: att?.missedDays ?? 0,
+          extraShifts: att?.extraShifts ?? 0,
+          lateToWork: att?.lateToWork ?? 0,
+        };
+      }));
+      return rows;
+    }),
+
+  /**
+   * Roster bulk save — accepts a per-GP counts payload and writes it
+   * directly. No name matching, no fuzzy similarity, no Persona scrape.
+   * The FM is editing her own GPs by id, so this is the most reliable
+   * import path of all.
+   */
+  saveRoster: protectedProcedure
+    .input(z.object({
+      teamId: z.number().positive(),
+      month: z.number().min(1).max(12),
+      year: z.number().min(2020).max(2100),
+      rows: z.array(z.object({
+        gpId: z.number().positive(),
+        sickLeaves: z.number().int().min(0).max(31),
+        missedDays: z.number().int().min(0).max(31),
+        extraShifts: z.number().int().min(0).max(31),
+        lateToWork: z.number().int().min(0).max(31),
+      })).min(1).max(500),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const team = await db.getFmTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
+      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      // Verify every gpId belongs to this team — defence in depth.
+      const ownership = await db.verifyGpOwnershipByTeam(input.rows.map(r => r.gpId), input.teamId);
+      if (!ownership.valid) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `Some GPs don't belong to this team: ${ownership.invalidGpIds.join(", ")}`,
+        });
+      }
+      let updated = 0;
+      let unchanged = 0;
+      for (const row of input.rows) {
+        const existing = await db.getOrCreateAttendance(row.gpId, input.month, input.year);
+        const noChange = (existing.sickLeaves ?? 0) === row.sickLeaves
+          && (existing.missedDays ?? 0) === row.missedDays
+          && (existing.extraShifts ?? 0) === row.extraShifts
+          && (existing.lateToWork ?? 0) === row.lateToWork;
+        if (noChange) { unchanged++; continue; }
+        await db.updateAttendance(existing.id, {
+          sickLeaves: row.sickLeaves,
+          missedDays: row.missedDays,
+          extraShifts: row.extraShifts,
+          lateToWork: row.lateToWork,
+        });
+        updated++;
+      }
+      return { updated, unchanged, total: input.rows.length };
+    }),
+
+  /**
+   * Targeted single-GP upsert — writes one row of attendance counts
+   * directly, scoped to a specific GP id. Used by the "Reconcile
+   * unmatched" flow (FM picks a candidate after a sync) and by quick-
+   * add buttons elsewhere in the UI.
+   */
+  upsertOne: protectedProcedure
+    .input(z.object({
+      teamId: z.number().positive(),
+      gpId: z.number().positive(),
+      month: z.number().min(1).max(12),
+      year: z.number().min(2020).max(2100),
+      sickLeaves: z.number().int().min(0).max(31),
+      missedDays: z.number().int().min(0).max(31),
+      extraShifts: z.number().int().min(0).max(31),
+      lateToWork: z.number().int().min(0).max(31),
+      dayBreakdown: z.object({
+        sick: z.array(z.string()).default([]),
+        missed: z.array(z.string()).default([]),
+        extra: z.array(z.string()).default([]),
+        late: z.array(z.string()).default([]),
+      }).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const team = await db.getFmTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
+      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      const ownership = await db.verifyGpOwnershipByTeam([input.gpId], input.teamId);
+      if (!ownership.valid) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "GP doesn't belong to this team" });
+      }
+      const existing = await db.getOrCreateAttendance(input.gpId, input.month, input.year);
+      const breakdownJson = input.dayBreakdown
+        ? JSON.stringify({
+            source: "persona",
+            syncedAt: new Date().toISOString(),
+            days: input.dayBreakdown,
+          })
+        : undefined;
+      await db.updateAttendance(existing.id, {
+        sickLeaves: input.sickLeaves,
+        missedDays: input.missedDays,
+        extraShifts: input.extraShifts,
+        lateToWork: input.lateToWork,
+        ...(breakdownJson ? { remarks: breakdownJson } : {}),
+      });
+      return { success: true, gpId: input.gpId };
+    }),
+
+  /**
+   * Reconcile + apply — the FM resolves an unmatched name by picking
+   * a GP from the candidate list. Saves the (personaName → gpId)
+   * alias for future syncs, then writes the row's pending counts
+   * directly to that GP's attendance.
+   */
+  linkAndApply: protectedProcedure
+    .input(z.object({
+      teamId: z.number().positive(),
+      gpId: z.number().positive(),
+      personaName: z.string().min(1).max(255),
+      month: z.number().min(1).max(12),
+      year: z.number().min(2020).max(2100),
+      sickLeaves: z.number().int().min(0).max(31),
+      missedDays: z.number().int().min(0).max(31),
+      extraShifts: z.number().int().min(0).max(31),
+      lateToWork: z.number().int().min(0).max(31),
+      dayBreakdown: z.object({
+        sick: z.array(z.string()).default([]),
+        missed: z.array(z.string()).default([]),
+        extra: z.array(z.string()).default([]),
+        late: z.array(z.string()).default([]),
+      }).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const team = await db.getFmTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
+      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      const ownership = await db.verifyGpOwnershipByTeam([input.gpId], input.teamId);
+      if (!ownership.valid) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "GP doesn't belong to this team" });
+      }
+      // 1. Save the alias for next time.
+      await db.upsertAlias({
+        teamId: input.teamId,
+        personaName: input.personaName,
+        gamePresenterId: input.gpId,
+        createdById: ctx.user.id,
+      });
+      // 2. Apply the pending counts.
+      const existing = await db.getOrCreateAttendance(input.gpId, input.month, input.year);
+      const breakdownJson = input.dayBreakdown
+        ? JSON.stringify({
+            source: "persona",
+            syncedAt: new Date().toISOString(),
+            days: input.dayBreakdown,
+          })
+        : undefined;
+      await db.updateAttendance(existing.id, {
+        sickLeaves: input.sickLeaves,
+        missedDays: input.missedDays,
+        extraShifts: input.extraShifts,
+        lateToWork: input.lateToWork,
+        ...(breakdownJson ? { remarks: breakdownJson } : {}),
+      });
+      return { success: true, aliasSaved: true, gpId: input.gpId };
+    }),
+
+  /**
+   * List saved Persona-name aliases for a team.
+   */
+  listAliases: protectedProcedure
+    .input(z.object({ teamId: z.number().positive() }))
+    .query(async ({ ctx, input }) => {
+      const team = await db.getFmTeamById(input.teamId);
+      if (!team) return [];
+      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      return db.listAliasesForTeam(input.teamId);
+    }),
+
+  /**
+   * Create or update a saved alias (Persona name → GP). Useful when
+   * the FM wants to pre-register an alias before running a sync, e.g.
+   * a new hire whose Persona name spelling differs from the GP record.
+   */
+  saveAlias: protectedProcedure
+    .input(z.object({
+      teamId: z.number().positive(),
+      personaName: z.string().min(1).max(255),
+      gpId: z.number().positive(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const team = await db.getFmTeamById(input.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
+      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      const ownership = await db.verifyGpOwnershipByTeam([input.gpId], input.teamId);
+      if (!ownership.valid) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "GP doesn't belong to this team" });
+      }
+      const id = await db.upsertAlias({
+        teamId: input.teamId,
+        personaName: input.personaName,
+        gamePresenterId: input.gpId,
+        createdById: ctx.user.id,
+      });
+      return { success: true, id };
+    }),
+
+  /**
+   * Remove a saved alias by id. Validates that the FM owns the team
+   * the alias is scoped to before deleting.
+   */
+  deleteAlias: protectedProcedure
+    .input(z.object({ aliasId: z.number().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const alias = await db.getAliasById(input.aliasId);
+      if (!alias) throw new TRPCError({ code: "NOT_FOUND", message: "Alias not found" });
+      const team = await db.getFmTeamById(alias.teamId);
+      if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Alias's team not found" });
+      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      await db.deleteAlias(input.aliasId);
+      return { success: true };
+    }),
 });
