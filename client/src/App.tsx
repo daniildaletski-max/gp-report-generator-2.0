@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, GitCompareArrows } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, Inbox as InboxIcon } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -23,7 +23,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 const Attendance = lazy(() => import("./pages/Attendance"));
 const Workspace = lazy(() => import("./pages/Workspace"));
 const GPPortal = lazy(() => import("./pages/GPPortal"));
-const Compare = lazy(() => import("./pages/Compare"));
+const Inbox = lazy(() => import("./pages/Inbox"));
 const InvitePage = lazy(() => import("./pages/InvitePage"));
 
 function PageLoader() {
@@ -48,7 +48,7 @@ const baseSidebarItems = [
   { href: "/evaluations", label: "Evaluations", icon: FileCheck },
   { href: "/reports", label: "Reports", icon: FileSpreadsheet },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck },
-  { href: "/compare", label: "Compare", icon: GitCompareArrows },
+  { href: "/inbox", label: "Inbox", icon: InboxIcon },
 ];
 
 // Admin-only item
@@ -112,9 +112,9 @@ function DashboardRoutes() {
                 <Workspace />
               </RouteErrorBoundary>
             </Route>
-            <Route path="/compare">
-              <RouteErrorBoundary fallbackTitle="Compare page failed to load">
-                <Compare />
+            <Route path="/inbox">
+              <RouteErrorBoundary fallbackTitle="Inbox failed to load">
+                <Inbox />
               </RouteErrorBoundary>
             </Route>
             <Route component={NotFound} />
@@ -166,6 +166,7 @@ function Router() {
       <Route path="/admin" component={DashboardRoutes} />
       <Route path="/attendance" component={DashboardRoutes} />
       <Route path="/workspace" component={DashboardRoutes} />
+      <Route path="/inbox" component={DashboardRoutes} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
