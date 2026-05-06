@@ -1,20 +1,33 @@
 /**
- * PersonaImporter — client-side bookmarklet-driven import for
- * persona.ee. Bypasses the server-side Puppeteer scraper (which is
- * blocked by missing Chromium runtime libs on the deploy host) by
- * letting the FM's already-authenticated browser do the extraction.
+ * PersonaImporter — multi-mode attendance importer for the casino HR
+ * system Persona.
  *
- * Flow:
- *  1. FM picks team + month + year, clicks "Copy bookmarklet".
- *  2. FM goes to persona.ee schedule page in another tab.
- *  3. FM clicks the bookmarklet on that page — it scrapes the
- *     visible schedule, classifies shift types (sick / missed /
- *     late / extra), and POSTs to /api/trpc/personaSync.importBatchForTeam.
- *  4. Same match-and-write path as the server scraper runs — anomaly
- *     detection, dayBreakdown JSON, fuzzy matcher, the lot.
+ * The tabs from most-reliable to least:
+ *   1. Roster — table of THIS team's GPs, FM types numbers in. No
+ *      name-matching, no DOM scraping. The default tab — works
+ *      regardless of Persona's HTML, browser cookie policy, or
+ *      whether Persona is even reachable.
+ *   2. Smart Paste — TSV/CSV rows pasted from Persona's schedule
+ *      grid. Live match preview shows which names will resolve and
+ *      which won't BEFORE submit. Unmatched names land in the
+ *      Reconcile panel where one click links the Persona name to
+ *      a GP and applies the row's data.
+ *   3. Browser Import — same bookmarklet / console / paste-JSON
+ *      flow as before. Useful when the FM already has Persona open
+ *      and wants the per-day breakdown captured. Same Reconcile
+ *      flow on the result.
+ *   4. Aliases — saved Persona-name → GP mappings. Once an alias
+ *      exists, future syncs skip fuzzy matching and resolve that
+ *      name directly. Solves the "every month, the same 12 names
+ *      fail to fuzzy-match" problem.
+ *
+ * Reconcile panel: any import that produces matchDetails surfaces
+ * unmatched rows here. The FM picks the right GP from the candidate
+ * list and we (a) save an alias for next time, (b) apply this row's
+ * counts to the chosen GP. Eliminates the "import succeeded but
+ * nothing happened" trap.
  */
-
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -24,10 +37,13 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import {
   Download, Bookmark, Terminal, ExternalLink, Copy, Check, X,
-  AlertTriangle, Loader2, Send, ChevronRight, Calendar, Building2,
+  AlertTriangle, Loader2, Send, Calendar, Building2,
+  Table2, ClipboardPaste, Globe, Link2, RefreshCw,
+  Trash2, UserPlus, Sparkles, ChevronDown, ChevronUp, Save,
 } from "lucide-react";
 
 const MONTH_NAMES = [
@@ -36,10 +52,48 @@ const MONTH_NAMES = [
 ];
 
 // ============================================
-// Bookmarklet payload — IIFE that runs on persona.ee. Tries to walk
-// the schedule grid, classify shift types by their text content
-// (case-insensitive prefix match — same rules as server scraper),
-// build the worker-attendance shape and POST it.
+// Types
+// ============================================
+interface RosterRow {
+  gpId: number;
+  gpName: string;
+  realName: string | null;
+  sickLeaves: number;
+  missedDays: number;
+  extraShifts: number;
+  lateToWork: number;
+}
+interface RosterEdit extends RosterRow {
+  isDirty: boolean;
+}
+interface MatchDetail {
+  gpId: number | null;
+  gpName: string;
+  personaName: string;
+  matched: boolean;
+  similarity: number;
+  changes: Record<string, { from: number; to: number } | undefined>;
+  applied?: boolean;
+  breakdownChanged?: boolean;
+  viaAlias?: boolean;
+  reason?: "below-threshold" | "wrong-team" | "no-candidates";
+  closestGpName?: string;
+  closestGpId?: number | null;
+  closestSimilarity?: number;
+  candidates?: Array<{ gpId: number; gpName: string; similarity: number }>;
+  pendingData?: {
+    sickLeaves: number;
+    missedDays: number;
+    extraShifts: number;
+    lateToWork: number;
+    dayBreakdown: { sick: string[]; missed: string[]; extra: string[]; late: string[] };
+  };
+}
+
+// ============================================
+// Bookmarklet payload — IIFE that runs on persona.ee. Best-effort
+// DOM walker; the Roster + Smart Paste paths are the real workhorses
+// now, and the bookmarklet is only one of several fallback options.
 // ============================================
 function buildBookmarkletScript(opts: {
   apiOrigin: string;
@@ -60,7 +114,6 @@ function buildBookmarkletScript(opts: {
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 8000);
   };
-  // Same shift-type buckets the server scraper uses, lower-case prefix.
   const bucketFor = (raw) => {
     const t = String(raw || "").toLowerCase().trim();
     if (!t) return null;
@@ -72,18 +125,8 @@ function buildBookmarkletScript(opts: {
   };
   try {
     banner("Scanning Persona schedule…", "#0ea5e9");
-
-    // Persona schedule is typically a table — rows = workers, cols =
-    // day cells. We try a few common selectors. If neither works,
-    // we fall back to looking for any element with a worker name +
-    // day cells underneath.
     const workers = [];
-    const rowSelectors = [
-      "tr.worker-row",
-      "tr[data-worker-id]",
-      ".schedule-row",
-      "tbody tr",
-    ];
+    const rowSelectors = ["tr.worker-row", "tr[data-worker-id]", ".schedule-row", "tbody tr"];
     let rowEls = [];
     for (const sel of rowSelectors) {
       const els = document.querySelectorAll(sel);
@@ -100,8 +143,6 @@ function buildBookmarkletScript(opts: {
       const widAttr = row.getAttribute("data-worker-id");
       const workerId = widAttr ? Number(widAttr) : 0;
       const buckets = { sick: [], missed: [], extra: [], late: [] };
-      // Iterate day cells. Each cell may carry an ISO date attribute
-      // or we fall back to the cell index + month/year.
       const cells = row.querySelectorAll("td[data-date], td.day, td");
       let dayIndex = 0;
       for (const c of cells) {
@@ -123,10 +164,6 @@ function buildBookmarkletScript(opts: {
         const bucket = bucketFor(text);
         if (bucket) buckets[bucket].push(iso);
       }
-      // Push every worker — including those with zero events for
-      // the month. Skipping zero-event workers means previously-
-      // non-zero attendance rows would never be reset back to zero
-      // when someone has a clean month (Codex P2 on PR #79).
       workers.push({
         name,
         workerId,
@@ -138,24 +175,16 @@ function buildBookmarkletScript(opts: {
         dayBreakdown: buckets,
       });
     }
-
     if (workers.length === 0) {
       banner("Found 0 workers with shift data. Check the month / project view and retry.", "#dc2626");
       return;
     }
-
-    // Build the payload first. We ALWAYS attempt to copy it to the
-    // clipboard so the FM has a paste-mode fallback even when the
-    // cross-origin POST fails (browsers with SameSite=Lax cookies
-    // refuse to forward our session on cross-origin requests, which
-    // means CORS preflight succeeds but auth fails on the import).
     const payload = { teamId: TEAM, month: MONTH, year: YEAR, workers: workers };
     let clipboardCopied = false;
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload));
       clipboardCopied = true;
     } catch (e) { /* clipboard may be blocked; non-fatal */ }
-
     banner("Found " + workers.length + " workers. Sending to GP Report…", "#0ea5e9");
     let postOk = false;
     let postSummary = "";
@@ -174,20 +203,14 @@ function buildBookmarkletScript(opts: {
           postOk = true;
         }
       }
-    } catch (e) { /* network / CORS / cookie failure → fall through to paste-mode */ }
-
-    if (postOk) {
-      banner(postSummary, "#16a34a");
-      return;
-    }
+    } catch (e) { /* fall through */ }
+    if (postOk) { banner(postSummary, "#16a34a"); return; }
     if (clipboardCopied) {
-      banner("Cross-origin auth blocked — JSON copied. Switch to GP Report → Persona → Paste tab.", "#7c3aed");
+      banner("Cross-origin auth blocked — JSON copied. Switch to GP Report → Persona → Browser Import → Paste JSON.", "#7c3aed");
       return;
     }
-    banner("Couldn't auto-send. Open browser console: copy(" + JSON.stringify(payload).length + " bytes) — fall back to paste mode.", "#dc2626");
-    // Last-ditch: stash the payload on window so the FM can grab it
-    // via the console even when navigator.clipboard isn't available.
-    (window as any).__personaImportPayload = payload;
+    banner("Couldn't auto-send. Open browser console: copy(window.__personaImportPayload).", "#dc2626");
+    (window).__personaImportPayload = payload;
   } catch (e) {
     banner("Error: " + (e && e.message ? e.message : e), "#dc2626");
   }
@@ -197,6 +220,54 @@ function buildBookmarkletScript(opts: {
 
 function asBookmarkletHref(script: string): string {
   return "javascript:" + encodeURIComponent(script);
+}
+
+// ============================================
+// Manual TSV parser — accepts tab- OR multi-space-separated rows.
+// Returns parsed rows AND skipped-line count for the UI preview.
+// ============================================
+type ParsedRow = { name: string; sick: number; missed: number; late: number; extra: number };
+function parseManualTSV(text: string): { rows: ParsedRow[]; skippedLines: number } {
+  const out: ParsedRow[] = [];
+  let skippedLines = 0;
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const tokens = line.includes("\t")
+      ? line.split(/\t+/).map(t => t.trim()).filter(t => t.length > 0)
+      : line.split(/\s{2,}|\s+(?=\d)/).map(t => t.trim()).filter(t => t.length > 0);
+    if (tokens.length < 5) {
+      const numericTail: number[] = [];
+      for (let j = tokens.length - 1; j >= 0; j--) {
+        const n = Number(tokens[j]);
+        if (Number.isFinite(n)) numericTail.unshift(n);
+        else break;
+      }
+      if (numericTail.length === 0) { skippedLines++; continue; }
+      const nameTokens = tokens.slice(0, tokens.length - numericTail.length);
+      if (nameTokens.length === 0) { skippedLines++; continue; }
+      const padded = [...numericTail];
+      while (padded.length < 4) padded.push(0);
+      const [sick, missed, late, extra] = padded;
+      const candidateName = nameTokens.join(" ").trim();
+      if (i === 0 && /^name$/i.test(candidateName)) { skippedLines++; continue; }
+      out.push({ name: candidateName, sick, missed, late, extra });
+      continue;
+    }
+    const [extra, late, missed, sick] = [
+      Number(tokens[tokens.length - 1]),
+      Number(tokens[tokens.length - 2]),
+      Number(tokens[tokens.length - 3]),
+      Number(tokens[tokens.length - 4]),
+    ];
+    if (![sick, missed, late, extra].every(n => Number.isFinite(n))) { skippedLines++; continue; }
+    const name = tokens.slice(0, tokens.length - 4).join(" ").trim();
+    if (!name) { skippedLines++; continue; }
+    if (i === 0 && /^name$/i.test(name)) { skippedLines++; continue; }
+    out.push({ name, sick, missed, late, extra });
+  }
+  return { rows: out, skippedLines };
 }
 
 // ============================================
@@ -222,25 +293,109 @@ export function PersonaImporter({
   const [teamId, setTeamId] = useState<number | null>(defaultTeamId ?? teams[0]?.id ?? null);
   const [month, setMonth] = useState<number>(defaultMonth);
   const [year, setYear] = useState<number>(defaultYear);
-  // Paste-mode fallback: bookmarklet copies the JSON payload to the
-  // clipboard, FM pastes it here, we POST same-origin. Always works
-  // even when cross-origin auth is blocked.
-  const [pasteText, setPasteText] = useState("");
-  // Manual TSV mode — the FM types worker rows directly. Bypasses
-  // bookmarklet DOM scraping and cross-origin auth entirely; the
-  // most reliable path when Persona's markup is unfamiliar or the
-  // user just wants to enter the numbers off the screen.
-  const [manualText, setManualText] = useState("");
+  const [activeTab, setActiveTab] = useState<"roster" | "paste" | "browser" | "aliases">("roster");
 
+  // Sync defaults when the host re-opens with a new team / period.
+  useEffect(() => {
+    if (defaultTeamId !== undefined) setTeamId(defaultTeamId);
+  }, [defaultTeamId]);
+  useEffect(() => { setMonth(defaultMonth); }, [defaultMonth]);
+  useEffect(() => { setYear(defaultYear); }, [defaultYear]);
+
+  // ────────────────────────────────────────────────────────────────
+  // Roster tab — fetch + edit + save
+  // ────────────────────────────────────────────────────────────────
+  const rosterQuery = trpc.personaSync.roster.useQuery(
+    { teamId: teamId ?? 0, month, year },
+    { enabled: open && teamId != null && activeTab === "roster" }
+  );
+  const [rosterRows, setRosterRows] = useState<RosterEdit[]>([]);
+  // When the roster query resolves with new data, replace local edits
+  // — but only if the user hasn't typed anything dirty. Otherwise keep
+  // their unsaved work.
+  useEffect(() => {
+    if (!rosterQuery.data) return;
+    const fresh: RosterEdit[] = rosterQuery.data.map((r: RosterRow) => ({ ...r, isDirty: false }));
+    setRosterRows(prev => {
+      const anyDirty = prev.some(r => r.isDirty);
+      if (anyDirty) return prev;
+      return fresh;
+    });
+  }, [rosterQuery.data]);
+
+  const saveRosterMutation = trpc.personaSync.saveRoster.useMutation({
+    onSuccess: (res) => {
+      toast.success(
+        res.updated > 0
+          ? `Saved — ${res.updated} GP${res.updated === 1 ? "" : "s"} updated, ${res.unchanged} unchanged.`
+          : `No changes detected — every GP was already up to date.`
+      );
+      setRosterRows(prev => prev.map(r => ({ ...r, isDirty: false })));
+      rosterQuery.refetch();
+      onImported?.();
+    },
+    onError: (err) => toast.error(`Save failed: ${err.message}`),
+  });
+
+  const setRosterValue = useCallback((gpId: number, key: "sickLeaves" | "missedDays" | "lateToWork" | "extraShifts", raw: string) => {
+    const n = Math.max(0, Math.min(31, Number(raw) || 0));
+    setRosterRows(prev => prev.map(r => r.gpId === gpId ? { ...r, [key]: n, isDirty: true } : r));
+  }, []);
+
+  const onSaveRoster = useCallback(() => {
+    if (!teamId) return;
+    const dirtyOnly = rosterRows.filter(r => r.isDirty);
+    const payload = (dirtyOnly.length > 0 ? dirtyOnly : rosterRows).map(r => ({
+      gpId: r.gpId,
+      sickLeaves: r.sickLeaves,
+      missedDays: r.missedDays,
+      extraShifts: r.extraShifts,
+      lateToWork: r.lateToWork,
+    }));
+    if (payload.length === 0) {
+      toast.error("No GPs in this team — add some on the Team management page first.");
+      return;
+    }
+    saveRosterMutation.mutate({ teamId, month, year, rows: payload });
+  }, [rosterRows, teamId, month, year, saveRosterMutation]);
+
+  const dirtyCount = rosterRows.filter(r => r.isDirty).length;
+
+  // ────────────────────────────────────────────────────────────────
+  // Smart Paste tab — TSV with live match preview against the roster
+  // ────────────────────────────────────────────────────────────────
+  const [manualText, setManualText] = useState("");
   const importMutation = trpc.personaSync.importBatchForTeam.useMutation({
     onSuccess: (res) => {
-      toast.success(`Imported ${res.matched} matched, ${res.unmatched} unmatched`);
-      setPasteText("");
+      const updated = (res.matchDetails ?? []).filter((d: MatchDetail) =>
+        d.matched && (typeof d.applied === "boolean" ? d.applied : Object.keys(d.changes ?? {}).length > 0)
+      ).length;
+      toast.success(`Imported — ${updated} updated, ${res.unmatched} unmatched.`);
       onImported?.();
+      // Refresh roster so the new counts appear in the Roster tab.
+      rosterQuery.refetch();
     },
     onError: (err) => toast.error(`Import failed: ${err.message}`),
   });
 
+  const onImportManual = useCallback(() => {
+    if (!teamId) { toast.error("Pick a team first"); return; }
+    const { rows } = parseManualTSV(manualText);
+    if (rows.length === 0) { toast.error("Couldn't parse any rows. Each line needs a name + 4 numbers."); return; }
+    const workers = rows.map(r => ({
+      name: r.name, workerId: 0, projectId: 0,
+      sickLeaves: r.sick, missedDays: r.missed,
+      extraShifts: r.extra, lateToWork: r.late,
+      dayBreakdown: { sick: [], missed: [], extra: [], late: [] },
+    }));
+    importMutation.mutate({ teamId, month, year, workers }, {
+      onSuccess: () => setManualText(""),
+    });
+  }, [manualText, importMutation, teamId, month, year]);
+
+  // ────────────────────────────────────────────────────────────────
+  // Browser Import tab — bookmarklet + console + paste-JSON
+  // ────────────────────────────────────────────────────────────────
   const apiOrigin = typeof window !== "undefined" ? window.location.origin : "";
   const script = useMemo(() => {
     if (teamId == null) return "";
@@ -248,211 +403,127 @@ export function PersonaImporter({
   }, [apiOrigin, teamId, month, year]);
 
   const onCopyBookmarklet = useCallback(async () => {
-    if (!script) {
-      toast.error("Pick a team first");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(asBookmarkletHref(script));
+    if (!script) { toast.error("Pick a team first"); return; }
+    try { await navigator.clipboard.writeText(asBookmarkletHref(script));
       toast.success("Bookmarklet copied — drag it onto your bookmarks bar.");
-    } catch {
-      toast.error("Couldn't copy — copy manually from the textarea below.");
-    }
+    } catch { toast.error("Couldn't copy — copy manually from the textarea."); }
   }, [script]);
 
-  const onCopyConsole = useCallback(async () => {
-    if (!script) {
-      toast.error("Pick a team first");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(script);
-      toast.success("Console snippet copied — paste in Persona DevTools console.");
-    } catch {
-      toast.error("Couldn't copy — copy manually from the textarea below.");
-    }
-  }, [script]);
-
+  const [pasteText, setPasteText] = useState("");
   const onImportPasted = useCallback(() => {
     const trimmed = pasteText.trim();
     if (!trimmed) return;
     let parsed: any;
-    try {
-      parsed = JSON.parse(trimmed);
-    } catch {
-      toast.error("Couldn't parse JSON — make sure you copied the entire payload from the bookmarklet banner.");
-      return;
-    }
-    // Accept either the raw payload object OR something wrapped in
-    // `{ json: { ... } }` (legacy clipboard format).
+    try { parsed = JSON.parse(trimmed); }
+    catch { toast.error("Couldn't parse JSON — paste the bookmarklet's full payload."); return; }
     const payload = parsed?.json ?? parsed;
-    if (!payload || !Array.isArray(payload.workers)) {
-      toast.error("Pasted JSON doesn't contain a workers array.");
-      return;
-    }
+    if (!payload || !Array.isArray(payload.workers)) { toast.error("Pasted JSON missing workers array."); return; }
     importMutation.mutate({
       teamId: payload.teamId ?? teamId ?? 0,
       month: payload.month ?? month,
       year: payload.year ?? year,
       workers: payload.workers,
-    });
+    }, { onSuccess: () => setPasteText("") });
   }, [pasteText, importMutation, teamId, month, year]);
 
-  // ============================================================
-  // Manual TSV parser — accepts tab- OR multi-space-separated rows
-  // in `name <ws> sick <ws> missed <ws> late <ws> extra` form. The
-  // last 4 numeric tokens are the counts, everything before them is
-  // the worker name (so multi-word names like "Alicia Bel-Haj" work
-  // without quoting). Header rows are auto-detected and skipped.
-  // ============================================================
-  type ParsedRow = { name: string; sick: number; missed: number; late: number; extra: number };
-  type ParsedTSV = { rows: ParsedRow[]; skippedLines: number };
-  const parseManualTSV = useCallback((text: string): ParsedTSV => {
-    const out: ParsedRow[] = [];
-    let skippedLines = 0;
-    const lines = text.split(/\r?\n/);
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-      // Tab-split first; fall back to 2+ whitespace.
-      const tokens = line.includes("\t")
-        ? line.split(/\t+/).map(t => t.trim()).filter(t => t.length > 0)
-        : line.split(/\s{2,}|\s+(?=\d)/).map(t => t.trim()).filter(t => t.length > 0);
-      if (tokens.length < 5) {
-        // Allow 1-3 numeric trailing tokens by padding with zeros
-        // (FM might omit zeros), but only when at least name + 1
-        // number is present.
-        const numericTail: number[] = [];
-        for (let j = tokens.length - 1; j >= 0; j--) {
-          const n = Number(tokens[j]);
-          if (Number.isFinite(n)) {
-            numericTail.unshift(n);
-          } else break;
-        }
-        if (numericTail.length === 0) { skippedLines++; continue; }
-        const nameTokens = tokens.slice(0, tokens.length - numericTail.length);
-        if (nameTokens.length === 0) { skippedLines++; continue; }
-        const padded = [...numericTail];
-        while (padded.length < 4) padded.push(0);
-        const [sick, missed, late, extra] = padded;
-        const candidateName = nameTokens.join(" ").trim();
-        if (i === 0 && /^name$/i.test(candidateName)) { skippedLines++; continue; }
-        out.push({ name: candidateName, sick, missed, late, extra });
-        continue;
-      }
-      const [extra, late, missed, sick] = [
-        Number(tokens[tokens.length - 1]),
-        Number(tokens[tokens.length - 2]),
-        Number(tokens[tokens.length - 3]),
-        Number(tokens[tokens.length - 4]),
-      ];
-      if (![sick, missed, late, extra].every(n => Number.isFinite(n))) {
-        skippedLines++;
-        continue;
-      }
-      const name = tokens.slice(0, tokens.length - 4).join(" ").trim();
-      if (!name) { skippedLines++; continue; }
-      // Header detection: row starts with "name" AND has all-zero numbers
-      if (i === 0 && /^name$/i.test(name)) { skippedLines++; continue; }
-      out.push({ name, sick, missed, late, extra });
+  // Live match preview for Smart Paste — runs the parsed names against
+  // the roster's GP names so the FM sees ahead of time which rows
+  // will resolve and which won't. Falls back to a substring/normalized
+  // check (the server is doing the real fuzzy match; we just want a
+  // best-effort heads-up before submitting).
+  const manualParsed = useMemo(() => parseManualTSV(manualText), [manualText]);
+  const matchPreview = useMemo(() => {
+    if (manualParsed.rows.length === 0 || !rosterQuery.data) return null;
+    const roster: RosterRow[] = rosterQuery.data;
+    const norm = (s: string) => s.toLowerCase().trim().replace(/\s+/g, " ");
+    const tokenize = (s: string) => norm(s).split(/[\s\-]+/).filter(t => t.length >= 2);
+    const matched: Array<{ row: ParsedRow; gp: RosterRow }> = [];
+    const unmatched: ParsedRow[] = [];
+    for (const row of manualParsed.rows) {
+      const rowTokens = new Set(tokenize(row.name));
+      // First pass: exact-string match against name OR realName.
+      const exact = roster.find(g => norm(g.gpName) === norm(row.name) || (g.realName && norm(g.realName) === norm(row.name)));
+      if (exact) { matched.push({ row, gp: exact }); continue; }
+      // Second pass: token-set equality (word order independent).
+      const tokenHit = roster.find(g => {
+        const gTokens = new Set(tokenize(g.gpName));
+        const rTokens = new Set(tokenize(g.realName ?? ""));
+        const sameSet = (a: Set<string>, b: Set<string>) =>
+          a.size === b.size && Array.from(a).every(t => b.has(t));
+        return sameSet(rowTokens, gTokens) || (g.realName && sameSet(rowTokens, rTokens));
+      });
+      if (tokenHit) { matched.push({ row, gp: tokenHit }); continue; }
+      unmatched.push(row);
     }
-    return { rows: out, skippedLines };
-  }, []);
+    return { matched, unmatched, total: manualParsed.rows.length };
+  }, [manualParsed, rosterQuery.data]);
 
-  const manualPreview = useMemo(() => {
-    if (!manualText.trim()) return null;
-    const { rows, skippedLines } = parseManualTSV(manualText);
-    if (rows.length === 0 && skippedLines === 0) return null;
-    let bySick = 0, byMissed = 0, byLate = 0, byExtra = 0;
-    for (const r of rows) {
-      bySick += r.sick; byMissed += r.missed; byLate += r.late; byExtra += r.extra;
-    }
-    return {
-      workerCount: rows.length,
-      totalEvents: bySick + byMissed + byLate + byExtra,
-      bySick, byMissed, byLate, byExtra,
-      skippedLines,
-    };
-  }, [manualText, parseManualTSV]);
+  // ────────────────────────────────────────────────────────────────
+  // Reconcile panel — surfaces unmatched names from the LAST import
+  // ────────────────────────────────────────────────────────────────
+  const lastImport = importMutation.data as
+    | { matchDetails?: MatchDetail[]; matched?: number; unmatched?: number; totalPersonaWorkers?: number }
+    | undefined;
+  const unmatchedRows: MatchDetail[] = useMemo(
+    () => (lastImport?.matchDetails ?? []).filter(d => !d.matched),
+    [lastImport]
+  );
 
-  const onImportManual = useCallback(() => {
-    if (!teamId) {
-      toast.error("Pick a team first");
-      return;
-    }
-    const { rows } = parseManualTSV(manualText);
-    if (rows.length === 0) {
-      toast.error("Couldn't parse any worker rows. Make sure each line has name + 4 numbers.");
-      return;
-    }
-    const workers = rows.map(r => ({
-      name: r.name,
-      workerId: 0,
-      projectId: 0,
-      sickLeaves: r.sick,
-      missedDays: r.missed,
-      extraShifts: r.extra,
-      lateToWork: r.late,
-      // Manual mode doesn't capture per-day breakdown — leave empty.
-      // Server's no-change check will still write counts when totals
-      // differ from what's already in the row.
-      dayBreakdown: { sick: [], missed: [], extra: [], late: [] },
-    }));
-    importMutation.mutate({
+  const linkAndApplyMutation = trpc.personaSync.linkAndApply.useMutation({
+    onSuccess: () => {
+      toast.success("Linked and applied — alias saved for next sync.");
+      rosterQuery.refetch();
+      onImported?.();
+    },
+    onError: (err) => toast.error(`Link failed: ${err.message}`),
+  });
+  const [resolved, setResolved] = useState<Set<string>>(new Set()); // personaName keys we've already linked
+  // Reset resolved-set when a new import lands.
+  useEffect(() => { setResolved(new Set()); }, [lastImport]);
+
+  const onLinkUnmatched = useCallback((row: MatchDetail, gpId: number) => {
+    if (!teamId || !row.pendingData) return;
+    linkAndApplyMutation.mutate({
       teamId,
+      gpId,
+      personaName: row.personaName,
       month,
       year,
-      workers,
+      sickLeaves: row.pendingData.sickLeaves,
+      missedDays: row.pendingData.missedDays,
+      extraShifts: row.pendingData.extraShifts,
+      lateToWork: row.pendingData.lateToWork,
+      dayBreakdown: row.pendingData.dayBreakdown,
     }, {
-      onSuccess: () => setManualText(""),
+      onSuccess: () => setResolved(prev => new Set(prev).add(row.personaName)),
     });
-  }, [manualText, parseManualTSV, importMutation, teamId, month, year]);
+  }, [linkAndApplyMutation, teamId, month, year]);
 
-  // Live preview of the pasted JSON — recomputed on every keystroke
-  // so the FM sees worker count + event totals before committing.
-  // Used to catch the "0 events for everyone" case (DOM selectors
-  // missed the shift data) before it produces a no-op import.
-  const pastePreview = useMemo(() => {
-    const trimmed = pasteText.trim();
-    if (!trimmed) return null;
-    let parsed: any;
-    try {
-      parsed = JSON.parse(trimmed);
-    } catch {
-      return null;
-    }
-    const payload = parsed?.json ?? parsed;
-    const workers: any[] = Array.isArray(payload?.workers) ? payload.workers : [];
-    if (workers.length === 0) return null;
-    let bySick = 0, byMissed = 0, byLate = 0, byExtra = 0;
-    let workersWithEvents = 0;
-    for (const w of workers) {
-      const sick = Number(w?.sickLeaves ?? 0);
-      const missed = Number(w?.missedDays ?? 0);
-      const late = Number(w?.lateToWork ?? 0);
-      const extra = Number(w?.extraShifts ?? 0);
-      bySick += sick; byMissed += missed; byLate += late; byExtra += extra;
-      if (sick + missed + late + extra > 0) workersWithEvents++;
-    }
-    const totalEvents = bySick + byMissed + byLate + byExtra;
-    return {
-      workerCount: workers.length,
-      workersWithEvents,
-      totalEvents,
-      bySick, byMissed, byLate, byExtra,
-    };
-  }, [pasteText]);
+  // ────────────────────────────────────────────────────────────────
+  // Aliases tab
+  // ────────────────────────────────────────────────────────────────
+  const aliasesQuery = trpc.personaSync.listAliases.useQuery(
+    { teamId: teamId ?? 0 },
+    { enabled: open && teamId != null && activeTab === "aliases" }
+  );
+  const deleteAliasMutation = trpc.personaSync.deleteAlias.useMutation({
+    onSuccess: () => { toast.success("Alias removed"); aliasesQuery.refetch(); },
+    onError: (err) => toast.error(`Delete failed: ${err.message}`),
+  });
 
+  // ────────────────────────────────────────────────────────────────
+  // Render
+  // ────────────────────────────────────────────────────────────────
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[92vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Download className="h-5 w-5 text-primary" />
-            Import attendance from Persona
+            <Sparkles className="h-5 w-5 text-primary" />
+            Persona attendance — sync &amp; manual entry
           </DialogTitle>
           <DialogDescription>
-            Server-side Persona scraper is blocked by the Chromium runtime libs on this host. This tool runs in your already-authenticated Persona browser session instead.
+            Pick a path. <strong>Roster</strong> is the most reliable: it bypasses every name-matching and Persona-DOM headache by editing your team's GPs directly.
           </DialogDescription>
         </DialogHeader>
 
@@ -463,13 +534,9 @@ export function PersonaImporter({
               <Building2 className="h-3.5 w-3.5" /> Team
             </label>
             <Select value={teamId ? String(teamId) : ""} onValueChange={v => setTeamId(Number(v))}>
-              <SelectTrigger className="h-9 bg-white">
-                <SelectValue placeholder="Pick team…" />
-              </SelectTrigger>
+              <SelectTrigger className="h-9 bg-white"><SelectValue placeholder="Pick team…" /></SelectTrigger>
               <SelectContent>
-                {teams.map(t => (
-                  <SelectItem key={t.id} value={String(t.id)}>{t.teamName}</SelectItem>
-                ))}
+                {teams.map(t => <SelectItem key={t.id} value={String(t.id)}>{t.teamName}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -478,22 +545,16 @@ export function PersonaImporter({
               <Calendar className="h-3.5 w-3.5" /> Month
             </label>
             <Select value={String(month)} onValueChange={v => setMonth(Number(v))}>
-              <SelectTrigger className="h-9 bg-white">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="h-9 bg-white"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {MONTH_NAMES.map((name, i) => (
-                  <SelectItem key={i} value={String(i + 1)}>{name}</SelectItem>
-                ))}
+                {MONTH_NAMES.map((name, i) => <SelectItem key={i} value={String(i + 1)}>{name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1">Year</label>
             <Select value={String(year)} onValueChange={v => setYear(Number(v))}>
-              <SelectTrigger className="h-9 bg-white">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="h-9 bg-white"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Array.from({ length: 4 }, (_, i) => new Date().getFullYear() - 1 + i).map(y => (
                   <SelectItem key={y} value={String(y)}>{y}</SelectItem>
@@ -503,33 +564,108 @@ export function PersonaImporter({
           </div>
         </div>
 
-        <Tabs defaultValue="manual" className="flex-1 overflow-hidden flex flex-col">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 overflow-hidden flex flex-col">
           <TabsList className="grid grid-cols-4 w-full">
-            <TabsTrigger value="manual" className="gap-1.5">
-              <Send className="h-3.5 w-3.5" /> Manual
-            </TabsTrigger>
-            <TabsTrigger value="bookmarklet" className="gap-1.5">
-              <Bookmark className="h-3.5 w-3.5" /> Bookmarklet
-            </TabsTrigger>
-            <TabsTrigger value="console" className="gap-1.5">
-              <Terminal className="h-3.5 w-3.5" /> Console
+            <TabsTrigger value="roster" className="gap-1.5">
+              <Table2 className="h-3.5 w-3.5" /> Roster
             </TabsTrigger>
             <TabsTrigger value="paste" className="gap-1.5">
-              <Send className="h-3.5 w-3.5" /> Paste JSON
+              <ClipboardPaste className="h-3.5 w-3.5" /> Smart Paste
+            </TabsTrigger>
+            <TabsTrigger value="browser" className="gap-1.5">
+              <Globe className="h-3.5 w-3.5" /> Browser Import
+            </TabsTrigger>
+            <TabsTrigger value="aliases" className="gap-1.5">
+              <Link2 className="h-3.5 w-3.5" /> Aliases
             </TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto pt-3">
-            {/* Manual TSV/CSV — the most reliable path. The FM types
-                or pastes worker rows in `name<tab>sick<tab>missed<tab>
-                late<tab>extra` format and we POST same-origin. No DOM
-                scraping, no cross-origin auth — works regardless of
-                Persona's HTML or the browser's cookie / CORS policy. */}
-            <TabsContent value="manual" className="space-y-3">
-              <p className="text-sm text-slate-700">
-                Type or paste worker rows below. <strong>Tab-separated</strong> or
-                multiple-spaces-separated. The header row is optional.
-              </p>
+            {/* ─── ROSTER TAB ─── */}
+            <TabsContent value="roster" className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm text-slate-700">
+                  Direct entry: each row is one of <strong>your team's GPs</strong>. Type the counts; we save against the GP id, so spelling and word order can never go wrong here.
+                </p>
+                <Button variant="outline" size="sm" onClick={() => rosterQuery.refetch()} className="gap-1.5 shrink-0">
+                  <RefreshCw className={`h-3.5 w-3.5 ${rosterQuery.isFetching ? "animate-spin" : ""}`} />
+                  Refresh
+                </Button>
+              </div>
+              {rosterQuery.isLoading && (
+                <div className="flex items-center gap-2 text-sm text-slate-500 py-8 justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading roster…
+                </div>
+              )}
+              {!rosterQuery.isLoading && rosterRows.length === 0 && (
+                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                  No GPs in this team yet. Add team members first, then return here to log their attendance.
+                </div>
+              )}
+              {rosterRows.length > 0 && (
+                <>
+                  <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                    <div className="grid grid-cols-[1fr_70px_70px_70px_70px] sm:grid-cols-[1fr_90px_90px_90px_90px] text-[11px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 border-b border-slate-200 px-3 py-2">
+                      <div>Game presenter</div>
+                      <div className="text-center">🤒 Sick</div>
+                      <div className="text-center">❌ Missed</div>
+                      <div className="text-center">⏰ Late</div>
+                      <div className="text-center">➕ Extra</div>
+                    </div>
+                    <div className="max-h-[340px] overflow-y-auto divide-y divide-slate-100">
+                      {rosterRows.map(r => (
+                        <div
+                          key={r.gpId}
+                          className={`grid grid-cols-[1fr_70px_70px_70px_70px] sm:grid-cols-[1fr_90px_90px_90px_90px] px-3 py-2 items-center hover:bg-slate-50 transition-colors ${r.isDirty ? "bg-amber-50/40" : ""}`}
+                        >
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-slate-800 truncate">{r.gpName}</div>
+                            {r.realName && r.realName !== r.gpName && (
+                              <div className="text-[11px] text-slate-500 truncate">HR: {r.realName}</div>
+                            )}
+                          </div>
+                          <RosterCell value={r.sickLeaves} onChange={v => setRosterValue(r.gpId, "sickLeaves", v)} />
+                          <RosterCell value={r.missedDays} onChange={v => setRosterValue(r.gpId, "missedDays", v)} />
+                          <RosterCell value={r.lateToWork} onChange={v => setRosterValue(r.gpId, "lateToWork", v)} />
+                          <RosterCell value={r.extraShifts} onChange={v => setRosterValue(r.gpId, "extraShifts", v)} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs text-slate-500">
+                      {dirtyCount > 0 ? (
+                        <span className="text-amber-700 font-medium">
+                          {dirtyCount} unsaved change{dirtyCount === 1 ? "" : "s"} · click Save to persist
+                        </span>
+                      ) : (
+                        <>{rosterRows.length} GP{rosterRows.length === 1 ? "" : "s"} · all in sync</>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {dirtyCount > 0 && (
+                        <Button variant="ghost" size="sm" onClick={() => rosterQuery.refetch()}>
+                          Discard
+                        </Button>
+                      )}
+                      <Button onClick={onSaveRoster} disabled={dirtyCount === 0 || saveRosterMutation.isPending} className="gap-1.5">
+                        {saveRosterMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                        Save attendance
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </TabsContent>
+
+            {/* ─── SMART PASTE TAB ─── */}
+            <TabsContent value="paste" className="space-y-3">
+              <div className="rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-2 text-xs text-blue-800 flex items-start gap-2">
+                <Sparkles className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <div>
+                  Paste TSV from any source — copy a Persona schedule into Excel, then copy back here. We'll preview which names match GPs <strong>before</strong> you submit. Unmatched names land in the <em>Reconcile</em> panel below for one-click linking.
+                </div>
+              </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600 font-mono">
                 Name &nbsp;&nbsp; Sick &nbsp;&nbsp; Missed &nbsp;&nbsp; Late &nbsp;&nbsp; Extra<br />
                 Alicia Bel-Haj &nbsp;&nbsp; 1 &nbsp;&nbsp; 0 &nbsp;&nbsp; 0 &nbsp;&nbsp; 0<br />
@@ -539,32 +675,28 @@ export function PersonaImporter({
                 value={manualText}
                 onChange={(e) => setManualText(e.target.value)}
                 placeholder={"Alicia Bel-Haj\t1\t0\t0\t0\nAnastassija Fomenkova\t2\t0\t0\t0"}
-                className="font-mono text-xs h-44"
+                className="font-mono text-xs h-40"
               />
-              {manualPreview && (
-                <div className={`rounded-lg border px-3 py-2 text-xs ${
-                  manualPreview.totalEvents === 0
-                    ? "border-amber-200 bg-amber-50/60 text-amber-800"
-                    : "border-emerald-200 bg-emerald-50/60 text-emerald-800"
+              {matchPreview && (
+                <div className={`rounded-lg border px-3 py-2.5 text-xs space-y-1.5 ${
+                  matchPreview.unmatched.length > 0
+                    ? "border-amber-200 bg-amber-50/60 text-amber-900"
+                    : "border-emerald-200 bg-emerald-50/60 text-emerald-900"
                 }`}>
-                  <div className="flex items-center justify-between gap-3 mb-1">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="font-semibold">
-                      {manualPreview.workerCount} worker{manualPreview.workerCount === 1 ? "" : "s"} parsed
-                      {" · "}
-                      {manualPreview.totalEvents} event{manualPreview.totalEvents === 1 ? "" : "s"}
+                      Live preview: {matchPreview.matched.length}/{matchPreview.total} will match
                     </span>
-                    {manualPreview.skippedLines > 0 && (
-                      <span className="text-[10px] uppercase tracking-wider opacity-80">
-                        {manualPreview.skippedLines} line{manualPreview.skippedLines === 1 ? "" : "s"} skipped
-                      </span>
-                    )}
+                    <span className="text-[10px] uppercase tracking-wider opacity-80">
+                      {matchPreview.unmatched.length} unmatched
+                    </span>
                   </div>
-                  <div className="flex flex-wrap gap-2 text-[11px]">
-                    <span>🤒 {manualPreview.bySick}</span>
-                    <span>❌ {manualPreview.byMissed}</span>
-                    <span>⏰ {manualPreview.byLate}</span>
-                    <span>➕ {manualPreview.byExtra}</span>
-                  </div>
+                  {matchPreview.unmatched.length > 0 && (
+                    <div className="text-[11px]">
+                      Won't match: {matchPreview.unmatched.slice(0, 5).map(r => r.name).join(", ")}
+                      {matchPreview.unmatched.length > 5 && ` +${matchPreview.unmatched.length - 5} more`}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="flex items-center gap-2">
@@ -578,168 +710,168 @@ export function PersonaImporter({
               </div>
             </TabsContent>
 
-            <TabsContent value="bookmarklet" className="space-y-3">
-              <ol className="space-y-2 text-sm text-slate-700 list-decimal list-inside">
-                <li>Pick the team / month / year above.</li>
-                <li>Click <strong>Copy bookmarklet</strong> below and drag the URL onto your browser&apos;s bookmarks bar.</li>
-                <li>Open <a href="https://reports.persona.ee/" target="_blank" rel="noreferrer" className="text-primary underline inline-flex items-center gap-0.5">Persona <ExternalLink className="h-3 w-3" /></a> and navigate to the schedule for the selected month.</li>
-                <li>Click the bookmarklet — it scrapes the schedule and POSTs to GP Report. A banner shows progress.</li>
-              </ol>
+            {/* ─── BROWSER IMPORT TAB ─── */}
+            <TabsContent value="browser" className="space-y-3">
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
-                <p className="text-xs text-slate-600 font-mono break-all overflow-hidden line-clamp-3">
-                  {asBookmarkletHref(script).slice(0, 240)}…
+                <p className="text-xs text-slate-700 leading-relaxed">
+                  When Persona's schedule is open in your browser, run the bookmarklet — it scrapes the schedule grid and POSTs the parsed payload here. If cross-origin auth blocks the POST, the script copies the JSON payload to your clipboard; paste it below.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button onClick={onCopyBookmarklet} className="gap-1.5" disabled={!script}>
-                    <Copy className="h-3.5 w-3.5" /> Copy bookmarklet
+                    <Bookmark className="h-3.5 w-3.5" /> Copy bookmarklet
                   </Button>
                   {script && (
                     <a
                       href={asBookmarkletHref(script)}
-                      onClick={(e) => { e.preventDefault(); toast.info("Drag this link to your bookmarks bar — clicking here won't run."); }}
+                      onClick={(e) => { e.preventDefault(); toast.info("Drag this link to your bookmarks bar — clicking won't run."); }}
                       className="text-xs px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 cursor-grab"
                       draggable
                     >
                       📌 Drag me to bookmarks bar
                     </a>
                   )}
+                  <a
+                    href="https://reports.persona.ee/"
+                    target="_blank" rel="noreferrer"
+                    className="text-xs px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 inline-flex items-center gap-1"
+                  >
+                    Open Persona <ExternalLink className="h-3 w-3" />
+                  </a>
                 </div>
               </div>
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex items-start gap-2">
-                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                <span>The bookmarklet relies on Persona&apos;s schedule DOM. If the layout changes and it stops finding rows, switch to the <strong>Console</strong> tab for the same script — easier to debug from DevTools.</span>
-              </div>
-            </TabsContent>
 
-            <TabsContent value="console" className="space-y-3">
-              <ol className="space-y-2 text-sm text-slate-700 list-decimal list-inside">
-                <li>Open <a href="https://reports.persona.ee/" target="_blank" rel="noreferrer" className="text-primary underline inline-flex items-center gap-0.5">Persona <ExternalLink className="h-3 w-3" /></a>, navigate to the schedule for the selected month.</li>
-                <li>Open DevTools (F12 or Cmd+Opt+I), switch to <strong>Console</strong>.</li>
-                <li>Click <strong>Copy snippet</strong>, paste into console, hit Enter.</li>
-                <li>Banner shows progress; results appear here when import finishes.</li>
-              </ol>
-              <Button onClick={onCopyConsole} className="gap-1.5" disabled={!script}>
-                <Copy className="h-3.5 w-3.5" /> Copy snippet
-              </Button>
-              <Textarea readOnly value={script} className="font-mono text-[10px] h-40 resize-none" />
-            </TabsContent>
+              <details className="rounded-lg border border-slate-200 bg-white">
+                <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 select-none flex items-center gap-1.5">
+                  <Terminal className="h-3.5 w-3.5" /> Console snippet (debug-friendly)
+                  <ChevronDown className="h-3 w-3 ml-auto group-open:hidden" />
+                </summary>
+                <div className="px-3 pb-3 space-y-2 border-t border-slate-100">
+                  <Button size="sm" variant="outline" onClick={async () => {
+                    if (!script) return;
+                    try { await navigator.clipboard.writeText(script); toast.success("Console snippet copied"); }
+                    catch { toast.error("Couldn't copy"); }
+                  }}>
+                    <Copy className="h-3 w-3 mr-1.5" /> Copy snippet
+                  </Button>
+                  <Textarea readOnly value={script} className="font-mono text-[10px] h-32 resize-none" />
+                </div>
+              </details>
 
-            {/* Paste fallback — for environments where the cross-origin
-                POST is blocked (SameSite cookies, no CORS proxy). The
-                bookmarklet copies the JSON payload to the clipboard
-                and the FM pastes it here. Same-origin POST = no auth
-                drama. */}
-            <TabsContent value="paste" className="space-y-3">
-              <ol className="space-y-2 text-sm text-slate-700 list-decimal list-inside">
-                <li>Run the bookmarklet on Persona — when its banner says <em>"JSON copied"</em>, the payload is on your clipboard.</li>
-                <li>Switch back here and paste below.</li>
-                <li>Click <strong>Import pasted data</strong>. Same-origin POST so this works regardless of cookie / CORS settings.</li>
-              </ol>
-              <Textarea
-                value={pasteText}
-                onChange={(e) => setPasteText(e.target.value)}
-                placeholder='Paste the JSON the bookmarklet copied (starts with {"teamId":...)'
-                className="font-mono text-[10px] h-40"
-              />
-              {/* Pre-submit preview — shows what we parsed so the FM
-                  catches a "0 events for everyone" scenario BEFORE
-                  submitting. The bookmarklet's DOM selectors guess
-                  Persona's structure; if they miss, every worker
-                  comes back with empty buckets and the import looks
-                  successful but writes nothing. The preview surfaces
-                  that case as a red warning instead of silent zero. */}
-              {pastePreview && (
-                <div className={`rounded-lg border px-3 py-2.5 text-xs ${
-                  pastePreview.totalEvents === 0
-                    ? "border-rose-200 bg-rose-50/60 text-rose-800"
-                    : "border-emerald-200 bg-emerald-50/60 text-emerald-800"
-                }`}>
-                  <div className="flex items-center justify-between gap-3 mb-1">
-                    <span className="font-semibold">
-                      {pastePreview.workerCount} worker{pastePreview.workerCount === 1 ? "" : "s"} · {pastePreview.totalEvents} event{pastePreview.totalEvents === 1 ? "" : "s"} parsed
-                    </span>
-                    <span className="text-[10px] uppercase tracking-wider opacity-80">
-                      {pastePreview.workersWithEvents}/{pastePreview.workerCount} have events
-                    </span>
+              <details className="rounded-lg border border-slate-200 bg-white" open>
+                <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 select-none flex items-center gap-1.5">
+                  <ClipboardPaste className="h-3.5 w-3.5" /> Paste JSON (when cross-origin auth is blocked)
+                </summary>
+                <div className="px-3 pb-3 space-y-2 border-t border-slate-100">
+                  <Textarea
+                    value={pasteText}
+                    onChange={(e) => setPasteText(e.target.value)}
+                    placeholder='Paste the JSON the bookmarklet copied (starts with {"teamId":...)'
+                    className="font-mono text-[10px] h-28"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button onClick={onImportPasted} disabled={!pasteText.trim() || importMutation.isPending} className="gap-1.5" size="sm">
+                      {importMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                      Import pasted data
+                    </Button>
+                    {pasteText.trim() && (
+                      <Button variant="ghost" size="sm" onClick={() => setPasteText("")}>Clear</Button>
+                    )}
                   </div>
-                  {pastePreview.totalEvents === 0 ? (
-                    <p className="text-[11px]">
-                      <strong>0 events for everyone.</strong> The bookmarklet ran but couldn&apos;t find shift data in Persona&apos;s DOM.
-                      Importing now will not change attendance counts. Open the monthly schedule view in Persona before re-running the bookmarklet, or fall through to the server-side scrape.
-                    </p>
-                  ) : (
-                    <div className="flex flex-wrap gap-2 text-[11px]">
-                      <span>🤒 {pastePreview.bySick} sick</span>
-                      <span>❌ {pastePreview.byMissed} missed</span>
-                      <span>⏰ {pastePreview.byLate} late</span>
-                      <span>➕ {pastePreview.byExtra} extra</span>
-                    </div>
-                  )}
+                </div>
+              </details>
+            </TabsContent>
+
+            {/* ─── ALIASES TAB ─── */}
+            <TabsContent value="aliases" className="space-y-3">
+              <div className="rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-2.5 text-xs text-blue-900">
+                <strong>Saved Persona-name → GP mappings.</strong> Once an alias exists, future syncs skip fuzzy matching for that name and resolve it instantly. Aliases are created automatically when you link an unmatched name in the Reconcile panel below.
+              </div>
+              {aliasesQuery.isLoading && (
+                <div className="flex items-center gap-2 text-sm text-slate-500 py-6 justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading aliases…
                 </div>
               )}
-              <div className="flex items-center gap-2">
-                <Button onClick={onImportPasted} disabled={!pasteText.trim() || importMutation.isPending} className="gap-1.5">
-                  {importMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                  Import pasted data
-                </Button>
-                {pasteText.trim() && (
-                  <Button variant="ghost" size="sm" onClick={() => setPasteText("")}>Clear</Button>
-                )}
-              </div>
+              {!aliasesQuery.isLoading && (aliasesQuery.data ?? []).length === 0 && (
+                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                  No saved aliases yet. They'll appear here as you link unmatched Persona names to GPs.
+                </div>
+              )}
+              {(aliasesQuery.data ?? []).length > 0 && (
+                <div className="rounded-xl border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100 max-h-[340px] overflow-y-auto">
+                  {(aliasesQuery.data ?? []).map((a) => (
+                    <div key={a.id} className="flex items-center gap-3 px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm">
+                          <span className="font-mono text-slate-700">{a.personaName}</span>
+                          <span className="text-slate-400 mx-2">→</span>
+                          <span className="font-medium text-slate-800">{a.gpName ?? `GP #${a.gamePresenterId}`}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">
+                          Linked {new Date(a.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost" size="sm"
+                        onClick={() => deleteAliasMutation.mutate({ aliasId: a.id })}
+                        disabled={deleteAliasMutation.isPending}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </TabsContent>
           </div>
-
-          {importMutation.data && (() => {
-            // Distinguish "matched and applied" from "matched but
-            // nothing changed". The server returns matchDetails with
-            // a per-row `applied` flag that's true when ANY write
-            // happened — including breakdown-only writes where the
-            // monthly totals didn't move but a sick day shifted from
-            // the 3rd to the 7th (Codex P2 on PR #80). Falls back to
-            // counting non-empty `changes` for older API payloads
-            // that predate the `applied` flag.
-            const data = importMutation.data as any;
-            const details: any[] = Array.isArray(data.matchDetails) ? data.matchDetails : [];
-            const updated = details.filter(d => {
-              if (!d.matched) return false;
-              if (typeof d.applied === "boolean") return d.applied;
-              return d.changes && Object.keys(d.changes).length > 0;
-            }).length;
-            const matchedNoChange = (data.matched ?? 0) - updated;
-            const allNoChange = data.matched > 0 && updated === 0;
-            return (
-              <div className="border-t border-slate-200 pt-3 space-y-2">
-                <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <ChevronRight className="h-3.5 w-3.5 text-primary" />
-                  Last import
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  <Badge className="bg-emerald-50 border-emerald-200 text-emerald-700 gap-1">
-                    <Check className="h-3 w-3" /> {updated} updated
-                  </Badge>
-                  {matchedNoChange > 0 && (
-                    <Badge className="bg-slate-100 border-slate-200 text-slate-600 gap-1">
-                      {matchedNoChange} matched · no change
-                    </Badge>
-                  )}
-                  <Badge className="bg-amber-50 border-amber-200 text-amber-700 gap-1">
-                    <AlertTriangle className="h-3 w-3" /> {data.unmatched} unmatched
-                  </Badge>
-                  <Badge className="bg-slate-100 border-slate-200 text-slate-700 gap-1">
-                    {data.totalPersonaWorkers} total
-                  </Badge>
-                </div>
-                {allNoChange && (
-                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
-                    Every matched worker was already up-to-date — no attendance rows were written.
-                    If Attendance still shows zeros, the bookmarklet likely couldn&apos;t parse Persona&apos;s shift data.
-                    Re-run on the monthly schedule view; the Paste preview above should report a non-zero event total.
-                  </p>
-                )}
-              </div>
-            );
-          })()}
         </Tabs>
+
+        {/* ─── RECONCILE PANEL ─── */}
+        {unmatchedRows.length > 0 && (
+          <div className="border-t border-slate-200 pt-3">
+            <ReconcilePanel
+              unmatched={unmatchedRows}
+              resolved={resolved}
+              roster={rosterQuery.data ?? []}
+              onLink={onLinkUnmatched}
+              isPending={linkAndApplyMutation.isPending}
+            />
+          </div>
+        )}
+
+        {/* ─── LAST IMPORT SUMMARY (when not in Roster mode) ─── */}
+        {lastImport && activeTab !== "roster" && (() => {
+          const details: MatchDetail[] = lastImport.matchDetails ?? [];
+          const updated = details.filter(d => {
+            if (!d.matched) return false;
+            if (typeof d.applied === "boolean") return d.applied;
+            return d.changes && Object.keys(d.changes).length > 0;
+          }).length;
+          const matchedNoChange = (lastImport.matched ?? 0) - updated;
+          const viaAlias = details.filter(d => d.matched && d.viaAlias).length;
+          return (
+            <div className="border-t border-slate-200 pt-3 flex flex-wrap gap-2 items-center">
+              <Badge className="bg-emerald-50 border-emerald-200 text-emerald-700 gap-1">
+                <Check className="h-3 w-3" /> {updated} updated
+              </Badge>
+              {matchedNoChange > 0 && (
+                <Badge className="bg-slate-100 border-slate-200 text-slate-600 gap-1">
+                  {matchedNoChange} matched · no change
+                </Badge>
+              )}
+              {viaAlias > 0 && (
+                <Badge className="bg-blue-50 border-blue-200 text-blue-700 gap-1">
+                  <Link2 className="h-3 w-3" /> {viaAlias} via alias
+                </Badge>
+              )}
+              <Badge className="bg-amber-50 border-amber-200 text-amber-700 gap-1">
+                <AlertTriangle className="h-3 w-3" /> {lastImport.unmatched ?? 0} unmatched
+              </Badge>
+              <Badge className="bg-slate-100 border-slate-200 text-slate-700 gap-1">
+                {lastImport.totalPersonaWorkers ?? 0} total
+              </Badge>
+            </div>
+          );
+        })()}
 
         <DialogFooter className="border-t border-slate-200 pt-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -748,6 +880,155 @@ export function PersonaImporter({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ============================================
+// Sub-components
+// ============================================
+function RosterCell({ value, onChange }: { value: number; onChange: (v: string) => void }) {
+  return (
+    <div className="flex justify-center">
+      <Input
+        type="number" min={0} max={31}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 w-14 text-center text-sm font-mono px-1"
+      />
+    </div>
+  );
+}
+
+function ReconcilePanel({
+  unmatched, resolved, roster, onLink, isPending,
+}: {
+  unmatched: MatchDetail[];
+  resolved: Set<string>;
+  roster: RosterRow[];
+  onLink: (row: MatchDetail, gpId: number) => void;
+  isPending: boolean;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const open = unmatched.filter(r => !resolved.has(r.personaName));
+  const done = unmatched.filter(r => resolved.has(r.personaName));
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3">
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full flex items-center justify-between gap-2 text-left"
+      >
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <h4 className="text-sm font-semibold text-amber-900">
+            Reconcile {open.length} unmatched name{open.length === 1 ? "" : "s"}
+          </h4>
+          {done.length > 0 && (
+            <Badge className="bg-emerald-100 border-emerald-200 text-emerald-700 ml-1">
+              {done.length} resolved
+            </Badge>
+          )}
+        </div>
+        {collapsed ? <ChevronDown className="h-4 w-4 text-amber-600" /> : <ChevronUp className="h-4 w-4 text-amber-600" />}
+      </button>
+      {!collapsed && (
+        <div className="mt-2 space-y-2 max-h-64 overflow-y-auto">
+          {open.length === 0 && (
+            <p className="text-xs text-emerald-800 px-1 py-2">All unmatched names have been linked. 🎉</p>
+          )}
+          {open.map(row => (
+            <ReconcileRow key={row.personaName} row={row} roster={roster} onLink={onLink} isPending={isPending} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReconcileRow({
+  row, roster, onLink, isPending,
+}: {
+  row: MatchDetail;
+  roster: RosterRow[];
+  onLink: (row: MatchDetail, gpId: number) => void;
+  isPending: boolean;
+}) {
+  // Combine server-provided candidates with the full team roster (so
+  // the FM can override even when the fuzzy matcher saw nothing).
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const cands = (row.candidates ?? []).slice(0, 3);
+  const eventTotal =
+    (row.pendingData?.sickLeaves ?? 0) +
+    (row.pendingData?.missedDays ?? 0) +
+    (row.pendingData?.lateToWork ?? 0) +
+    (row.pendingData?.extraShifts ?? 0);
+  return (
+    <div className="rounded-lg bg-white border border-amber-200 px-3 py-2">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-slate-800 truncate">{row.personaName}</div>
+          <div className="text-[10px] text-slate-500 flex items-center gap-2">
+            {eventTotal > 0 ? (
+              <>🤒 {row.pendingData?.sickLeaves} · ❌ {row.pendingData?.missedDays} · ⏰ {row.pendingData?.lateToWork} · ➕ {row.pendingData?.extraShifts}</>
+            ) : (
+              <>no events parsed</>
+            )}
+            {row.reason && (
+              <span className="ml-1 px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600">
+                {row.reason === "wrong-team" ? "wrong team" :
+                 row.reason === "below-threshold" ? "low similarity" : "no candidates"}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {cands.length > 0 ? cands.map(c => (
+          <Button
+            key={c.gpId}
+            size="sm" variant="outline"
+            disabled={isPending}
+            onClick={() => onLink(row, c.gpId)}
+            className="h-7 text-xs gap-1"
+          >
+            <UserPlus className="h-3 w-3" />
+            {c.gpName}
+            <span className="text-[10px] text-slate-500 ml-0.5">{Math.round(c.similarity * 100)}%</span>
+          </Button>
+        )) : (
+          <span className="text-[11px] text-slate-500 italic">No team candidates — pick manually:</span>
+        )}
+        <Button
+          size="sm" variant="ghost"
+          onClick={() => setPickerOpen(o => !o)}
+          className="h-7 text-xs"
+        >
+          {pickerOpen ? "Hide list" : "Pick from full roster"}
+        </Button>
+      </div>
+      {pickerOpen && (
+        <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 divide-y divide-slate-200">
+          {roster.length === 0 && (
+            <div className="px-2 py-2 text-[11px] text-slate-500">
+              Roster is empty — load it on the Roster tab first.
+            </div>
+          )}
+          {roster.map(g => (
+            <button
+              key={g.gpId}
+              disabled={isPending}
+              onClick={() => onLink(row, g.gpId)}
+              className="w-full text-left px-2 py-1.5 text-xs hover:bg-white transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              <UserPlus className="h-3 w-3 text-slate-400 shrink-0" />
+              <span className="truncate">{g.gpName}</span>
+              {g.realName && g.realName !== g.gpName && (
+                <span className="text-[10px] text-slate-400 truncate">· HR: {g.realName}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -775,7 +1056,7 @@ export function PersonaImportButton({
     <>
       <Button variant={variant} size={size} className={className} onClick={() => setOpen(true)}>
         <Download className="h-3.5 w-3.5 mr-1.5" />
-        Import via bookmarklet
+        Persona attendance
       </Button>
       <PersonaImporter
         open={open}

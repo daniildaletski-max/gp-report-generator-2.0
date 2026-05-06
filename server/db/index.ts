@@ -148,3 +148,10 @@ export {
   createSyncLog, updateSyncLog,
   getLastSyncForTeam, getRecentSyncsForTeam, getAllRecentSyncs,
 } from "./personaSyncLogs";
+
+// Persona Name Aliases
+export {
+  findAliasForTeam, listAliasesForTeam, upsertAlias,
+  deleteAlias, getAliasById, loadAliasMapForTeam,
+} from "./personaAliases";
+export type { PersonaAliasWithGp } from "./personaAliases";
