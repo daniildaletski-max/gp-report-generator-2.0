@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
+import { useCountUp } from "@/hooks/useCountUp";
 
 interface StatCardProps {
   icon: LucideIcon;
@@ -61,6 +62,34 @@ const colorMap: Record<string, {
   },
 };
 
+/**
+ * Internal helper: animates numeric values, passes through strings unchanged.
+ */
+function AnimatedValue({ value, className }: { value: number | string; className?: string }) {
+  const numericValue = typeof value === "number" ? value : parseFloat(value);
+  const isNumeric = !isNaN(numericValue) && typeof value !== "string";
+  const hasDecimals = isNumeric && !Number.isInteger(numericValue);
+
+  const { value: animatedVal, ref } = useCountUp({
+    end: isNumeric ? numericValue : 0,
+    duration: 800,
+    decimals: hasDecimals ? 1 : 0,
+  });
+
+  if (!isNumeric) {
+    return <p className={className}>{value}</p>;
+  }
+
+  return (
+    <p ref={ref as React.RefObject<HTMLParagraphElement>} className={className}>
+      {animatedVal.toLocaleString(undefined, {
+        minimumFractionDigits: hasDecimals ? 1 : 0,
+        maximumFractionDigits: hasDecimals ? 1 : 0,
+      })}
+    </p>
+  );
+}
+
 export function StatCard({ icon: Icon, value, label, color = "violet", suffix, className }: StatCardProps) {
   const colors = colorMap[color] || colorMap.violet;
 
@@ -82,9 +111,7 @@ export function StatCard({ icon: Icon, value, label, color = "violet", suffix, c
         </div>
       </div>
       <div className="flex items-baseline gap-1">
-        <p className={cn("text-2xl sm:text-3xl font-bold tracking-tight", colors.valueText)}>
-          {value}
-        </p>
+        <AnimatedValue value={value} className={cn("text-2xl sm:text-3xl font-bold tracking-tight", colors.valueText)} />
         {suffix && <span className="text-sm text-muted-foreground font-medium">{suffix}</span>}
       </div>
       <p className="text-xs sm:text-sm font-medium text-muted-foreground mt-1.5">{label}</p>

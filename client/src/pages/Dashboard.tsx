@@ -15,6 +15,7 @@ import { useUrlState, urlNumber } from "@/hooks/useUrlState";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from "recharts";
 import { useIsMobile } from "@/hooks/useMobile";
+import { useCountUp } from "@/hooks/useCountUp";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -1543,9 +1544,7 @@ function DashboardHero({
               <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Avg Team Score</p>
               <div className="flex items-baseline gap-3 mt-1.5 flex-wrap">
                 {displayValue ? (
-                  <span className="text-4xl sm:text-5xl font-bold tabular-nums text-foreground leading-none">
-                    {displayValue}
-                  </span>
+                  <AnimatedHeroValue value={displayValue!} />
                 ) : (
                   // No data anywhere — render a calmer "no data yet" line
                   // instead of the em-dash that visually clipped to a bar.
@@ -1632,6 +1631,17 @@ function DashboardHero({
         />
       </div>
     </div>
+  );
+}
+
+/** Animated hero value — counts up from 0 to the displayed score */
+function AnimatedHeroValue({ value }: { value: string }) {
+  const numVal = parseFloat(value);
+  const { value: animated, ref } = useCountUp({ end: numVal, duration: 900, decimals: 1 });
+  return (
+    <span ref={ref as React.RefObject<HTMLSpanElement>} className="text-4xl sm:text-5xl font-bold tabular-nums text-foreground leading-none">
+      {animated.toFixed(1)}
+    </span>
   );
 }
 

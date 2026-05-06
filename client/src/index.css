@@ -1159,4 +1159,76 @@
   .glow-gold-sm {
     box-shadow: 0 0 10px rgba(212, 175, 55, 0.1), 0 0 20px rgba(212, 175, 55, 0.03);
   }
+
+  /* Submit button pulse on click */
+  .btn-pulse {
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-pulse::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle, rgba(212, 175, 55, 0.3) 0%, transparent 70%);
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .btn-pulse:active::after {
+    opacity: 1;
+    transform: scale(2.5);
+    transition: opacity 0s, transform 0s;
+  }
+
+  /* Row slide-out animation for list item removal */
+  .row-slide-out {
+    animation: row-exit 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  /* Stagger children entrance */
+  .stagger-children > * {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: stagger-in 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+  .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+  .stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+  .stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+  .stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+  .stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+  .stagger-children > *:nth-child(7) { animation-delay: 300ms; }
+  .stagger-children > *:nth-child(8) { animation-delay: 350ms; }
+  .stagger-children > *:nth-child(9) { animation-delay: 400ms; }
+  .stagger-children > *:nth-child(10) { animation-delay: 450ms; }
+
+  /* Tab content transition */
+  .tab-content-enter {
+    animation: tab-slide-in 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Card hover lift with gold shadow */
+  .card-interactive {
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .card-interactive:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px -8px rgba(212, 175, 55, 0.15), 0 4px 10px -4px rgba(15, 23, 42, 0.06);
+  }
+}
+
+@keyframes row-exit {
+  0% { opacity: 1; transform: translateX(0); max-height: 80px; }
+  50% { opacity: 0.5; transform: translateX(30px); }
+  100% { opacity: 0; transform: translateX(60px); max-height: 0; margin: 0; padding: 0; overflow: hidden; }
+}
+
+@keyframes stagger-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes tab-slide-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
 }

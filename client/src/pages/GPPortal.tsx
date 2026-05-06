@@ -13,7 +13,7 @@ import {
   MessageSquare, FileText, LayoutDashboard,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
 import { MAX_TOTAL_SCORE, MAX_APPEARANCE_SCORE, MAX_GAME_PERFORMANCE_SCORE, SCORE_CONFIG, MONTH_NAMES } from "../../../shared/const";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
 import { getTips } from "@/lib/improvementTips";
@@ -1191,6 +1191,7 @@ export default function GPPortal() {
             />
 
             <CriterionBreakdown evaluations={(monthDetails?.evaluations ?? []) as any[]} />
+            <RadarBreakdown evaluations={(monthDetails?.evaluations ?? []) as any[]} />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Error Details */}
@@ -1756,6 +1757,84 @@ function CriterionBreakdown({ evaluations }: { evaluations: any[] }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// RadarBreakdown — spider/radar chart showing all 6 criteria as a
+// polygon, giving the GP a visual "shape" of their strengths.
+// ============================================
+function RadarBreakdown({ evaluations }: { evaluations: any[] }) {
+  const data = useMemo(() => {
+    if (!evaluations || evaluations.length === 0) return null;
+    const totals = { hair: 0, makeup: 0, outfit: 0, posture: 0, dealing: 0, perf: 0 };
+    const counts = { hair: 0, makeup: 0, outfit: 0, posture: 0, dealing: 0, perf: 0 };
+    for (const e of evaluations) {
+      const add = (key: keyof typeof totals, value: any) => {
+        if (value != null && Number.isFinite(Number(value))) {
+          totals[key] += Number(value);
+          counts[key]++;
+        }
+      };
+      add("hair", e.hairScore);
+      add("makeup", e.makeupScore);
+      add("outfit", e.outfitScore);
+      add("posture", e.postureScore);
+      add("dealing", e.dealingStyleScore);
+      add("perf", e.gamePerformanceScore);
+    }
+    // Normalize all to 0-100% scale for radar comparison
+    const norm = (key: keyof typeof totals, max: number) =>
+      counts[key] > 0 ? Math.round((totals[key] / counts[key] / max) * 100) : 0;
+    return [
+      { criterion: "Hair", score: norm("hair", 3), fullMark: 100 },
+      { criterion: "Makeup", score: norm("makeup", 3), fullMark: 100 },
+      { criterion: "Outfit", score: norm("outfit", 3), fullMark: 100 },
+      { criterion: "Posture", score: norm("posture", 3), fullMark: 100 },
+      { criterion: "Dealing", score: norm("dealing", 5), fullMark: 100 },
+      { criterion: "Game Perf", score: norm("perf", 5), fullMark: 100 },
+    ];
+  }, [evaluations]);
+
+  if (!data || data.every(d => d.score === 0)) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+          <Target className="h-4 w-4 text-amber-500" />
+          Performance Shape
+        </h3>
+        <span className="text-[11px] text-slate-500">
+          Normalized to 100%
+        </span>
+      </div>
+      <div className="w-full h-[240px] sm:h-[280px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
+            <PolarGrid stroke="#e2e8f0" />
+            <PolarAngleAxis
+              dataKey="criterion"
+              tick={{ fontSize: 11, fill: "#64748b" }}
+            />
+            <PolarRadiusAxis
+              angle={30}
+              domain={[0, 100]}
+              tick={{ fontSize: 9, fill: "#94a3b8" }}
+              tickCount={5}
+            />
+            <Radar
+              name="Score"
+              dataKey="score"
+              stroke="oklch(0.65 0.13 75)"
+              fill="oklch(0.75 0.12 85)"
+              fillOpacity={0.35}
+              strokeWidth={2}
+            />
+          </RadarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );

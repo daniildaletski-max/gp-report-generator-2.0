@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import { useIsMobile } from "@/hooks/useMobile";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -35,10 +36,17 @@ export function GPDetailDrawer({ gpId, open, onOpenChange }: GPDetailDrawerProps
     { gpId: gpId ?? 0, monthsBack: 6 },
     { enabled: open && gpId !== null && gpId > 0 },
   );
+  const isMobile = useIsMobile();
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-0">
+      <SheetContent
+        side={isMobile ? "bottom" : "right"}
+        className={isMobile
+          ? "h-[88vh] rounded-t-2xl overflow-y-auto p-0"
+          : "w-full sm:max-w-2xl overflow-y-auto p-0"
+        }
+      >
         {isLoading || !data ? (
           <ProfileSkeleton />
         ) : (

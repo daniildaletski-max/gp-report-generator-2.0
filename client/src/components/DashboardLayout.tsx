@@ -23,6 +23,8 @@ import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { CommandPalette, useCommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 
 type MenuItem = {
   icon: React.ComponentType<{ className?: string }>;
@@ -132,6 +134,12 @@ function DashboardLayoutContent({
   const isMobile = useIsMobile();
   const palette = useCommandPalette();
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  useKeyboardShortcuts({
+    onOpenSearch: () => palette.setOpen(true),
+    onShowHelp: () => setShortcutsOpen(true),
+  });
   const handleLogout = useCallback(async () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
@@ -385,6 +393,7 @@ function DashboardLayoutContent({
       </SidebarInset>
 
       <CommandPalette open={palette.open} onOpenChange={palette.setOpen} initialQuery={palette.query} />
+      <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </>
   );
 }
