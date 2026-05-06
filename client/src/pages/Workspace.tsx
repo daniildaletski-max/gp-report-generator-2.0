@@ -977,7 +977,7 @@ function CoachingPanel({ gpId, gpName }: { gpId: number; gpName: string }) {
   });
   const [composerOpen, setComposerOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
-  const [draftCategory, setDraftCategory] = useState<string>("coaching");
+  const [draftCategory, setDraftCategory] = useState<string>("general");
   const completeMutation = trpc.actionItems.complete.useMutation({
     onSuccess: () => { refetch(); toast.success("Action item completed"); },
     onError: (e) => toast.error(e.message),
@@ -1042,11 +1042,15 @@ function CoachingPanel({ gpId, gpName }: { gpId: number; gpName: string }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="coaching">Coaching</SelectItem>
-                <SelectItem value="attendance">Attendance</SelectItem>
+                {/* Categories must match the schema enum used by
+                    actionItems.create — appearance / performance /
+                    attitude / attendance / errors / general. */}
+                <SelectItem value="general">General</SelectItem>
                 <SelectItem value="performance">Performance</SelectItem>
                 <SelectItem value="appearance">Appearance</SelectItem>
-                <SelectItem value="general">General</SelectItem>
+                <SelectItem value="attitude">Attitude</SelectItem>
+                <SelectItem value="attendance">Attendance</SelectItem>
+                <SelectItem value="errors">Errors</SelectItem>
               </SelectContent>
             </Select>
             <Button
