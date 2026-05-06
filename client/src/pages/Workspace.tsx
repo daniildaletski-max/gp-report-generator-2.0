@@ -35,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/PageHeader";
 import { StudioworksImportButton } from "@/components/StudioworksImporter";
+import { BulkEvaluateButton } from "@/components/BulkEvaluateDialog";
 import { toast } from "sonner";
 import {
   Zap, Users, Clock, AlertTriangle, CheckCircle2, ChevronRight, ChevronLeft,
@@ -430,6 +431,11 @@ export default function WorkspacePage() {
               variant="outline"
               size="sm"
               onImported={() => refetchCadence()}
+            />
+            <BulkEvaluateButton
+              gps={(cadenceData?.gps ?? []) as any}
+              evaluatorName={user?.name ?? user?.email ?? ""}
+              onCommitted={() => refetchCadence()}
             />
           </div>
         )}
