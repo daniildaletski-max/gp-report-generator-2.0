@@ -333,10 +333,10 @@ export default function Dashboard() {
           </div>
 
           {/* Action grid — 2x2 on mobile, 1x4 on tablet+ */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 stagger-children">
             <button
               onClick={() => setLocation('/upload')}
-              className="group flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-md transition-all text-left"
+              className="group flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-primary/40 hover:shadow-md transition-all text-left card-interactive"
             >
               <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-sm shrink-0">
                 <Upload className="h-5 w-5 text-white" />
@@ -348,7 +348,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setLocation('/reports')}
-              className="group flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-emerald-300 hover:shadow-md transition-all text-left"
+              className="group flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-emerald-300 hover:shadow-md transition-all text-left card-interactive"
             >
               <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-sm shrink-0">
                 <FileSpreadsheet className="h-5 w-5 text-white" />
@@ -360,7 +360,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setLocation('/attendance')}
-              className="group flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-blue-300 hover:shadow-md transition-all text-left"
+              className="group flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-blue-300 hover:shadow-md transition-all text-left card-interactive"
             >
               <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shrink-0">
                 <RefreshCw className="h-5 w-5 text-white" />
@@ -372,7 +372,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setLocation('/admin?tab=action-items')}
-              className="group flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-violet-300 hover:shadow-md transition-all text-left"
+              className="group flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-violet-300 hover:shadow-md transition-all text-left card-interactive"
             >
               <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center shadow-sm shrink-0">
                 <Target className="h-5 w-5 text-white" />
@@ -1606,7 +1606,7 @@ function DashboardHero({
       </div>
 
       {/* Mini tiles — vertical stack on desktop, horizontal scroll on mobile */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3 stagger-children">
         <MiniMetric
           label="GPs evaluated"
           primary={`${evaluatedGPs}`}

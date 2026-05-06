@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, GitCompareArrows } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -23,6 +23,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 const Attendance = lazy(() => import("./pages/Attendance"));
 const Workspace = lazy(() => import("./pages/Workspace"));
 const GPPortal = lazy(() => import("./pages/GPPortal"));
+const Compare = lazy(() => import("./pages/Compare"));
 const InvitePage = lazy(() => import("./pages/InvitePage"));
 
 function PageLoader() {
@@ -47,6 +48,7 @@ const baseSidebarItems = [
   { href: "/evaluations", label: "Evaluations", icon: FileCheck },
   { href: "/reports", label: "Reports", icon: FileSpreadsheet },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck },
+  { href: "/compare", label: "Compare", icon: GitCompareArrows },
 ];
 
 // Admin-only item
@@ -108,6 +110,11 @@ function DashboardRoutes() {
             <Route path="/workspace">
               <RouteErrorBoundary fallbackTitle="Workspace failed to load">
                 <Workspace />
+              </RouteErrorBoundary>
+            </Route>
+            <Route path="/compare">
+              <RouteErrorBoundary fallbackTitle="Compare page failed to load">
+                <Compare />
               </RouteErrorBoundary>
             </Route>
             <Route component={NotFound} />

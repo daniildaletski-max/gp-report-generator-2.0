@@ -257,7 +257,7 @@ export default function AttendancePage() {
               size="sm"
               onClick={handleSave}
               disabled={isSaving}
-              className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary text-white font-semibold shadow-lg shadow-primary/20"
+              className="btn-pulse bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary text-white font-semibold shadow-lg shadow-primary/20"
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -514,7 +514,7 @@ export default function AttendancePage() {
           <Button
             onClick={handleSave}
             disabled={isSaving}
-            className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary text-white font-semibold shadow-lg"
+            className="btn-pulse w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary text-white font-semibold shadow-lg"
           >
             {isSaving ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1231,7 +1231,11 @@ function AttendanceCalendarView({
               className={`relative min-h-[68px] sm:min-h-[84px] p-1.5 sm:p-2 rounded-lg border text-left transition-all ${
                 cell.inMonth
                   ? hasActivity
-                    ? "bg-white border-slate-200 hover:border-primary/40 hover:shadow-sm cursor-pointer"
+                    ? totalCount >= 4
+                      ? "bg-rose-50/80 border-rose-200 hover:border-rose-300 hover:shadow-md cursor-pointer"
+                      : totalCount >= 2
+                        ? "bg-amber-50/60 border-amber-200/80 hover:border-primary/40 hover:shadow-sm cursor-pointer"
+                        : "bg-primary/5 border-primary/20 hover:border-primary/40 hover:shadow-sm cursor-pointer"
                     : isWeekend
                       ? "bg-slate-50/60 border-slate-100 opacity-70"
                       : "bg-white border-slate-100 hover:border-slate-200 cursor-default"

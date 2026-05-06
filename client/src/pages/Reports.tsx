@@ -653,7 +653,7 @@ export default function ReportsPage() {
                 <Button variant="outline" onClick={() => setShowNewReport(false)} disabled={isGenerating}>
                   Cancel
                 </Button>
-                <Button onClick={handleGenerate} disabled={isGenerating || !formData.teamId || !formData.reportMonth} className="bg-gradient-to-r from-primary to-primary/80 text-white hover:from-primary/90 hover:to-primary">
+                <Button onClick={handleGenerate} disabled={isGenerating || !formData.teamId || !formData.reportMonth} className="btn-pulse bg-gradient-to-r from-primary to-primary/80 text-white hover:from-primary/90 hover:to-primary">
                   {isGenerating ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -674,7 +674,7 @@ export default function ReportsPage() {
       {/* Stats strip — calmer KPI tiles with semantic accent stripes,
           replaces the heavier stat-card-enhanced blocks. Same data,
           much less visual noise. */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 stagger-children">
         <ReportKpi icon={FileSpreadsheet} label="Total Reports" value={stats.total} tone="violet" />
         <ReportKpi icon={Calendar} label="This Month" value={stats.thisMonth} tone="sky" />
         <ReportKpi icon={CheckCircle} label="Finalized" value={stats.finalized} tone="emerald" />
@@ -790,7 +790,7 @@ export default function ReportsPage() {
             {/* Mobile card grid (< md) */}
             <div className="md:hidden space-y-2">
               {filteredReports.map((item) => (
-                <div key={item.report.id} className="rounded-xl border border-border bg-card p-3">
+                <div key={item.report.id} className="card-interactive rounded-xl border border-border bg-card p-3">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-foreground truncate">{item.team?.teamName || "Unknown"}</p>
