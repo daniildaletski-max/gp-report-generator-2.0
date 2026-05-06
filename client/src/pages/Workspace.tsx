@@ -789,15 +789,13 @@ export default function WorkspacePage() {
                 </div>
               )}
 
-              {selectedGp.openActions > 0 && (
-                <div className="glass-card p-3 border-amber-200">
-                  <div className="flex items-center gap-2">
-                    <Flag className="h-4 w-4 text-amber-500" />
-                    <span className="text-xs font-semibold text-amber-700">
-                      {selectedGp.openActions} open action item{selectedGp.openActions === 1 ? "" : "s"}
-                    </span>
-                  </div>
-                </div>
+              {/* Coaching panel — shows action items the system flagged
+                  for this GP (anomaly detection, watch zones, manual
+                  notes). Lets the FM advance status / mark complete
+                  in-place without leaving the eval flow. Replaces the
+                  "N open action items" stub that just showed a count. */}
+              {selectedGp.gpId != null && (
+                <CoachingPanel gpId={selectedGp.gpId} gpName={selectedGp.gpName} />
               )}
             </>
           )}
@@ -956,6 +954,189 @@ function AttPill({
       <Icon className="h-3 w-3" />
       <span className="tabular-nums text-xs font-semibold">{value}</span>
       <span className="text-[10px] uppercase tracking-wider opacity-80">{label}</span>
+    </div>
+  );
+}
+
+// ============================================
+// CoachingPanel — Workspace right-rail widget showing the selected
+// GP's open action items + an inline "Add note" composer. Wires the
+// existing actionItems tRPC endpoints (list / update / complete /
+// create) into a tight sidebar UI so the FM doesn't have to bounce
+// out to the Admin page to manage coaching.
+//
+// Statuses follow the schema enum:
+//   open -> in_progress -> completed
+// Priority and category come from the existing schema. We render
+// items grouped by status, with a "complete" button per row.
+// ============================================
+function CoachingPanel({ gpId, gpName }: { gpId: number; gpName: string }) {
+  const { data: items, refetch, isLoading } = trpc.actionItems.list.useQuery({
+    gpId,
+    includeAllStatuses: false, // show open + in_progress only by default
+  });
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftCategory, setDraftCategory] = useState<string>("coaching");
+  const completeMutation = trpc.actionItems.complete.useMutation({
+    onSuccess: () => { refetch(); toast.success("Action item completed"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateMutation = trpc.actionItems.update.useMutation({
+    onSuccess: () => refetch(),
+    onError: (e) => toast.error(e.message),
+  });
+  const createMutation = trpc.actionItems.create.useMutation({
+    onSuccess: () => {
+      refetch();
+      setDraftTitle("");
+      setComposerOpen(false);
+      toast.success("Note added");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const list = items ?? [];
+  const open = list.filter(i => i.status === "open");
+  const inProgress = list.filter(i => i.status === "in_progress");
+
+  const tonePriority = (p: string) => {
+    if (p === "high") return "border-rose-300 bg-rose-50 text-rose-800";
+    if (p === "medium") return "border-amber-300 bg-amber-50 text-amber-800";
+    return "border-slate-300 bg-slate-50 text-slate-700";
+  };
+
+  return (
+    <div className="glass-card p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Flag className="h-4 w-4 text-amber-500" />
+          <h3 className="text-xs font-semibold uppercase tracking-wider">Coaching</h3>
+          {list.length > 0 && (
+            <Badge variant="outline" className="h-5 text-[10px]">{list.length}</Badge>
+          )}
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-[11px] gap-1"
+          onClick={() => setComposerOpen(o => !o)}
+        >
+          {composerOpen ? <ChevronLeft className="h-3 w-3" /> : <Send className="h-3 w-3" />}
+          {composerOpen ? "Cancel" : "Add note"}
+        </Button>
+      </div>
+
+      {composerOpen && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-2 space-y-2">
+          <Input
+            placeholder={`Note for ${gpName.split(" ")[0]}…`}
+            value={draftTitle}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            className="h-8 text-xs"
+            autoFocus
+          />
+          <div className="flex items-center gap-1.5">
+            <Select value={draftCategory} onValueChange={setDraftCategory}>
+              <SelectTrigger className="h-7 text-[11px] flex-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="coaching">Coaching</SelectItem>
+                <SelectItem value="attendance">Attendance</SelectItem>
+                <SelectItem value="performance">Performance</SelectItem>
+                <SelectItem value="appearance">Appearance</SelectItem>
+                <SelectItem value="general">General</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              className="h-7 text-[11px]"
+              disabled={!draftTitle.trim() || createMutation.isPending}
+              onClick={() => createMutation.mutate({
+                gpId,
+                title: draftTitle.trim(),
+                category: draftCategory as any,
+                priority: "medium",
+                source: "manual",
+              })}
+            >
+              {createMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {isLoading ? (
+        <p className="text-[11px] text-slate-500 py-2">Loading…</p>
+      ) : list.length === 0 && !composerOpen ? (
+        <div className="text-[11px] text-slate-500 py-3 text-center">
+          No open coaching items.
+          <br />
+          <button
+            className="text-amber-700 hover:underline mt-1"
+            onClick={() => setComposerOpen(true)}
+          >
+            + Add a note
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {[...open, ...inProgress].map((it: any) => (
+            <div
+              key={it.id}
+              className={`rounded-lg border px-2 py-1.5 ${tonePriority(it.priority)}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold leading-tight truncate">
+                    {it.title}
+                  </p>
+                  {it.description && (
+                    <p className="text-[10px] opacity-80 mt-0.5 line-clamp-2">
+                      {it.description}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+                    <span className="text-[9px] uppercase tracking-wider opacity-70">
+                      {it.category}
+                    </span>
+                    <span className="text-[9px] opacity-50">·</span>
+                    <span className="text-[9px] uppercase tracking-wider opacity-70">
+                      {it.status === "in_progress" ? "in progress" : it.status}
+                    </span>
+                    {it.priority === "high" && (
+                      <span className="text-[9px] uppercase tracking-wider font-bold text-rose-700">· high</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {it.status === "open" && (
+                    <button
+                      type="button"
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-white/80 border border-slate-300 text-slate-700 hover:bg-slate-100"
+                      title="Mark in progress"
+                      onClick={() => updateMutation.mutate({ id: it.id, status: "in_progress" })}
+                      disabled={updateMutation.isPending}
+                    >
+                      Start
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-300 text-emerald-800 hover:bg-emerald-200"
+                    title="Mark complete"
+                    onClick={() => completeMutation.mutate({ id: it.id })}
+                    disabled={completeMutation.isPending}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
