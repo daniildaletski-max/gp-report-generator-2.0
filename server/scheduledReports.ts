@@ -400,12 +400,20 @@ async function runMonthlyReportGeneration() {
 
 /**
  * Initialize the cron job.
- * Runs at 06:00 UTC on the 1st of every month.
+ * Runs at 06:00 EET on the 5th of every month.
+ *
+ * Why the 5th and not the 1st: the previous-month data isn't fully
+ * settled until the FM has had a few business days to finish off
+ * stragglers (late evals, attendance corrections, error-file
+ * uploads). Generating + emailing reports on day-1 hands FMs an
+ * incomplete document. Day-5 gives a comfortable buffer while
+ * still arriving early enough in the new month to act on.
  */
 export function initScheduledReports() {
   // Cron: minute hour day-of-month month day-of-week
-  // "0 6 1 * *" = At 06:00 on the 1st of every month
-  const task = cron.schedule("0 6 1 * *", () => {
+  // "0 6 5 * *" = At 06:00 on the 5th of every month
+  const cronExpr = process.env.MONTHLY_REPORTS_CRON || "0 6 5 * *";
+  const task = cron.schedule(cron.validate(cronExpr) ? cronExpr : "0 6 5 * *", () => {
     log.info("[ScheduledReports] Cron triggered - starting monthly report generation");
     runMonthlyReportGeneration().catch(err => {
       log.error("Unhandled error in scheduled job", err instanceof Error ? err : new Error(String(err)));
@@ -414,7 +422,7 @@ export function initScheduledReports() {
     timezone: "Europe/Tallinn", // User's timezone
   });
 
-  log.info("[ScheduledReports] Monthly report generation scheduled (1st of each month at 06:00 EET)");
+  log.info(`[ScheduledReports] Monthly report generation scheduled at "${cronExpr}" (default: 5th of each month at 06:00 EET)`);
   return task;
 }
 
