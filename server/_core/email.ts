@@ -9,6 +9,14 @@ export type EmailPayload = {
   html?: string;
   attachmentUrl?: string;
   attachmentName?: string;
+  /**
+   * Optional idempotency key — when supplied, Resend dedups duplicate
+   * sends for the same key. Critical for the cron retry path: if a
+   * marker-write fails after a successful send, the next retry day
+   * would otherwise re-send the same email; with this key Resend
+   * recognises the duplicate and silently no-ops the second call.
+   */
+  idempotencyKey?: string;
 };
 
 // Cache the verified domain to avoid repeated API calls
@@ -80,14 +88,21 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
       });
     }
 
-    const { data, error } = await resend.emails.send({
-      from: fromAddress,
-      to: [payload.to],
-      subject: payload.subject,
-      text: payload.body,
-      html: payload.html,
-      attachments: attachments.length > 0 ? attachments : undefined,
-    });
+    const { data, error } = await resend.emails.send(
+      {
+        from: fromAddress,
+        to: [payload.to],
+        subject: payload.subject,
+        text: payload.body,
+        html: payload.html,
+        attachments: attachments.length > 0 ? attachments : undefined,
+      },
+      // Resend v6 second-arg `RequestOptions`. When the caller passes
+      // an idempotency key, Resend will silently no-op a duplicate send
+      // for the same key — making retry-day re-runs safe even when an
+      // earlier marker-write failed after a successful send.
+      payload.idempotencyKey ? { idempotencyKey: payload.idempotencyKey } : undefined,
+    );
 
     if (error) {
       console.warn(`[Email] Failed to send email to ${payload.to}: ${error.message}`);
@@ -134,8 +149,15 @@ export async function sendReportEmail(params: {
     attitude?: number;
     gpCount?: number;
   };
+  /**
+   * Stable idempotency key per (report id, period). When the caller
+   * passes one, Resend dedups duplicate sends — so a retry-day
+   * re-attempt after a successful send + failed marker-write doesn't
+   * double-mail the FM.
+   */
+  idempotencyKey?: string;
 }): Promise<boolean> {
-  const { userEmail, userName, teamName, monthName, year, excelUrl, googleSheetsUrl, summary } = params;
+  const { userEmail, userName, teamName, monthName, year, excelUrl, googleSheetsUrl, summary, idempotencyKey } = params;
 
   const subject = `Team Monthly Report — ${teamName} (${monthName} ${year})`;
   const generatedAt = new Date().toLocaleString('en-GB', {
@@ -211,5 +233,6 @@ ${typeof summary.avgScore === 'number' ? `• Avg team score: ${summary.avgScore
     html,
     attachmentUrl: excelUrl,
     attachmentName: `TeamOverview_${teamName.replace(/\s+/g, '_')}_${monthName}${year}.xlsx`,
+    idempotencyKey,
   });
 }

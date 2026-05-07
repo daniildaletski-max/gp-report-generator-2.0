@@ -203,6 +203,12 @@ export async function generateExcelAndEmail(
       excelUrl,
       googleSheetsUrl,
       summary,
+      // Stable per (reportId, period) — Resend dedups duplicate sends
+      // for the same key, so a retry-day re-attempt after a successful
+      // send whose marker-write failed will silently no-op instead of
+      // double-mailing the FM (Codex P2 — "Avoid retrying after
+      // confirmed sends when marker write fails").
+      idempotencyKey: `report-${report.id}-${report.reportYear}-${report.reportMonth}`,
     });
     log.info("Report email sent", { to: ctx.user.email, sent: emailSent, hasSheets: !!googleSheetsUrl });
 
@@ -218,20 +224,33 @@ export async function generateExcelAndEmail(
     //       "no-recipient"→ terminal, skip
     //       "legacy-backfill" → terminal, skip (set by the cron itself)
     //
-    // If this overwrite fails, the row stays in the in-progress
-    // state — which is itself a valid retry signal. The next cron
-    // tick will re-attempt the email (Resend dedups, harmless even
-    // if the email actually landed).
-    try {
-      await db.updateReport(report.id, {
-        reportData: {
-          ...baseReportData,
-          emailDelivery: { sentAt: new Date().toISOString(), success: emailSent },
-        },
-      });
-    } catch (e) {
-      log.warn("Failed to overwrite in-progress marker with final outcome — row stays in-progress, cron will retry", {
-        error: e instanceof Error ? e.message : String(e),
+    // Retry the marker write up to 3 times with brief backoff so a
+    // transient DB blip doesn't leave the row stuck in-progress. If
+    // all 3 attempts fail, fall through — the row stays in-progress
+    // and the cron will re-attempt; the Resend idempotency key on
+    // the email-send path makes that re-attempt safe (no duplicate
+    // mail to the FM even if the email already landed).
+    let markerOverwriteOk = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await db.updateReport(report.id, {
+          reportData: {
+            ...baseReportData,
+            emailDelivery: { sentAt: new Date().toISOString(), success: emailSent },
+          },
+        });
+        markerOverwriteOk = true;
+        break;
+      } catch (e) {
+        log.warn(`Marker overwrite attempt ${attempt}/3 failed`, {
+          error: e instanceof Error ? e.message : String(e),
+          reportId: report.id,
+        });
+        if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 250));
+      }
+    }
+    if (!markerOverwriteOk) {
+      log.warn("All marker-overwrite attempts exhausted — row stays in-progress, cron will retry safely (idempotency key prevents duplicate mail)", {
         reportId: report.id,
       });
     }
