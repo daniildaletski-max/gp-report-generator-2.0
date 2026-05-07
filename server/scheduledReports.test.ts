@@ -256,6 +256,43 @@ describe("Scheduled Reports", () => {
     expect(legacyStamps).toHaveLength(0);
   });
 
+  it("should bail (not duplicate-create) when deleteReport on a partial row fails", async () => {
+    // Without a unique constraint on (teamId, reportMonth, reportYear),
+    // a transient deleteReport failure followed by createReport would
+    // leave both the stale partial row AND a fresh row for the same
+    // period — and `.limit(1)` lookups could keep returning the stale
+    // one, looping forever. The cron must skip this team for the
+    // current tick and retry tomorrow instead.
+    const db = await import("./db");
+    (db.getAllUsers as any).mockResolvedValueOnce([
+      { user: { id: 1, role: "user", email: "test@test.com", name: "Test User" }, team: null },
+    ]);
+    (db.getFmTeamsByUser as any).mockResolvedValueOnce([
+      { id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1 },
+    ]);
+    (db.getFmTeamById as any).mockResolvedValueOnce({
+      id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
+    });
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 994,
+      excelFileUrl: null,
+      reportData: {},
+    });
+    // Force the deletion to fail transiently.
+    (db.deleteReport as any).mockClear();
+    (db.deleteReport as any).mockRejectedValueOnce(new Error("connection reset"));
+    (db.createReport as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration();
+
+    // The delete was attempted on the right row...
+    expect(db.deleteReport).toHaveBeenCalledWith(994);
+    // ...and once it threw, createReport must NOT have been called
+    // (otherwise we'd have a duplicate row for the same period).
+    expect(db.createReport).not.toHaveBeenCalled();
+  });
+
   it("should retry a row with no excelFileUrl (partial workbook)", async () => {
     const db = await import("./db");
     (db.getAllUsers as any).mockResolvedValueOnce([

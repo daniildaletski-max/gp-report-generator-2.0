@@ -100,9 +100,23 @@ async function generateReportForTeam(
     if (existing && !existing.excelFileUrl) {
       // Partial row — workbook never produced. Clear it so the rest
       // of the function can build a clean replacement.
+      //
+      // Bail-on-delete-failure: there is no unique constraint on
+      // (teamId, reportMonth, reportYear). If `deleteReport` fails
+      // transiently and we still call `createReport`, we'd leave the
+      // old partial row PLUS a fresh finalized row for the same
+      // (team, month, year). `getReportByTeamMonthYear(...).limit(1)`
+      // could then keep returning the stale partial on subsequent
+      // runs, duplicating work indefinitely. Safer to skip this team
+      // for this cron tick and let tomorrow's retry-day try again.
       log.info(`[ScheduledReports] Found partial row #${existing.id} for ${team.teamName} (no excelFileUrl), regenerating`);
-      try { await db.deleteReport(existing.id); } catch (e) {
-        log.warn("Failed to delete partial row, will overwrite anyway", { error: e instanceof Error ? e.message : String(e) });
+      try {
+        await db.deleteReport(existing.id);
+      } catch (e) {
+        log.warn(`Failed to delete partial row #${existing.id} for ${team.teamName} — skipping team for this run, will retry tomorrow`, {
+          error: e instanceof Error ? e.message : String(e),
+        });
+        return null;
       }
     } else if (existing && existing.excelFileUrl && !existingDelivery?.success) {
       // Workbook is uploaded but email never confirmed. Re-run the
