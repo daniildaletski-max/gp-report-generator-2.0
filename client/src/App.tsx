@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, Inbox as InboxIcon } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, Inbox as InboxIcon, Sparkles } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -24,6 +24,7 @@ const Attendance = lazy(() => import("./pages/Attendance"));
 const Workspace = lazy(() => import("./pages/Workspace"));
 const GPPortal = lazy(() => import("./pages/GPPortal"));
 const Inbox = lazy(() => import("./pages/Inbox"));
+const Copilot = lazy(() => import("./pages/Copilot"));
 const InvitePage = lazy(() => import("./pages/InvitePage"));
 
 function PageLoader() {
@@ -43,6 +44,7 @@ function PageLoader() {
 // Base sidebar items for all users
 const baseSidebarItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/copilot", label: "Copilot", icon: Sparkles },
   { href: "/workspace", label: "Workspace", icon: Zap },
   { href: "/upload", label: "Upload", icon: UploadIcon },
   { href: "/evaluations", label: "Evaluations", icon: FileCheck },
@@ -117,6 +119,11 @@ function DashboardRoutes() {
                 <Inbox />
               </RouteErrorBoundary>
             </Route>
+            <Route path="/copilot">
+              <RouteErrorBoundary fallbackTitle="Copilot failed to load">
+                <Copilot />
+              </RouteErrorBoundary>
+            </Route>
             <Route component={NotFound} />
           </Switch>
           </Suspense>
@@ -167,6 +174,7 @@ function Router() {
       <Route path="/attendance" component={DashboardRoutes} />
       <Route path="/workspace" component={DashboardRoutes} />
       <Route path="/inbox" component={DashboardRoutes} />
+      <Route path="/copilot" component={DashboardRoutes} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
