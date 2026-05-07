@@ -58,6 +58,12 @@ interface ReportData {
     goalsThisMonth: string | null;
     teamOverview: string | null;
     additionalComments: string | null;
+    /** New narrative fields populated by reportNarrativesService — added
+     *  to power the Executive Summary and Per-GP Reviews sheets. */
+    executiveSummary?: string | null;
+    topWins?: string | null;
+    topConcerns?: string | null;
+    perGpReviews?: Array<{ gpId: number; gpName: string; narrative: string; focusForNextMonth: string }> | null;
   };
   teamName: string;
   fmName: string;
@@ -1351,15 +1357,142 @@ function buildActionItemsSheet(workbook: ExcelJS.Workbook, items: ActionItemSumm
 // Main Excel Generation
 // ============================
 
+/**
+ * Executive Summary sheet — first thing the recipient sees when they
+ * open the workbook. Single-page layout with the narrative + top
+ * wins/concerns inline so a quick scan is enough.
+ */
+function buildExecutiveSummarySheet(
+  workbook: ExcelJS.Workbook,
+  data: ReportData,
+  monthName: string,
+): void {
+  const { report, teamName, fmName } = data;
+  const summary = (report.executiveSummary || "").trim();
+  const wins = (report.topWins || "").trim();
+  const concerns = (report.topConcerns || "").trim();
+  // Skip if nothing to show — keeps the workbook tidy when the LLM
+  // call failed AND its fallback was also empty.
+  if (!summary && !wins && !concerns) return;
+
+  const sheet = workbook.addWorksheet("Executive Summary");
+  sheet.columns = [
+    { width: 22 },
+    { width: 70 },
+  ];
+
+  // Title block
+  sheet.mergeCells("A1:B1");
+  const title = sheet.getCell("A1");
+  title.value = `${teamName} — Executive Summary, ${monthName} ${report.reportYear}`;
+  title.font = { name: "Arial", size: 16, bold: true, color: { argb: COLORS.navyBlue } };
+  title.alignment = { horizontal: "left", vertical: "middle" };
+  sheet.getRow(1).height = 28;
+
+  sheet.mergeCells("A2:B2");
+  const subtitle = sheet.getCell("A2");
+  subtitle.value = `Floor Manager: ${fmName}`;
+  subtitle.font = { name: "Arial", size: 11, italic: true, color: { argb: COLORS.darkGray } };
+  sheet.getRow(2).height = 18;
+
+  // Spacer
+  sheet.getRow(3).height = 6;
+
+  let row = 4;
+  if (summary) {
+    const label = sheet.getCell(`A${row}`);
+    label.value = "OVERVIEW";
+    label.font = { name: "Arial", size: 10, bold: true, color: { argb: COLORS.darkGray } };
+    label.alignment = { vertical: "top" };
+    const cell = sheet.getCell(`B${row}`);
+    cell.value = summary;
+    cell.alignment = { wrapText: true, vertical: "top" };
+    cell.font = { name: "Arial", size: 11 };
+    sheet.getRow(row).height = Math.max(60, Math.ceil(summary.length / 80) * 16);
+    row++;
+    sheet.getRow(row).height = 6;
+    row++;
+  }
+
+  if (wins) {
+    const label = sheet.getCell(`A${row}`);
+    label.value = "TOP WINS";
+    label.font = { name: "Arial", size: 10, bold: true, color: { argb: COLORS.greenDark } };
+    label.alignment = { vertical: "top" };
+    const cell = sheet.getCell(`B${row}`);
+    cell.value = wins;
+    cell.alignment = { wrapText: true, vertical: "top" };
+    cell.font = { name: "Arial", size: 11 };
+    sheet.getRow(row).height = Math.max(60, wins.split("\n").length * 18);
+    row++;
+    sheet.getRow(row).height = 6;
+    row++;
+  }
+
+  if (concerns) {
+    const label = sheet.getCell(`A${row}`);
+    label.value = "TOP CONCERNS";
+    label.font = { name: "Arial", size: 10, bold: true, color: { argb: COLORS.redDark } };
+    label.alignment = { vertical: "top" };
+    const cell = sheet.getCell(`B${row}`);
+    cell.value = concerns;
+    cell.alignment = { wrapText: true, vertical: "top" };
+    cell.font = { name: "Arial", size: 11 };
+    sheet.getRow(row).height = Math.max(60, concerns.split("\n").length * 18);
+    row++;
+  }
+}
+
+/**
+ * Per-GP Reviews sheet — one row per GP with their AI-generated
+ * narrative + suggested focus for next month. Lets the FM print or
+ * email a personalised section to each presenter without needing
+ * to scroll through scores.
+ */
+function buildPerGpReviewsSheet(
+  workbook: ExcelJS.Workbook,
+  reviews: NonNullable<ReportData["report"]["perGpReviews"]>,
+): void {
+  if (!reviews || reviews.length === 0) return;
+  const sheet = workbook.addWorksheet("Per-GP Reviews");
+  sheet.columns = [
+    { header: "Game Presenter", key: "gpName", width: 28 },
+    { header: "Performance review", key: "narrative", width: 80 },
+    { header: "Focus for next month", key: "focusForNextMonth", width: 50 },
+  ];
+  sheet.getRow(1).font = { name: "Arial", size: 11, bold: true, color: { argb: COLORS.white } };
+  sheet.getRow(1).fill = {
+    type: "pattern", pattern: "solid", fgColor: { argb: COLORS.navyBlue },
+  };
+  sheet.getRow(1).height = 22;
+  sheet.getRow(1).alignment = { vertical: "middle", horizontal: "left" };
+
+  for (const r of reviews) {
+    const row = sheet.addRow({
+      gpName: r.gpName,
+      narrative: r.narrative,
+      focusForNextMonth: r.focusForNextMonth,
+    });
+    row.alignment = { wrapText: true, vertical: "top" };
+    // Estimate row height from the longer of the two text columns.
+    const longer = Math.max(r.narrative.length, r.focusForNextMonth.length);
+    row.height = Math.max(40, Math.ceil(longer / 60) * 16);
+  }
+}
+
 export async function generateReportWorkbook(data: ReportData): Promise<Buffer> {
   const { report, teamName, fmName, attendanceData, attitudeByGp, gpEvaluationsData, prevMonthEvaluations, actionItems } = data;
   const monthName = MONTH_NAMES[report.reportMonth - 1];
 
-  log.info("Generating Excel workbook v2.0", { reportId: report.id, teamName, month: monthName, gpCount: attendanceData.length });
+  log.info("Generating Excel workbook v2.1", { reportId: report.id, teamName, month: monthName, gpCount: attendanceData.length });
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "GP Report Generator";
   workbook.created = new Date();
+
+  // Sheet 0: Executive Summary — recipient-friendly opener so the
+  // workbook is readable WITHOUT diving into the metric grid.
+  buildExecutiveSummarySheet(workbook, data, monthName);
 
   // Sheet 1: Data (Individual GP Scores)
   buildDataSheet(workbook, gpEvaluationsData);
@@ -1377,12 +1510,17 @@ export async function generateReportWorkbook(data: ReportData): Promise<Buffer> 
   // Sheet 4: Attitude Entries (optional)
   buildAttitudeSheet(workbook, attendanceData, attitudeByGp);
 
-  // Sheet 5: Coaching Plans (optional — only if any items)
+  // Sheet 5: Per-GP Reviews — one paragraph per GP + next-month focus.
+  if (report.perGpReviews && report.perGpReviews.length > 0) {
+    buildPerGpReviewsSheet(workbook, report.perGpReviews);
+  }
+
+  // Sheet 6: Coaching Plans (optional — only if any items)
   if (actionItems && actionItems.length > 0) {
     buildActionItemsSheet(workbook, actionItems);
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
-  log.info("Workbook v2.0 generated successfully", { reportId: report.id, sheets: workbook.worksheets.length });
+  log.info("Workbook v2.1 generated successfully", { reportId: report.id, sheets: workbook.worksheets.length });
   return Buffer.from(buffer);
 }
