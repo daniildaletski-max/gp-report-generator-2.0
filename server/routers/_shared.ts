@@ -200,6 +200,7 @@ export async function generateExcelAndEmail(
     // becomes unsound (Codex P2 — "Don't classify missed first
     // retries as legacy"). Writing on both branches makes the
     // marker's presence/absence the definitive era-signal.
+    let markerPersisted = false;
     try {
       const existingData = (report.reportData as any) ?? {};
       await db.updateReport(report.id, {
@@ -208,8 +209,35 @@ export async function generateExcelAndEmail(
           emailDelivery: { sentAt: new Date().toISOString(), success: emailSent },
         },
       });
+      markerPersisted = true;
     } catch (e) {
       log.warn("Failed to persist email-delivery flag", { error: e instanceof Error ? e.message : String(e) });
+    }
+
+    // Belt-and-braces: if the marker-write failed AND the email
+    // didn't land, the row would otherwise sit with `excelFileUrl`
+    // set + no marker — which the cron's "no marker = legacy" rule
+    // would silently stamp terminal on the next run. The genuinely
+    // failed delivery would never be retried (Codex P2 — "Keep
+    // failed sends retryable when marker persistence fails").
+    //
+    // Recovery: clear `excelFileUrl` so the row downgrades to the
+    // partial-workbook state. The cron's partial-row branch then
+    // deletes + regenerates fresh on the next retry day, restoring
+    // a valid path to delivery.
+    //
+    // For email SUCCESS, marker-write failure is harmless: the
+    // email already landed, and a `legacy-backfill` stamp on the
+    // next run is the correct terminal state.
+    if (!markerPersisted && !emailSent) {
+      try {
+        await db.updateReport(report.id, { excelFileUrl: null, excelFileKey: null });
+        log.warn(`Cleared excelFileUrl on report ${report.id} after failed marker write — keeping failed delivery retryable`);
+      } catch (e2) {
+        log.error("Cannot clear excelFileUrl after marker-write failure; row may be stuck and will need manual intervention",
+          e2 instanceof Error ? e2 : new Error(String(e2)),
+          { reportId: report.id });
+      }
     }
   } else {
     // No recipient on file — terminal state. Persist a sentinel so
