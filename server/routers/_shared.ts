@@ -188,27 +188,32 @@ export async function generateExcelAndEmail(
     }
   }
 
-  // Write the workbook reference AND a `in-progress` email-delivery
-  // sentinel atomically, in a single updateReport call. This closes
-  // the window where the row could ever have `excelFileUrl` set
-  // without an `emailDelivery` marker — the precondition for the
-  // cron's "no marker = legacy" rule (Codex P2 — "Keep markerless
-  // new rows retryable"). Even if the process is killed between
-  // here and the email-send below, the row will carry an
-  // in-progress marker and the safety-net cron will treat it as
-  // retry-needed, not as a legacy artefact.
+  // Write the workbook reference and (on the cron path only) an
+  // `in-progress` email-delivery sentinel atomically. Two reasons
+  // to gate the marker on `idempotent`:
   //
-  // The marker is overwritten with the real outcome (success /
-  // failure / no-recipient) after sendReportEmail returns.
+  // 1. The marker is the cron's retry/legacy discriminator — manual
+  //    re-exports shouldn't be touching that state, otherwise a
+  //    failed manual click writes `success: false` and the next cron
+  //    retry day re-sends a previous-month report on the FM
+  //    automatically (Codex P2 — "Keep manual resend failures out
+  //    of cron retry state").
+  // 2. Skipping the in-progress marker for manual paths also means
+  //    a half-finished manual export can't accidentally trigger the
+  //    cron's "in-progress = retry me" branch.
+  //
+  // For idempotent (cron) calls the marker is later overwritten
+  // with the real outcome (success / failure / no-recipient) after
+  // sendReportEmail returns.
   const baseReportData = (report.reportData as any) ?? {};
+  const inProgressMarker = idempotent
+    ? { reportData: { ...baseReportData, emailDelivery: { sentAt: null, success: false, reason: "in-progress" } } }
+    : {};
   await db.updateReport(report.id, {
     excelFileUrl: excelUrl,
     excelFileKey: fileKey,
     status: "finalized",
-    reportData: {
-      ...baseReportData,
-      emailDelivery: { sentAt: null, success: false, reason: "in-progress" },
-    },
+    ...inProgressMarker,
     ...(googleSheetsUrl ? { googleSheetsUrl } : {}),
   });
 
@@ -221,7 +226,16 @@ export async function generateExcelAndEmail(
     // Compute a quick stats summary for the email body — read-only,
     // best-effort. If anything throws we still send the email without
     // numbers rather than block delivery.
-    const summary = (() => {
+    //
+    // OMITTED on the cron (idempotent) path: those numbers can drift
+    // between a successful day-5 send and a day-6+ retry (Persona
+    // auto-syncs every 12h, so attendance figures change). Resend
+    // would then see the same idempotency key with different body
+    // bytes and 409 the retry — and after the 24h cache expiry,
+    // duplicate-email the FM (Codex P2 — "Reuse idempotency keys
+    // only with a frozen email body"). Manual exports keep the
+    // summary panel since they don't use idempotency.
+    const summary = idempotent ? undefined : (() => {
       try {
         const totalEvals = gpEvaluationsData.reduce((s: number, gp: any) => s + (gp.evaluations?.length || 0), 0);
         const totalScore = gpEvaluationsData.reduce((s: number, gp: any) => {
@@ -274,63 +288,54 @@ export async function generateExcelAndEmail(
     });
     log.info("Report email sent", { to: ctx.user.email, sent: emailSent, hasSheets: !!googleSheetsUrl });
 
-    // Overwrite the in-progress sentinel (written above, atomically
-    // with excelFileUrl) with the real email-send outcome. The
-    // marker's `success` field is the cron's terminal-vs-retry
-    // discriminator:
-    //   - success: true   → terminal, skip
-    //   - success: false  → new-code failure, retry email
-    //   - reason:
-    //       "in-progress" → process died before this overwrite,
-    //                       cron treats as retry (same as success:false)
-    //       "no-recipient"→ terminal, skip
-    //       "legacy-backfill" → terminal, skip (set by the cron itself)
-    //
-    // Retry the marker write up to 3 times with brief backoff so a
-    // transient DB blip doesn't leave the row stuck in-progress. If
-    // all 3 attempts fail, fall through — the row stays in-progress
-    // and the cron will re-attempt; the Resend idempotency key on
-    // the email-send path makes that re-attempt safe (no duplicate
-    // mail to the FM even if the email already landed).
-    let markerOverwriteOk = false;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        await db.updateReport(report.id, {
-          reportData: {
-            ...baseReportData,
-            emailDelivery: { sentAt: new Date().toISOString(), success: emailSent },
-          },
-        });
-        markerOverwriteOk = true;
-        break;
-      } catch (e) {
-        log.warn(`Marker overwrite attempt ${attempt}/3 failed`, {
-          error: e instanceof Error ? e.message : String(e),
+    // Overwrite the in-progress sentinel — but ONLY on the cron
+    // (idempotent) path. Manual re-exports must not write
+    // `emailDelivery`; otherwise a failed manual click during the
+    // 5-10 retry window would write `success: false` onto a
+    // previously-delivered row and the next cron tick would re-send
+    // it (Codex P2 — "Keep manual resend failures out of cron retry
+    // state").
+    if (idempotent) {
+      let markerOverwriteOk = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await db.updateReport(report.id, {
+            reportData: {
+              ...baseReportData,
+              emailDelivery: { sentAt: new Date().toISOString(), success: emailSent },
+            },
+          });
+          markerOverwriteOk = true;
+          break;
+        } catch (e) {
+          log.warn(`Marker overwrite attempt ${attempt}/3 failed`, {
+            error: e instanceof Error ? e.message : String(e),
+            reportId: report.id,
+          });
+          if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 250));
+        }
+      }
+      if (!markerOverwriteOk) {
+        log.warn("All marker-overwrite attempts exhausted — row stays in-progress, cron will retry safely (idempotency key prevents duplicate mail)", {
           reportId: report.id,
         });
-        if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 250));
       }
     }
-    if (!markerOverwriteOk) {
-      log.warn("All marker-overwrite attempts exhausted — row stays in-progress, cron will retry safely (idempotency key prevents duplicate mail)", {
-        reportId: report.id,
-      });
-    }
   } else {
-    // No recipient on file — terminal state. Overwrite the
-    // in-progress sentinel (written above with excelFileUrl) with
-    // the no-recipient marker so the retry-day cron doesn't keep
-    // rebuilding/uploading this row forever. Admin-config issue,
-    // not a transient delivery failure.
     log.info("User has no email configured, skipping email notification");
-    try {
-      await db.updateReport(report.id, {
-        reportData: { ...baseReportData, emailDelivery: { sentAt: null, success: false, reason: "no-recipient" } },
-      });
-    } catch (e) {
-      log.warn("Failed to persist no-recipient flag — row stays in-progress, cron will safely retry once an email is set", {
-        error: e instanceof Error ? e.message : String(e),
-      });
+    // Cron-path only: persist the no-recipient terminal sentinel so
+    // future retry days short-circuit on this row. Manual paths
+    // don't touch `emailDelivery`.
+    if (idempotent) {
+      try {
+        await db.updateReport(report.id, {
+          reportData: { ...baseReportData, emailDelivery: { sentAt: null, success: false, reason: "no-recipient" } },
+        });
+      } catch (e) {
+        log.warn("Failed to persist no-recipient flag — row stays in-progress, cron will safely retry once an email is set", {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
     }
   }
 
