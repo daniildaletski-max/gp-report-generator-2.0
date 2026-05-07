@@ -134,8 +134,18 @@ export async function sendReportEmail(params: {
     attitude?: number;
     gpCount?: number;
   };
+  /**
+   * Narrative bundle from reportNarrativesService. When supplied, the
+   * email body becomes a full read-without-opening-Excel briefing:
+   * exec summary + top wins + top concerns rendered inline.
+   */
+  narrative?: {
+    executiveSummary?: string | null;
+    topWins?: string | null;
+    topConcerns?: string | null;
+  };
 }): Promise<boolean> {
-  const { userEmail, userName, teamName, monthName, year, excelUrl, googleSheetsUrl, summary } = params;
+  const { userEmail, userName, teamName, monthName, year, excelUrl, googleSheetsUrl, summary, narrative } = params;
 
   const subject = `Team Monthly Report — ${teamName} (${monthName} ${year})`;
   const generatedAt = new Date().toLocaleString('en-GB', {
@@ -149,7 +159,16 @@ Hello ${userName},
 
 Your Team Monthly Overview for ${teamName} — ${monthName} ${year} is ready.
 
-${googleSheetsUrl ? `Open in Google Sheets:\n${googleSheetsUrl}\n\n` : ""}Excel attachment is included; you can also download it from:
+${narrative?.executiveSummary ? `EXECUTIVE SUMMARY
+${narrative.executiveSummary}
+
+` : ""}${narrative?.topWins ? `TOP WINS
+${narrative.topWins}
+
+` : ""}${narrative?.topConcerns ? `TOP CONCERNS
+${narrative.topConcerns}
+
+` : ""}${googleSheetsUrl ? `Open in Google Sheets:\n${googleSheetsUrl}\n\n` : ""}Excel attachment is included; you can also download it from:
 ${excelUrl}
 
 ${summary ? `Quick numbers:
@@ -175,6 +194,37 @@ ${typeof summary.avgScore === 'number' ? `• Avg team score: ${summary.avgScore
       </tr>
     </table>` : "";
 
+  // Render the narrative blocks inline so the email is readable
+  // WITHOUT opening Excel. The exec summary becomes a featured
+  // paragraph; wins/concerns become matching coloured panels.
+  const escapeHtml = (s: string) => s
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  // Lightweight markdown-bullet → HTML list. Each line starting with
+  // "- " becomes an <li>; everything else is dropped (we only render
+  // bullet lists in this section).
+  const renderBullets = (raw: string): string => {
+    const items = raw.split(/\r?\n/).map(l => l.trim())
+      .filter(l => l.startsWith("-"))
+      .map(l => `<li style="margin:4px 0;">${escapeHtml(l.replace(/^-\s*/, ""))}</li>`);
+    return items.length > 0 ? `<ul style="margin:6px 0 0;padding-left:18px;">${items.join("")}</ul>` : "";
+  };
+  const execBlock = narrative?.executiveSummary ? `
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin:12px 0 16px;">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#475569;font-weight:600;margin-bottom:6px;">Executive Summary</div>
+          <div style="font-size:14px;line-height:1.55;color:#0f172a;">${escapeHtml(narrative.executiveSummary)}</div>
+        </div>` : "";
+  const winsBlock = narrative?.topWins ? `
+        <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:14px 16px;margin:0 0 12px;">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#065f46;font-weight:700;margin-bottom:4px;">Top Wins</div>
+          <div style="font-size:13px;color:#064e3b;line-height:1.45;">${renderBullets(narrative.topWins)}</div>
+        </div>` : "";
+  const concernsBlock = narrative?.topConcerns ? `
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 16px;margin:0 0 16px;">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#991b1b;font-weight:700;margin-bottom:4px;">Top Concerns</div>
+          <div style="font-size:13px;color:#7f1d1d;line-height:1.45;">${renderBullets(narrative.topConcerns)}</div>
+        </div>` : "";
+
   const primaryHref = googleSheetsUrl || excelUrl;
   const primaryLabel = googleSheetsUrl ? "Open in Google Sheets" : "Download Excel";
 
@@ -189,6 +239,9 @@ ${typeof summary.avgScore === 'number' ? `• Avg team score: ${summary.avgScore
         <tr><td style="padding:24px 28px;">
           <p style="margin:0 0 8px;font-size:15px;">Hello ${userName},</p>
           <p style="margin:0 0 16px;font-size:14px;color:#475569;">Your Team Monthly Overview is ready. ${googleSheetsUrl ? "It's available as a live Google Sheet you can edit and share, plus an Excel attachment for offline use." : "The Excel report is attached, plus a direct download link below."}</p>
+          ${execBlock}
+          ${winsBlock}
+          ${concernsBlock}
           ${stats}
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 12px;">
             <tr><td>

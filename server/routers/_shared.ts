@@ -17,8 +17,200 @@ import { sendReportEmail } from "../_core/email";
 import { generateReportWorkbook } from "../services/excelService";
 import { exportToGoogleSheets, isGoogleSheetsAvailable } from "../services/googleSheetsService";
 import { createLogger } from "../services/logger";
+import {
+  generateAllNarratives,
+  type ReportSnapshot,
+  type PerGpRow,
+  type MonthDelta,
+  type PerGpReview,
+} from "../services/reportNarrativesService";
 
 const log = createLogger("Router");
+
+/**
+ * Build a `ReportSnapshot` for the given team + month/year (with prior
+ * month metrics for delta computation). Shared by the on-demand
+ * generation path and the scheduled cron — both pull the same shape
+ * before calling `generateAllNarratives`.
+ */
+export async function buildReportSnapshot(opts: {
+  teamId: number;
+  reportMonth: number;
+  reportYear: number;
+  userId: number;
+  teamName: string;
+  fmName: string;
+}): Promise<ReportSnapshot> {
+  const monthName = MONTH_NAMES[opts.reportMonth - 1];
+  const prevMonth = opts.reportMonth === 1 ? 12 : opts.reportMonth - 1;
+  const prevYear = opts.reportMonth === 1 ? opts.reportYear - 1 : opts.reportYear;
+
+  const [
+    statsThis, statsPrev, attendanceThis, attendancePrev, errorsThis, errorsPrev, gpsTeam,
+  ] = await Promise.all([
+    db.getGPMonthlyStats(opts.teamId, opts.reportYear, opts.reportMonth),
+    db.getGPMonthlyStats(opts.teamId, prevYear, prevMonth),
+    db.getAttendanceByTeamMonth(opts.teamId, opts.reportMonth, opts.reportYear),
+    db.getAttendanceByTeamMonth(opts.teamId, prevMonth, prevYear),
+    db.getErrorCountByGP(opts.reportMonth, opts.reportYear, opts.userId),
+    db.getErrorCountByGP(prevMonth, prevYear, opts.userId),
+    db.getGamePresentersByTeam(opts.teamId),
+  ]);
+
+  // Attitude per-GP for both months — best-effort, parallel.
+  const attitudePerGp = new Map<number, { positive: number; negative: number }>();
+  await Promise.all(gpsTeam.map(async gp => {
+    try {
+      const ats = await db.getAttitudeScreenshotsForGP(gp.id, opts.reportMonth, opts.reportYear);
+      const positive = ats.filter(a => (a.attitudeScore ?? 0) > 0).length;
+      const negative = ats.filter(a => (a.attitudeScore ?? 0) < 0).length;
+      attitudePerGp.set(gp.id, { positive, negative });
+    } catch {
+      attitudePerGp.set(gp.id, { positive: 0, negative: 0 });
+    }
+  }));
+
+  const dirOf = (cur: number, prev: number): MonthDelta["direction"] =>
+    Math.abs(cur - prev) < 0.05 ? "flat" : cur > prev ? "up" : "down";
+  const delta = (cur: number, prev: number): MonthDelta => ({ current: cur, previous: prev, direction: dirOf(cur, prev) });
+
+  const avg = (vals: number[]) => vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
+  const sum = (vals: number[]) => vals.reduce((s, v) => s + v, 0);
+
+  const avgsThis = {
+    total: avg(statsThis.map(s => Number(s.avgTotalScore || 0))),
+    appearance: avg(statsThis.map(s => Number(s.avgAppearanceScore || 0))),
+    gamePerf: avg(statsThis.map(s => Number(s.avgGamePerfScore || 0))),
+  };
+  const avgsPrev = {
+    total: avg(statsPrev.map(s => Number(s.avgTotalScore || 0))),
+    appearance: avg(statsPrev.map(s => Number(s.avgAppearanceScore || 0))),
+    gamePerf: avg(statsPrev.map(s => Number(s.avgGamePerfScore || 0))),
+  };
+
+  const totalsThis = {
+    evaluations: sum(statsThis.map(s => Number(s.evaluationCount || 0))),
+    mistakes: sum(attendanceThis.map(a => a.monthlyStats?.mistakes || a.attendance?.mistakes || 0)),
+    sickDays: sum(attendanceThis.map(a => a.attendance?.sickLeaves || 0)),
+    missedDays: sum(attendanceThis.map(a => a.attendance?.missedDays || 0)),
+    lateArrivals: sum(attendanceThis.map(a => a.attendance?.lateToWork || 0)),
+    extraShifts: sum(attendanceThis.map(a => a.attendance?.extraShifts || 0)),
+  };
+  const totalsPrev = {
+    evaluations: sum(statsPrev.map(s => Number(s.evaluationCount || 0))),
+    mistakes: sum(attendancePrev.map(a => a.monthlyStats?.mistakes || a.attendance?.mistakes || 0)),
+    sickDays: sum(attendancePrev.map(a => a.attendance?.sickLeaves || 0)),
+    missedDays: sum(attendancePrev.map(a => a.attendance?.missedDays || 0)),
+    lateArrivals: sum(attendancePrev.map(a => a.attendance?.lateToWork || 0)),
+    extraShifts: sum(attendancePrev.map(a => a.attendance?.extraShifts || 0)),
+  };
+
+  // Build per-GP rows. Sort order: most concerning first (low score,
+  // high mistakes, high attendance issues) so the LLM and the Excel
+  // sheet both lead with the GPs that need attention.
+  const perGp: PerGpRow[] = gpsTeam.map(gp => {
+    const stat = statsThis.find(s => s.gpName === gp.name);
+    const statPrev = statsPrev.find(s => s.gpName === gp.name);
+    const att = attendanceThis.find(a => a.gamePresenter?.id === gp.id)?.attendance ?? null;
+    const err = errorsThis.find(e => e.gpName === gp.name)?.errorCount ?? 0;
+    const at = attitudePerGp.get(gp.id) ?? { positive: 0, negative: 0 };
+    return {
+      gpId: gp.id,
+      gpName: gp.name,
+      avgScore: Number(stat?.avgTotalScore ?? 0),
+      appearanceScore: Number(stat?.avgAppearanceScore ?? 0),
+      gamePerformanceScore: Number(stat?.avgGamePerfScore ?? 0),
+      evaluationCount: Number(stat?.evaluationCount ?? 0),
+      errorCount: err,
+      attitudePositive: at.positive,
+      attitudeNegative: at.negative,
+      lateArrivals: att?.lateToWork ?? 0,
+      missedDays: att?.missedDays ?? 0,
+      sickDays: att?.sickLeaves ?? 0,
+      prevAvgScore: Number(statPrev?.avgTotalScore ?? 0),
+    };
+  });
+  // Risk-style ordering: lowest scoring + highest mistakes float to the top.
+  perGp.sort((a, b) => {
+    const ra = (22 - a.avgScore) + a.errorCount + a.lateArrivals + a.attitudeNegative;
+    const rb = (22 - b.avgScore) + b.errorCount + b.lateArrivals + b.attitudeNegative;
+    return rb - ra;
+  });
+
+  // Suppress unused (errorsPrev currently unused in narrative; reserved
+  // for a future per-GP error delta).
+  void errorsPrev;
+
+  return {
+    teamName: opts.teamName,
+    fmName: opts.fmName,
+    monthName,
+    year: opts.reportYear,
+    totalGps: gpsTeam.length,
+    averages: {
+      total: delta(avgsThis.total, avgsPrev.total),
+      appearance: delta(avgsThis.appearance, avgsPrev.appearance),
+      gamePerf: delta(avgsThis.gamePerf, avgsPrev.gamePerf),
+    },
+    totals: {
+      evaluations: delta(totalsThis.evaluations, totalsPrev.evaluations),
+      mistakes: delta(totalsThis.mistakes, totalsPrev.mistakes),
+      sickDays: delta(totalsThis.sickDays, totalsPrev.sickDays),
+      missedDays: delta(totalsThis.missedDays, totalsPrev.missedDays),
+      lateArrivals: delta(totalsThis.lateArrivals, totalsPrev.lateArrivals),
+      extraShifts: delta(totalsThis.extraShifts, totalsPrev.extraShifts),
+    },
+    perGp,
+  };
+}
+
+/**
+ * Generate the new narrative bundle (executive summary, top wins/
+ * concerns, per-GP reviews) and persist to the report row.
+ *
+ * Designed to be called from BOTH the on-demand `report.generate`
+ * path and the scheduled cron, after the report row has been created
+ * but before the Excel/email step. Failures are logged but never
+ * thrown — the report should always proceed.
+ */
+export async function generateAndPersistNarratives(opts: {
+  reportId: number;
+  teamId: number;
+  reportMonth: number;
+  reportYear: number;
+  userId: number;
+  teamName: string;
+  fmName: string;
+}): Promise<{
+  executiveSummary: string;
+  topWins: string;
+  topConcerns: string;
+  perGpReviews: PerGpReview[];
+} | null> {
+  try {
+    const snapshot = await buildReportSnapshot({
+      teamId: opts.teamId,
+      reportMonth: opts.reportMonth,
+      reportYear: opts.reportYear,
+      userId: opts.userId,
+      teamName: opts.teamName,
+      fmName: opts.fmName,
+    });
+    const bundle = await generateAllNarratives(snapshot);
+    await db.updateReport(opts.reportId, {
+      executiveSummary: bundle.executiveSummary,
+      topWins: bundle.topWins,
+      topConcerns: bundle.topConcerns,
+      perGpReviews: bundle.perGpReviews as any,
+    });
+    return bundle;
+  } catch (e) {
+    log.warn(`Narrative generation failed for report ${opts.reportId}; continuing`, {
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return null;
+  }
+}
 
 export async function generateExcelAndEmail(
   ctx: { user: { id: number; role: string; email?: string | null; name?: string | null } },
@@ -84,6 +276,12 @@ export async function generateExcelAndEmail(
       goalsThisMonth: report.goalsThisMonth,
       teamOverview: report.teamOverview,
       additionalComments: report.additionalComments,
+      executiveSummary: (report as any).executiveSummary ?? null,
+      topWins: (report as any).topWins ?? null,
+      topConcerns: (report as any).topConcerns ?? null,
+      perGpReviews: ((report as any).perGpReviews ?? null) as
+        | Array<{ gpId: number; gpName: string; narrative: string; focusForNextMonth: string }>
+        | null,
     },
     teamName,
     fmName,
@@ -186,6 +384,16 @@ export async function generateExcelAndEmail(
       excelUrl,
       googleSheetsUrl,
       summary,
+      // Read narratives off the freshly-persisted report row so the
+      // email body matches what's in the workbook's Executive Summary
+      // sheet. These fields may be null when the LLM call failed AND
+      // the heuristic fallback also returned empty strings; in that
+      // case the email simply falls back to the legacy stats-only body.
+      narrative: {
+        executiveSummary: (report as any).executiveSummary ?? null,
+        topWins: (report as any).topWins ?? null,
+        topConcerns: (report as any).topConcerns ?? null,
+      },
     });
     log.info("Report email sent", { to: ctx.user.email, sent: emailSent, hasSheets: !!googleSheetsUrl });
   } else {

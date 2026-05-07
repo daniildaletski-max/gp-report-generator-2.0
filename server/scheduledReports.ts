@@ -267,10 +267,24 @@ Write 3-4 concise sentences. Cite specific numbers. No bullet points. No fluff.`
       userId: user.id,
     });
 
+    // Generate richer narratives (exec summary, top wins/concerns,
+    // per-GP reviews) and persist to the report row before we build
+    // the Excel — the workbook + email pull these fields from the
+    // saved row.
+    const { generateExcelAndEmail, generateAndPersistNarratives } = await import("./routers/_shared");
+    await generateAndPersistNarratives({
+      reportId: report.id,
+      teamId,
+      reportMonth,
+      reportYear,
+      userId: user.id,
+      teamName: team.teamName,
+      fmName: team.floorManagerName,
+    });
+
     // Generate Excel and send email — share the rich workbook builder
     // with the on-demand path so scheduled reports also get the
     // Coaching Plans + Bonus Summary sheets.
-    const { generateExcelAndEmail } = await import("./routers/_shared");
     await generateExcelAndEmail(
       { user: { id: user.id, role: user.role, email: user.email, name: user.name } },
       report.id,
