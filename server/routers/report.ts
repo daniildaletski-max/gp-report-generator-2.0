@@ -692,7 +692,12 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       reportId: z.number().positive(),
     }))
     .mutation(async ({ ctx, input }) => {
-      return generateExcelAndEmail(ctx, input.reportId);
+      // Manual re-export — the operator intends to re-send the email
+      // (typically after editing FM Performance / Goals / Team
+      // Overview text in the Reports UI). Opt out of the Resend
+      // idempotency key so the second send actually goes through
+      // instead of being silently dedup'd against the original.
+      return generateExcelAndEmail(ctx, input.reportId, { idempotent: false });
     }),
 
   exportToGoogleSheets: protectedProcedure

@@ -23,8 +23,25 @@ const log = createLogger("Router");
 export async function generateExcelAndEmail(
   ctx: { user: { id: number; role: string; email?: string | null; name?: string | null } },
   reportId: number,
+  /**
+   * `idempotent` — controls whether the Resend `Idempotency-Key`
+   * header is sent.
+   *
+   * Default `true`: a stable key per (reportId, period) is sent,
+   * so duplicate calls for the same row (cron retry-email branch
+   * after an interrupted day-5, repeated kicks of the same row)
+   * are deduplicated by Resend → exactly one email per row.
+   *
+   * Pass `false` from user-triggered re-exports (`report.exportToExcel`)
+   * where the operator INTENDS to re-send the email after editing
+   * the report. Without opting out, Resend would cache the prior
+   * response and silently swallow the new send (Codex P2 — "Use
+   * per-send idempotency keys for manual exports").
+   */
+  opts?: { idempotent?: boolean },
 ) {
   log.info("exportToExcel START", { reportId });
+  const idempotent = opts?.idempotent ?? true;
   const reportWithTeam = await db.getReportWithTeam(reportId);
   if (!reportWithTeam) throw new TRPCError({ code: 'NOT_FOUND', message: 'Report not found' });
 
@@ -208,7 +225,14 @@ export async function generateExcelAndEmail(
       // send whose marker-write failed will silently no-op instead of
       // double-mailing the FM (Codex P2 — "Avoid retrying after
       // confirmed sends when marker write fails").
-      idempotencyKey: `report-${report.id}-${report.reportYear}-${report.reportMonth}`,
+      //
+      // OFF for manual re-exports (`exportToExcel` calls us with
+      // `idempotent: false`) so the operator can deliberately re-send
+      // an updated email after editing the report (Codex P2 — "Use
+      // per-send idempotency keys for manual exports").
+      idempotencyKey: idempotent
+        ? `report-${report.id}-${report.reportYear}-${report.reportMonth}`
+        : undefined,
     });
     log.info("Report email sent", { to: ctx.user.email, sent: emailSent, hasSheets: !!googleSheetsUrl });
 
