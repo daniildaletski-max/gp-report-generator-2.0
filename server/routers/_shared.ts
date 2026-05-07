@@ -188,6 +188,28 @@ export async function generateExcelAndEmail(
       summary,
     });
     log.info("Report email sent", { to: ctx.user.email, sent: emailSent, hasSheets: !!googleSheetsUrl });
+
+    // Persist email-delivery confirmation in `reportData` so the
+    // safety-net cron on days 6-10 can distinguish a row that's
+    // truly done from one that finalized the workbook but never
+    // confirmed the email (e.g. Resend was down on day 5). Stored
+    // in the existing JSON column to avoid a schema migration. We
+    // overwrite the whole reportData on re-emails, since the only
+    // legitimate writers are this code path and the initial
+    // createReport (which sets `{ stats, attendance }`).
+    if (emailSent) {
+      try {
+        const existingData = (report.reportData as any) ?? {};
+        await db.updateReport(report.id, {
+          reportData: { ...existingData, emailDelivery: { sentAt: new Date().toISOString(), success: true } },
+        });
+      } catch (e) {
+        // Non-fatal — the email landed; failure to persist the flag
+        // just means the safety-net cron may re-attempt the email
+        // tomorrow, which is harmless (Resend dedups).
+        log.warn("Failed to persist email-delivery flag", { error: e instanceof Error ? e.message : String(e) });
+      }
+    }
   } else {
     log.info("User has no email configured, skipping email notification");
   }

@@ -32,6 +32,8 @@ vi.mock("./db", () => ({
   getGamePresentersByTeam: vi.fn().mockResolvedValue([]),
   getAttitudeScreenshotsForGP: vi.fn().mockResolvedValue([]),
   createReport: vi.fn().mockResolvedValue({ id: 1 }),
+  // Used by the partial-row cleanup path on retry days.
+  deleteReport: vi.fn().mockResolvedValue(undefined),
   // Used by the new pre-report Persona sync step
   getAllFmTeams: vi.fn().mockResolvedValue([]),
 }));
@@ -112,7 +114,7 @@ describe("Scheduled Reports", () => {
     expect(db.createReport).not.toHaveBeenCalled();
   });
 
-  it("should skip teams that already have a report", async () => {
+  it("should skip teams whose report is FULLY done (excelFileUrl + emailDelivery)", async () => {
     const db = await import("./db");
     (db.getAllUsers as any).mockResolvedValueOnce([
       { user: { id: 1, role: "user", email: "test@test.com", name: "Test User" }, team: null },
@@ -123,13 +125,50 @@ describe("Scheduled Reports", () => {
     (db.getFmTeamById as any).mockResolvedValueOnce({
       id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
     });
-    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({ id: 999 }); // Existing report
+    // Existing row that's truly done — workbook uploaded AND email
+    // delivery was confirmed. The retry must skip these.
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 999,
+      excelFileUrl: "https://example.com/r.xlsx",
+      reportData: { emailDelivery: { sentAt: "2026-04-05T06:00:00Z", success: true } },
+    });
 
     const { runMonthlyReportGeneration } = await import("./scheduledReports");
     await runMonthlyReportGeneration();
 
-    // createReport should NOT have been called since report already exists
     expect(db.createReport).not.toHaveBeenCalled();
+  });
+
+  it("should retry a row with no excelFileUrl (partial workbook)", async () => {
+    const db = await import("./db");
+    (db.getAllUsers as any).mockResolvedValueOnce([
+      { user: { id: 1, role: "user", email: "test@test.com", name: "Test User" }, team: null },
+    ]);
+    (db.getFmTeamsByUser as any).mockResolvedValueOnce([
+      { id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1 },
+    ]);
+    (db.getFmTeamById as any).mockResolvedValueOnce({
+      id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
+    });
+    // Partial row — workbook never produced. Cron must delete this
+    // and regenerate fresh.
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 998,
+      excelFileUrl: null,
+      reportData: {},
+    });
+    // Empty stats so the test stops short of the LLM/Excel path —
+    // we only need to verify the partial-row deletion happened.
+    (db.getGPMonthlyStats as any).mockResolvedValueOnce([]);
+    (db.deleteReport as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration();
+
+    // The partial row must have been cleaned up. Whether the rest of
+    // the path generated a fresh row is irrelevant for this test —
+    // the contract is "don't let a partial row block the retry".
+    expect(db.deleteReport).toHaveBeenCalledWith(998);
   });
 
   it("should NOT spam owner notifications on retry-day no-op runs", async () => {

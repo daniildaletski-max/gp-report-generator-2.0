@@ -33,11 +33,57 @@ async function generateReportForTeam(
       return null;
     }
 
-    // Check if a report already exists for this team/month/year
+    // Existing-row state machine — retry-aware so the new 5-10 cron
+    // window can recover from partial / failed prior runs.
+    //
+    //   row absent                                  → fresh generate
+    //   row present, no excelFileUrl                → workbook never
+    //                                                 finished (DB blip,
+    //                                                 storage outage,
+    //                                                 LLM timeout). Drop
+    //                                                 the partial row +
+    //                                                 regenerate fresh.
+    //   row present, excelFileUrl set, no email
+    //   delivery confirmation in reportData         → workbook is fine
+    //                                                 but the email was
+    //                                                 never confirmed
+    //                                                 (Resend down on
+    //                                                 day 5). Re-run
+    //                                                 generateExcelAndEmail
+    //                                                 against the same
+    //                                                 row id — idempotent.
+    //   row present + excelFileUrl + delivery=true  → truly done, skip.
     const existing = await db.getReportByTeamMonthYear(teamId, reportMonth, reportYear);
-    if (existing) {
-      log.info(`[ScheduledReports] Report already exists for team ${team.teamName} - ${MONTH_NAMES[reportMonth - 1]} ${reportYear}, skipping`);
+    const existingDelivery = ((existing?.reportData as any)?.emailDelivery ?? null) as { success?: boolean } | null;
+    const isFullyDone = !!(existing && existing.excelFileUrl && existingDelivery?.success === true);
+    if (isFullyDone) {
+      log.info(`[ScheduledReports] Report already complete for team ${team.teamName} - ${MONTH_NAMES[reportMonth - 1]} ${reportYear}, skipping`);
       return null;
+    }
+    if (existing && !existing.excelFileUrl) {
+      // Partial row — workbook never produced. Clear it so the rest
+      // of the function can build a clean replacement.
+      log.info(`[ScheduledReports] Found partial row #${existing.id} for ${team.teamName} (no excelFileUrl), regenerating`);
+      try { await db.deleteReport(existing.id); } catch (e) {
+        log.warn("Failed to delete partial row, will overwrite anyway", { error: e instanceof Error ? e.message : String(e) });
+      }
+    } else if (existing && existing.excelFileUrl && !existingDelivery?.success) {
+      // Workbook is uploaded but email never confirmed. Re-run the
+      // shared helper against this row id — it'll re-upload (cheap)
+      // and re-send. Idempotent on the row; skips ahead of the LLM
+      // generation block below.
+      log.info(`[ScheduledReports] Re-attempting email for team ${team.teamName} (row #${existing.id}, excelFileUrl set, no delivery confirmation)`);
+      const { generateExcelAndEmail } = await import("./routers/_shared");
+      try {
+        await generateExcelAndEmail(
+          { user: { id: user.id, role: user.role, email: user.email, name: user.name } },
+          existing.id,
+        );
+        return { reportId: existing.id, teamName: team.teamName };
+      } catch (e) {
+        log.warn(`Email retry failed for ${team.teamName}; will leave row as-is for next retry day`, { error: e instanceof Error ? e.message : String(e) });
+        return null;
+      }
     }
 
     // Get evaluation stats for the month
