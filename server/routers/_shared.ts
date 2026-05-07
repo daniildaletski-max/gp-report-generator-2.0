@@ -189,26 +189,27 @@ export async function generateExcelAndEmail(
     });
     log.info("Report email sent", { to: ctx.user.email, sent: emailSent, hasSheets: !!googleSheetsUrl });
 
-    // Persist email-delivery confirmation in `reportData` so the
-    // safety-net cron on days 6-10 can distinguish a row that's
-    // truly done from one that finalized the workbook but never
-    // confirmed the email (e.g. Resend was down on day 5). Stored
-    // in the existing JSON column to avoid a schema migration. We
-    // overwrite the whole reportData on re-emails, since the only
-    // legitimate writers are this code path and the initial
-    // createReport (which sets `{ stats, attendance }`).
-    if (emailSent) {
-      try {
-        const existingData = (report.reportData as any) ?? {};
-        await db.updateReport(report.id, {
-          reportData: { ...existingData, emailDelivery: { sentAt: new Date().toISOString(), success: true } },
-        });
-      } catch (e) {
-        // Non-fatal — the email landed; failure to persist the flag
-        // just means the safety-net cron may re-attempt the email
-        // tomorrow, which is harmless (Resend dedups).
-        log.warn("Failed to persist email-delivery flag", { error: e instanceof Error ? e.message : String(e) });
-      }
+    // Always persist the email-delivery outcome (success OR failure)
+    // in `reportData`. This is the load-bearing signal the safety-
+    // net cron on days 6-10 uses to tell apart:
+    //   - delivered (success: true)            → terminal, skip
+    //   - new-code failure (success: false)    → retry email
+    //   - legacy row (marker absent entirely)  → backfill + skip
+    // If we only wrote on success, a new-code failure would look
+    // identical to a legacy row, and the retry-or-backfill decision
+    // becomes unsound (Codex P2 — "Don't classify missed first
+    // retries as legacy"). Writing on both branches makes the
+    // marker's presence/absence the definitive era-signal.
+    try {
+      const existingData = (report.reportData as any) ?? {};
+      await db.updateReport(report.id, {
+        reportData: {
+          ...existingData,
+          emailDelivery: { sentAt: new Date().toISOString(), success: emailSent },
+        },
+      });
+    } catch (e) {
+      log.warn("Failed to persist email-delivery flag", { error: e instanceof Error ? e.message : String(e) });
     }
   } else {
     // No recipient on file — terminal state. Persist a sentinel so

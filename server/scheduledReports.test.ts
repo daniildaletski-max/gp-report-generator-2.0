@@ -171,12 +171,16 @@ describe("Scheduled Reports", () => {
     expect(db.deleteReport).not.toHaveBeenCalled();
   });
 
-  it("should backfill + skip legacy rows (excelFileUrl set, no delivery marker, old updatedAt)", async () => {
+  it("should backfill + skip legacy rows (excelFileUrl set, NO delivery marker at all)", async () => {
     // Pre-merge rows have `excelFileUrl` set (workbook was uploaded
-    // and the email was sent BY THE OLD CODE PATH that didn't write
-    // a delivery marker). Without this guard, the retry-email branch
-    // would re-spam every FM with their prior-month reports on the
-    // first day-6+ cron tick.
+    // by the OLD code path) but NO `emailDelivery` marker — the
+    // marker is only written by the new code path. Without this
+    // guard, the retry-email branch would re-spam every FM with
+    // their prior-month reports on the first day-6+ cron tick.
+    //
+    // Critically: the era signal is marker presence, NOT row age.
+    // A day-5 new-code failure has marker {success:false} so it's
+    // distinguishable from a legacy row even when both look "old".
     const db = await import("./db");
     (db.getAllUsers as any).mockResolvedValueOnce([
       { user: { id: 1, role: "user", email: "test@test.com", name: "Test User" }, team: null },
@@ -187,12 +191,11 @@ describe("Scheduled Reports", () => {
     (db.getFmTeamById as any).mockResolvedValueOnce({
       id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
     });
-    // Old row, last touched 5 days ago, no delivery marker.
-    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    // Row with workbook uploaded but absolutely no emailDelivery
+    // marker — pre-merge artefact.
     (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
       id: 996,
       excelFileUrl: "https://example.com/legacy.xlsx",
-      updatedAt: fiveDaysAgo,
       reportData: {},
     });
     (db.updateReport as any).mockClear();
@@ -214,6 +217,43 @@ describe("Scheduled Reports", () => {
     // No email re-send, no regeneration.
     expect(db.createReport).not.toHaveBeenCalled();
     expect(db.deleteReport).not.toHaveBeenCalled();
+  });
+
+  it("should retry rows whose email-delivery marker says success=false (NEW-code failure, not legacy)", async () => {
+    // Day-5 cron uploads the workbook but `sendReportEmail` returns
+    // false (Resend down). New code writes
+    // `emailDelivery: { success: false }` so the retry-email branch
+    // can distinguish this from a legacy row (no marker at all) and
+    // re-attempt instead of stamping legacy-backfill.
+    const db = await import("./db");
+    (db.getAllUsers as any).mockResolvedValueOnce([
+      { user: { id: 1, role: "user", email: "test@test.com", name: "Test User" }, team: null },
+    ]);
+    (db.getFmTeamsByUser as any).mockResolvedValueOnce([
+      { id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1 },
+    ]);
+    (db.getFmTeamById as any).mockResolvedValueOnce({
+      id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
+    });
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 995,
+      excelFileUrl: "https://example.com/r.xlsx",
+      reportData: { emailDelivery: { sentAt: "2026-04-05T06:00:00Z", success: false } },
+    });
+    (db.updateReport as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration();
+
+    // The legacy-backfill branch must NOT have fired (no
+    // updateReport call carrying reason: "legacy-backfill"). The
+    // retry-email branch can't fully execute under unit-test mocks
+    // since it loads `_shared.ts` dynamically, but it MUST NOT have
+    // mistakenly stamped legacy-backfill on a real failed delivery.
+    const legacyStamps = (db.updateReport as any).mock.calls.filter((c: any[]) =>
+      c[1]?.reportData?.emailDelivery?.reason === "legacy-backfill",
+    );
+    expect(legacyStamps).toHaveLength(0);
   });
 
   it("should retry a row with no excelFileUrl (partial workbook)", async () => {
