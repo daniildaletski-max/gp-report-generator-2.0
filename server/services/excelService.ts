@@ -271,7 +271,14 @@ export async function generateChartImage(
         plugins: {
           title: { display: true, text: title, font: { size: 17, weight: 'bold' }, padding: { bottom: 18 }, color: '#0f172a' },
           legend: { position: 'bottom', labels: { padding: 18, font: { size: 11 }, usePointStyle: true, pointStyle: 'rectRounded' } },
-          datalabels: { display: true, anchor: 'end', align: 'top', font: { size: 9, weight: 'bold' }, color: '#1f2937', formatter: (value: number) => value.toFixed(1) },
+          // No `formatter` here — JSON.stringify (used to ship the
+          // config to QuickChart) silently drops function-valued
+          // properties, so the formatter would never reach the
+          // renderer (Codex P2 — "Serialize delta labels instead of
+          // embedding functions"). Data is pre-rounded by
+          // `computeGpAverages` so the default datalabels rendering
+          // shows the value at the right precision.
+          datalabels: { display: true, anchor: 'end', align: 'top', font: { size: 9, weight: 'bold' }, color: '#1f2937' },
           // Reference line for team average — a single annotation
           // plugin entry. QuickChart supports `chartjs-plugin-annotation`.
           annotation: {
@@ -355,10 +362,27 @@ export async function generateComparisonChart(
         : 'rgba(56, 122, 196, 1)'
     );
 
+    // Bake the delta into the X-axis label per GP rather than into a
+    // datalabel formatter. The chart config is sent to QuickChart via
+    // `JSON.stringify`, which silently drops function-valued keys —
+    // so any `formatter: (value, ctx) => ...` we'd put on the dataset
+    // never makes the trip and the deltas wouldn't render at all
+    // (Codex P2 — "Serialize delta labels instead of embedding
+    // functions"). Using string labels survives JSON serialisation.
+    //
+    // Format: "GP Name (+1.2)" / "GP Name (−1.2)" / "GP Name" when
+    // the delta is below the noise threshold.
+    const labelsWithDelta = labels.map((name, i) => {
+      const d = deltas[i] ?? 0;
+      if (Math.abs(d) < 0.05) return name;
+      const sign = d > 0 ? '+' : '−';
+      return `${name} (${sign}${Math.abs(d).toFixed(1)})`;
+    });
+
     const chartConfig = {
       type: 'bar',
       data: {
-        labels,
+        labels: labelsWithDelta,
         datasets: [
           {
             label: currentMonthName,
@@ -369,22 +393,15 @@ export async function generateComparisonChart(
             borderRadius: 6,
             barPercentage: 0.78,
             categoryPercentage: 0.86,
-            // Datalabel for the current dataset shows the value AND
-            // the delta vs prev — "20.5 (+1.2)" style. Stored on the
-            // dataset so QuickChart's plugin formatter has access to
-            // `context.dataIndex`.
+            // Plain numeric value display — chartjs-plugin-datalabels
+            // renders the bar's value verbatim when no formatter is
+            // supplied. The delta is now in the X-axis label above.
             datalabels: {
               display: true,
               anchor: 'end',
               align: 'top',
               font: { size: 9, weight: 'bold' },
               color: '#0f172a',
-              formatter: (value: number, context: any) => {
-                const d = deltas[context.dataIndex] ?? 0;
-                const sign = d > 0 ? '+' : '';
-                const dStr = Math.abs(d) < 0.05 ? '·' : `${sign}${d.toFixed(1)}`;
-                return `${value.toFixed(1)}\n${dStr}`;
-              },
             },
           },
           {
@@ -402,7 +419,9 @@ export async function generateComparisonChart(
               align: 'top',
               font: { size: 9 },
               color: '#475569',
-              formatter: (value: number) => value.toFixed(1),
+              // No `formatter` — same JSON.stringify drop reason as
+              // above. Data is pre-rounded by `computeGpAverages` so
+              // the default renderer shows the right precision.
             },
           },
         ],
@@ -415,7 +434,7 @@ export async function generateComparisonChart(
         },
         scales: {
           y: { beginAtZero: true, max: MAX_TOTAL_SCORE + 2, title: { display: true, text: 'Total Score', font: { weight: 'bold' } }, grid: { color: 'rgba(0, 0, 0, 0.06)' } },
-          x: { title: { display: true, text: 'Game Presenters', font: { weight: 'bold' } }, grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
+          x: { title: { display: true, text: 'Game Presenters (with delta vs prev)', font: { weight: 'bold' } }, grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
         },
       },
     };
