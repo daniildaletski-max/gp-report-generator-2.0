@@ -132,6 +132,41 @@ describe("Scheduled Reports", () => {
     expect(db.createReport).not.toHaveBeenCalled();
   });
 
+  it("should NOT spam owner notifications on retry-day no-op runs", async () => {
+    // After a successful day-5 run, days 6-10 see every team already
+    // reported and produce 0 generations. The retry-day code path
+    // must stay silent on the no-op notification — otherwise the
+    // project owner gets 5 "No Reports Generated" emails per month.
+    const db = await import("./db");
+    const { notifyOwner } = await import("./_core/notification");
+
+    (db.getAllUsers as any).mockResolvedValueOnce([]);
+    (notifyOwner as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration({ isPrimaryRun: false });
+
+    // No "Generated" notification (nothing generated) AND no "No
+    // Reports Generated" notification (this is a retry-day no-op).
+    expect(notifyOwner).not.toHaveBeenCalled();
+  });
+
+  it("should still notify on day-5 no-op so genuine empty months are visible", async () => {
+    const db = await import("./db");
+    const { notifyOwner } = await import("./_core/notification");
+
+    (db.getAllUsers as any).mockResolvedValueOnce([]);
+    (notifyOwner as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration({ isPrimaryRun: true });
+
+    // Primary run, no reports generated → owner gets the "no data"
+    // heads-up. This is the legacy behaviour we're preserving.
+    expect(notifyOwner).toHaveBeenCalledTimes(1);
+    expect((notifyOwner as any).mock.calls[0][0].title).toMatch(/No Reports Generated/);
+  });
+
   it("should iterate per user and per user's own teams (per-FM routing)", async () => {
     // Two FMs, each owns a different team. The cron must call the
     // per-team report generator with EACH user's id/email — never

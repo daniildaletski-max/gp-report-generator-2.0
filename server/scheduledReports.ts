@@ -286,8 +286,16 @@ Write 3-4 concise sentences. Cite specific numbers. No bullet points. No fluff.`
 
 /**
  * Main scheduled job: generates reports for all teams that have data for the previous month.
+ *
+ * `isPrimaryRun` defaults to true and gates the "no reports generated"
+ * owner notification. The day-5 cron tick is the primary run; days
+ * 6-10 are idempotent retries that should stay silent on the no-op
+ * path so the owner doesn't get five "No Reports Generated" emails
+ * the week after a successful day-5. Retry runs still notify when
+ * something IS generated (recovered failure — worth surfacing).
  */
-async function runMonthlyReportGeneration() {
+async function runMonthlyReportGeneration(opts?: { isPrimaryRun?: boolean }) {
+  const isPrimaryRun = opts?.isPrimaryRun ?? true;
   if (isMonthlyGenerationRunning) {
     log.info("[ScheduledReports] Monthly report generation is already running, skipping duplicate trigger");
     return;
@@ -371,7 +379,14 @@ async function runMonthlyReportGeneration() {
 
     log.info(`[ScheduledReports] Completed: ${totalGenerated} reports generated, ${totalSkipped} skipped`);
 
-    // Notify the project owner about the scheduled run
+    // Notify the project owner about the scheduled run.
+    //
+    // - `totalGenerated > 0` always notifies — that's worth surfacing
+    //   regardless of which day fired (a retry-day run that succeeds
+    //   is itself useful information about a recovered failure).
+    // - `totalGenerated === 0` only notifies on the primary day-5 run.
+    //   On retry days (6-10) every team is normally already reported,
+    //   so a "No Reports Generated" owner email would just be noise.
     if (totalGenerated > 0) {
       const reportSummary = results
         .map(r => `- ${r.userName}: ${r.teamName} (Report #${r.reportId})`)
@@ -381,11 +396,13 @@ async function runMonthlyReportGeneration() {
         title: `Monthly Reports Generated: ${monthName} ${reportYear}`,
         content: `Automated monthly report generation completed.\n\nGenerated: ${totalGenerated} reports\nSkipped: ${totalSkipped} (no data or already exists)\n\nReports:\n${reportSummary}`,
       });
-    } else {
+    } else if (isPrimaryRun) {
       await notifyOwner({
         title: `Monthly Reports: No Reports Generated for ${monthName} ${reportYear}`,
         content: `Automated monthly report generation ran but no new reports were generated. Either all teams already have reports for this month, or no evaluation data was found.`,
       });
+    } else {
+      log.info(`[ScheduledReports] Retry-day run produced no new reports — staying silent (steady state)`);
     }
   } catch (error) {
     log.error("Fatal error during scheduled generation", error instanceof Error ? error : new Error(String(error)));
@@ -422,8 +439,21 @@ export function initScheduledReports() {
   // "0 6 5-10 * *" = At 06:00 on days 5-10 of every month
   const cronExpr = process.env.MONTHLY_REPORTS_CRON || "0 6 5-10 * *";
   const task = cron.schedule(cron.validate(cronExpr) ? cronExpr : "0 6 5-10 * *", () => {
-    log.info("[ScheduledReports] Cron triggered - starting monthly report generation");
-    runMonthlyReportGeneration().catch(err => {
+    // Day of month in Tallinn — same timezone the cron is configured
+    // in. We use Intl rather than `new Date().getDate()` so the path
+    // works regardless of whether the deploy host runs in UTC, EET,
+    // or anywhere else: at 06:00 EET in summer the UTC date is the
+    // same, but explicit-tz is safer than betting on it.
+    let tallinnDay = 0;
+    try {
+      tallinnDay = Number(new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Tallinn",
+        day: "numeric",
+      }).format(new Date()));
+    } catch { tallinnDay = new Date().getDate(); }
+    const isPrimaryRun = tallinnDay === 5;
+    log.info(`[ScheduledReports] Cron triggered (day ${tallinnDay}, ${isPrimaryRun ? "primary" : "retry"}) - starting monthly report generation`);
+    runMonthlyReportGeneration({ isPrimaryRun }).catch(err => {
       log.error("Unhandled error in scheduled job", err instanceof Error ? err : new Error(String(err)));
     });
   }, {
