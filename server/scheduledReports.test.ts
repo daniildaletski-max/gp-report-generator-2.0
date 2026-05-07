@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 
-// Mock node-cron before importing the module
+// Mock node-cron before importing the module. We expose both
+// `schedule` (used to register the cron) and `validate` (used inside
+// `initScheduledReports` to fall back to a known-good expression when
+// MONTHLY_REPORTS_CRON env var holds something invalid). The mock
+// validates trivially — that's good enough for unit tests.
 vi.mock("node-cron", () => ({
   default: {
     schedule: vi.fn((expression: string, callback: () => void, options?: any) => {
@@ -12,6 +16,7 @@ vi.mock("node-cron", () => ({
         callback,
       };
     }),
+    validate: vi.fn((expr: string) => typeof expr === "string" && expr.length > 0),
   },
 }));
 
@@ -50,14 +55,17 @@ describe("Scheduled Reports", () => {
 
     initScheduledReports();
 
+    // Cron fires at 06:00 on the 5th of every month in Europe/Tallinn.
+    // Day-5 (not day-1) so the FM has a few business days to finish
+    // off late evals / attendance corrections before the auto-email.
     expect(cron.default.schedule).toHaveBeenCalledWith(
-      "0 6 1 * *",
+      "0 6 5 * *",
       expect.any(Function),
       expect.objectContaining({ timezone: "Europe/Tallinn" }),
     );
   });
 
-  it("should use correct cron expression for 1st of each month at 06:00", async () => {
+  it("should use correct cron expression for 5th of each month at 06:00", async () => {
     const cron = await import("node-cron");
     const { initScheduledReports } = await import("./scheduledReports");
 
@@ -65,7 +73,7 @@ describe("Scheduled Reports", () => {
 
     const calls = (cron.default.schedule as any).mock.calls;
     const lastCall = calls[calls.length - 1];
-    expect(lastCall[0]).toBe("0 6 1 * *"); // minute 0, hour 6, day 1, every month, every weekday
+    expect(lastCall[0]).toBe("0 6 5 * *"); // minute 0, hour 6, day 5, every month, every weekday
   });
 
   it("should export runMonthlyReportGeneration for manual triggering", async () => {
@@ -121,6 +129,44 @@ describe("Scheduled Reports", () => {
 
     // createReport should NOT have been called since report already exists
     expect(db.createReport).not.toHaveBeenCalled();
+  });
+
+  it("should iterate per user and per user's own teams (per-FM routing)", async () => {
+    // Two FMs, each owns a different team. The cron must call the
+    // per-team report generator with EACH user's id/email — never
+    // mix one FM's email with another FM's team.
+    const db = await import("./db");
+
+    (db.getAllUsers as any).mockResolvedValueOnce([
+      { user: { id: 1, role: "user", email: "fm-a@example.com", name: "FM A" }, team: null },
+      { user: { id: 2, role: "user", email: "fm-b@example.com", name: "FM B" }, team: null },
+    ]);
+    // getFmTeamsByUser is called twice — once per user. Return the
+    // appropriate team for each call. (mockResolvedValueOnce queues.)
+    (db.getFmTeamsByUser as any)
+      .mockResolvedValueOnce([{ id: 10, teamName: "Team A", floorManagerName: "FM A", userId: 1 }])
+      .mockResolvedValueOnce([{ id: 20, teamName: "Team B", floorManagerName: "FM B", userId: 2 }]);
+    // Both teams have reports already so we can stop short of the
+    // Excel + email path (the actual delivery uses Resend which we
+    // don't want to hit). What we're verifying here is the iteration
+    // shape: each user is queried for their OWN teams only.
+    (db.getFmTeamById as any)
+      .mockResolvedValueOnce({ id: 10, teamName: "Team A", floorManagerName: "FM A", userId: 1 })
+      .mockResolvedValueOnce({ id: 20, teamName: "Team B", floorManagerName: "FM B", userId: 2 });
+    (db.getReportByTeamMonthYear as any)
+      .mockResolvedValueOnce({ id: 100 })
+      .mockResolvedValueOnce({ id: 101 });
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration();
+
+    // getFmTeamsByUser must have been called once per user, scoped to
+    // that user's id. This is what guarantees FMs don't see each
+    // other's teams in the cron run.
+    const teamsByUserCalls = (db.getFmTeamsByUser as any).mock.calls;
+    const calledUserIds = teamsByUserCalls.map((c: any[]) => c[0]).sort();
+    expect(calledUserIds).toContain(1);
+    expect(calledUserIds).toContain(2);
   });
 
   it("should prevent overlapping monthly generation runs", async () => {
