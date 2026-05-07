@@ -267,24 +267,10 @@ Write 3-4 concise sentences. Cite specific numbers. No bullet points. No fluff.`
       userId: user.id,
     });
 
-    // Generate richer narratives (exec summary, top wins/concerns,
-    // per-GP reviews) and persist to the report row before we build
-    // the Excel — the workbook + email pull these fields from the
-    // saved row.
-    const { generateExcelAndEmail, generateAndPersistNarratives } = await import("./routers/_shared");
-    await generateAndPersistNarratives({
-      reportId: report.id,
-      teamId,
-      reportMonth,
-      reportYear,
-      userId: user.id,
-      teamName: team.teamName,
-      fmName: team.floorManagerName,
-    });
-
     // Generate Excel and send email — share the rich workbook builder
     // with the on-demand path so scheduled reports also get the
     // Coaching Plans + Bonus Summary sheets.
+    const { generateExcelAndEmail } = await import("./routers/_shared");
     await generateExcelAndEmail(
       { user: { id: user.id, role: user.role, email: user.email, name: user.name } },
       report.id,
@@ -414,20 +400,28 @@ async function runMonthlyReportGeneration() {
 
 /**
  * Initialize the cron job.
- * Runs at 06:00 EET on the 5th of every month.
  *
- * Why the 5th and not the 1st: the previous-month data isn't fully
- * settled until the FM has had a few business days to finish off
- * stragglers (late evals, attendance corrections, error-file
- * uploads). Generating + emailing reports on day-1 hands FMs an
- * incomplete document. Day-5 gives a comfortable buffer while
- * still arriving early enough in the new month to act on.
+ * Fires at 06:00 EET on each of days 5, 6, 7, 8, 9, 10 of every month.
+ *
+ * Why a 6-day window and not just the 5th:
+ * - Day 5 is the primary run — late evals / attendance corrections
+ *   from the prior month have settled, FM gets the report with their
+ *   morning coffee.
+ * - Days 6-10 are a safety net. `runMonthlyReportGeneration` is
+ *   idempotent: it skips any team that already has a report row for
+ *   the previous month. So a day-6 run does almost nothing if day-5
+ *   succeeded — it's only there to catch transient failures (a brief
+ *   DB blip, LLM rate-limit, Resend outage) that left some teams
+ *   unreported. After day 10 we stop trying — at that point the
+ *   missing data is more interesting than the missing email.
+ *
+ * Operators can override the whole expression via MONTHLY_REPORTS_CRON.
  */
 export function initScheduledReports() {
   // Cron: minute hour day-of-month month day-of-week
-  // "0 6 5 * *" = At 06:00 on the 5th of every month
-  const cronExpr = process.env.MONTHLY_REPORTS_CRON || "0 6 5 * *";
-  const task = cron.schedule(cron.validate(cronExpr) ? cronExpr : "0 6 5 * *", () => {
+  // "0 6 5-10 * *" = At 06:00 on days 5-10 of every month
+  const cronExpr = process.env.MONTHLY_REPORTS_CRON || "0 6 5-10 * *";
+  const task = cron.schedule(cron.validate(cronExpr) ? cronExpr : "0 6 5-10 * *", () => {
     log.info("[ScheduledReports] Cron triggered - starting monthly report generation");
     runMonthlyReportGeneration().catch(err => {
       log.error("Unhandled error in scheduled job", err instanceof Error ? err : new Error(String(err)));

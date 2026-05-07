@@ -55,17 +55,18 @@ describe("Scheduled Reports", () => {
 
     initScheduledReports();
 
-    // Cron fires at 06:00 on the 5th of every month in Europe/Tallinn.
-    // Day-5 (not day-1) so the FM has a few business days to finish
-    // off late evals / attendance corrections before the auto-email.
+    // Cron fires at 06:00 on each of days 5-10 in Europe/Tallinn.
+    // Day-5 is the primary run; days 6-10 are an idempotent safety
+    // net that re-runs only for teams whose report didn't make it on
+    // day 5 (transient DB / LLM / email failure).
     expect(cron.default.schedule).toHaveBeenCalledWith(
-      "0 6 5 * *",
+      "0 6 5-10 * *",
       expect.any(Function),
       expect.objectContaining({ timezone: "Europe/Tallinn" }),
     );
   });
 
-  it("should use correct cron expression for 5th of each month at 06:00", async () => {
+  it("should use correct cron expression for days 5-10 of each month at 06:00", async () => {
     const cron = await import("node-cron");
     const { initScheduledReports } = await import("./scheduledReports");
 
@@ -73,7 +74,7 @@ describe("Scheduled Reports", () => {
 
     const calls = (cron.default.schedule as any).mock.calls;
     const lastCall = calls[calls.length - 1];
-    expect(lastCall[0]).toBe("0 6 5 * *"); // minute 0, hour 6, day 5, every month, every weekday
+    expect(lastCall[0]).toBe("0 6 5-10 * *"); // minute 0, hour 6, days 5 through 10, every month, every weekday
   });
 
   it("should export runMonthlyReportGeneration for manual triggering", async () => {
