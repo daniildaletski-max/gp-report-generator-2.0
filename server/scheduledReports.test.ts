@@ -34,6 +34,8 @@ vi.mock("./db", () => ({
   createReport: vi.fn().mockResolvedValue({ id: 1 }),
   // Used by the partial-row cleanup path on retry days.
   deleteReport: vi.fn().mockResolvedValue(undefined),
+  // Used by the legacy-backfill stamp path on retry days.
+  updateReport: vi.fn().mockResolvedValue(undefined),
   // Used by the new pre-report Persona sync step
   getAllFmTeams: vi.fn().mockResolvedValue([]),
 }));
@@ -165,6 +167,51 @@ describe("Scheduled Reports", () => {
     await runMonthlyReportGeneration();
 
     // No regeneration, no deletion — fully terminal.
+    expect(db.createReport).not.toHaveBeenCalled();
+    expect(db.deleteReport).not.toHaveBeenCalled();
+  });
+
+  it("should backfill + skip legacy rows (excelFileUrl set, no delivery marker, old updatedAt)", async () => {
+    // Pre-merge rows have `excelFileUrl` set (workbook was uploaded
+    // and the email was sent BY THE OLD CODE PATH that didn't write
+    // a delivery marker). Without this guard, the retry-email branch
+    // would re-spam every FM with their prior-month reports on the
+    // first day-6+ cron tick.
+    const db = await import("./db");
+    (db.getAllUsers as any).mockResolvedValueOnce([
+      { user: { id: 1, role: "user", email: "test@test.com", name: "Test User" }, team: null },
+    ]);
+    (db.getFmTeamsByUser as any).mockResolvedValueOnce([
+      { id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1 },
+    ]);
+    (db.getFmTeamById as any).mockResolvedValueOnce({
+      id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
+    });
+    // Old row, last touched 5 days ago, no delivery marker.
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 996,
+      excelFileUrl: "https://example.com/legacy.xlsx",
+      updatedAt: fiveDaysAgo,
+      reportData: {},
+    });
+    (db.updateReport as any).mockClear();
+    (db.createReport as any).mockClear();
+    (db.deleteReport as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration();
+
+    // Backfill stamp written.
+    expect(db.updateReport).toHaveBeenCalledWith(
+      996,
+      expect.objectContaining({
+        reportData: expect.objectContaining({
+          emailDelivery: expect.objectContaining({ reason: "legacy-backfill" }),
+        }),
+      }),
+    );
+    // No email re-send, no regeneration.
     expect(db.createReport).not.toHaveBeenCalled();
     expect(db.deleteReport).not.toHaveBeenCalled();
   });

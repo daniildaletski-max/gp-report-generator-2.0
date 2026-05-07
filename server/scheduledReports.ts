@@ -70,6 +70,38 @@ async function generateReportForTeam(
       log.info(`[ScheduledReports] Report already complete for team ${team.teamName} - ${MONTH_NAMES[reportMonth - 1]} ${reportYear}, skipping`);
       return null;
     }
+
+    // Legacy backfill — rows generated before this code shipped have
+    // `excelFileUrl` set but no `emailDelivery` marker (the marker is
+    // only written by the new code path). On the first cron tick
+    // post-deploy, those would otherwise enter the retry-email branch
+    // below and re-send every FM their prior-month emails.
+    //
+    // Heuristic: if the row hasn't been touched in 36+ hours and has
+    // no marker, it predates this code path. Stamp a `legacy-backfill`
+    // sentinel + skip. After one pass every legacy row is normalised
+    // and the standard terminal check above catches it on subsequent
+    // runs, so the heuristic only fires once per row.
+    //
+    // 36h is generous: the cron runs daily, so a real failure-and-retry
+    // cycle keeps `updatedAt` fresh within 24h. Anything older than
+    // 36h is genuinely stale.
+    if (existing && existing.excelFileUrl && !existingDelivery) {
+      const updatedAtMs = existing.updatedAt ? new Date(existing.updatedAt as any).getTime() : 0;
+      const ageHours = (Date.now() - updatedAtMs) / (1000 * 60 * 60);
+      const LEGACY_AGE_HOURS = 36;
+      if (ageHours > LEGACY_AGE_HOURS) {
+        log.info(`[ScheduledReports] Legacy row #${existing.id} for ${team.teamName} (age ${ageHours.toFixed(0)}h, no delivery marker) — backfilling sentinel + skipping`);
+        try {
+          await db.updateReport(existing.id, {
+            reportData: { ...((existing.reportData as any) ?? {}), emailDelivery: { sentAt: null, success: true, reason: "legacy-backfill" } },
+          });
+        } catch (e) {
+          log.warn("Legacy-backfill stamp failed (non-fatal — heuristic catches it next run)", { error: e instanceof Error ? e.message : String(e) });
+        }
+        return null;
+      }
+    }
     if (existing && !existing.excelFileUrl) {
       // Partial row — workbook never produced. Clear it so the rest
       // of the function can build a clean replacement.
