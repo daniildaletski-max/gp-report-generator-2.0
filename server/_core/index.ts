@@ -165,6 +165,36 @@ async function ensureRealNameColumn(): Promise<void> {
   }
 }
 
+/**
+ * Idempotent schema repair for the four narrative columns added to
+ * `reports` in migration 0021/0022. Same pattern as `realName`: when
+ * the deploy doesn't auto-run drizzle migrations, every INSERT into
+ * `reports` would fail with "Unknown column 'executiveSummary'" and
+ * the user sees their Generate Report button do nothing. We add the
+ * columns at boot; if they're already present MySQL throws "Duplicate
+ * column" and we swallow it.
+ */
+async function ensureReportNarrativeColumns(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const additions: Array<{ name: string; ddl: any }> = [
+    { name: "executiveSummary", ddl: sql`ALTER TABLE \`reports\` ADD COLUMN \`executiveSummary\` text NULL` },
+    { name: "topWins",          ddl: sql`ALTER TABLE \`reports\` ADD COLUMN \`topWins\` text NULL` },
+    { name: "topConcerns",      ddl: sql`ALTER TABLE \`reports\` ADD COLUMN \`topConcerns\` text NULL` },
+    { name: "perGpReviews",     ddl: sql`ALTER TABLE \`reports\` ADD COLUMN \`perGpReviews\` json NULL` },
+  ];
+  for (const { name, ddl } of additions) {
+    try {
+      await db.execute(ddl);
+      log.info(`Schema repair: added \`${name}\` column to reports`);
+    } catch (e: any) {
+      const msg = e?.message || String(e);
+      if (/Duplicate column|already exists/i.test(msg)) continue;
+      log.warn(`Schema repair for reports.${name} failed (non-fatal)`, { error: msg });
+    }
+  }
+}
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
@@ -329,6 +359,14 @@ async function startServer() {
     // MySQL throws "Duplicate column" which we swallow.
     ensureRealNameColumn().catch(err => {
       log.warn("realName boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Same idempotent ALTER TABLE pattern for the four narrative
+    // columns added to `reports` in migration 0021/0022. Without this,
+    // any deploy that hasn't run drizzle-kit will reject every
+    // `INSERT INTO reports (..., executiveSummary, ...)` with "Unknown
+    // column" and the Generate Report button silently fails.
+    ensureReportNarrativeColumns().catch(err => {
+      log.warn("report narrative columns boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
     });
   });
 
