@@ -33,11 +33,122 @@ async function generateReportForTeam(
       return null;
     }
 
-    // Check if a report already exists for this team/month/year
+    // Existing-row state machine — retry-aware so the new 5-10 cron
+    // window can recover from partial / failed prior runs.
+    //
+    //   row absent                                  → fresh generate
+    //   row present, no excelFileUrl                → workbook never
+    //                                                 finished (DB blip,
+    //                                                 storage outage,
+    //                                                 LLM timeout). Drop
+    //                                                 the partial row +
+    //                                                 regenerate fresh.
+    //   row present, excelFileUrl set, no email
+    //   delivery confirmation in reportData         → workbook is fine
+    //                                                 but the email was
+    //                                                 never confirmed
+    //                                                 (Resend down on
+    //                                                 day 5). Re-run
+    //                                                 generateExcelAndEmail
+    //                                                 against the same
+    //                                                 row id — idempotent.
+    //   row present + excelFileUrl + delivery=true  → truly done, skip.
     const existing = await db.getReportByTeamMonthYear(teamId, reportMonth, reportYear);
-    if (existing) {
-      log.info(`[ScheduledReports] Report already exists for team ${team.teamName} - ${MONTH_NAMES[reportMonth - 1]} ${reportYear}, skipping`);
+    const existingDelivery = ((existing?.reportData as any)?.emailDelivery ?? null) as
+      | { success?: boolean; reason?: string }
+      | null;
+    // "Terminal" rows the retry should leave alone:
+    //   - email landed (success === true), OR
+    //   - team owner has no email at all (reason === "no-recipient");
+    //     the workbook is built and uploaded, there's nothing more to
+    //     do until an admin sets the user's email.
+    const isTerminal = !!(existing && existing.excelFileUrl && (
+      existingDelivery?.success === true
+      || existingDelivery?.reason === "no-recipient"
+    ));
+    if (isTerminal) {
+      log.info(`[ScheduledReports] Report already complete for team ${team.teamName} - ${MONTH_NAMES[reportMonth - 1]} ${reportYear}, skipping`);
       return null;
+    }
+
+    // Legacy backfill — rows generated before this code shipped have
+    // `excelFileUrl` set but ZERO `emailDelivery` marker. The new
+    // code path writes the marker on every email attempt (success
+    // OR failure), so its absence is now the definitive signal that
+    // the row predates this PR.
+    //
+    // We previously combined "no marker" with an `updatedAt > 36h`
+    // age heuristic; that was unsound (a day-5 failure followed by a
+    // day-6 scheduler outage would falsely classify the row as
+    // legacy on day 7 and lose the email forever — Codex P2 #6).
+    // Now: the marker's presence/absence is the era signal directly.
+    //
+    // Lazy + idempotent: stamp the sentinel + skip. The standard
+    // terminal check above catches stamped rows on every subsequent
+    // run, so this branch only fires once per legacy row.
+    if (existing && existing.excelFileUrl && !existingDelivery) {
+      log.info(`[ScheduledReports] Legacy row #${existing.id} for ${team.teamName} (no delivery marker, predates retry code) — backfilling sentinel + skipping`);
+      try {
+        await db.updateReport(existing.id, {
+          reportData: { ...((existing.reportData as any) ?? {}), emailDelivery: { sentAt: null, success: true, reason: "legacy-backfill" } },
+        });
+      } catch (e) {
+        log.warn("Legacy-backfill stamp failed (non-fatal — will be retried next run)", { error: e instanceof Error ? e.message : String(e) });
+      }
+      return null;
+    }
+    if (existing && !existing.excelFileUrl) {
+      // Partial row — workbook never produced. Clear it so the rest
+      // of the function can build a clean replacement.
+      //
+      // Bail-on-delete-failure: there is no unique constraint on
+      // (teamId, reportMonth, reportYear). If `deleteReport` fails
+      // transiently and we still call `createReport`, we'd leave the
+      // old partial row PLUS a fresh finalized row for the same
+      // (team, month, year). `getReportByTeamMonthYear(...).limit(1)`
+      // could then keep returning the stale partial on subsequent
+      // runs, duplicating work indefinitely. Safer to skip this team
+      // for this cron tick and let tomorrow's retry-day try again.
+      log.info(`[ScheduledReports] Found partial row #${existing.id} for ${team.teamName} (no excelFileUrl), regenerating`);
+      try {
+        await db.deleteReport(existing.id);
+      } catch (e) {
+        log.warn(`Failed to delete partial row #${existing.id} for ${team.teamName} — skipping team for this run, will retry tomorrow`, {
+          error: e instanceof Error ? e.message : String(e),
+        });
+        return null;
+      }
+    } else if (existing && existing.excelFileUrl && existingDelivery
+               && (existingDelivery.success === false || existingDelivery.reason === "in-progress")) {
+      // Workbook is uploaded but email never confirmed. Re-run the
+      // shared helper against this row id — it'll re-upload (cheap)
+      // and re-send. Idempotent on the row; skips ahead of the LLM
+      // generation block below.
+      //
+      // Critically: only count this team as "generated" when the
+      // helper's own `emailSent` flag comes back true. `sendEmail`
+      // catches Resend / network failures and returns false, so a
+      // bare success return from generateExcelAndEmail does NOT mean
+      // the message landed. If it didn't, return null so the run
+      // counter stays accurate, the owner notification doesn't lie
+      // about a recovered failure, and tomorrow's retry-day picks
+      // the row up again.
+      log.info(`[ScheduledReports] Re-attempting email for team ${team.teamName} (row #${existing.id}, excelFileUrl set, no delivery confirmation)`);
+      const { generateExcelAndEmail } = await import("./routers/_shared");
+      try {
+        const result = await generateExcelAndEmail(
+          { user: { id: user.id, role: user.role, email: user.email, name: user.name } },
+          existing.id,
+        );
+        if (result?.emailSent) {
+          return { reportId: existing.id, teamName: team.teamName };
+        }
+        log.info(`[ScheduledReports] Email retry for ${team.teamName} returned emailSent=false; leaving row for next retry day`);
+        return null;
+      } catch (e) {
+        log.warn(`Email retry failed for ${team.teamName}; will leave row as-is for next retry day`, { error: e instanceof Error ? e.message : String(e) });
+        return null;
+      }
     }
 
     // Get evaluation stats for the month
@@ -267,24 +378,10 @@ Write 3-4 concise sentences. Cite specific numbers. No bullet points. No fluff.`
       userId: user.id,
     });
 
-    // Generate richer narratives (exec summary, top wins/concerns,
-    // per-GP reviews) and persist to the report row before we build
-    // the Excel — the workbook + email pull these fields from the
-    // saved row.
-    const { generateExcelAndEmail, generateAndPersistNarratives } = await import("./routers/_shared");
-    await generateAndPersistNarratives({
-      reportId: report.id,
-      teamId,
-      reportMonth,
-      reportYear,
-      userId: user.id,
-      teamName: team.teamName,
-      fmName: team.floorManagerName,
-    });
-
     // Generate Excel and send email — share the rich workbook builder
     // with the on-demand path so scheduled reports also get the
     // Coaching Plans + Bonus Summary sheets.
+    const { generateExcelAndEmail } = await import("./routers/_shared");
     await generateExcelAndEmail(
       { user: { id: user.id, role: user.role, email: user.email, name: user.name } },
       report.id,
@@ -300,8 +397,16 @@ Write 3-4 concise sentences. Cite specific numbers. No bullet points. No fluff.`
 
 /**
  * Main scheduled job: generates reports for all teams that have data for the previous month.
+ *
+ * `isPrimaryRun` defaults to true and gates the "no reports generated"
+ * owner notification. The day-5 cron tick is the primary run; days
+ * 6-10 are idempotent retries that should stay silent on the no-op
+ * path so the owner doesn't get five "No Reports Generated" emails
+ * the week after a successful day-5. Retry runs still notify when
+ * something IS generated (recovered failure — worth surfacing).
  */
-async function runMonthlyReportGeneration() {
+async function runMonthlyReportGeneration(opts?: { isPrimaryRun?: boolean }) {
+  const isPrimaryRun = opts?.isPrimaryRun ?? true;
   if (isMonthlyGenerationRunning) {
     log.info("[ScheduledReports] Monthly report generation is already running, skipping duplicate trigger");
     return;
@@ -385,7 +490,14 @@ async function runMonthlyReportGeneration() {
 
     log.info(`[ScheduledReports] Completed: ${totalGenerated} reports generated, ${totalSkipped} skipped`);
 
-    // Notify the project owner about the scheduled run
+    // Notify the project owner about the scheduled run.
+    //
+    // - `totalGenerated > 0` always notifies — that's worth surfacing
+    //   regardless of which day fired (a retry-day run that succeeds
+    //   is itself useful information about a recovered failure).
+    // - `totalGenerated === 0` only notifies on the primary day-5 run.
+    //   On retry days (6-10) every team is normally already reported,
+    //   so a "No Reports Generated" owner email would just be noise.
     if (totalGenerated > 0) {
       const reportSummary = results
         .map(r => `- ${r.userName}: ${r.teamName} (Report #${r.reportId})`)
@@ -395,11 +507,13 @@ async function runMonthlyReportGeneration() {
         title: `Monthly Reports Generated: ${monthName} ${reportYear}`,
         content: `Automated monthly report generation completed.\n\nGenerated: ${totalGenerated} reports\nSkipped: ${totalSkipped} (no data or already exists)\n\nReports:\n${reportSummary}`,
       });
-    } else {
+    } else if (isPrimaryRun) {
       await notifyOwner({
         title: `Monthly Reports: No Reports Generated for ${monthName} ${reportYear}`,
         content: `Automated monthly report generation ran but no new reports were generated. Either all teams already have reports for this month, or no evaluation data was found.`,
       });
+    } else {
+      log.info(`[ScheduledReports] Retry-day run produced no new reports — staying silent (steady state)`);
     }
   } catch (error) {
     log.error("Fatal error during scheduled generation", error instanceof Error ? error : new Error(String(error)));
@@ -414,22 +528,43 @@ async function runMonthlyReportGeneration() {
 
 /**
  * Initialize the cron job.
- * Runs at 06:00 EET on the 5th of every month.
  *
- * Why the 5th and not the 1st: the previous-month data isn't fully
- * settled until the FM has had a few business days to finish off
- * stragglers (late evals, attendance corrections, error-file
- * uploads). Generating + emailing reports on day-1 hands FMs an
- * incomplete document. Day-5 gives a comfortable buffer while
- * still arriving early enough in the new month to act on.
+ * Fires at 06:00 EET on each of days 5, 6, 7, 8, 9, 10 of every month.
+ *
+ * Why a 6-day window and not just the 5th:
+ * - Day 5 is the primary run — late evals / attendance corrections
+ *   from the prior month have settled, FM gets the report with their
+ *   morning coffee.
+ * - Days 6-10 are a safety net. `runMonthlyReportGeneration` is
+ *   idempotent: it skips any team that already has a report row for
+ *   the previous month. So a day-6 run does almost nothing if day-5
+ *   succeeded — it's only there to catch transient failures (a brief
+ *   DB blip, LLM rate-limit, Resend outage) that left some teams
+ *   unreported. After day 10 we stop trying — at that point the
+ *   missing data is more interesting than the missing email.
+ *
+ * Operators can override the whole expression via MONTHLY_REPORTS_CRON.
  */
 export function initScheduledReports() {
   // Cron: minute hour day-of-month month day-of-week
-  // "0 6 5 * *" = At 06:00 on the 5th of every month
-  const cronExpr = process.env.MONTHLY_REPORTS_CRON || "0 6 5 * *";
-  const task = cron.schedule(cron.validate(cronExpr) ? cronExpr : "0 6 5 * *", () => {
-    log.info("[ScheduledReports] Cron triggered - starting monthly report generation");
-    runMonthlyReportGeneration().catch(err => {
+  // "0 6 5-10 * *" = At 06:00 on days 5-10 of every month
+  const cronExpr = process.env.MONTHLY_REPORTS_CRON || "0 6 5-10 * *";
+  const task = cron.schedule(cron.validate(cronExpr) ? cronExpr : "0 6 5-10 * *", () => {
+    // Day of month in Tallinn — same timezone the cron is configured
+    // in. We use Intl rather than `new Date().getDate()` so the path
+    // works regardless of whether the deploy host runs in UTC, EET,
+    // or anywhere else: at 06:00 EET in summer the UTC date is the
+    // same, but explicit-tz is safer than betting on it.
+    let tallinnDay = 0;
+    try {
+      tallinnDay = Number(new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Tallinn",
+        day: "numeric",
+      }).format(new Date()));
+    } catch { tallinnDay = new Date().getDate(); }
+    const isPrimaryRun = tallinnDay === 5;
+    log.info(`[ScheduledReports] Cron triggered (day ${tallinnDay}, ${isPrimaryRun ? "primary" : "retry"}) - starting monthly report generation`);
+    runMonthlyReportGeneration({ isPrimaryRun }).catch(err => {
       log.error("Unhandled error in scheduled job", err instanceof Error ? err : new Error(String(err)));
     });
   }, {

@@ -6,7 +6,7 @@ import { MONTH_NAMES } from "@shared/const";
 import { invokeLLM } from "../_core/llm";
 import { notifyOwner } from "../_core/notification";
 import { exportToGoogleSheets, isGoogleSheetsAvailable } from "../services/googleSheetsService";
-import { generateExcelAndEmail, generateAndPersistNarratives, extractEvaluationFromImage, parseEvaluationDate, EvaluationDataSchema } from "./_shared";
+import { generateExcelAndEmail, extractEvaluationFromImage, parseEvaluationDate, EvaluationDataSchema } from "./_shared";
 import { createLogger } from "../services/logger";
 const log = createLogger("Router");
 
@@ -560,20 +560,6 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         generatedById: ctx.user.id,
       });
 
-      // Generate richer narratives (executive summary, top wins/
-      // concerns, per-GP reviews) and persist to the report row
-      // before the workbook gets built. The Excel sheet builder reads
-      // these fields off the row.
-      await generateAndPersistNarratives({
-        reportId: report.id,
-        teamId: input.teamId,
-        reportMonth: input.reportMonth,
-        reportYear: input.reportYear,
-        userId: ctx.user.id,
-        teamName: team.teamName,
-        fmName: team.floorManagerName,
-      });
-
       await notifyOwner({
         title: "New Report Generated",
         content: `A new Team Monthly Overview report has been generated for ${team.teamName} - ${MONTH_NAMES[input.reportMonth - 1]} ${input.reportYear}`,
@@ -659,17 +645,6 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
               };
             }
           }
-          // Generate narratives before the email pass so the bulk path
-          // produces the same rich content as on-demand + cron.
-          await generateAndPersistNarratives({
-            reportId: report.id,
-            teamId: team.id,
-            reportMonth: input.reportMonth,
-            reportYear: input.reportYear,
-            userId: recipientCtx.user.id,
-            teamName: team.teamName,
-            fmName: team.floorManagerName,
-          });
           const result = await generateExcelAndEmail(recipientCtx, report.id);
           results.push({
             teamId: team.id,
@@ -717,7 +692,12 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       reportId: z.number().positive(),
     }))
     .mutation(async ({ ctx, input }) => {
-      return generateExcelAndEmail(ctx, input.reportId);
+      // Manual re-export — the operator intends to re-send the email
+      // (typically after editing FM Performance / Goals / Team
+      // Overview text in the Reports UI). Opt out of the Resend
+      // idempotency key so the second send actually goes through
+      // instead of being silently dedup'd against the original.
+      return generateExcelAndEmail(ctx, input.reportId, { idempotent: false });
     }),
 
   exportToGoogleSheets: protectedProcedure

@@ -58,12 +58,6 @@ interface ReportData {
     goalsThisMonth: string | null;
     teamOverview: string | null;
     additionalComments: string | null;
-    /** New narrative fields populated by reportNarrativesService — added
-     *  to power the Executive Summary and Per-GP Reviews sheets. */
-    executiveSummary?: string | null;
-    topWins?: string | null;
-    topConcerns?: string | null;
-    perGpReviews?: Array<{ gpId: number; gpName: string; narrative: string; focusForNextMonth: string }> | null;
   };
   teamName: string;
   fmName: string;
@@ -211,6 +205,30 @@ export async function generateChartImage(
   title: string
 ): Promise<Buffer | null> {
   try {
+    // Performance band colours — gives every bar a glanceable read on
+    // status without needing to look up the number. Thresholds match
+    // the existing dashboard vocabulary: green = exceeding, amber =
+    // ok-but-watch, red = needs attention.
+    //   ≥ 18  → green (good)
+    //   16-18 → amber (watch)
+    //   < 16  → red (needs attention)
+    const totalColors = totalScores.map(v =>
+      v >= 18 ? 'rgba(46, 160, 67, 0.85)'
+        : v >= 16 ? 'rgba(245, 158, 11, 0.85)'
+        : 'rgba(220, 38, 38, 0.85)'
+    );
+    const totalBorders = totalScores.map(v =>
+      v >= 18 ? 'rgba(46, 160, 67, 1)'
+        : v >= 16 ? 'rgba(245, 158, 11, 1)'
+        : 'rgba(220, 38, 38, 1)'
+    );
+
+    // Team average — drawn as a horizontal reference line so each bar
+    // has immediate context against the team mean.
+    const teamAvg = totalScores.length > 0
+      ? totalScores.reduce((s, v) => s + v, 0) / totalScores.length
+      : 0;
+
     const chartConfig = {
       type: 'bar',
       data: {
@@ -219,41 +237,72 @@ export async function generateChartImage(
           {
             label: `Total Score (max ${MAX_TOTAL_SCORE})`,
             data: totalScores,
-            backgroundColor: 'rgba(68, 114, 196, 0.85)',
-            borderColor: 'rgba(68, 114, 196, 1)',
+            backgroundColor: totalColors,
+            borderColor: totalBorders,
             borderWidth: 1,
-            borderRadius: 4,
-            barPercentage: 0.75,
-            categoryPercentage: 0.85,
+            borderRadius: 6,
+            barPercentage: 0.78,
+            categoryPercentage: 0.86,
           },
           {
             label: 'Appearance (max 12)',
             data: appearanceScores,
-            backgroundColor: 'rgba(112, 173, 71, 0.85)',
-            borderColor: 'rgba(112, 173, 71, 1)',
+            backgroundColor: 'rgba(56, 122, 196, 0.7)',
+            borderColor: 'rgba(56, 122, 196, 1)',
             borderWidth: 1,
-            borderRadius: 4,
-            barPercentage: 0.75,
-            categoryPercentage: 0.85,
+            borderRadius: 6,
+            barPercentage: 0.78,
+            categoryPercentage: 0.86,
           },
           {
             label: 'Game Performance (max 10)',
             data: gamePerformanceScores,
-            backgroundColor: 'rgba(255, 192, 0, 0.85)',
-            borderColor: 'rgba(255, 192, 0, 1)',
+            backgroundColor: 'rgba(124, 58, 237, 0.7)',
+            borderColor: 'rgba(124, 58, 237, 1)',
             borderWidth: 1,
-            borderRadius: 4,
-            barPercentage: 0.75,
-            categoryPercentage: 0.85,
+            borderRadius: 6,
+            barPercentage: 0.78,
+            categoryPercentage: 0.86,
           },
         ],
       },
       options: {
         responsive: true,
         plugins: {
-          title: { display: true, text: title, font: { size: 16, weight: 'bold' }, padding: { bottom: 16 }, color: '#1a1a1a' },
-          legend: { position: 'bottom', labels: { padding: 16, font: { size: 11 }, usePointStyle: true, pointStyle: 'rectRounded' } },
-          datalabels: { display: true, anchor: 'end', align: 'top', font: { size: 9, weight: 'bold' }, color: '#333', formatter: (value: number) => value.toFixed(1) },
+          title: { display: true, text: title, font: { size: 17, weight: 'bold' }, padding: { bottom: 18 }, color: '#0f172a' },
+          legend: { position: 'bottom', labels: { padding: 18, font: { size: 11 }, usePointStyle: true, pointStyle: 'rectRounded' } },
+          // No `formatter` here — JSON.stringify (used to ship the
+          // config to QuickChart) silently drops function-valued
+          // properties, so the formatter would never reach the
+          // renderer (Codex P2 — "Serialize delta labels instead of
+          // embedding functions"). Data is pre-rounded by
+          // `computeGpAverages` so the default datalabels rendering
+          // shows the value at the right precision.
+          datalabels: { display: true, anchor: 'end', align: 'top', font: { size: 9, weight: 'bold' }, color: '#1f2937' },
+          // Reference line for team average — a single annotation
+          // plugin entry. QuickChart supports `chartjs-plugin-annotation`.
+          annotation: {
+            annotations: teamAvg > 0 ? {
+              avgLine: {
+                type: 'line',
+                yMin: teamAvg, yMax: teamAvg,
+                borderColor: 'rgba(15, 23, 42, 0.55)',
+                borderWidth: 2,
+                borderDash: [6, 4],
+                label: {
+                  display: true,
+                  content: `Team avg ${teamAvg.toFixed(1)}`,
+                  position: 'end',
+                  backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                  color: '#ffffff',
+                  font: { size: 10, weight: 'bold' },
+                  padding: { x: 6, y: 3 },
+                  borderRadius: 4,
+                  yAdjust: -4,
+                },
+              },
+            } : {},
+          },
         },
         scales: {
           y: {
@@ -264,7 +313,7 @@ export async function generateChartImage(
             grid: { color: 'rgba(0, 0, 0, 0.06)' },
           },
           x: {
-            title: { display: true, text: 'Game Presenters', font: { size: 12, weight: 'bold' } },
+            title: { display: true, text: 'Game Presenters (sorted by total score)', font: { size: 12, weight: 'bold' } },
             ticks: { maxRotation: 45, minRotation: 0, font: { size: 10 } },
             grid: { display: false },
           },
@@ -272,7 +321,8 @@ export async function generateChartImage(
       },
     };
 
-    const chartUrl = `https://quickchart.io/chart?v=3&c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=900&h=420&bkg=white&f=png`;
+    // Wider + taller — 900×420 was cramped when teams have 12+ GPs.
+    const chartUrl = `https://quickchart.io/chart?v=3&c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=1100&h=480&bkg=white&f=png&devicePixelRatio=2`;
     const response = await fetch(chartUrl);
     if (!response.ok) {
       log.error('QuickChart API error', undefined, { status: response.status });
@@ -295,30 +345,101 @@ export async function generateComparisonChart(
   title: string
 ): Promise<Buffer | null> {
   try {
+    // Colour each current bar by direction vs prev so improvers /
+    // regressors are visually obvious without reading the numbers.
+    //   improved by ≥ 0.3 → green
+    //   regressed by ≥ 0.3 → red
+    //   within ±0.3       → blue (flat)
+    const deltas = currentScores.map((c, i) => c - (previousScores[i] ?? 0));
+    const currentColors = deltas.map(d =>
+      d >= 0.3 ? 'rgba(46, 160, 67, 0.85)'
+        : d <= -0.3 ? 'rgba(220, 38, 38, 0.85)'
+        : 'rgba(56, 122, 196, 0.85)'
+    );
+    const currentBorders = deltas.map(d =>
+      d >= 0.3 ? 'rgba(46, 160, 67, 1)'
+        : d <= -0.3 ? 'rgba(220, 38, 38, 1)'
+        : 'rgba(56, 122, 196, 1)'
+    );
+
+    // Bake the delta into the X-axis label per GP rather than into a
+    // datalabel formatter. The chart config is sent to QuickChart via
+    // `JSON.stringify`, which silently drops function-valued keys —
+    // so any `formatter: (value, ctx) => ...` we'd put on the dataset
+    // never makes the trip and the deltas wouldn't render at all
+    // (Codex P2 — "Serialize delta labels instead of embedding
+    // functions"). Using string labels survives JSON serialisation.
+    //
+    // Format: "GP Name (+1.2)" / "GP Name (−1.2)" / "GP Name" when
+    // the delta is below the noise threshold.
+    const labelsWithDelta = labels.map((name, i) => {
+      const d = deltas[i] ?? 0;
+      if (Math.abs(d) < 0.05) return name;
+      const sign = d > 0 ? '+' : '−';
+      return `${name} (${sign}${Math.abs(d).toFixed(1)})`;
+    });
+
     const chartConfig = {
       type: 'bar',
       data: {
-        labels,
+        labels: labelsWithDelta,
         datasets: [
-          { label: currentMonthName, data: currentScores, backgroundColor: 'rgba(68, 114, 196, 0.8)', borderColor: 'rgba(68, 114, 196, 1)', borderWidth: 1, borderRadius: 4 },
-          { label: previousMonthName, data: previousScores, backgroundColor: 'rgba(255, 192, 0, 0.7)', borderColor: 'rgba(255, 192, 0, 1)', borderWidth: 1, borderRadius: 4 },
+          {
+            label: currentMonthName,
+            data: currentScores,
+            backgroundColor: currentColors,
+            borderColor: currentBorders,
+            borderWidth: 1,
+            borderRadius: 6,
+            barPercentage: 0.78,
+            categoryPercentage: 0.86,
+            // Plain numeric value display — chartjs-plugin-datalabels
+            // renders the bar's value verbatim when no formatter is
+            // supplied. The delta is now in the X-axis label above.
+            datalabels: {
+              display: true,
+              anchor: 'end',
+              align: 'top',
+              font: { size: 9, weight: 'bold' },
+              color: '#0f172a',
+            },
+          },
+          {
+            label: previousMonthName,
+            data: previousScores,
+            backgroundColor: 'rgba(148, 163, 184, 0.55)',
+            borderColor: 'rgba(100, 116, 139, 1)',
+            borderWidth: 1,
+            borderRadius: 6,
+            barPercentage: 0.78,
+            categoryPercentage: 0.86,
+            datalabels: {
+              display: true,
+              anchor: 'end',
+              align: 'top',
+              font: { size: 9 },
+              color: '#475569',
+              // No `formatter` — same JSON.stringify drop reason as
+              // above. Data is pre-rounded by `computeGpAverages` so
+              // the default renderer shows the right precision.
+            },
+          },
         ],
       },
       options: {
         responsive: true,
         plugins: {
-          title: { display: true, text: title, font: { size: 14, weight: 'bold' }, color: '#1a1a1a' },
-          legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'rectRounded' } },
-          datalabels: { display: true, anchor: 'end', align: 'top', font: { size: 9 }, formatter: (value: number) => value.toFixed(1) },
+          title: { display: true, text: title, font: { size: 15, weight: 'bold' }, padding: { bottom: 14 }, color: '#0f172a' },
+          legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyle: 'rectRounded' } },
         },
         scales: {
-          y: { beginAtZero: true, max: MAX_TOTAL_SCORE + 2, title: { display: true, text: 'Total Score' } },
-          x: { title: { display: true, text: 'Game Presenters' } },
+          y: { beginAtZero: true, max: MAX_TOTAL_SCORE + 2, title: { display: true, text: 'Total Score', font: { weight: 'bold' } }, grid: { color: 'rgba(0, 0, 0, 0.06)' } },
+          x: { title: { display: true, text: 'Game Presenters (with delta vs prev)', font: { weight: 'bold' } }, grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
         },
       },
     };
 
-    const chartUrl = `https://quickchart.io/chart?v=3&c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=800&h=380&bkg=white&f=png`;
+    const chartUrl = `https://quickchart.io/chart?v=3&c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=1000&h=440&bkg=white&f=png&devicePixelRatio=2`;
     const response = await fetch(chartUrl);
     if (!response.ok) {
       log.error('QuickChart comparison API error', undefined, { status: response.status });
@@ -1357,142 +1478,15 @@ function buildActionItemsSheet(workbook: ExcelJS.Workbook, items: ActionItemSumm
 // Main Excel Generation
 // ============================
 
-/**
- * Executive Summary sheet — first thing the recipient sees when they
- * open the workbook. Single-page layout with the narrative + top
- * wins/concerns inline so a quick scan is enough.
- */
-function buildExecutiveSummarySheet(
-  workbook: ExcelJS.Workbook,
-  data: ReportData,
-  monthName: string,
-): void {
-  const { report, teamName, fmName } = data;
-  const summary = (report.executiveSummary || "").trim();
-  const wins = (report.topWins || "").trim();
-  const concerns = (report.topConcerns || "").trim();
-  // Skip if nothing to show — keeps the workbook tidy when the LLM
-  // call failed AND its fallback was also empty.
-  if (!summary && !wins && !concerns) return;
-
-  const sheet = workbook.addWorksheet("Executive Summary");
-  sheet.columns = [
-    { width: 22 },
-    { width: 70 },
-  ];
-
-  // Title block
-  sheet.mergeCells("A1:B1");
-  const title = sheet.getCell("A1");
-  title.value = `${teamName} — Executive Summary, ${monthName} ${report.reportYear}`;
-  title.font = { name: "Arial", size: 16, bold: true, color: { argb: COLORS.navyBlue } };
-  title.alignment = { horizontal: "left", vertical: "middle" };
-  sheet.getRow(1).height = 28;
-
-  sheet.mergeCells("A2:B2");
-  const subtitle = sheet.getCell("A2");
-  subtitle.value = `Floor Manager: ${fmName}`;
-  subtitle.font = { name: "Arial", size: 11, italic: true, color: { argb: COLORS.darkGray } };
-  sheet.getRow(2).height = 18;
-
-  // Spacer
-  sheet.getRow(3).height = 6;
-
-  let row = 4;
-  if (summary) {
-    const label = sheet.getCell(`A${row}`);
-    label.value = "OVERVIEW";
-    label.font = { name: "Arial", size: 10, bold: true, color: { argb: COLORS.darkGray } };
-    label.alignment = { vertical: "top" };
-    const cell = sheet.getCell(`B${row}`);
-    cell.value = summary;
-    cell.alignment = { wrapText: true, vertical: "top" };
-    cell.font = { name: "Arial", size: 11 };
-    sheet.getRow(row).height = Math.max(60, Math.ceil(summary.length / 80) * 16);
-    row++;
-    sheet.getRow(row).height = 6;
-    row++;
-  }
-
-  if (wins) {
-    const label = sheet.getCell(`A${row}`);
-    label.value = "TOP WINS";
-    label.font = { name: "Arial", size: 10, bold: true, color: { argb: COLORS.greenDark } };
-    label.alignment = { vertical: "top" };
-    const cell = sheet.getCell(`B${row}`);
-    cell.value = wins;
-    cell.alignment = { wrapText: true, vertical: "top" };
-    cell.font = { name: "Arial", size: 11 };
-    sheet.getRow(row).height = Math.max(60, wins.split("\n").length * 18);
-    row++;
-    sheet.getRow(row).height = 6;
-    row++;
-  }
-
-  if (concerns) {
-    const label = sheet.getCell(`A${row}`);
-    label.value = "TOP CONCERNS";
-    label.font = { name: "Arial", size: 10, bold: true, color: { argb: COLORS.redDark } };
-    label.alignment = { vertical: "top" };
-    const cell = sheet.getCell(`B${row}`);
-    cell.value = concerns;
-    cell.alignment = { wrapText: true, vertical: "top" };
-    cell.font = { name: "Arial", size: 11 };
-    sheet.getRow(row).height = Math.max(60, concerns.split("\n").length * 18);
-    row++;
-  }
-}
-
-/**
- * Per-GP Reviews sheet — one row per GP with their AI-generated
- * narrative + suggested focus for next month. Lets the FM print or
- * email a personalised section to each presenter without needing
- * to scroll through scores.
- */
-function buildPerGpReviewsSheet(
-  workbook: ExcelJS.Workbook,
-  reviews: NonNullable<ReportData["report"]["perGpReviews"]>,
-): void {
-  if (!reviews || reviews.length === 0) return;
-  const sheet = workbook.addWorksheet("Per-GP Reviews");
-  sheet.columns = [
-    { header: "Game Presenter", key: "gpName", width: 28 },
-    { header: "Performance review", key: "narrative", width: 80 },
-    { header: "Focus for next month", key: "focusForNextMonth", width: 50 },
-  ];
-  sheet.getRow(1).font = { name: "Arial", size: 11, bold: true, color: { argb: COLORS.white } };
-  sheet.getRow(1).fill = {
-    type: "pattern", pattern: "solid", fgColor: { argb: COLORS.navyBlue },
-  };
-  sheet.getRow(1).height = 22;
-  sheet.getRow(1).alignment = { vertical: "middle", horizontal: "left" };
-
-  for (const r of reviews) {
-    const row = sheet.addRow({
-      gpName: r.gpName,
-      narrative: r.narrative,
-      focusForNextMonth: r.focusForNextMonth,
-    });
-    row.alignment = { wrapText: true, vertical: "top" };
-    // Estimate row height from the longer of the two text columns.
-    const longer = Math.max(r.narrative.length, r.focusForNextMonth.length);
-    row.height = Math.max(40, Math.ceil(longer / 60) * 16);
-  }
-}
-
 export async function generateReportWorkbook(data: ReportData): Promise<Buffer> {
   const { report, teamName, fmName, attendanceData, attitudeByGp, gpEvaluationsData, prevMonthEvaluations, actionItems } = data;
   const monthName = MONTH_NAMES[report.reportMonth - 1];
 
-  log.info("Generating Excel workbook v2.1", { reportId: report.id, teamName, month: monthName, gpCount: attendanceData.length });
+  log.info("Generating Excel workbook v2.0", { reportId: report.id, teamName, month: monthName, gpCount: attendanceData.length });
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "GP Report Generator";
   workbook.created = new Date();
-
-  // Sheet 0: Executive Summary — recipient-friendly opener so the
-  // workbook is readable WITHOUT diving into the metric grid.
-  buildExecutiveSummarySheet(workbook, data, monthName);
 
   // Sheet 1: Data (Individual GP Scores)
   buildDataSheet(workbook, gpEvaluationsData);
@@ -1510,17 +1504,12 @@ export async function generateReportWorkbook(data: ReportData): Promise<Buffer> 
   // Sheet 4: Attitude Entries (optional)
   buildAttitudeSheet(workbook, attendanceData, attitudeByGp);
 
-  // Sheet 5: Per-GP Reviews — one paragraph per GP + next-month focus.
-  if (report.perGpReviews && report.perGpReviews.length > 0) {
-    buildPerGpReviewsSheet(workbook, report.perGpReviews);
-  }
-
-  // Sheet 6: Coaching Plans (optional — only if any items)
+  // Sheet 5: Coaching Plans (optional — only if any items)
   if (actionItems && actionItems.length > 0) {
     buildActionItemsSheet(workbook, actionItems);
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
-  log.info("Workbook v2.1 generated successfully", { reportId: report.id, sheets: workbook.worksheets.length });
+  log.info("Workbook v2.0 generated successfully", { reportId: report.id, sheets: workbook.worksheets.length });
   return Buffer.from(buffer);
 }

@@ -17,206 +17,31 @@ import { sendReportEmail } from "../_core/email";
 import { generateReportWorkbook } from "../services/excelService";
 import { exportToGoogleSheets, isGoogleSheetsAvailable } from "../services/googleSheetsService";
 import { createLogger } from "../services/logger";
-import {
-  generateAllNarratives,
-  type ReportSnapshot,
-  type PerGpRow,
-  type MonthDelta,
-  type PerGpReview,
-} from "../services/reportNarrativesService";
 
 const log = createLogger("Router");
-
-/**
- * Build a `ReportSnapshot` for the given team + month/year (with prior
- * month metrics for delta computation). Shared by the on-demand
- * generation path and the scheduled cron — both pull the same shape
- * before calling `generateAllNarratives`.
- */
-export async function buildReportSnapshot(opts: {
-  teamId: number;
-  reportMonth: number;
-  reportYear: number;
-  userId: number;
-  teamName: string;
-  fmName: string;
-}): Promise<ReportSnapshot> {
-  const monthName = MONTH_NAMES[opts.reportMonth - 1];
-  const prevMonth = opts.reportMonth === 1 ? 12 : opts.reportMonth - 1;
-  const prevYear = opts.reportMonth === 1 ? opts.reportYear - 1 : opts.reportYear;
-
-  const [
-    statsThis, statsPrev, attendanceThis, attendancePrev, errorsThis, errorsPrev, gpsTeam,
-  ] = await Promise.all([
-    db.getGPMonthlyStats(opts.teamId, opts.reportYear, opts.reportMonth),
-    db.getGPMonthlyStats(opts.teamId, prevYear, prevMonth),
-    db.getAttendanceByTeamMonth(opts.teamId, opts.reportMonth, opts.reportYear),
-    db.getAttendanceByTeamMonth(opts.teamId, prevMonth, prevYear),
-    db.getErrorCountByGP(opts.reportMonth, opts.reportYear, opts.userId),
-    db.getErrorCountByGP(prevMonth, prevYear, opts.userId),
-    db.getGamePresentersByTeam(opts.teamId),
-  ]);
-
-  // Attitude per-GP for both months — best-effort, parallel.
-  const attitudePerGp = new Map<number, { positive: number; negative: number }>();
-  await Promise.all(gpsTeam.map(async gp => {
-    try {
-      const ats = await db.getAttitudeScreenshotsForGP(gp.id, opts.reportMonth, opts.reportYear);
-      const positive = ats.filter(a => (a.attitudeScore ?? 0) > 0).length;
-      const negative = ats.filter(a => (a.attitudeScore ?? 0) < 0).length;
-      attitudePerGp.set(gp.id, { positive, negative });
-    } catch {
-      attitudePerGp.set(gp.id, { positive: 0, negative: 0 });
-    }
-  }));
-
-  const dirOf = (cur: number, prev: number): MonthDelta["direction"] =>
-    Math.abs(cur - prev) < 0.05 ? "flat" : cur > prev ? "up" : "down";
-  const delta = (cur: number, prev: number): MonthDelta => ({ current: cur, previous: prev, direction: dirOf(cur, prev) });
-
-  const avg = (vals: number[]) => vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
-  const sum = (vals: number[]) => vals.reduce((s, v) => s + v, 0);
-
-  const avgsThis = {
-    total: avg(statsThis.map(s => Number(s.avgTotalScore || 0))),
-    appearance: avg(statsThis.map(s => Number(s.avgAppearanceScore || 0))),
-    gamePerf: avg(statsThis.map(s => Number(s.avgGamePerfScore || 0))),
-  };
-  const avgsPrev = {
-    total: avg(statsPrev.map(s => Number(s.avgTotalScore || 0))),
-    appearance: avg(statsPrev.map(s => Number(s.avgAppearanceScore || 0))),
-    gamePerf: avg(statsPrev.map(s => Number(s.avgGamePerfScore || 0))),
-  };
-
-  const totalsThis = {
-    evaluations: sum(statsThis.map(s => Number(s.evaluationCount || 0))),
-    mistakes: sum(attendanceThis.map(a => a.monthlyStats?.mistakes || a.attendance?.mistakes || 0)),
-    sickDays: sum(attendanceThis.map(a => a.attendance?.sickLeaves || 0)),
-    missedDays: sum(attendanceThis.map(a => a.attendance?.missedDays || 0)),
-    lateArrivals: sum(attendanceThis.map(a => a.attendance?.lateToWork || 0)),
-    extraShifts: sum(attendanceThis.map(a => a.attendance?.extraShifts || 0)),
-  };
-  const totalsPrev = {
-    evaluations: sum(statsPrev.map(s => Number(s.evaluationCount || 0))),
-    mistakes: sum(attendancePrev.map(a => a.monthlyStats?.mistakes || a.attendance?.mistakes || 0)),
-    sickDays: sum(attendancePrev.map(a => a.attendance?.sickLeaves || 0)),
-    missedDays: sum(attendancePrev.map(a => a.attendance?.missedDays || 0)),
-    lateArrivals: sum(attendancePrev.map(a => a.attendance?.lateToWork || 0)),
-    extraShifts: sum(attendancePrev.map(a => a.attendance?.extraShifts || 0)),
-  };
-
-  // Build per-GP rows. Sort order: most concerning first (low score,
-  // high mistakes, high attendance issues) so the LLM and the Excel
-  // sheet both lead with the GPs that need attention.
-  const perGp: PerGpRow[] = gpsTeam.map(gp => {
-    const stat = statsThis.find(s => s.gpName === gp.name);
-    const statPrev = statsPrev.find(s => s.gpName === gp.name);
-    const att = attendanceThis.find(a => a.gamePresenter?.id === gp.id)?.attendance ?? null;
-    const err = errorsThis.find(e => e.gpName === gp.name)?.errorCount ?? 0;
-    const at = attitudePerGp.get(gp.id) ?? { positive: 0, negative: 0 };
-    return {
-      gpId: gp.id,
-      gpName: gp.name,
-      avgScore: Number(stat?.avgTotalScore ?? 0),
-      appearanceScore: Number(stat?.avgAppearanceScore ?? 0),
-      gamePerformanceScore: Number(stat?.avgGamePerfScore ?? 0),
-      evaluationCount: Number(stat?.evaluationCount ?? 0),
-      errorCount: err,
-      attitudePositive: at.positive,
-      attitudeNegative: at.negative,
-      lateArrivals: att?.lateToWork ?? 0,
-      missedDays: att?.missedDays ?? 0,
-      sickDays: att?.sickLeaves ?? 0,
-      prevAvgScore: Number(statPrev?.avgTotalScore ?? 0),
-    };
-  });
-  // Risk-style ordering: lowest scoring + highest mistakes float to the top.
-  perGp.sort((a, b) => {
-    const ra = (22 - a.avgScore) + a.errorCount + a.lateArrivals + a.attitudeNegative;
-    const rb = (22 - b.avgScore) + b.errorCount + b.lateArrivals + b.attitudeNegative;
-    return rb - ra;
-  });
-
-  // Suppress unused (errorsPrev currently unused in narrative; reserved
-  // for a future per-GP error delta).
-  void errorsPrev;
-
-  return {
-    teamName: opts.teamName,
-    fmName: opts.fmName,
-    monthName,
-    year: opts.reportYear,
-    totalGps: gpsTeam.length,
-    averages: {
-      total: delta(avgsThis.total, avgsPrev.total),
-      appearance: delta(avgsThis.appearance, avgsPrev.appearance),
-      gamePerf: delta(avgsThis.gamePerf, avgsPrev.gamePerf),
-    },
-    totals: {
-      evaluations: delta(totalsThis.evaluations, totalsPrev.evaluations),
-      mistakes: delta(totalsThis.mistakes, totalsPrev.mistakes),
-      sickDays: delta(totalsThis.sickDays, totalsPrev.sickDays),
-      missedDays: delta(totalsThis.missedDays, totalsPrev.missedDays),
-      lateArrivals: delta(totalsThis.lateArrivals, totalsPrev.lateArrivals),
-      extraShifts: delta(totalsThis.extraShifts, totalsPrev.extraShifts),
-    },
-    perGp,
-  };
-}
-
-/**
- * Generate the new narrative bundle (executive summary, top wins/
- * concerns, per-GP reviews) and persist to the report row.
- *
- * Designed to be called from BOTH the on-demand `report.generate`
- * path and the scheduled cron, after the report row has been created
- * but before the Excel/email step. Failures are logged but never
- * thrown — the report should always proceed.
- */
-export async function generateAndPersistNarratives(opts: {
-  reportId: number;
-  teamId: number;
-  reportMonth: number;
-  reportYear: number;
-  userId: number;
-  teamName: string;
-  fmName: string;
-}): Promise<{
-  executiveSummary: string;
-  topWins: string;
-  topConcerns: string;
-  perGpReviews: PerGpReview[];
-} | null> {
-  try {
-    const snapshot = await buildReportSnapshot({
-      teamId: opts.teamId,
-      reportMonth: opts.reportMonth,
-      reportYear: opts.reportYear,
-      userId: opts.userId,
-      teamName: opts.teamName,
-      fmName: opts.fmName,
-    });
-    const bundle = await generateAllNarratives(snapshot);
-    await db.updateReport(opts.reportId, {
-      executiveSummary: bundle.executiveSummary,
-      topWins: bundle.topWins,
-      topConcerns: bundle.topConcerns,
-      perGpReviews: bundle.perGpReviews as any,
-    });
-    return bundle;
-  } catch (e) {
-    log.warn(`Narrative generation failed for report ${opts.reportId}; continuing`, {
-      error: e instanceof Error ? e.message : String(e),
-    });
-    return null;
-  }
-}
 
 export async function generateExcelAndEmail(
   ctx: { user: { id: number; role: string; email?: string | null; name?: string | null } },
   reportId: number,
+  /**
+   * `idempotent` — controls whether the Resend `Idempotency-Key`
+   * header is sent.
+   *
+   * Default `true`: a stable key per (reportId, period) is sent,
+   * so duplicate calls for the same row (cron retry-email branch
+   * after an interrupted day-5, repeated kicks of the same row)
+   * are deduplicated by Resend → exactly one email per row.
+   *
+   * Pass `false` from user-triggered re-exports (`report.exportToExcel`)
+   * where the operator INTENDS to re-send the email after editing
+   * the report. Without opting out, Resend would cache the prior
+   * response and silently swallow the new send (Codex P2 — "Use
+   * per-send idempotency keys for manual exports").
+   */
+  opts?: { idempotent?: boolean },
 ) {
   log.info("exportToExcel START", { reportId });
+  const idempotent = opts?.idempotent ?? true;
   const reportWithTeam = await db.getReportWithTeam(reportId);
   if (!reportWithTeam) throw new TRPCError({ code: 'NOT_FOUND', message: 'Report not found' });
 
@@ -266,52 +91,77 @@ export async function generateExcelAndEmail(
     log.warn("Failed to load action items for report", { error: e instanceof Error ? e.message : String(e) });
   }
 
-  const buffer = await generateReportWorkbook({
-    report: {
-      id: report.id,
-      teamId: report.teamId,
-      reportMonth: report.reportMonth,
-      reportYear: report.reportYear,
-      fmPerformance: report.fmPerformance,
-      goalsThisMonth: report.goalsThisMonth,
-      teamOverview: report.teamOverview,
-      additionalComments: report.additionalComments,
-      executiveSummary: (report as any).executiveSummary ?? null,
-      topWins: (report as any).topWins ?? null,
-      topConcerns: (report as any).topConcerns ?? null,
-      perGpReviews: ((report as any).perGpReviews ?? null) as
-        | Array<{ gpId: number; gpName: string; narrative: string; focusForNextMonth: string }>
-        | null,
-    },
-    teamName,
-    fmName,
-    attendanceData: freshAttendance,
-    attitudeByGp,
-    gpEvaluationsData,
-    prevMonthEvaluations,
-    actionItems: actionItemsForReport.map(it => ({
-      gpName: it.gamePresenter.name,
-      title: it.title,
-      description: it.description,
-      category: it.category,
-      priority: it.priority,
-      status: it.status,
-      source: it.source,
-      dueDate: it.dueDate,
-      createdAt: it.createdAt,
-      completedAt: it.completedAt,
-    })),
-  });
+  // On the cron retry path (idempotent === true) where a workbook has
+  // already been built and uploaded, REUSE the existing excelFileUrl /
+  // excelFileKey instead of regenerating. This keeps the email payload
+  // (attachment URL) byte-identical to the first attempt's send, so
+  // Resend's idempotency check resolves as a cache hit ("same key,
+  // same body") rather than a 409 ("same key, different body").
+  // Without this, the retry would build a fresh nanoid()-suffixed
+  // URL each day, Resend would 409 every retry, and once the 24h
+  // cache expired we'd accidentally send a duplicate email
+  // (Codex P2 — "Reuse idempotency keys only with identical payloads").
+  //
+  // Manual `exportToExcel` (idempotent: false) always rebuilds —
+  // operator typically clicks re-export AFTER editing the report
+  // text, expecting a fresh workbook in the email.
+  const shouldReuseWorkbook = idempotent && !!report.excelFileUrl && !!report.excelFileKey;
 
-  const fileKey = `reports/${report.id}/${nanoid()}-TeamOverview_${teamName.replace(/\s+/g, '_')}_${monthName}${report.reportYear}.xlsx`;
-  const { url: excelUrl } = await storagePut(fileKey, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  let fileKey: string;
+  let excelUrl: string;
+  if (shouldReuseWorkbook) {
+    fileKey = report.excelFileKey!;
+    excelUrl = report.excelFileUrl!;
+    log.info("Retry path — reusing existing workbook to preserve idempotency-key payload match", {
+      reportId, excelUrl,
+    });
+  } else {
+    const buffer = await generateReportWorkbook({
+      report: {
+        id: report.id,
+        teamId: report.teamId,
+        reportMonth: report.reportMonth,
+        reportYear: report.reportYear,
+        fmPerformance: report.fmPerformance,
+        goalsThisMonth: report.goalsThisMonth,
+        teamOverview: report.teamOverview,
+        additionalComments: report.additionalComments,
+      },
+      teamName,
+      fmName,
+      attendanceData: freshAttendance,
+      attitudeByGp,
+      gpEvaluationsData,
+      prevMonthEvaluations,
+      actionItems: actionItemsForReport.map(it => ({
+        gpName: it.gamePresenter.name,
+        title: it.title,
+        description: it.description,
+        category: it.category,
+        priority: it.priority,
+        status: it.status,
+        source: it.source,
+        dueDate: it.dueDate,
+        createdAt: it.createdAt,
+        completedAt: it.completedAt,
+      })),
+    });
+    fileKey = `reports/${report.id}/${nanoid()}-TeamOverview_${teamName.replace(/\s+/g, '_')}_${monthName}${report.reportYear}.xlsx`;
+    const result = await storagePut(fileKey, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    excelUrl = result.url;
+  }
 
   // Best-effort Google Sheets export — when service-account creds are
   // configured the report is also pushed to Drive so the email can lead
   // with a Sheets link the FM can edit and share. Failures don't block
   // the Excel/email path.
+  //
+  // On the cron retry path we keep the previously-exported Sheets URL
+  // (already on the row from the first attempt), for the same reason
+  // as the workbook above: the email payload must stay byte-identical
+  // for Resend's idempotency cache to resolve cleanly.
   let googleSheetsUrl: string | null = report.googleSheetsUrl || null;
-  if (isGoogleSheetsAvailable()) {
+  if (!shouldReuseWorkbook && isGoogleSheetsAvailable()) {
     try {
       const sheetsResult = await exportToGoogleSheets({
         report: {
@@ -338,10 +188,32 @@ export async function generateExcelAndEmail(
     }
   }
 
+  // Write the workbook reference and (on the cron path only) an
+  // `in-progress` email-delivery sentinel atomically. Two reasons
+  // to gate the marker on `idempotent`:
+  //
+  // 1. The marker is the cron's retry/legacy discriminator — manual
+  //    re-exports shouldn't be touching that state, otherwise a
+  //    failed manual click writes `success: false` and the next cron
+  //    retry day re-sends a previous-month report on the FM
+  //    automatically (Codex P2 — "Keep manual resend failures out
+  //    of cron retry state").
+  // 2. Skipping the in-progress marker for manual paths also means
+  //    a half-finished manual export can't accidentally trigger the
+  //    cron's "in-progress = retry me" branch.
+  //
+  // For idempotent (cron) calls the marker is later overwritten
+  // with the real outcome (success / failure / no-recipient) after
+  // sendReportEmail returns.
+  const baseReportData = (report.reportData as any) ?? {};
+  const inProgressMarker = idempotent
+    ? { reportData: { ...baseReportData, emailDelivery: { sentAt: null, success: false, reason: "in-progress" } } }
+    : {};
   await db.updateReport(report.id, {
     excelFileUrl: excelUrl,
     excelFileKey: fileKey,
     status: "finalized",
+    ...inProgressMarker,
     ...(googleSheetsUrl ? { googleSheetsUrl } : {}),
   });
 
@@ -354,7 +226,16 @@ export async function generateExcelAndEmail(
     // Compute a quick stats summary for the email body — read-only,
     // best-effort. If anything throws we still send the email without
     // numbers rather than block delivery.
-    const summary = (() => {
+    //
+    // OMITTED on the cron (idempotent) path: those numbers can drift
+    // between a successful day-5 send and a day-6+ retry (Persona
+    // auto-syncs every 12h, so attendance figures change). Resend
+    // would then see the same idempotency key with different body
+    // bytes and 409 the retry — and after the 24h cache expiry,
+    // duplicate-email the FM (Codex P2 — "Reuse idempotency keys
+    // only with a frozen email body"). Manual exports keep the
+    // summary panel since they don't use idempotency.
+    const summary = idempotent ? undefined : (() => {
       try {
         const totalEvals = gpEvaluationsData.reduce((s: number, gp: any) => s + (gp.evaluations?.length || 0), 0);
         const totalScore = gpEvaluationsData.reduce((s: number, gp: any) => {
@@ -384,20 +265,78 @@ export async function generateExcelAndEmail(
       excelUrl,
       googleSheetsUrl,
       summary,
-      // Read narratives off the freshly-persisted report row so the
-      // email body matches what's in the workbook's Executive Summary
-      // sheet. These fields may be null when the LLM call failed AND
-      // the heuristic fallback also returned empty strings; in that
-      // case the email simply falls back to the legacy stats-only body.
-      narrative: {
-        executiveSummary: (report as any).executiveSummary ?? null,
-        topWins: (report as any).topWins ?? null,
-        topConcerns: (report as any).topConcerns ?? null,
-      },
+      // Stable per (reportId, period) — Resend dedups duplicate sends
+      // for the same key, so a retry-day re-attempt after a successful
+      // send whose marker-write failed will silently no-op instead of
+      // double-mailing the FM (Codex P2 — "Avoid retrying after
+      // confirmed sends when marker write fails").
+      //
+      // OFF for manual re-exports (`exportToExcel` calls us with
+      // `idempotent: false`) so the operator can deliberately re-send
+      // an updated email after editing the report (Codex P2 — "Use
+      // per-send idempotency keys for manual exports").
+      idempotencyKey: idempotent
+        ? `report-${report.id}-${report.reportYear}-${report.reportMonth}`
+        : undefined,
+      // Derive "generated at" from the report's createdAt on the
+      // idempotent path so the body bytes match across retries —
+      // Resend's idempotency cache treats different bodies as
+      // different requests and 409s when the key matches (Codex P2 —
+      // "Reuse idempotency keys only with identical payloads").
+      // Manual re-exports get the live timestamp.
+      generatedAt: idempotent ? new Date(report.createdAt as any) : new Date(),
     });
     log.info("Report email sent", { to: ctx.user.email, sent: emailSent, hasSheets: !!googleSheetsUrl });
+
+    // Overwrite the in-progress sentinel — but ONLY on the cron
+    // (idempotent) path. Manual re-exports must not write
+    // `emailDelivery`; otherwise a failed manual click during the
+    // 5-10 retry window would write `success: false` onto a
+    // previously-delivered row and the next cron tick would re-send
+    // it (Codex P2 — "Keep manual resend failures out of cron retry
+    // state").
+    if (idempotent) {
+      let markerOverwriteOk = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await db.updateReport(report.id, {
+            reportData: {
+              ...baseReportData,
+              emailDelivery: { sentAt: new Date().toISOString(), success: emailSent },
+            },
+          });
+          markerOverwriteOk = true;
+          break;
+        } catch (e) {
+          log.warn(`Marker overwrite attempt ${attempt}/3 failed`, {
+            error: e instanceof Error ? e.message : String(e),
+            reportId: report.id,
+          });
+          if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 250));
+        }
+      }
+      if (!markerOverwriteOk) {
+        log.warn("All marker-overwrite attempts exhausted — row stays in-progress, cron will retry safely (idempotency key prevents duplicate mail)", {
+          reportId: report.id,
+        });
+      }
+    }
   } else {
     log.info("User has no email configured, skipping email notification");
+    // Cron-path only: persist the no-recipient terminal sentinel so
+    // future retry days short-circuit on this row. Manual paths
+    // don't touch `emailDelivery`.
+    if (idempotent) {
+      try {
+        await db.updateReport(report.id, {
+          reportData: { ...baseReportData, emailDelivery: { sentAt: null, success: false, reason: "no-recipient" } },
+        });
+      } catch (e) {
+        log.warn("Failed to persist no-recipient flag — row stays in-progress, cron will safely retry once an email is set", {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
   }
 
   return {

@@ -179,31 +179,6 @@ export const reports = mysqlTable("reports", {
   goalsThisMonth: text("goalsThisMonth"),
   teamOverview: text("teamOverview"),
   additionalComments: text("additionalComments"),
-  /**
-   * Executive summary — 1-paragraph board-ready narrative covering:
-   * the headline, the most important metric movement vs prior month,
-   * the team-level theme, and the recommended next-month focus. The
-   * field that lets the recipient read the report WITHOUT opening
-   * Excel. Kept as a separate text column (not inside reportData) so
-   * we can render it directly in the email body and in the report
-   * preview UI.
-   */
-  executiveSummary: text("executiveSummary"),
-  /**
-   * Top wins (3-5) and top concerns (3-5) for the month, both as
-   * markdown-bullet strings. Written by the LLM and editable by the
-   * FM in the Reports preview UI.
-   */
-  topWins: text("topWins"),
-  topConcerns: text("topConcerns"),
-  /**
-   * Per-GP narrative reviews — array of `{ gpId, gpName, narrative,
-   * focusForNextMonth }` rendered as-is into a Per-GP Reviews sheet
-   * + the email body. JSON because the array length is variable and
-   * the order is meaningful (sorted by riskScore so concerning GPs
-   * come first).
-   */
-  perGpReviews: json("perGpReviews"),
   reportData: json("reportData"),
   excelFileUrl: text("excelFileUrl"),
   excelFileKey: varchar("excelFileKey", { length: 512 }),

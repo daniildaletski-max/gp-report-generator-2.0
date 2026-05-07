@@ -32,6 +32,10 @@ vi.mock("./db", () => ({
   getGamePresentersByTeam: vi.fn().mockResolvedValue([]),
   getAttitudeScreenshotsForGP: vi.fn().mockResolvedValue([]),
   createReport: vi.fn().mockResolvedValue({ id: 1 }),
+  // Used by the partial-row cleanup path on retry days.
+  deleteReport: vi.fn().mockResolvedValue(undefined),
+  // Used by the legacy-backfill stamp path on retry days.
+  updateReport: vi.fn().mockResolvedValue(undefined),
   // Used by the new pre-report Persona sync step
   getAllFmTeams: vi.fn().mockResolvedValue([]),
 }));
@@ -55,17 +59,18 @@ describe("Scheduled Reports", () => {
 
     initScheduledReports();
 
-    // Cron fires at 06:00 on the 5th of every month in Europe/Tallinn.
-    // Day-5 (not day-1) so the FM has a few business days to finish
-    // off late evals / attendance corrections before the auto-email.
+    // Cron fires at 06:00 on each of days 5-10 in Europe/Tallinn.
+    // Day-5 is the primary run; days 6-10 are an idempotent safety
+    // net that re-runs only for teams whose report didn't make it on
+    // day 5 (transient DB / LLM / email failure).
     expect(cron.default.schedule).toHaveBeenCalledWith(
-      "0 6 5 * *",
+      "0 6 5-10 * *",
       expect.any(Function),
       expect.objectContaining({ timezone: "Europe/Tallinn" }),
     );
   });
 
-  it("should use correct cron expression for 5th of each month at 06:00", async () => {
+  it("should use correct cron expression for days 5-10 of each month at 06:00", async () => {
     const cron = await import("node-cron");
     const { initScheduledReports } = await import("./scheduledReports");
 
@@ -73,7 +78,7 @@ describe("Scheduled Reports", () => {
 
     const calls = (cron.default.schedule as any).mock.calls;
     const lastCall = calls[calls.length - 1];
-    expect(lastCall[0]).toBe("0 6 5 * *"); // minute 0, hour 6, day 5, every month, every weekday
+    expect(lastCall[0]).toBe("0 6 5-10 * *"); // minute 0, hour 6, days 5 through 10, every month, every weekday
   });
 
   it("should export runMonthlyReportGeneration for manual triggering", async () => {
@@ -111,7 +116,7 @@ describe("Scheduled Reports", () => {
     expect(db.createReport).not.toHaveBeenCalled();
   });
 
-  it("should skip teams that already have a report", async () => {
+  it("should skip teams whose report is FULLY done (excelFileUrl + emailDelivery)", async () => {
     const db = await import("./db");
     (db.getAllUsers as any).mockResolvedValueOnce([
       { user: { id: 1, role: "user", email: "test@test.com", name: "Test User" }, team: null },
@@ -122,13 +127,271 @@ describe("Scheduled Reports", () => {
     (db.getFmTeamById as any).mockResolvedValueOnce({
       id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
     });
-    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({ id: 999 }); // Existing report
+    // Existing row that's truly done — workbook uploaded AND email
+    // delivery was confirmed. The retry must skip these.
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 999,
+      excelFileUrl: "https://example.com/r.xlsx",
+      reportData: { emailDelivery: { sentAt: "2026-04-05T06:00:00Z", success: true } },
+    });
 
     const { runMonthlyReportGeneration } = await import("./scheduledReports");
     await runMonthlyReportGeneration();
 
-    // createReport should NOT have been called since report already exists
     expect(db.createReport).not.toHaveBeenCalled();
+  });
+
+  it("should treat no-recipient rows as terminal (don't loop forever)", async () => {
+    // Row exists with excelFileUrl set but emailDelivery.reason ===
+    // "no-recipient" — the team owner has no email on file. Cron
+    // must NOT keep rebuilding this every day 6-10.
+    const db = await import("./db");
+    (db.getAllUsers as any).mockResolvedValueOnce([
+      { user: { id: 1, role: "user", email: null, name: "No-Email User" }, team: null },
+    ]);
+    (db.getFmTeamsByUser as any).mockResolvedValueOnce([
+      { id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1 },
+    ]);
+    (db.getFmTeamById as any).mockResolvedValueOnce({
+      id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
+    });
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 997,
+      excelFileUrl: "https://example.com/r.xlsx",
+      reportData: { emailDelivery: { sentAt: null, success: false, reason: "no-recipient" } },
+    });
+    (db.createReport as any).mockClear();
+    (db.deleteReport as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration();
+
+    // No regeneration, no deletion — fully terminal.
+    expect(db.createReport).not.toHaveBeenCalled();
+    expect(db.deleteReport).not.toHaveBeenCalled();
+  });
+
+  it("should backfill + skip legacy rows (excelFileUrl set, NO delivery marker at all)", async () => {
+    // Pre-merge rows have `excelFileUrl` set (workbook was uploaded
+    // by the OLD code path) but NO `emailDelivery` marker — the
+    // marker is only written by the new code path. Without this
+    // guard, the retry-email branch would re-spam every FM with
+    // their prior-month reports on the first day-6+ cron tick.
+    //
+    // Critically: the era signal is marker presence, NOT row age.
+    // A day-5 new-code failure has marker {success:false} so it's
+    // distinguishable from a legacy row even when both look "old".
+    const db = await import("./db");
+    (db.getAllUsers as any).mockResolvedValueOnce([
+      { user: { id: 1, role: "user", email: "test@test.com", name: "Test User" }, team: null },
+    ]);
+    (db.getFmTeamsByUser as any).mockResolvedValueOnce([
+      { id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1 },
+    ]);
+    (db.getFmTeamById as any).mockResolvedValueOnce({
+      id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
+    });
+    // Row with workbook uploaded but absolutely no emailDelivery
+    // marker — pre-merge artefact.
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 996,
+      excelFileUrl: "https://example.com/legacy.xlsx",
+      reportData: {},
+    });
+    (db.updateReport as any).mockClear();
+    (db.createReport as any).mockClear();
+    (db.deleteReport as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration();
+
+    // Backfill stamp written.
+    expect(db.updateReport).toHaveBeenCalledWith(
+      996,
+      expect.objectContaining({
+        reportData: expect.objectContaining({
+          emailDelivery: expect.objectContaining({ reason: "legacy-backfill" }),
+        }),
+      }),
+    );
+    // No email re-send, no regeneration.
+    expect(db.createReport).not.toHaveBeenCalled();
+    expect(db.deleteReport).not.toHaveBeenCalled();
+  });
+
+  it("should NOT stamp legacy-backfill on rows whose marker is `in-progress` (process killed mid-flow)", async () => {
+    // The new code writes an `in-progress` sentinel atomically with
+    // excelFileUrl. If the process is then killed before the marker
+    // is overwritten with the real outcome, the row carries the
+    // in-progress sentinel — NOT a missing marker. The cron must
+    // treat this as retry-needed, not legacy.
+    const db = await import("./db");
+    (db.getAllUsers as any).mockResolvedValueOnce([
+      { user: { id: 1, role: "user", email: "test@test.com", name: "Test User" }, team: null },
+    ]);
+    (db.getFmTeamsByUser as any).mockResolvedValueOnce([
+      { id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1 },
+    ]);
+    (db.getFmTeamById as any).mockResolvedValueOnce({
+      id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
+    });
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 993,
+      excelFileUrl: "https://example.com/r.xlsx",
+      reportData: { emailDelivery: { sentAt: null, success: false, reason: "in-progress" } },
+    });
+    (db.updateReport as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration();
+
+    // Must NOT stamp legacy-backfill — that would mark a real
+    // interrupted-mid-flow row as terminal and lose the email.
+    const legacyStamps = (db.updateReport as any).mock.calls.filter((c: any[]) =>
+      c[1]?.reportData?.emailDelivery?.reason === "legacy-backfill",
+    );
+    expect(legacyStamps).toHaveLength(0);
+  });
+
+  it("should retry rows whose email-delivery marker says success=false (NEW-code failure, not legacy)", async () => {
+    // Day-5 cron uploads the workbook but `sendReportEmail` returns
+    // false (Resend down). New code writes
+    // `emailDelivery: { success: false }` so the retry-email branch
+    // can distinguish this from a legacy row (no marker at all) and
+    // re-attempt instead of stamping legacy-backfill.
+    const db = await import("./db");
+    (db.getAllUsers as any).mockResolvedValueOnce([
+      { user: { id: 1, role: "user", email: "test@test.com", name: "Test User" }, team: null },
+    ]);
+    (db.getFmTeamsByUser as any).mockResolvedValueOnce([
+      { id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1 },
+    ]);
+    (db.getFmTeamById as any).mockResolvedValueOnce({
+      id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
+    });
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 995,
+      excelFileUrl: "https://example.com/r.xlsx",
+      reportData: { emailDelivery: { sentAt: "2026-04-05T06:00:00Z", success: false } },
+    });
+    (db.updateReport as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration();
+
+    // The legacy-backfill branch must NOT have fired (no
+    // updateReport call carrying reason: "legacy-backfill"). The
+    // retry-email branch can't fully execute under unit-test mocks
+    // since it loads `_shared.ts` dynamically, but it MUST NOT have
+    // mistakenly stamped legacy-backfill on a real failed delivery.
+    const legacyStamps = (db.updateReport as any).mock.calls.filter((c: any[]) =>
+      c[1]?.reportData?.emailDelivery?.reason === "legacy-backfill",
+    );
+    expect(legacyStamps).toHaveLength(0);
+  });
+
+  it("should bail (not duplicate-create) when deleteReport on a partial row fails", async () => {
+    // Without a unique constraint on (teamId, reportMonth, reportYear),
+    // a transient deleteReport failure followed by createReport would
+    // leave both the stale partial row AND a fresh row for the same
+    // period — and `.limit(1)` lookups could keep returning the stale
+    // one, looping forever. The cron must skip this team for the
+    // current tick and retry tomorrow instead.
+    const db = await import("./db");
+    (db.getAllUsers as any).mockResolvedValueOnce([
+      { user: { id: 1, role: "user", email: "test@test.com", name: "Test User" }, team: null },
+    ]);
+    (db.getFmTeamsByUser as any).mockResolvedValueOnce([
+      { id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1 },
+    ]);
+    (db.getFmTeamById as any).mockResolvedValueOnce({
+      id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
+    });
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 994,
+      excelFileUrl: null,
+      reportData: {},
+    });
+    // Force the deletion to fail transiently.
+    (db.deleteReport as any).mockClear();
+    (db.deleteReport as any).mockRejectedValueOnce(new Error("connection reset"));
+    (db.createReport as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration();
+
+    // The delete was attempted on the right row...
+    expect(db.deleteReport).toHaveBeenCalledWith(994);
+    // ...and once it threw, createReport must NOT have been called
+    // (otherwise we'd have a duplicate row for the same period).
+    expect(db.createReport).not.toHaveBeenCalled();
+  });
+
+  it("should retry a row with no excelFileUrl (partial workbook)", async () => {
+    const db = await import("./db");
+    (db.getAllUsers as any).mockResolvedValueOnce([
+      { user: { id: 1, role: "user", email: "test@test.com", name: "Test User" }, team: null },
+    ]);
+    (db.getFmTeamsByUser as any).mockResolvedValueOnce([
+      { id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1 },
+    ]);
+    (db.getFmTeamById as any).mockResolvedValueOnce({
+      id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
+    });
+    // Partial row — workbook never produced. Cron must delete this
+    // and regenerate fresh.
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 998,
+      excelFileUrl: null,
+      reportData: {},
+    });
+    // Empty stats so the test stops short of the LLM/Excel path —
+    // we only need to verify the partial-row deletion happened.
+    (db.getGPMonthlyStats as any).mockResolvedValueOnce([]);
+    (db.deleteReport as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration();
+
+    // The partial row must have been cleaned up. Whether the rest of
+    // the path generated a fresh row is irrelevant for this test —
+    // the contract is "don't let a partial row block the retry".
+    expect(db.deleteReport).toHaveBeenCalledWith(998);
+  });
+
+  it("should NOT spam owner notifications on retry-day no-op runs", async () => {
+    // After a successful day-5 run, days 6-10 see every team already
+    // reported and produce 0 generations. The retry-day code path
+    // must stay silent on the no-op notification — otherwise the
+    // project owner gets 5 "No Reports Generated" emails per month.
+    const db = await import("./db");
+    const { notifyOwner } = await import("./_core/notification");
+
+    (db.getAllUsers as any).mockResolvedValueOnce([]);
+    (notifyOwner as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration({ isPrimaryRun: false });
+
+    // No "Generated" notification (nothing generated) AND no "No
+    // Reports Generated" notification (this is a retry-day no-op).
+    expect(notifyOwner).not.toHaveBeenCalled();
+  });
+
+  it("should still notify on day-5 no-op so genuine empty months are visible", async () => {
+    const db = await import("./db");
+    const { notifyOwner } = await import("./_core/notification");
+
+    (db.getAllUsers as any).mockResolvedValueOnce([]);
+    (notifyOwner as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration({ isPrimaryRun: true });
+
+    // Primary run, no reports generated → owner gets the "no data"
+    // heads-up. This is the legacy behaviour we're preserving.
+    expect(notifyOwner).toHaveBeenCalledTimes(1);
+    expect((notifyOwner as any).mock.calls[0][0].title).toMatch(/No Reports Generated/);
   });
 
   it("should iterate per user and per user's own teams (per-FM routing)", async () => {

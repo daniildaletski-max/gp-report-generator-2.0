@@ -1114,63 +1114,6 @@ export default function ReportsPage() {
                 </div>
               )}
 
-              {viewingReport.report.executiveSummary && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">Executive Summary</label>
-                    <Button
-                      variant="ghost" size="sm"
-                      onClick={() => copyToClipboard(viewingReport.report.executiveSummary, "Executive Summary")}
-                    >
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  <div className="p-3 rounded-lg text-sm whitespace-pre-wrap bg-slate-50 border border-slate-200">
-                    {viewingReport.report.executiveSummary}
-                  </div>
-                </div>
-              )}
-
-              {(viewingReport.report.topWins || viewingReport.report.topConcerns) && (
-                <div className="grid gap-3 md:grid-cols-2">
-                  {viewingReport.report.topWins && (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-emerald-700">Top Wins</label>
-                      <div className="p-3 rounded-lg text-sm whitespace-pre-wrap bg-emerald-50/50 border border-emerald-200 text-emerald-900">
-                        {viewingReport.report.topWins}
-                      </div>
-                    </div>
-                  )}
-                  {viewingReport.report.topConcerns && (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-rose-700">Top Concerns</label>
-                      <div className="p-3 rounded-lg text-sm whitespace-pre-wrap bg-rose-50/50 border border-rose-200 text-rose-900">
-                        {viewingReport.report.topConcerns}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {Array.isArray(viewingReport.report.perGpReviews) && viewingReport.report.perGpReviews.length > 0 && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Per-GP Reviews ({viewingReport.report.perGpReviews.length})</label>
-                  <div className="rounded-lg border border-slate-200 divide-y divide-slate-200 max-h-72 overflow-y-auto bg-white">
-                    {viewingReport.report.perGpReviews.map((r: any, i: number) => (
-                      <div key={r.gpId ?? i} className="p-3">
-                        <div className="text-sm font-semibold text-slate-800">{r.gpName}</div>
-                        <div className="text-[12px] text-slate-700 mt-0.5 whitespace-pre-wrap">{r.narrative}</div>
-                        {r.focusForNextMonth && (
-                          <div className="text-[11px] text-amber-700 mt-1">
-                            <strong>Next month:</strong> {r.focusForNextMonth}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {viewingReport.report.additionalComments && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Additional Notes</label>
