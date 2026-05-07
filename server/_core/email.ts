@@ -156,11 +156,19 @@ export async function sendReportEmail(params: {
    * double-mail the FM.
    */
   idempotencyKey?: string;
+  /**
+   * Deterministic "generated at" stamp shown in the email footer.
+   * The cron retry path passes the report's `createdAt` so the body
+   * bytes match the first attempt — required for Resend's idempotency
+   * cache to resolve a duplicate send as a cache hit (same key + same
+   * body) instead of a 409 (same key + different body).
+   */
+  generatedAt?: Date;
 }): Promise<boolean> {
-  const { userEmail, userName, teamName, monthName, year, excelUrl, googleSheetsUrl, summary, idempotencyKey } = params;
+  const { userEmail, userName, teamName, monthName, year, excelUrl, googleSheetsUrl, summary, idempotencyKey, generatedAt: generatedAtParam } = params;
 
   const subject = `Team Monthly Report — ${teamName} (${monthName} ${year})`;
-  const generatedAt = new Date().toLocaleString('en-GB', {
+  const generatedAt = (generatedAtParam ?? new Date()).toLocaleString('en-GB', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     hour: '2-digit', minute: '2-digit',
   });

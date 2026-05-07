@@ -91,46 +91,77 @@ export async function generateExcelAndEmail(
     log.warn("Failed to load action items for report", { error: e instanceof Error ? e.message : String(e) });
   }
 
-  const buffer = await generateReportWorkbook({
-    report: {
-      id: report.id,
-      teamId: report.teamId,
-      reportMonth: report.reportMonth,
-      reportYear: report.reportYear,
-      fmPerformance: report.fmPerformance,
-      goalsThisMonth: report.goalsThisMonth,
-      teamOverview: report.teamOverview,
-      additionalComments: report.additionalComments,
-    },
-    teamName,
-    fmName,
-    attendanceData: freshAttendance,
-    attitudeByGp,
-    gpEvaluationsData,
-    prevMonthEvaluations,
-    actionItems: actionItemsForReport.map(it => ({
-      gpName: it.gamePresenter.name,
-      title: it.title,
-      description: it.description,
-      category: it.category,
-      priority: it.priority,
-      status: it.status,
-      source: it.source,
-      dueDate: it.dueDate,
-      createdAt: it.createdAt,
-      completedAt: it.completedAt,
-    })),
-  });
+  // On the cron retry path (idempotent === true) where a workbook has
+  // already been built and uploaded, REUSE the existing excelFileUrl /
+  // excelFileKey instead of regenerating. This keeps the email payload
+  // (attachment URL) byte-identical to the first attempt's send, so
+  // Resend's idempotency check resolves as a cache hit ("same key,
+  // same body") rather than a 409 ("same key, different body").
+  // Without this, the retry would build a fresh nanoid()-suffixed
+  // URL each day, Resend would 409 every retry, and once the 24h
+  // cache expired we'd accidentally send a duplicate email
+  // (Codex P2 — "Reuse idempotency keys only with identical payloads").
+  //
+  // Manual `exportToExcel` (idempotent: false) always rebuilds —
+  // operator typically clicks re-export AFTER editing the report
+  // text, expecting a fresh workbook in the email.
+  const shouldReuseWorkbook = idempotent && !!report.excelFileUrl && !!report.excelFileKey;
 
-  const fileKey = `reports/${report.id}/${nanoid()}-TeamOverview_${teamName.replace(/\s+/g, '_')}_${monthName}${report.reportYear}.xlsx`;
-  const { url: excelUrl } = await storagePut(fileKey, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  let fileKey: string;
+  let excelUrl: string;
+  if (shouldReuseWorkbook) {
+    fileKey = report.excelFileKey!;
+    excelUrl = report.excelFileUrl!;
+    log.info("Retry path — reusing existing workbook to preserve idempotency-key payload match", {
+      reportId, excelUrl,
+    });
+  } else {
+    const buffer = await generateReportWorkbook({
+      report: {
+        id: report.id,
+        teamId: report.teamId,
+        reportMonth: report.reportMonth,
+        reportYear: report.reportYear,
+        fmPerformance: report.fmPerformance,
+        goalsThisMonth: report.goalsThisMonth,
+        teamOverview: report.teamOverview,
+        additionalComments: report.additionalComments,
+      },
+      teamName,
+      fmName,
+      attendanceData: freshAttendance,
+      attitudeByGp,
+      gpEvaluationsData,
+      prevMonthEvaluations,
+      actionItems: actionItemsForReport.map(it => ({
+        gpName: it.gamePresenter.name,
+        title: it.title,
+        description: it.description,
+        category: it.category,
+        priority: it.priority,
+        status: it.status,
+        source: it.source,
+        dueDate: it.dueDate,
+        createdAt: it.createdAt,
+        completedAt: it.completedAt,
+      })),
+    });
+    fileKey = `reports/${report.id}/${nanoid()}-TeamOverview_${teamName.replace(/\s+/g, '_')}_${monthName}${report.reportYear}.xlsx`;
+    const result = await storagePut(fileKey, buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    excelUrl = result.url;
+  }
 
   // Best-effort Google Sheets export — when service-account creds are
   // configured the report is also pushed to Drive so the email can lead
   // with a Sheets link the FM can edit and share. Failures don't block
   // the Excel/email path.
+  //
+  // On the cron retry path we keep the previously-exported Sheets URL
+  // (already on the row from the first attempt), for the same reason
+  // as the workbook above: the email payload must stay byte-identical
+  // for Resend's idempotency cache to resolve cleanly.
   let googleSheetsUrl: string | null = report.googleSheetsUrl || null;
-  if (isGoogleSheetsAvailable()) {
+  if (!shouldReuseWorkbook && isGoogleSheetsAvailable()) {
     try {
       const sheetsResult = await exportToGoogleSheets({
         report: {
@@ -233,6 +264,13 @@ export async function generateExcelAndEmail(
       idempotencyKey: idempotent
         ? `report-${report.id}-${report.reportYear}-${report.reportMonth}`
         : undefined,
+      // Derive "generated at" from the report's createdAt on the
+      // idempotent path so the body bytes match across retries —
+      // Resend's idempotency cache treats different bodies as
+      // different requests and 409s when the key matches (Codex P2 —
+      // "Reuse idempotency keys only with identical payloads").
+      // Manual re-exports get the live timestamp.
+      generatedAt: idempotent ? new Date(report.createdAt as any) : new Date(),
     });
     log.info("Report email sent", { to: ctx.user.email, sent: emailSent, hasSheets: !!googleSheetsUrl });
 
