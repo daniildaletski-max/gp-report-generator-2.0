@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, FileCheck, TrendingUp, TrendingDown, FileSpreadsheet, AlertTriangle, Award, Target, Calendar, PieChart, ArrowRight, Upload, Sparkles, RefreshCw, Clock, Zap, BarChart3, CheckCircle2, X, ChevronRight } from "lucide-react";
+import { Users, FileCheck, TrendingUp, TrendingDown, FileSpreadsheet, AlertTriangle, Award, Target, Calendar, PieChart, ArrowRight, Upload, Sparkles, RefreshCw, Clock, Zap, BarChart3, CheckCircle2, X, ChevronRight, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -331,6 +331,29 @@ export default function Dashboard() {
               <Progress value={evaluationProgress} className="h-2 bg-muted" />
             </div>
           </div>
+
+          {/* Copilot hero CTA — surfaces the AI brief at the top of every
+              FM's dashboard, since the brief is the new "first thing to
+              read in the morning" workflow. Routes to the dedicated
+              /copilot page. */}
+          <button
+            onClick={() => setLocation('/copilot')}
+            className="group w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl bg-gradient-to-r from-primary/10 via-violet-50 to-amber-50 border border-primary/30 hover:border-primary/50 hover:shadow-md transition-all text-left card-interactive"
+          >
+            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-violet-600 flex items-center justify-center shadow-sm shrink-0">
+              <Bot className="h-6 w-6 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm sm:text-base font-bold text-foreground leading-tight">Open your AI brief</p>
+                <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/15 text-primary font-bold">New</span>
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                Personalised priorities for today, generated from this team's data.
+              </p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-primary/60 group-hover:text-primary transition-colors shrink-0" />
+          </button>
 
           {/* Action grid — 2x2 on mobile, 1x4 on tablet+ */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 stagger-children">
