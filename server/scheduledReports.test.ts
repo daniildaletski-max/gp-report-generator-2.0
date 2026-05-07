@@ -139,6 +139,36 @@ describe("Scheduled Reports", () => {
     expect(db.createReport).not.toHaveBeenCalled();
   });
 
+  it("should treat no-recipient rows as terminal (don't loop forever)", async () => {
+    // Row exists with excelFileUrl set but emailDelivery.reason ===
+    // "no-recipient" — the team owner has no email on file. Cron
+    // must NOT keep rebuilding this every day 6-10.
+    const db = await import("./db");
+    (db.getAllUsers as any).mockResolvedValueOnce([
+      { user: { id: 1, role: "user", email: null, name: "No-Email User" }, team: null },
+    ]);
+    (db.getFmTeamsByUser as any).mockResolvedValueOnce([
+      { id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1 },
+    ]);
+    (db.getFmTeamById as any).mockResolvedValueOnce({
+      id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
+    });
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 997,
+      excelFileUrl: "https://example.com/r.xlsx",
+      reportData: { emailDelivery: { sentAt: null, success: false, reason: "no-recipient" } },
+    });
+    (db.createReport as any).mockClear();
+    (db.deleteReport as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration();
+
+    // No regeneration, no deletion — fully terminal.
+    expect(db.createReport).not.toHaveBeenCalled();
+    expect(db.deleteReport).not.toHaveBeenCalled();
+  });
+
   it("should retry a row with no excelFileUrl (partial workbook)", async () => {
     const db = await import("./db");
     (db.getAllUsers as any).mockResolvedValueOnce([

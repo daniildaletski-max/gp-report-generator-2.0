@@ -54,9 +54,19 @@ async function generateReportForTeam(
     //                                                 row id — idempotent.
     //   row present + excelFileUrl + delivery=true  → truly done, skip.
     const existing = await db.getReportByTeamMonthYear(teamId, reportMonth, reportYear);
-    const existingDelivery = ((existing?.reportData as any)?.emailDelivery ?? null) as { success?: boolean } | null;
-    const isFullyDone = !!(existing && existing.excelFileUrl && existingDelivery?.success === true);
-    if (isFullyDone) {
+    const existingDelivery = ((existing?.reportData as any)?.emailDelivery ?? null) as
+      | { success?: boolean; reason?: string }
+      | null;
+    // "Terminal" rows the retry should leave alone:
+    //   - email landed (success === true), OR
+    //   - team owner has no email at all (reason === "no-recipient");
+    //     the workbook is built and uploaded, there's nothing more to
+    //     do until an admin sets the user's email.
+    const isTerminal = !!(existing && existing.excelFileUrl && (
+      existingDelivery?.success === true
+      || existingDelivery?.reason === "no-recipient"
+    ));
+    if (isTerminal) {
       log.info(`[ScheduledReports] Report already complete for team ${team.teamName} - ${MONTH_NAMES[reportMonth - 1]} ${reportYear}, skipping`);
       return null;
     }
@@ -72,14 +82,27 @@ async function generateReportForTeam(
       // shared helper against this row id — it'll re-upload (cheap)
       // and re-send. Idempotent on the row; skips ahead of the LLM
       // generation block below.
+      //
+      // Critically: only count this team as "generated" when the
+      // helper's own `emailSent` flag comes back true. `sendEmail`
+      // catches Resend / network failures and returns false, so a
+      // bare success return from generateExcelAndEmail does NOT mean
+      // the message landed. If it didn't, return null so the run
+      // counter stays accurate, the owner notification doesn't lie
+      // about a recovered failure, and tomorrow's retry-day picks
+      // the row up again.
       log.info(`[ScheduledReports] Re-attempting email for team ${team.teamName} (row #${existing.id}, excelFileUrl set, no delivery confirmation)`);
       const { generateExcelAndEmail } = await import("./routers/_shared");
       try {
-        await generateExcelAndEmail(
+        const result = await generateExcelAndEmail(
           { user: { id: user.id, role: user.role, email: user.email, name: user.name } },
           existing.id,
         );
-        return { reportId: existing.id, teamName: team.teamName };
+        if (result?.emailSent) {
+          return { reportId: existing.id, teamName: team.teamName };
+        }
+        log.info(`[ScheduledReports] Email retry for ${team.teamName} returned emailSent=false; leaving row for next retry day`);
+        return null;
       } catch (e) {
         log.warn(`Email retry failed for ${team.teamName}; will leave row as-is for next retry day`, { error: e instanceof Error ? e.message : String(e) });
         return null;

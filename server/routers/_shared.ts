@@ -211,7 +211,20 @@ export async function generateExcelAndEmail(
       }
     }
   } else {
+    // No recipient on file — terminal state. Persist a sentinel so
+    // the retry-day cron doesn't keep rebuilding/uploading this row
+    // forever waiting for an email that's never going to be sent.
+    // The owner of the team simply has no `users.email` set; this
+    // is an admin-config issue, not a transient delivery failure.
     log.info("User has no email configured, skipping email notification");
+    try {
+      const existingData = (report.reportData as any) ?? {};
+      await db.updateReport(report.id, {
+        reportData: { ...existingData, emailDelivery: { sentAt: null, success: false, reason: "no-recipient" } },
+      });
+    } catch (e) {
+      log.warn("Failed to persist no-recipient flag", { error: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   return {
