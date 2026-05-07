@@ -219,6 +219,40 @@ describe("Scheduled Reports", () => {
     expect(db.deleteReport).not.toHaveBeenCalled();
   });
 
+  it("should NOT stamp legacy-backfill on rows whose marker is `in-progress` (process killed mid-flow)", async () => {
+    // The new code writes an `in-progress` sentinel atomically with
+    // excelFileUrl. If the process is then killed before the marker
+    // is overwritten with the real outcome, the row carries the
+    // in-progress sentinel — NOT a missing marker. The cron must
+    // treat this as retry-needed, not legacy.
+    const db = await import("./db");
+    (db.getAllUsers as any).mockResolvedValueOnce([
+      { user: { id: 1, role: "user", email: "test@test.com", name: "Test User" }, team: null },
+    ]);
+    (db.getFmTeamsByUser as any).mockResolvedValueOnce([
+      { id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1 },
+    ]);
+    (db.getFmTeamById as any).mockResolvedValueOnce({
+      id: 100, teamName: "Test Team", floorManagerName: "Test FM", userId: 1,
+    });
+    (db.getReportByTeamMonthYear as any).mockResolvedValueOnce({
+      id: 993,
+      excelFileUrl: "https://example.com/r.xlsx",
+      reportData: { emailDelivery: { sentAt: null, success: false, reason: "in-progress" } },
+    });
+    (db.updateReport as any).mockClear();
+
+    const { runMonthlyReportGeneration } = await import("./scheduledReports");
+    await runMonthlyReportGeneration();
+
+    // Must NOT stamp legacy-backfill — that would mark a real
+    // interrupted-mid-flow row as terminal and lose the email.
+    const legacyStamps = (db.updateReport as any).mock.calls.filter((c: any[]) =>
+      c[1]?.reportData?.emailDelivery?.reason === "legacy-backfill",
+    );
+    expect(legacyStamps).toHaveLength(0);
+  });
+
   it("should retry rows whose email-delivery marker says success=false (NEW-code failure, not legacy)", async () => {
     // Day-5 cron uploads the workbook but `sendReportEmail` returns
     // false (Resend down). New code writes

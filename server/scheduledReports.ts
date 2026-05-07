@@ -118,7 +118,8 @@ async function generateReportForTeam(
         });
         return null;
       }
-    } else if (existing && existing.excelFileUrl && !existingDelivery?.success) {
+    } else if (existing && existing.excelFileUrl && existingDelivery
+               && (existingDelivery.success === false || existingDelivery.reason === "in-progress")) {
       // Workbook is uploaded but email never confirmed. Re-run the
       // shared helper against this row id — it'll re-upload (cheap)
       // and re-send. Idempotent on the row; skips ahead of the LLM

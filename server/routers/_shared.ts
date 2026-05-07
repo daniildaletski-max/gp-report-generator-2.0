@@ -140,10 +140,27 @@ export async function generateExcelAndEmail(
     }
   }
 
+  // Write the workbook reference AND a `in-progress` email-delivery
+  // sentinel atomically, in a single updateReport call. This closes
+  // the window where the row could ever have `excelFileUrl` set
+  // without an `emailDelivery` marker — the precondition for the
+  // cron's "no marker = legacy" rule (Codex P2 — "Keep markerless
+  // new rows retryable"). Even if the process is killed between
+  // here and the email-send below, the row will carry an
+  // in-progress marker and the safety-net cron will treat it as
+  // retry-needed, not as a legacy artefact.
+  //
+  // The marker is overwritten with the real outcome (success /
+  // failure / no-recipient) after sendReportEmail returns.
+  const baseReportData = (report.reportData as any) ?? {};
   await db.updateReport(report.id, {
     excelFileUrl: excelUrl,
     excelFileKey: fileKey,
     status: "finalized",
+    reportData: {
+      ...baseReportData,
+      emailDelivery: { sentAt: null, success: false, reason: "in-progress" },
+    },
     ...(googleSheetsUrl ? { googleSheetsUrl } : {}),
   });
 
@@ -189,70 +206,50 @@ export async function generateExcelAndEmail(
     });
     log.info("Report email sent", { to: ctx.user.email, sent: emailSent, hasSheets: !!googleSheetsUrl });
 
-    // Always persist the email-delivery outcome (success OR failure)
-    // in `reportData`. This is the load-bearing signal the safety-
-    // net cron on days 6-10 uses to tell apart:
-    //   - delivered (success: true)            → terminal, skip
-    //   - new-code failure (success: false)    → retry email
-    //   - legacy row (marker absent entirely)  → backfill + skip
-    // If we only wrote on success, a new-code failure would look
-    // identical to a legacy row, and the retry-or-backfill decision
-    // becomes unsound (Codex P2 — "Don't classify missed first
-    // retries as legacy"). Writing on both branches makes the
-    // marker's presence/absence the definitive era-signal.
-    let markerPersisted = false;
+    // Overwrite the in-progress sentinel (written above, atomically
+    // with excelFileUrl) with the real email-send outcome. The
+    // marker's `success` field is the cron's terminal-vs-retry
+    // discriminator:
+    //   - success: true   → terminal, skip
+    //   - success: false  → new-code failure, retry email
+    //   - reason:
+    //       "in-progress" → process died before this overwrite,
+    //                       cron treats as retry (same as success:false)
+    //       "no-recipient"→ terminal, skip
+    //       "legacy-backfill" → terminal, skip (set by the cron itself)
+    //
+    // If this overwrite fails, the row stays in the in-progress
+    // state — which is itself a valid retry signal. The next cron
+    // tick will re-attempt the email (Resend dedups, harmless even
+    // if the email actually landed).
     try {
-      const existingData = (report.reportData as any) ?? {};
       await db.updateReport(report.id, {
         reportData: {
-          ...existingData,
+          ...baseReportData,
           emailDelivery: { sentAt: new Date().toISOString(), success: emailSent },
         },
       });
-      markerPersisted = true;
     } catch (e) {
-      log.warn("Failed to persist email-delivery flag", { error: e instanceof Error ? e.message : String(e) });
-    }
-
-    // Belt-and-braces: if the marker-write failed AND the email
-    // didn't land, the row would otherwise sit with `excelFileUrl`
-    // set + no marker — which the cron's "no marker = legacy" rule
-    // would silently stamp terminal on the next run. The genuinely
-    // failed delivery would never be retried (Codex P2 — "Keep
-    // failed sends retryable when marker persistence fails").
-    //
-    // Recovery: clear `excelFileUrl` so the row downgrades to the
-    // partial-workbook state. The cron's partial-row branch then
-    // deletes + regenerates fresh on the next retry day, restoring
-    // a valid path to delivery.
-    //
-    // For email SUCCESS, marker-write failure is harmless: the
-    // email already landed, and a `legacy-backfill` stamp on the
-    // next run is the correct terminal state.
-    if (!markerPersisted && !emailSent) {
-      try {
-        await db.updateReport(report.id, { excelFileUrl: null, excelFileKey: null });
-        log.warn(`Cleared excelFileUrl on report ${report.id} after failed marker write — keeping failed delivery retryable`);
-      } catch (e2) {
-        log.error("Cannot clear excelFileUrl after marker-write failure; row may be stuck and will need manual intervention",
-          e2 instanceof Error ? e2 : new Error(String(e2)),
-          { reportId: report.id });
-      }
+      log.warn("Failed to overwrite in-progress marker with final outcome — row stays in-progress, cron will retry", {
+        error: e instanceof Error ? e.message : String(e),
+        reportId: report.id,
+      });
     }
   } else {
-    // No recipient on file — terminal state. Persist a sentinel so
-    // the retry-day cron doesn't keep rebuilding/uploading this row
-    // forever waiting for an email that's never going to be sent.
-    // The owner of the team simply has no `users.email` set; this
-    // is an admin-config issue, not a transient delivery failure.
+    // No recipient on file — terminal state. Overwrite the
+    // in-progress sentinel (written above with excelFileUrl) with
+    // the no-recipient marker so the retry-day cron doesn't keep
+    // rebuilding/uploading this row forever. Admin-config issue,
+    // not a transient delivery failure.
     log.info("User has no email configured, skipping email notification");
     try {
-      const existingData = (report.reportData as any) ?? {};
       await db.updateReport(report.id, {
-        reportData: { ...existingData, emailDelivery: { sentAt: null, success: false, reason: "no-recipient" } },
+        reportData: { ...baseReportData, emailDelivery: { sentAt: null, success: false, reason: "no-recipient" } },
       });
     } catch (e) {
-      log.warn("Failed to persist no-recipient flag", { error: e instanceof Error ? e.message : String(e) });
+      log.warn("Failed to persist no-recipient flag — row stays in-progress, cron will safely retry once an email is set", {
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
