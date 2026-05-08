@@ -286,49 +286,91 @@ export default function GPPortal() {
 
     // Each badge surfaces a progress hint when locked so the GP can see
     // how close they are to the next unlock — turns the locked column
-    // from "missing rewards" into "next goals".
+    // from "missing rewards" into "next goals". `rarity` adds a visual
+    // hierarchy on the badge: common badges feel earned, legendary
+    // ones feel like a flex.
     return [
       {
         icon: Star, title: 'First Steps', description: 'Complete your first evaluation',
         unlocked: totalEvals >= 1, color: 'bg-amber-50 border-amber-200',
+        rarity: 'common' as const,
         progress: Math.min(1, totalEvals / 1),
         progressLabel: totalEvals >= 1 ? null : "0 / 1 evaluations",
       },
       {
         icon: Flame, title: 'On Fire', description: 'Complete 5 evaluations',
         unlocked: totalEvals >= 5, color: 'bg-orange-50 border-orange-200',
+        rarity: 'rare' as const,
         progress: Math.min(1, totalEvals / 5),
         progressLabel: totalEvals >= 5 ? null : `${totalEvals} / 5 evals`,
       },
       {
         icon: Crown, title: 'Excellence', description: 'Average score above 20',
         unlocked: avgScore >= 20, color: 'bg-yellow-50 border-yellow-200',
+        rarity: 'epic' as const,
         progress: avgScore >= 20 ? 1 : Math.max(0, Math.min(1, avgScore / 20)),
         progressLabel: avgScore >= 20 ? null : `${avgScore.toFixed(1)} / 20 avg`,
       },
       {
         icon: Gem, title: 'Perfect Score', description: `Get a perfect ${MAX_TOTAL_SCORE}/${MAX_TOTAL_SCORE}`,
         unlocked: perfectScores > 0, color: 'bg-purple-50 border-purple-200',
-        // Progress here = how close their best ever is to a perfect run.
+        rarity: 'legendary' as const,
         progress: perfectScores > 0 ? 1 : Math.max(0, Math.min(1, bestScore / MAX_TOTAL_SCORE)),
         progressLabel: perfectScores > 0 ? null : `Best ${bestScore} / ${MAX_TOTAL_SCORE}`,
       },
       {
         icon: Shield, title: 'Flawless', description: 'Zero mistakes this month',
         unlocked: mistakes === 0, color: 'bg-green-50 border-green-200',
-        // Once a mistake lands the badge is gone for the month — nothing
-        // to "progress" toward, so leave it as a clean lock.
+        rarity: 'epic' as const,
         progress: null,
         progressLabel: mistakes === 0 ? null : `${mistakes} mistake${mistakes === 1 ? "" : "s"} so far`,
       },
       {
         icon: Heart, title: 'Team Player', description: 'Positive attitude score',
         unlocked: attitude > 0, color: 'bg-pink-50 border-pink-200',
+        rarity: 'rare' as const,
         progress: null,
         progressLabel: attitude > 0 ? null : "Earn positive feedback",
       },
     ];
   }, [data]);
+
+  /**
+   * GP Level + XP — gamified progression layered on top of raw eval
+   * counts so every action a GP takes feels like it moves a needle.
+   *
+   * XP recipe (kept simple so the formula's predictable):
+   *   - 50 XP per evaluation logged
+   *   - 200 XP per perfect-score evaluation (multiplicative bonus on top)
+   *   - 100 XP per unlocked achievement
+   *   - 25 XP per positive-attitude point
+   *
+   * Levels grow geometrically — level N requires `100 * N * (N+1) / 2`
+   * cumulative XP. So level 1 → 100, level 2 → 300, level 3 → 600,
+   * level 5 → 1500. Keeps early progress fast and later progress
+   * meaningful without showing absurd numbers.
+   */
+  const xp = useMemo(() => {
+    if (!data) return null;
+    const totalEvals = data.evaluations.length;
+    const perfectScores = data.evaluations.filter((e: any) => (e.totalScore || 0) >= MAX_TOTAL_SCORE).length;
+    const attitude = data.monthlyStats?.current?.attitude ?? 0;
+    const unlockedCount = achievements.filter(a => a.unlocked).length;
+
+    const total = totalEvals * 50 + perfectScores * 200 + unlockedCount * 100 + Math.max(0, attitude) * 25;
+
+    let level = 1;
+    let xpForNext = 100;
+    let cumulative = 0;
+    while (cumulative + xpForNext <= total) {
+      cumulative += xpForNext;
+      level += 1;
+      xpForNext = 100 * level;
+    }
+    const intoLevel = total - cumulative;
+    const pct = xpForNext > 0 ? (intoLevel / xpForNext) * 100 : 0;
+    return { total, level, intoLevel, xpForNext, pct, untilNext: xpForNext - intoLevel };
+  }, [data, achievements]);
 
   if (isLoading) return <GPPortalSkeleton />;
 
@@ -533,56 +575,75 @@ export default function GPPortal() {
           }
         />
 
-        {/* Big achievement progress banner — replaces the previous quiet
-            "X/6" pill in the Achievements section header with a full-
-            width hero strip the GP sees as soon as they scroll past the
-            pulse. Hard to miss; reinforces how close they are to the
-            next reward. */}
-        {(() => {
-          const unlocked = achievements.filter(a => a.unlocked).length;
-          const total = achievements.length;
-          if (total === 0) return null;
-          const pct = total > 0 ? (unlocked / total) * 100 : 0;
-          const remaining = total - unlocked;
-          return (
-            <section className="relative overflow-hidden rounded-3xl border border-amber-200/60 bg-gradient-to-r from-amber-50 via-white to-yellow-50 shadow-lg shadow-amber-100/40">
-              <div className="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-gradient-to-br from-amber-300/40 to-yellow-300/40 blur-3xl pointer-events-none" aria-hidden />
-              <div className="relative p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-                <div className="flex items-center gap-4 min-w-0 flex-1">
-                  <div className="shrink-0 h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center shadow-lg shadow-amber-200/60">
-                    <Trophy className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-amber-700">Achievements</p>
-                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
-                      <span className="tabular-nums">{unlocked}</span>
-                      <span className="text-amber-400 mx-1">/</span>
-                      <span className="tabular-nums text-amber-600">{total}</span>
-                      <span className="text-slate-400 font-bold ml-2 text-base sm:text-lg">unlocked</span>
-                    </h2>
-                    <p className="text-sm text-slate-500 mt-0.5">
-                      {remaining === 0
-                        ? "🎉 You've unlocked everything — legendary!"
-                        : `${remaining} reward${remaining === 1 ? "" : "s"} away from a perfect collection`}
-                    </p>
-                  </div>
-                </div>
-                {/* Big progress bar — shown right of the title on desktop, below on mobile */}
-                <div className="sm:max-w-sm w-full">
-                  <div className="relative h-3 rounded-full bg-slate-100 overflow-hidden shadow-inner">
-                    <div
-                      className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 shadow-md transition-[width] duration-700 ease-out"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <p className="mt-1.5 text-[11px] text-slate-400 text-right tabular-nums font-semibold">
-                    {pct.toFixed(0)}%
-                  </p>
+        {/* Level + XP banner — gamified progression bar.
+            Combines the achievement count, eval count, perfect scores,
+            and attitude into a single XP number with a level. Lets the
+            GP see "I'm Level 6, 80 XP from Level 7" — much more
+            actionable + addictive than a flat 3/6 unlocked count. */}
+        {xp && (
+          <section className="relative overflow-hidden rounded-3xl border border-amber-200/60 bg-gradient-to-r from-amber-50 via-white to-yellow-50 shadow-lg shadow-amber-100/40">
+            <div className="absolute -top-20 -right-20 h-56 w-56 rounded-full bg-gradient-to-br from-amber-300/40 to-yellow-300/40 blur-3xl pointer-events-none" aria-hidden />
+            <div className="absolute -bottom-12 left-1/3 h-32 w-32 rounded-full bg-gradient-to-tr from-yellow-200/40 to-transparent blur-2xl pointer-events-none" aria-hidden />
+
+            <div className="relative p-5 sm:p-7 flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-7">
+              {/* Level shield — bold gold-foil look */}
+              <div className="shrink-0 relative">
+                <div className="absolute -inset-1 rounded-3xl bg-gradient-to-br from-amber-400 to-yellow-500 blur-md opacity-40 animate-[pulse_3s_ease-in-out_infinite]" aria-hidden />
+                <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-2xl bg-gradient-to-br from-amber-400 via-yellow-500 to-orange-500 flex flex-col items-center justify-center shadow-xl shadow-amber-300/60 ring-4 ring-white">
+                  <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/90 leading-none">Level</span>
+                  <span className="text-3xl sm:text-4xl font-black text-white tabular-nums leading-none mt-1 drop-shadow-md">{xp.level}</span>
                 </div>
               </div>
-            </section>
-          );
-        })()}
+
+              {/* XP progress + headline */}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-end justify-between gap-3 mb-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-amber-700">Career XP</p>
+                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
+                      <span className="tabular-nums">{xp.total.toLocaleString()}</span>
+                      <span className="text-amber-500 mx-1.5 font-bold text-lg sm:text-xl">XP</span>
+                      <span className="hidden sm:inline text-slate-400 font-bold text-base sm:text-lg">
+                        · {xp.untilNext} to Level {xp.level + 1}
+                      </span>
+                    </h2>
+                  </div>
+                  <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 shrink-0 tabular-nums">
+                    {xp.intoLevel} / {xp.xpForNext} XP
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="relative h-3.5 rounded-full bg-slate-100 overflow-hidden shadow-inner">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-500 shadow-md transition-[width] duration-700 ease-out"
+                    style={{ width: `${xp.pct}%` }}
+                  />
+                </div>
+
+                {/* Sub-stats in a row — keeps information density high */}
+                <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-600">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden />
+                    <span className="font-bold tabular-nums">{data.evaluations.length}</span> evals
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-orange-400" aria-hidden />
+                    <span className="font-bold tabular-nums">{data.evaluations.filter((e: any) => (e.totalScore || 0) >= MAX_TOTAL_SCORE).length}</span> perfect runs
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" aria-hidden />
+                    <span className="font-bold tabular-nums">{achievements.filter(a => a.unlocked).length}</span> badges
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-rose-400" aria-hidden />
+                    <span className="font-bold tabular-nums">{cleanStreak}</span> streak
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Score Overview Cards — with month-over-month delta chips per category */}
         <section>
@@ -875,6 +936,118 @@ export default function GPPortal() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Weekly Quests — three small game-y challenges that keep
+                the GP returning. Each tile lights up gold when complete
+                so the row visually fills as the week progresses. */}
+            {(() => {
+              const totalEvalsAll = data.evaluations.length;
+              // Count evals dated within the current month/year — the
+              // monthlyStats payload doesn't expose an `evaluationCount`
+              // field, so derive it from the eval list directly.
+              const now = new Date();
+              const curMonth = now.getMonth() + 1;
+              const curYear = now.getFullYear();
+              const evalsThisMonth = data.evaluations.filter((e: any) => {
+                if (!e.evaluationDate) return false;
+                const d = new Date(e.evaluationDate);
+                return d.getMonth() + 1 === curMonth && d.getFullYear() === curYear;
+              }).length;
+              const perfectEverCount = data.evaluations.filter((e: any) => (e.totalScore || 0) >= MAX_TOTAL_SCORE).length;
+              const cleanThisMonth = (data.monthlyStats?.current?.mistakes ?? 0) === 0;
+              const quests = [
+                {
+                  icon: Eye,
+                  label: "Stay Active",
+                  goal: "3 evaluations this month",
+                  done: evalsThisMonth >= 3,
+                  pct: Math.min(1, evalsThisMonth / 3),
+                  hint: `${Math.min(3, evalsThisMonth)} / 3 logged`,
+                  reward: "+150 XP",
+                },
+                {
+                  icon: Sparkles,
+                  label: "Polish a Run",
+                  goal: `Score ${MAX_TOTAL_SCORE}/${MAX_TOTAL_SCORE} once`,
+                  done: perfectEverCount > 0,
+                  pct: perfectEverCount > 0 ? 1 : 0.4,
+                  hint: perfectEverCount > 0 ? "Mastered" : "Aim for the bonus",
+                  reward: "+200 XP",
+                },
+                {
+                  icon: Shield,
+                  label: "Keep It Clean",
+                  goal: "Zero mistakes this month",
+                  done: cleanThisMonth,
+                  pct: cleanThisMonth ? 1 : 0.5,
+                  hint: cleanThisMonth ? "Locked in" : "On the board",
+                  reward: "+100 XP",
+                },
+              ];
+              return (
+                <section className="mb-6">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2.5 text-slate-900">
+                      <span className="inline-block h-6 w-1 rounded-full bg-gradient-to-b from-amber-400 to-yellow-500" aria-hidden />
+                      <Target className="h-5 w-5 text-amber-600" />
+                      Active Quests
+                    </h2>
+                    <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">
+                      Earn XP toward Level {xp ? xp.level + 1 : "—"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {quests.map((q) => (
+                      <div
+                        key={q.label}
+                        className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 ${
+                          q.done
+                            ? "border-amber-300 bg-gradient-to-br from-amber-50 to-yellow-50 shadow-md shadow-amber-100/60 ring-1 ring-amber-200/60"
+                            : "border-slate-200 bg-white shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                        }`}
+                      >
+                        {q.done && (
+                          <div className="absolute -top-1 -right-1 h-6 w-6 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-white text-[11px] font-bold shadow-sm">
+                            ✓
+                          </div>
+                        )}
+                        <div className="flex items-start gap-3">
+                          <div className={`shrink-0 h-10 w-10 rounded-xl flex items-center justify-center ${
+                            q.done ? "bg-white/80 border border-amber-300" : "bg-amber-50 border border-amber-100"
+                          }`}>
+                            <q.icon className={`h-5 w-5 ${q.done ? "text-amber-700" : "text-amber-500"}`} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-bold text-sm text-slate-900 truncate">{q.label}</p>
+                              <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0 rounded-full border ${
+                                q.done
+                                  ? "text-amber-700 bg-white border-amber-300"
+                                  : "text-amber-600 bg-amber-50 border-amber-200"
+                              }`}>
+                                {q.reward}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5 truncate">{q.goal}</p>
+                            <div className="mt-2 flex items-center gap-2">
+                              <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-[width] duration-700 ease-out ${
+                                    q.done ? "bg-gradient-to-r from-amber-400 to-yellow-500" : "bg-gradient-to-r from-slate-300 to-amber-300"
+                                  }`}
+                                  style={{ width: `${Math.min(100, Math.max(8, q.pct * 100))}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] font-semibold text-slate-500 shrink-0 tabular-nums">{q.hint}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })()}
 
             {/* Achievements moved into Overview */}
             <section>

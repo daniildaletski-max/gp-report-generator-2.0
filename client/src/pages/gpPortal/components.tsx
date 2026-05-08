@@ -410,7 +410,7 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
 // Achievement badge — locked/unlocked tile
 // ============================================================================
 
-export function AchievementBadge({ icon: Icon, title, description, unlocked, color, progress, progressLabel }: {
+export function AchievementBadge({ icon: Icon, title, description, unlocked, color, progress, progressLabel, rarity }: {
   icon: typeof Star;
   title: string;
   description: string;
@@ -422,17 +422,41 @@ export function AchievementBadge({ icon: Icon, title, description, unlocked, col
   progress?: number | null;
   /** Short progress hint, e.g. "3/5 evaluations" or "+1.2 to go". */
   progressLabel?: string | null;
+  /** Visual hierarchy on the badge — common feels earned, legendary
+   *  feels like a flex. Drives the rim/glow treatment when unlocked. */
+  rarity?: "common" | "rare" | "epic" | "legendary";
 }) {
   const showProgress = !unlocked && typeof progress === "number" && progress > 0;
   const almostThere = showProgress && (progress as number) >= 0.66;
+  // Rarity rim — only visible on unlocked badges, layered as a thin
+  // ring around the tile. Legendary gets a slowly-rotating conic
+  // gradient so it reads as "rare prize" without being garish.
+  const rarityRim =
+    !unlocked || !rarity ? null :
+    rarity === "legendary" ? "ring-2 ring-amber-400/60 shadow-md shadow-amber-200/60" :
+    rarity === "epic" ? "ring-2 ring-amber-300/60 shadow-sm shadow-amber-200/40" :
+    rarity === "rare" ? "ring-1 ring-amber-300/40" :
+    null;
+  const rarityLabel =
+    !rarity ? null :
+    rarity === "legendary" ? { text: "Legendary", cls: "text-amber-700 bg-gradient-to-r from-amber-100 to-yellow-100 border-amber-300" } :
+    rarity === "epic" ? { text: "Epic", cls: "text-amber-700 bg-amber-50 border-amber-200" } :
+    rarity === "rare" ? { text: "Rare", cls: "text-slate-600 bg-slate-50 border-slate-200" } :
+    { text: "Common", cls: "text-slate-500 bg-slate-50 border-slate-200" };
   return (
     <div className={`relative p-4 rounded-xl border transition-all duration-300 group cursor-default ${
       unlocked
-        ? `${color} shadow-sm hover:shadow-md hover:shadow-amber-100/60 hover:-translate-y-0.5`
+        ? `${color} shadow-sm hover:shadow-md hover:shadow-amber-100/60 hover:-translate-y-0.5 ${rarityRim ?? ""}`
         : showProgress
           ? `bg-white border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 ${almostThere ? "ring-1 ring-amber-200/80" : ""}`
           : 'bg-slate-50 border-slate-200 opacity-60'
     }`}>
+      {/* Legendary rotating rim — only on unlocked legendary badges.
+          A super-slow conic gradient halo so they pop without being
+          distracting. */}
+      {unlocked && rarity === "legendary" && (
+        <div className="absolute -inset-px rounded-xl opacity-30 group-hover:opacity-60 transition-opacity duration-300 pointer-events-none [background:conic-gradient(from_0deg,#fbbf24_0deg,#f59e0b_90deg,#f97316_180deg,#fbbf24_270deg,#f59e0b_360deg)] animate-[spin_8s_linear_infinite] blur-sm" aria-hidden />
+      )}
       {/* Gold shimmer on hover for unlocked */}
       {unlocked && (
         <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-amber-50/40 to-transparent pointer-events-none" aria-hidden />
@@ -454,9 +478,16 @@ export function AchievementBadge({ icon: Icon, title, description, unlocked, col
           }`} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className={`font-semibold text-sm truncate ${
-            unlocked ? 'text-slate-800' : showProgress ? 'text-slate-700' : 'text-slate-400'
-          }`}>{title}</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className={`font-semibold text-sm truncate ${
+              unlocked ? 'text-slate-800' : showProgress ? 'text-slate-700' : 'text-slate-400'
+            }`}>{title}</p>
+            {rarityLabel && (
+              <span className={`shrink-0 inline-flex items-center px-1.5 py-0 text-[9px] uppercase tracking-wider font-bold rounded-full border ${rarityLabel.cls}`}>
+                {rarityLabel.text}
+              </span>
+            )}
+          </div>
           <p className={`text-xs truncate ${
             unlocked ? 'text-slate-500' : showProgress ? 'text-slate-500' : 'text-slate-400'
           }`}>{description}</p>
