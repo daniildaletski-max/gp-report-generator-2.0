@@ -373,12 +373,17 @@ export default function GPPortal() {
   const mistakeCount = monthDetails?.stats?.mistakes ?? 0;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 relative">
-      
+    <div className="min-h-screen text-slate-900 relative bg-gradient-to-b from-amber-50/40 via-slate-50 to-slate-50">
+      {/* Decorative ambient backdrop — soft gold glow at the top of
+          the viewport so the dashboard feels lit rather than flat. */}
+      <div className="pointer-events-none fixed inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_60%_60%_at_50%_0%,rgba(251,191,36,0.18),transparent_70%)]" aria-hidden />
+
       {/* Header — sticky personal bar. Surfaces the GP's name, tier
           badge, current clean-streak, and refresh button so the
           context stays visible no matter how far they scroll. */}
-      <header className="relative z-20 border-b border-slate-200 bg-white/95 backdrop-blur-md sticky top-0 shadow-sm">
+      <header className="relative z-20 border-b border-amber-200/60 bg-gradient-to-r from-white via-amber-50/40 to-white backdrop-blur-md sticky top-0 shadow-sm">
+        {/* Top hairline shimmer */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" aria-hidden />
         <div className="container py-3 sm:py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br ${tier?.color ?? "from-amber-400 to-amber-600"} flex items-center justify-center shadow-sm shrink-0`}>
@@ -692,8 +697,9 @@ export default function GPPortal() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Quick Stats */}
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold flex items-center gap-2 text-slate-800">
-                  <Target className="h-5 w-5 text-amber-500" />
+                <h2 className="text-lg font-bold flex items-center gap-2.5 text-slate-900">
+                  <span className="inline-block h-6 w-1 rounded-full bg-gradient-to-b from-amber-400 to-yellow-500" aria-hidden />
+                  <Target className="h-5 w-5 text-amber-600" />
                   This Month's Stats
                 </h2>
                 <div className="grid grid-cols-2 gap-3">
@@ -734,10 +740,11 @@ export default function GPPortal() {
               </div>
 
               {/* Recent Evaluations */}
-              <Card className="bg-white border-slate-200 shadow-sm">
+              <Card className="bg-white border-slate-200/80 shadow-sm hover:shadow-md transition-shadow duration-300">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-slate-800 text-base flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-amber-500" />
+                  <CardTitle className="text-slate-900 text-base font-bold flex items-center gap-2.5">
+                    <span className="inline-block h-5 w-1 rounded-full bg-gradient-to-b from-amber-400 to-yellow-500" aria-hidden />
+                    <Clock className="h-4 w-4 text-amber-600" />
                     Recent Evaluations
                   </CardTitle>
                 </CardHeader>
@@ -758,46 +765,52 @@ export default function GPPortal() {
                         if (eval_.dealingStyleScore != null) subs.push({ key: "d", label: "Deal", value: eval_.dealingStyleScore, max: SCORE_CONFIG.dealingStyle.max });
                         if (eval_.gamePerformanceScore != null) subs.push({ key: "g", label: "Perf", value: eval_.gamePerformanceScore, max: SCORE_CONFIG.gamePerformance.max });
                         return (
-                          <div key={eval_.id} className={`group p-3 rounded-xl border ${sc.border} ${sc.bg} hover:shadow-sm transition-all`}>
-                            <div className="flex items-center justify-between gap-2 mb-1.5">
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <span className={`h-2 w-2 rounded-full ${sc.dot} shrink-0`} aria-hidden />
-                                <p className="text-sm font-semibold text-slate-800 truncate">
-                                  {eval_.game || 'Game Session'}
-                                </p>
+                          <div key={eval_.id} className={`group relative overflow-hidden p-3 rounded-xl border ${sc.border} ${sc.bg} hover:shadow-md hover:-translate-y-0.5 transition-all duration-300`}>
+                            {/* Big circular score badge on the left
+                                replaces the small inline score so the
+                                eye lands on the number first. */}
+                            <div className="flex items-start gap-3">
+                              <div className={`relative shrink-0 h-14 w-14 rounded-2xl border-2 ${sc.border} bg-white flex flex-col items-center justify-center shadow-sm`}>
+                                <span className={`text-xl font-bold tabular-nums leading-none ${sc.text}`}>{eval_.totalScore}</span>
+                                <span className="text-[9px] text-slate-400 leading-none mt-0.5">/{MAX_TOTAL_SCORE}</span>
+                                <span className={`absolute -top-1 -right-1 h-3 w-3 rounded-full ring-2 ring-white ${sc.dot}`} aria-hidden />
                               </div>
-                              <div className="flex items-baseline gap-0.5 shrink-0">
-                                <span className={`text-lg font-bold tabular-nums ${sc.text}`}>{eval_.totalScore}</span>
-                                <span className="text-[10px] text-slate-400">/{MAX_TOTAL_SCORE}</span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="text-sm font-semibold text-slate-800 truncate">
+                                    {eval_.game || 'Game Session'}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 min-w-0">
+                                  {evalDate && (
+                                    <span className="shrink-0">{format(evalDate, 'MMM d')}</span>
+                                  )}
+                                  {eval_.evaluatorName && (
+                                    <>
+                                      <span className="text-slate-300">·</span>
+                                      <span className="truncate">by {eval_.evaluatorName}</span>
+                                    </>
+                                  )}
+                                </div>
+                                {/* Per-criterion mini chips — at-a-glance breakdown */}
+                                {subs.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-2">
+                                    {subs.map(s => {
+                                      const ssc = scoreColor(s.value, s.max);
+                                      return (
+                                        <span
+                                          key={s.key}
+                                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border bg-white ${ssc.border} ${ssc.text}`}
+                                          title={`${s.label}: ${s.value}/${s.max}`}
+                                        >
+                                          {s.label} <span className="tabular-nums">{s.value}</span>
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             </div>
-                            <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
-                              <span className="flex items-center gap-1.5 min-w-0">
-                                {evalDate && (
-                                  <span className="shrink-0">{format(evalDate, 'MMM d')}</span>
-                                )}
-                                {eval_.evaluatorName && (
-                                  <span className="truncate">· by {eval_.evaluatorName}</span>
-                                )}
-                              </span>
-                            </div>
-                            {/* Per-criterion mini chips — at-a-glance breakdown */}
-                            {subs.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-2">
-                                {subs.map(s => {
-                                  const ssc = scoreColor(s.value, s.max);
-                                  return (
-                                    <span
-                                      key={s.key}
-                                      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border bg-white ${ssc.border} ${ssc.text}`}
-                                      title={`${s.label}: ${s.value}/${s.max}`}
-                                    >
-                                      {s.label} <span className="tabular-nums">{s.value}</span>
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            )}
                           </div>
                         );
                       })}
@@ -814,13 +827,21 @@ export default function GPPortal() {
 
             {/* Achievements moved into Overview */}
             <section>
-              <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-slate-800">
-                <Trophy className="h-5 w-5 text-amber-500" />
-                Achievements
-                <Badge className="ml-2 bg-amber-50 text-amber-700 border-amber-200">
-                  {achievements.filter(a => a.unlocked).length}/{achievements.length}
-                </Badge>
-              </h2>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2.5 text-slate-900">
+                  {/* Gold accent bar — visual rhythm marker that
+                      replaces the smaller icon-only header treatment. */}
+                  <span className="inline-block h-6 w-1 rounded-full bg-gradient-to-b from-amber-400 to-yellow-500" aria-hidden />
+                  <Trophy className="h-5 w-5 text-amber-600" />
+                  Achievements
+                </h2>
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-50 to-yellow-50 text-amber-700 border border-amber-200 shadow-sm">
+                  <span className="tabular-nums">{achievements.filter(a => a.unlocked).length}</span>
+                  <span className="text-amber-400">/</span>
+                  <span className="tabular-nums text-amber-600">{achievements.length}</span>
+                  <span className="text-amber-500">unlocked</span>
+                </span>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {achievements.map((a) => (
                   <AchievementBadge key={a.title} {...a} />
