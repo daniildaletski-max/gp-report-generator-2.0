@@ -221,7 +221,12 @@ async function validateAutomationCredentials(): Promise<void> {
     //                    only reach me, not the FMs").
     try {
       const { getFromAddress } = await import("./email");
-      const fromAddress = await getFromAddress();
+      // skipCache: true so a transient Resend domains.list failure
+      // at boot doesn't prime the 5-minute send cache with the
+      // resend.dev fallback (Codex P2 — "Avoid priming the send
+      // cache from boot audit"). The first real email send will
+      // re-resolve from scratch.
+      const fromAddress = await getFromAddress({ skipCache: true });
       if (fromAddress.includes("@resend.dev")) {
         log.warn(
           `[BootAudit] Resend will send from ${fromAddress} — no verified domain found. ` +
