@@ -26,6 +26,13 @@ export const fmTeams = mysqlTable("fm_teams", {
   id: int("id").autoincrement().primaryKey(),
   teamName: varchar("teamName", { length: 255 }).notNull(),
   floorManagerName: varchar("floorManagerName", { length: 255 }).notNull(),
+  /**
+   * Direct email address for the team's Floor Manager. When set, the
+   * Team Monthly Overview email is delivered straight to this address
+   * — admins can route reports to FMs without first creating a `users`
+   * row for them. Falls back to the user link below when null.
+   */
+  managerEmail: varchar("managerEmail", { length: 320 }),
   userId: int("userId"), // Owner of this team - for user data isolation
   personaProjectId: int("personaProjectId"), // Persona schedule project ID for auto-sync
   createdAt: timestamp("createdAt").defaultNow().notNull(),

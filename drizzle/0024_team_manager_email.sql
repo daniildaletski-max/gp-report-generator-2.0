@@ -1,0 +1,1 @@
+ALTER TABLE `fm_teams` ADD `managerEmail` varchar(320);

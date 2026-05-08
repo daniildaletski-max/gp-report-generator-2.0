@@ -36,10 +36,17 @@ export const fmTeamRouter = router({
     .input(z.object({
       teamName: z.string().min(1),
       floorManagerName: z.string().min(1),
+      // Optional direct email for the FM. When set, Team Monthly
+      // Overview reports go straight to this address — bypassing the
+      // user-link lookup so admins can route to FMs that don't have
+      // a `users` row yet. Empty string is treated as null.
+      managerEmail: z.string().email().optional().or(z.literal("")),
     }))
     .mutation(async ({ ctx, input }) => {
+      const { managerEmail, ...rest } = input;
       const team = await db.createFmTeam({
-        ...input,
+        ...rest,
+        managerEmail: managerEmail ? managerEmail : null,
         userId: ctx.user.id,
       });
       return team;
@@ -51,6 +58,8 @@ export const fmTeamRouter = router({
       teamId: z.number(),
       teamName: z.string().min(1).optional(),
       floorManagerName: z.string().min(1).optional(),
+      // Pass empty string to clear; omit to leave unchanged.
+      managerEmail: z.string().email().optional().or(z.literal("")),
       gpIds: z.array(z.number()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -61,7 +70,12 @@ export const fmTeamRouter = router({
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only update your own teams' });
         }
       }
-      const { teamId, gpIds, ...data } = input;
+      const { teamId, gpIds, managerEmail, ...rest } = input;
+      // Empty string from the form → clear the override (NULL in DB).
+      const data: Record<string, unknown> = { ...rest };
+      if (managerEmail !== undefined) {
+        data.managerEmail = managerEmail === "" ? null : managerEmail;
+      }
       if (gpIds !== undefined) {
         await db.updateTeamWithGPs(teamId, data, gpIds);
       } else {
