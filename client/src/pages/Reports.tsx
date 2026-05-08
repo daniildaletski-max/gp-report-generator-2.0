@@ -94,6 +94,12 @@ export default function ReportsPage() {
   const utils = trpc.useUtils();
   const { data: reports, isLoading, refetch } = trpc.report.list.useQuery();
   const { data: teams } = trpc.fmTeam.list.useQuery();
+  // Email-delivery preview — answers "where would the emails go right
+  // now?" before any reports are generated. The diagnostic panel
+  // below renders this; the data is also implicitly the answer to
+  // "why are my FMs not getting emails?" when an admin sees their
+  // own address resolved for someone else's team.
+  const { data: deliveryReadiness } = trpc.report.deliveryReadiness.useQuery();
   const generateMutation = trpc.report.generate.useMutation();
   const exportMutation = trpc.report.exportToExcel.useMutation();
   // Bulk-generate for every team the user can see — one click ships
@@ -101,15 +107,35 @@ export default function ReportsPage() {
   const generateAllMutation = trpc.report.generateAllForMonth.useMutation({
     onSuccess: (data) => {
       const failedNames = data.results.filter(r => r.status === "failed").map(r => r.teamName);
-      if (data.totals.failed === 0) {
+      const fallbackNames = data.results.filter(r => r.fallbackToCaller).map(r => r.teamName);
+      const fellBack = data.totals.fellBackToCaller ?? 0;
+
+      if (data.totals.failed === 0 && fellBack === 0) {
         toast.success(`All ${data.totals.succeeded} reports generated · ${data.totals.emailsSent} email${data.totals.emailsSent === 1 ? '' : 's'} sent`);
+      } else if (data.totals.failed === 0 && fellBack > 0) {
+        // Reports went out but the recipient was the admin (the
+        // FMs aren't configured). Surface this prominently — it's
+        // the "why am I getting all the emails?" signal.
+        toast.warning(
+          `${data.totals.succeeded} reports generated, but ${fellBack} email${fellBack === 1 ? '' : 's'} ended up in YOUR inbox`,
+          {
+            description: `Teams without an FM email on file: ${fallbackNames.join(', ')}. Open the "Email delivery" panel below to fix.`,
+            duration: 15000,
+          },
+        );
       } else {
-        toast.warning(`${data.totals.succeeded} succeeded, ${data.totals.failed} failed`, {
-          description: failedNames.length > 0 ? `Failed: ${failedNames.join(', ')}` : undefined,
-          duration: 12000,
+        toast.warning(`${data.totals.succeeded} succeeded, ${data.totals.failed} failed${fellBack > 0 ? `, ${fellBack} fell back to your inbox` : ''}`, {
+          description: [
+            failedNames.length > 0 ? `Failed: ${failedNames.join(', ')}` : null,
+            fallbackNames.length > 0 ? `Fell back to your inbox: ${fallbackNames.join(', ')}` : null,
+          ].filter(Boolean).join(' · '),
+          duration: 15000,
         });
       }
       utils.report.list.invalidate();
+      // Refresh the delivery-readiness panel so configuration fixes
+      // become visible immediately.
+      utils.report.deliveryReadiness.invalidate();
     },
     onError: (err) => {
       toast.error(`Bulk generate failed: ${err.message}`);
@@ -465,6 +491,16 @@ export default function ReportsPage() {
           </div>
         }
       />
+
+      {/* Email-delivery panel — surfaces the answer to "where do the
+          monthly emails actually go?" before any reports are sent. If
+          the operator sees themselves listed as the recipient for
+          another FM's team, the panel tells them exactly which
+          configuration step is missing (no FM linked / FM has no
+          email). Only renders when there's something to fix or when
+          the user is an admin overseeing multiple teams. */}
+      <DeliveryReadinessPanel data={deliveryReadiness} />
+
       <Dialog open={showNewReport} onOpenChange={setShowNewReport}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -1225,6 +1261,108 @@ type ReportListItem = {
   report: { id: number; teamId: number | null; reportMonth: number; reportYear: number; status?: string | null; excelFileUrl?: string | null };
   team: { id: number; teamName: string; floorManagerName?: string | null } | null;
 };
+
+// ============================================
+// DeliveryReadinessPanel — surfaces "where do the monthly emails
+// actually go right now?" before any reports are generated.
+//
+// This is the answer to the most common ops complaint: "letters only
+// reach me, not the other FMs." Without this panel, the operator has
+// no way to tell from the UI whether:
+//   • the FMs aren't linked to teams (team.userId is null)
+//   • the FMs are linked but have no email on file (users.email null)
+//   • everything's wired up and Resend is rejecting (domain unverified)
+//
+// All three failure modes look the same from the outside ("only I get
+// the emails"). The panel distinguishes the first two and points to
+// the fix; the third is logged at send time with a remediation hint.
+// ============================================
+type DeliveryReadiness = {
+  rows: Array<{
+    teamId: number;
+    teamName: string;
+    fmName: string;
+    recipientEmail: string | null;
+    recipientName: string | null;
+    status: "ok" | "no-fm" | "fm-missing-email";
+    fallbackToCaller: boolean;
+  }>;
+  callerEmail: string | null;
+  summary: { total: number; ok: number; fallback: number };
+};
+
+function DeliveryReadinessPanel({ data }: { data: DeliveryReadiness | undefined }) {
+  if (!data || data.rows.length === 0) return null;
+  const hasIssues = data.summary.fallback > 0;
+  // When everything is wired up, render a quiet one-liner so the
+  // operator gets passive confirmation; collapse the per-team list
+  // unless they expand it.
+  if (!hasIssues) {
+    return (
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 px-4 py-2.5 text-[13px] text-emerald-800 flex items-center gap-2">
+        <CheckCircle className="h-4 w-4 shrink-0" />
+        <span>
+          <strong>Email delivery: ready.</strong>{" "}
+          All {data.summary.ok} team{data.summary.ok === 1 ? "" : "s"} have an FM email on file —
+          monthly reports will go to each FM directly.
+        </span>
+      </div>
+    );
+  }
+
+  // There are misconfigured teams — render the actionable list.
+  const fallbackRows = data.rows.filter(r => r.fallbackToCaller);
+  const okRows = data.rows.filter(r => !r.fallbackToCaller);
+  return (
+    <Card className="border-amber-200 bg-amber-50/30">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-amber-100 border border-amber-200">
+            <FileSpreadsheet className="h-3.5 w-3.5 text-amber-700" />
+          </div>
+          Email delivery: {data.summary.fallback} team{data.summary.fallback === 1 ? "" : "s"} would land in your inbox
+        </CardTitle>
+        <CardDescription>
+          {data.callerEmail
+            ? <>Reports for these teams will be emailed to <strong>{data.callerEmail}</strong> instead of the FM, because the FM isn't fully configured.</>
+            : <>Reports for these teams have no recipient because no FM is configured AND your account has no email on file.</>}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="rounded-lg border border-amber-200 bg-white divide-y divide-amber-100 overflow-hidden">
+          {fallbackRows.map(row => (
+            <div key={row.teamId} className="px-3 py-2 flex items-center justify-between gap-3 text-sm">
+              <div className="min-w-0">
+                <div className="font-medium text-slate-800 truncate">{row.teamName}</div>
+                <div className="text-[12px] text-slate-500 truncate">FM: {row.fmName}</div>
+              </div>
+              <div className="text-right">
+                {row.status === "no-fm" ? (
+                  <Badge variant="warning">No FM linked to team</Badge>
+                ) : (
+                  <Badge variant="warning">FM has no email on file</Badge>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="text-[12px] text-slate-600 leading-relaxed">
+          <strong>Fix it:</strong>{" "}
+          <ul className="list-disc list-inside mt-1 space-y-0.5">
+            <li><em>No FM linked to team</em> — assign the team to its FM in the Team management page.</li>
+            <li><em>FM has no email on file</em> — the FM needs to log in once via OAuth so their email is captured (or update via /admin user settings).</li>
+          </ul>
+          {okRows.length > 0 && (
+            <p className="mt-2 text-emerald-700">
+              <CheckCircle className="inline h-3 w-3 mr-1" />
+              {okRows.length} other team{okRows.length === 1 ? "" : "s"} {okRows.length === 1 ? "is" : "are"} configured correctly and will email their FM directly.
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function CoverageMatrix({
   reports,

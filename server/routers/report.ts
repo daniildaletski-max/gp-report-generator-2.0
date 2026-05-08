@@ -604,6 +604,13 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         status: "success" | "failed";
         reportId?: number;
         emailSent?: boolean;
+        /** The address the email was actually sent to (or attempted). */
+        recipientEmail?: string | null;
+        /** True when the recipient was the caller (admin) instead of
+         *  the team's FM — usually because the FM has no email or no
+         *  user link. The toast warns about these so the operator can
+         *  fix the team→user / user.email configuration. */
+        fallbackToCaller?: boolean;
         error?: string;
       }> = [];
 
@@ -630,8 +637,14 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           // shouldn't get every team's email — each report belongs to
           // a different FM. Look up the team owner's email/name so
           // generateExcelAndEmail addresses the message to them. Fall
-          // back to the caller's email when the team has no owner.
+          // back to the caller's email when the team has no owner OR
+          // the FM exists but has no email on file. We track this
+          // fallback explicitly so the result can warn the operator
+          // that "5 reports succeeded, but 3 ended up in YOUR inbox
+          // because the FMs aren't configured" — surfaces the misconfig
+          // instead of silently dumping everything on the admin.
           let recipientCtx: { user: { id: number; role: string; email?: string | null; name?: string | null } } = ctx;
+          let fallbackToCaller = false;
           if (team.userId && team.userId !== ctx.user.id) {
             const owner = await db.getUserById(team.userId);
             if (owner?.email) {
@@ -643,7 +656,13 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
                   name: owner.name ?? null,
                 },
               };
+            } else {
+              // FM linked but no email → admin's inbox catches it.
+              fallbackToCaller = true;
             }
+          } else if (!team.userId) {
+            // No FM linked at all → admin's inbox catches it.
+            fallbackToCaller = true;
           }
           const result = await generateExcelAndEmail(recipientCtx, report.id);
           results.push({
@@ -652,6 +671,8 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
             status: "success",
             reportId: report.id,
             emailSent: result.emailSent,
+            recipientEmail: recipientCtx.user.email ?? null,
+            fallbackToCaller,
           });
         } catch (e) {
           log.error(`Bulk generate failed for team ${team.id}`, e instanceof Error ? e : new Error(String(e)));
@@ -667,6 +688,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       const succeeded = results.filter(r => r.status === "success").length;
       const failed = results.filter(r => r.status === "failed").length;
       const emailsSent = results.filter(r => r.emailSent).length;
+      const fellBackToCaller = results.filter(r => r.fallbackToCaller).length;
 
       // One owner notification for the whole batch — better than spamming
       // per-team in `generate`.
@@ -681,7 +703,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
 
       return {
         results,
-        totals: { teams: results.length, succeeded, failed, emailsSent },
+        totals: { teams: results.length, succeeded, failed, emailsSent, fellBackToCaller },
         month: input.reportMonth,
         year: input.reportYear,
       };
@@ -813,7 +835,7 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
     .input(z.object({ id: z.number().positive() }))
     .mutation(async ({ ctx, input }) => {
       const isAdmin = ctx.user.role === 'admin';
-      
+
       const success = await db.deleteReportWithCheckByUser(
         input.id,
         ctx.user.id,
@@ -822,7 +844,99 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       if (!success) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Report not found or access denied' });
       }
-      
+
       return { success: true };
     }),
+
+  /**
+   * Delivery-readiness check — answers "if I generate reports right
+   * now, where do the emails actually go?" without firing any sends.
+   *
+   * For each team the caller can see, resolves the recipient via the
+   * same logic the cron and `generateAllForMonth` use:
+   *   1. team.userId → users[that id].email   (the FM)
+   *   2. fallback to caller's own email        (admin behind the wheel)
+   *
+   * Returns one of three statuses per team so the Reports page can
+   * show "✓ Will send to fm-a@..." / "⚠ No FM assigned, will fall
+   * back to your inbox" / "⚠ FM has no email on file" — so an
+   * operator who's wondering "why am I getting all the emails?" sees
+   * the answer at the top of the page instead of having to dig
+   * through audit logs.
+   */
+  deliveryReadiness: protectedProcedure.query(async ({ ctx }) => {
+    const allTeams = ctx.user.role === "admin"
+      ? await db.getAllFmTeams()
+      : await db.getFmTeamsByUser(ctx.user.id);
+
+    const callerEmail = ctx.user.email ?? null;
+    type Status = "ok" | "no-fm" | "fm-missing-email";
+    const rows: Array<{
+      teamId: number;
+      teamName: string;
+      fmName: string;
+      recipientEmail: string | null;
+      recipientName: string | null;
+      status: Status;
+      /** True when the resolved recipient is the caller's own email
+       *  rather than the team's FM. The Reports UI uses this to
+       *  highlight rows that look "your inbox is acting as a
+       *  fallback". */
+      fallbackToCaller: boolean;
+    }> = [];
+
+    for (const team of allTeams) {
+      let owner = null as Awaited<ReturnType<typeof db.getUserById>> | null;
+      if (team.userId) {
+        try {
+          owner = await db.getUserById(team.userId);
+        } catch { owner = null; }
+      }
+
+      let status: Status;
+      let recipientEmail: string | null;
+      let recipientName: string | null;
+      let fallbackToCaller = false;
+
+      if (!team.userId || !owner) {
+        // No FM linked at all — falls back to the caller.
+        status = "no-fm";
+        recipientEmail = callerEmail;
+        recipientName = ctx.user.name ?? null;
+        fallbackToCaller = true;
+      } else if (!owner.email) {
+        // FM exists but has no email on file. The cron's per-user
+        // path skips them entirely (writes a no-recipient sentinel);
+        // the admin bulk path falls back to the caller.
+        status = "fm-missing-email";
+        recipientEmail = callerEmail;
+        recipientName = ctx.user.name ?? null;
+        fallbackToCaller = true;
+      } else {
+        status = "ok";
+        recipientEmail = owner.email;
+        recipientName = owner.name ?? null;
+      }
+
+      rows.push({
+        teamId: team.id,
+        teamName: team.teamName,
+        fmName: team.floorManagerName,
+        recipientEmail,
+        recipientName,
+        status,
+        fallbackToCaller,
+      });
+    }
+
+    return {
+      rows: rows.sort((a, b) => a.teamName.localeCompare(b.teamName)),
+      callerEmail,
+      summary: {
+        total: rows.length,
+        ok: rows.filter(r => r.status === "ok").length,
+        fallback: rows.filter(r => r.fallbackToCaller).length,
+      },
+    };
+  }),
 });
