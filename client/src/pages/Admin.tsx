@@ -701,6 +701,9 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
   const [editingTeam, setEditingTeam] = useState<any>(null);
   const [selectedGPs, setSelectedGPs] = useState<number[]>([]);
   const [gpSearchTerm, setGpSearchTerm] = useState("");
+  // Inline email edit state
+  const [inlineEditTeamId, setInlineEditTeamId] = useState<number | null>(null);
+  const [inlineEmailValue, setInlineEmailValue] = useState("");
 
   const { data: teamsWithGPs, isLoading, refetch } = trpc.fmTeam.listWithGPs.useQuery();
   const { data: allGPs } = trpc.gamePresenter.list.useQuery();
@@ -734,6 +737,19 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
     },
     onError: (error) => {
       toast.error(error.message || "Failed to update team");
+    },
+  });
+
+  // Lightweight mutation for inline email edits (no GP reassignment)
+  const updateEmailInline = trpc.fmTeam.update.useMutation({
+    onSuccess: () => {
+      toast.success("Manager email updated");
+      setInlineEditTeamId(null);
+      setInlineEmailValue("");
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to update email");
     },
   });
 
@@ -1151,6 +1167,73 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                       <UserCog className="h-3 w-3 text-slate-400" />
                       {team.floorManagerName}
                     </CardDescription>
+                    {/* Inline manager email edit */}
+                    <div className="mt-2">
+                      {inlineEditTeamId === team.id ? (
+                        <form
+                          className="flex items-center gap-1.5"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            updateEmailInline.mutate({
+                              teamId: team.id,
+                              managerEmail: inlineEmailValue,
+                            });
+                          }}
+                        >
+                          <Mail className="h-3 w-3 text-amber-500 shrink-0" />
+                          <Input
+                            type="email"
+                            placeholder="manager@example.com"
+                            value={inlineEmailValue}
+                            onChange={(e) => setInlineEmailValue(e.target.value)}
+                            className="h-7 text-xs flex-1"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                setInlineEditTeamId(null);
+                                setInlineEmailValue("");
+                              }
+                            }}
+                          />
+                          <Button
+                            type="submit"
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 text-emerald-600 hover:text-emerald-700"
+                            disabled={updateEmailInline.isPending}
+                          >
+                            {updateEmailInline.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 text-slate-400 hover:text-slate-600"
+                            onClick={() => { setInlineEditTeamId(null); setInlineEmailValue(""); }}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </form>
+                      ) : (
+                        <button
+                          type="button"
+                          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-amber-700 transition-colors group w-full text-left"
+                          onClick={() => {
+                            setInlineEditTeamId(team.id);
+                            setInlineEmailValue(team.managerEmail || "");
+                          }}
+                          title="Click to edit manager email"
+                        >
+                          <Mail className="h-3 w-3 text-slate-400 group-hover:text-amber-500" />
+                          {team.managerEmail ? (
+                            <span className="truncate">{team.managerEmail}</span>
+                          ) : (
+                            <span className="italic text-slate-400">Add email for reports</span>
+                          )}
+                          <Edit className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                        </button>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* Stat trio with semantic colours + tabular nums */}
