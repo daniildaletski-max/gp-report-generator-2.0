@@ -97,7 +97,15 @@ export async function generateExcelAndEmail(
   const reportWithTeam = await db.getReportWithTeam(reportId);
   if (!reportWithTeam) throw new TRPCError({ code: 'NOT_FOUND', message: 'Report not found' });
 
-  if (ctx.user.role !== 'admin' && reportWithTeam.report.userId !== ctx.user.id) {
+  // Allow: admin, the user the report is pinned to, OR the user who
+  // owns the team. The team-owner branch matters for legacy reports
+  // created before `generate` started setting `report.userId` (the
+  // single-team path) — those rows have a NULL userId and would
+  // otherwise be exportable only by an admin.
+  const reportUserId = reportWithTeam.report.userId;
+  const teamUserId = reportWithTeam.team?.userId ?? null;
+  const isOwner = reportUserId === ctx.user.id || teamUserId === ctx.user.id;
+  if (ctx.user.role !== 'admin' && !isOwner) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only export your own reports' });
   }
 
