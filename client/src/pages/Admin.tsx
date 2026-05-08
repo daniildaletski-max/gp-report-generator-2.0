@@ -697,6 +697,7 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
   const [newFMName, setNewFMName] = useState("");
+  const [newManagerEmail, setNewManagerEmail] = useState("");
   const [editingTeam, setEditingTeam] = useState<any>(null);
   const [selectedGPs, setSelectedGPs] = useState<number[]>([]);
   const [gpSearchTerm, setGpSearchTerm] = useState("");
@@ -711,6 +712,7 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
       setIsCreateOpen(false);
       setNewTeamName("");
       setNewFMName("");
+      setNewManagerEmail("");
       refetch();
       refetchTeams();
       refetchUnassigned();
@@ -855,13 +857,27 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                       onChange={(e) => setNewFMName(e.target.value)}
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="managerEmail">Manager Email <span className="text-muted-foreground text-xs font-normal">(reports go here)</span></Label>
+                    <Input
+                      id="managerEmail"
+                      type="email"
+                      placeholder="e.g., john.smith@example.com"
+                      value={newManagerEmail}
+                      onChange={(e) => setNewManagerEmail(e.target.value)}
+                    />
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
                     Cancel
                   </Button>
                   <Button
-                    onClick={() => createTeam.mutate({ teamName: newTeamName, floorManagerName: newFMName })}
+                    onClick={() => createTeam.mutate({
+                      teamName: newTeamName,
+                      floorManagerName: newFMName,
+                      managerEmail: newManagerEmail || undefined,
+                    })}
                     disabled={!newTeamName || !newFMName || createTeam.isPending}
                   >
                     {createTeam.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -959,6 +975,15 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                                   <Input
                                     value={editingTeam?.floorManagerName || ""}
                                     onChange={(e) => setEditingTeam({ ...editingTeam, floorManagerName: e.target.value })}
+                                  />
+                                </div>
+                                <div className="space-y-2 col-span-2">
+                                  <Label>Manager Email <span className="text-muted-foreground text-xs font-normal">(Team Monthly Overview reports go here)</span></Label>
+                                  <Input
+                                    type="email"
+                                    placeholder="e.g., john.smith@example.com"
+                                    value={editingTeam?.managerEmail || ""}
+                                    onChange={(e) => setEditingTeam({ ...editingTeam, managerEmail: e.target.value })}
                                   />
                                 </div>
                               </div>
@@ -1081,6 +1106,7 @@ function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
                                   teamId: editingTeam.id,
                                   teamName: editingTeam.teamName,
                                   floorManagerName: editingTeam.floorManagerName,
+                                  managerEmail: editingTeam.managerEmail ?? "",
                                   gpIds: selectedGPs,
                                 })}
                                 disabled={updateTeam.isPending}

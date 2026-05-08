@@ -26,16 +26,34 @@ type ReportRecipient = {
 };
 
 /**
- * Routes the Team Monthly Overview email to the team's Floor Manager
- * (the user the team is linked to via `fmTeams.userId`) instead of the
- * caller. Falls back to the caller only when the team has no FM linked
- * or the linked FM has no email on file — matching the bulk-generate
- * behaviour so single and bulk paths stay consistent.
+ * Routes the Team Monthly Overview email to the team's Floor Manager.
+ *
+ * Resolution order (first non-empty wins):
+ *   1. `team.managerEmail` — admin-set override on the team itself.
+ *      Lets admins direct the email to an FM who doesn't have a
+ *      `users` row, which is the normal case in this app (FM names
+ *      are free-text strings, not user accounts).
+ *   2. `users[team.userId].email` — the legacy user-link path. Used
+ *      for FMs that DO have a self-served user account.
+ *   3. Caller's own email — fallback only, with `fallbackToCaller`
+ *      flagged so the UI can warn ("this report ended up in YOUR
+ *      inbox because the FM isn't configured").
  */
 export async function resolveReportRecipient(
   ctx: { user: { id: number; role: string; email?: string | null; name?: string | null } },
-  team: { userId?: number | null },
+  team: { userId?: number | null; managerEmail?: string | null; floorManagerName?: string | null },
 ): Promise<ReportRecipient> {
+  if (team.managerEmail) {
+    return {
+      user: {
+        id: 0,
+        role: "fm",
+        email: team.managerEmail,
+        name: team.floorManagerName ?? null,
+      },
+      fallbackToCaller: false,
+    };
+  }
   if (team.userId && team.userId !== ctx.user.id) {
     const owner = await db.getUserById(team.userId);
     if (owner?.email) {

@@ -169,6 +169,13 @@
       "when": 1778166967812,
       "tag": "0023_sparkling_fabian_cortez",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1778688000000,
+      "tag": "0024_team_manager_email",
+      "breakpoints": true
     }
   ]
 }

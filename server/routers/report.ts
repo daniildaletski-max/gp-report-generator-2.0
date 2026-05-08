@@ -890,7 +890,13 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       let recipientName: string | null;
       let fallbackToCaller = false;
 
-      if (!team.userId || !owner) {
+      // Mirrors `resolveReportRecipient` — managerEmail wins, then
+      // user link, then fallback to caller.
+      if (team.managerEmail) {
+        status = "ok";
+        recipientEmail = team.managerEmail;
+        recipientName = team.floorManagerName ?? null;
+      } else if (!team.userId || !owner) {
         // No FM linked at all — falls back to the caller.
         status = "no-fm";
         recipientEmail = callerEmail;
