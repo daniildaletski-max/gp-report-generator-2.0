@@ -206,6 +206,45 @@ async function validateAutomationCredentials(): Promise<void> {
       new Error("RESEND_API_KEY missing"),
     );
     issues.push("RESEND_API_KEY");
+  } else {
+    // Resolve the from-address once at boot so the operator can SEE in
+    // the deploy logs which address will actually be used. Catches the
+    // common "I verified my domain but emails still go from
+    // resend.dev" misconfiguration — without this line the operator
+    // has no signal until they trigger a real send.
+    //
+    // Verified domain → "Using verified Resend domain: <domain>".
+    // Unverified      → log.warn with the exact remediation URL,
+    //                    because Resend's free tier silently caps
+    //                    deliveries from `resend.dev` to the account
+    //                    owner's email (which manifests as "letters
+    //                    only reach me, not the FMs").
+    try {
+      const { getFromAddress } = await import("./email");
+      // skipCache: true so a transient Resend domains.list failure
+      // at boot doesn't prime the 5-minute send cache with the
+      // resend.dev fallback (Codex P2 — "Avoid priming the send
+      // cache from boot audit"). The first real email send will
+      // re-resolve from scratch.
+      const fromAddress = await getFromAddress({ skipCache: true });
+      if (fromAddress.includes("@resend.dev")) {
+        log.warn(
+          `[BootAudit] Resend will send from ${fromAddress} — no verified domain found. ` +
+          `On Resend's free/test tier, sending FROM resend.dev is restricted to the account owner's email — ` +
+          `meaning every FM other than the Resend account holder will silently NOT receive their monthly report. ` +
+          `Verify a domain at https://resend.com/domains and restart (or wait 5 min for the cache to refresh).`,
+        );
+        issues.push("RESEND_DOMAIN_UNVERIFIED");
+      } else {
+        log.info(`[BootAudit] Resend from-address: ${fromAddress} (verified domain — emails will reach all configured FMs).`);
+      }
+    } catch (e) {
+      // Non-fatal — Resend API call from boot can be flaky on cold
+      // starts. The send-time logic re-checks anyway.
+      log.warn("[BootAudit] Could not resolve Resend from-address (will retry at first send)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
 
   // 2. Persona credentials — only required when at least one team has

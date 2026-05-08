@@ -25,14 +25,27 @@ let lastDomainCheck = 0;
 const DOMAIN_CHECK_INTERVAL = 5 * 60 * 1000; // Re-check every 5 minutes
 
 /**
- * Determines the best "from" address by checking if gpreportgen.info is verified in Resend.
+ * Determines the best "from" address by checking if a domain is verified in Resend.
  * Falls back to reports@resend.dev if not verified.
+ *
+ * Exported so the boot-time audit can call this and log which
+ * from-address the system will actually use — letting the operator
+ * confirm a newly-verified Resend domain has taken effect without
+ * sending a real test email.
+ *
+ * `skipCache` — when `true`, neither READS from the 5-minute cache
+ * nor WRITES the resolved value back to it. Used by the boot audit
+ * so a transient Resend API failure at startup doesn't pollute the
+ * send-time cache with the resend.dev fallback for 5 minutes after
+ * (Codex P2 — "Avoid priming the send cache from boot audit").
  */
-async function getFromAddress(): Promise<string> {
+export async function getFromAddress(opts?: { skipCache?: boolean }): Promise<string> {
+  const skipCache = opts?.skipCache === true;
   const now = Date.now();
-  
-  // Return cached value if still fresh
-  if (cachedFromAddress && (now - lastDomainCheck) < DOMAIN_CHECK_INTERVAL) {
+
+  // Cached fast-path — only when the caller is happy with cached
+  // values (the normal send path is, the boot audit is not).
+  if (!skipCache && cachedFromAddress && (now - lastDomainCheck) < DOMAIN_CHECK_INTERVAL) {
     return cachedFromAddress;
   }
 
@@ -40,29 +53,33 @@ async function getFromAddress(): Promise<string> {
     return "GP Report Generator <reports@resend.dev>";
   }
 
+  let resolved: string;
   try {
     const resend = new Resend(ENV.resendApiKey);
     const { data } = await resend.domains.list();
-    
-    // Look for a verified domain
     const verifiedDomain = data?.data?.find(
       (d: any) => d.status === "verified" || d.status === "active"
     );
-    
     if (verifiedDomain) {
-      cachedFromAddress = `GP Report Generator <reports@${verifiedDomain.name}>`;
+      resolved = `GP Report Generator <reports@${verifiedDomain.name}>`;
       console.log(`[Email] Using verified domain: ${verifiedDomain.name}`);
     } else {
-      cachedFromAddress = "GP Report Generator <reports@resend.dev>";
+      resolved = "GP Report Generator <reports@resend.dev>";
       console.log("[Email] No verified domain found, using resend.dev fallback");
     }
   } catch (err) {
     console.warn("[Email] Failed to check domains, using resend.dev fallback:", err);
-    cachedFromAddress = "GP Report Generator <reports@resend.dev>";
+    resolved = "GP Report Generator <reports@resend.dev>";
   }
 
-  lastDomainCheck = now;
-  return cachedFromAddress;
+  // Only persist into the 5-minute cache when the caller is the send
+  // path. Boot audit calls leave the cache untouched so the first
+  // real send re-resolves freshly.
+  if (!skipCache) {
+    cachedFromAddress = resolved;
+    lastDomainCheck = now;
+  }
+  return resolved;
 }
 
 /**
