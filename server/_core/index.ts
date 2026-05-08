@@ -209,11 +209,15 @@ async function validateAutomationCredentials(): Promise<void> {
   }
 
   // 2. Persona credentials — only required when at least one team has
-  // a personaProjectId configured. Otherwise the auto-sync cron sits
-  // idle and there's nothing to warn about.
+  // a personaProjectId configured AND the auto-sync cron isn't
+  // explicitly disabled. Mirrors the same `PERSONA_SYNC_CRON=off`
+  // guard `initPersonaAutoSync` itself uses, so an operator who
+  // intentionally turned the integration off doesn't see a false
+  // actionable error in their deploy logs.
+  const personaCronEnabled = (process.env.PERSONA_SYNC_CRON ?? "").toLowerCase() !== "off";
   const hasPersonaUser = !!process.env.PERSONA_USERNAME;
   const hasPersonaPass = !!process.env.PERSONA_PASSWORD;
-  if (!hasPersonaUser || !hasPersonaPass) {
+  if (personaCronEnabled && (!hasPersonaUser || !hasPersonaPass)) {
     try {
       const allTeams = await db.getAllFmTeams();
       const teamsExpectingPersona = allTeams.filter(t => (t as any).personaProjectId);
@@ -221,7 +225,7 @@ async function validateAutomationCredentials(): Promise<void> {
         const names = teamsExpectingPersona.map(t => t.teamName).join(", ");
         log.error(
           `[BootAudit] PERSONA_USERNAME/PERSONA_PASSWORD missing but ${teamsExpectingPersona.length} team(s) have personaProjectId configured: ${names}. ` +
-          `Persona auto-sync will skip every run; attendance data will go stale. Set both env vars and restart.`,
+          `Persona auto-sync will skip every run; attendance data will go stale. Set both env vars and restart, or set PERSONA_SYNC_CRON=off to silence.`,
           new Error("PERSONA_* credentials missing"),
         );
         issues.push("PERSONA_*");
