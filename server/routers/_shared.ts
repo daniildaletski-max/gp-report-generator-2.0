@@ -277,6 +277,7 @@ export async function generateExcelAndEmail(
   // the email every time they generate so they have a record in their
   // inbox; cheap, resend handles dedup on its side.
   let emailSent = false;
+  let emailFailureReason: string | null = null;
   if (ctx.user.email) {
     // Compute a quick stats summary for the email body — read-only,
     // best-effort. If anything throws we still send the email without
@@ -311,7 +312,7 @@ export async function generateExcelAndEmail(
       }
     })();
 
-    emailSent = await sendReportEmail({
+    const sendResult = await sendReportEmail({
       userEmail: ctx.user.email,
       userName: ctx.user.name || 'Floor Manager',
       teamName,
@@ -341,7 +342,9 @@ export async function generateExcelAndEmail(
       // Manual re-exports get the live timestamp.
       generatedAt: idempotent ? new Date(report.createdAt as any) : new Date(),
     });
-    log.info("Report email sent", { to: ctx.user.email, sent: emailSent, hasSheets: !!googleSheetsUrl });
+    emailSent = sendResult.success;
+    emailFailureReason = sendResult.reason ?? null;
+    log.info("Report email sent", { to: ctx.user.email, sent: emailSent, hasSheets: !!googleSheetsUrl, reason: emailFailureReason });
 
     // Overwrite the in-progress sentinel — but ONLY on the cron
     // (idempotent) path. Manual re-exports must not write
@@ -400,6 +403,7 @@ export async function generateExcelAndEmail(
     googleSheetsUrl,
     emailSent,
     emailAddress: ctx.user.email || null,
+    emailFailureReason,
   };
 }
 

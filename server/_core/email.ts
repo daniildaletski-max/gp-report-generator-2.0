@@ -92,12 +92,14 @@ export async function getFromAddress(opts?: { skipCache?: boolean }): Promise<st
 
 /**
  * Sends an email through Resend API.
- * Returns `true` if the email was sent successfully, `false` otherwise.
+ * Returns `{ success, reason? }` — the reason is a short
+ * human-readable string when the send fails, suitable for surfacing
+ * to the operator in a toast or log line.
  */
-export async function sendEmail(payload: EmailPayload): Promise<boolean> {
+export async function sendEmail(payload: EmailPayload): Promise<{ success: boolean; reason?: string }> {
   if (!ENV.resendApiKey) {
     console.warn("[Email] RESEND_API_KEY is not configured. Email will not be sent.");
-    return false;
+    return { success: false, reason: "RESEND_API_KEY not configured on the server" };
   }
 
   const resend = new Resend(ENV.resendApiKey);
@@ -122,22 +124,10 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
         html: payload.html,
         attachments: attachments.length > 0 ? attachments : undefined,
       },
-      // Resend v6 second-arg `RequestOptions`. When the caller passes
-      // an idempotency key, Resend will silently no-op a duplicate send
-      // for the same key — making retry-day re-runs safe even when an
-      // earlier marker-write failed after a successful send.
       payload.idempotencyKey ? { idempotencyKey: payload.idempotencyKey } : undefined,
     );
 
     if (error) {
-      // Distinguish the three failure modes so the operator sees
-      // WHY a send failed instead of just "Failed to send":
-      //   - validation/domain error  → from-address not verified;
-      //                                 silently caps deliveries to
-      //                                 the Resend account owner only
-      //   - 403 / forbidden          → also a domain-validation thing
-      //                                 in practice (free tier)
-      //   - everything else          → transient (network, 5xx)
       const errMsg = error.message ?? "";
       const errCode = (error as { name?: string }).name ?? "unknown";
       const isDomainIssue =
@@ -154,17 +144,21 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
         );
         cachedFromAddress = null;
         lastDomainCheck = 0;
-      } else {
-        console.warn(`[Email] Failed to send email to ${payload.to}: ${errMsg} (code=${errCode})`);
+        return {
+          success: false,
+          reason: `Resend rejected the send (${errCode}): from-address ${fromAddress} not allowed. ${errMsg}`,
+        };
       }
-      return false;
+      console.warn(`[Email] Failed to send email to ${payload.to}: ${errMsg} (code=${errCode})`);
+      return { success: false, reason: `Resend error (${errCode}): ${errMsg}` };
     }
 
     console.log(`[Email] Successfully sent email to ${payload.to} from ${fromAddress}, id: ${data?.id}`);
-    return true;
+    return { success: true };
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.warn("[Email] Error sending email:", error);
-    return false;
+    return { success: false, reason: `Send threw: ${msg}` };
   }
 }
 
@@ -210,7 +204,7 @@ export async function sendReportEmail(params: {
    * body) instead of a 409 (same key + different body).
    */
   generatedAt?: Date;
-}): Promise<boolean> {
+}): Promise<{ success: boolean; reason?: string }> {
   const { userEmail, userName, teamName, monthName, year, excelUrl, googleSheetsUrl, summary, idempotencyKey, generatedAt: generatedAtParam } = params;
 
   const subject = `Team Monthly Report — ${teamName} (${monthName} ${year})`;
