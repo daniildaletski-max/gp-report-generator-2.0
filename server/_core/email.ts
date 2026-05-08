@@ -105,11 +105,32 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
     );
 
     if (error) {
-      console.warn(`[Email] Failed to send email to ${payload.to}: ${error.message}`);
-      // If it's a domain validation error, reset cache so next attempt re-checks
-      if (error.message?.includes("verify a domain") || error.message?.includes("validation_error")) {
+      // Distinguish the three failure modes so the operator sees
+      // WHY a send failed instead of just "Failed to send":
+      //   - validation/domain error  → from-address not verified;
+      //                                 silently caps deliveries to
+      //                                 the Resend account owner only
+      //   - 403 / forbidden          → also a domain-validation thing
+      //                                 in practice (free tier)
+      //   - everything else          → transient (network, 5xx)
+      const errMsg = error.message ?? "";
+      const errCode = (error as { name?: string }).name ?? "unknown";
+      const isDomainIssue =
+        errMsg.includes("verify a domain") ||
+        errMsg.includes("validation_error") ||
+        errCode === "validation_error" ||
+        errCode === "restricted_api_key";
+      if (isDomainIssue) {
+        console.warn(
+          `[Email] Domain restriction rejected the send to ${payload.to} from ${fromAddress}. ` +
+          `Resend's free tier without a verified domain only delivers to the email that owns the account; ` +
+          `verify a domain at https://resend.com/domains and set the from-address to use it. ` +
+          `Original error: ${errMsg}`,
+        );
         cachedFromAddress = null;
         lastDomainCheck = 0;
+      } else {
+        console.warn(`[Email] Failed to send email to ${payload.to}: ${errMsg} (code=${errCode})`);
       }
       return false;
     }
