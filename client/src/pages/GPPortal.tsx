@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
+import { getScoreTone, SCORE_TONE_CLASSES } from "@/lib/scoreTone";
 import { MAX_TOTAL_SCORE, MAX_APPEARANCE_SCORE, MAX_GAME_PERFORMANCE_SCORE, SCORE_CONFIG, MONTH_NAMES } from "../../../shared/const";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
 import { getTips } from "@/lib/improvementTips";
@@ -26,28 +27,35 @@ import {
 } from "./gpPortal/components";
 
 /**
- * scoreColor — single source of truth for "what colour is this score?"
- * across the GP portal. Replaces the 5+ inline ternaries that all
- * had subtly different breakpoints (sometimes >=20 / >=18, sometimes
- * 18.5 etc) and returns a coordinated set of Tailwind classes for
- * text, bg, and a coloured dot.
+ * scoreColor — thin adapter around the app-wide `getScoreTone` helper.
  *
- * Tiers (% of max):
- *   90%+ : emerald  (excellent)
- *   75%+ : amber    (good)
- *   <75% : rose     (needs work)
- *   null score → slate (not yet rated)
+ * The GP Portal previously had its own thresholds (90%/75%) which
+ * disagreed with the rest of the app (Reports / Dashboard / charts
+ * use the 18/22 = 0.818 cutoff). Now everything reads from a single
+ * source of truth in `lib/scoreTone.ts`, so the same number paints
+ * the same colour everywhere it's shown.
+ *
+ * Returns a coordinated set of Tailwind classes for text, bg, border,
+ * and a coloured dot, plus a legacy `tier` string the existing
+ * callsites still read.
  */
 function scoreColor(score: number | null | undefined, max: number): {
   text: string; bg: string; border: string; dot: string; tier: "excellent" | "good" | "low" | "none";
 } {
-  if (score == null || max <= 0) {
+  const tone = getScoreTone(score, max);
+  if (tone === "neutral") {
     return { text: "text-slate-500", bg: "bg-slate-50", border: "border-slate-200", dot: "bg-slate-300", tier: "none" };
   }
-  const pct = score / max;
-  if (pct >= 0.9) return { text: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", dot: "bg-emerald-500", tier: "excellent" };
-  if (pct >= 0.75) return { text: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", dot: "bg-amber-500", tier: "good" };
-  return { text: "text-rose-700", bg: "bg-rose-50", border: "border-rose-200", dot: "bg-rose-500", tier: "low" };
+  const c = SCORE_TONE_CLASSES[tone];
+  const dot =
+    tone === "success" ? "bg-emerald-500"
+      : tone === "warning" ? "bg-amber-500"
+      : "bg-rose-500";
+  const tier =
+    tone === "success" ? "excellent"
+      : tone === "warning" ? "good"
+      : "low";
+  return { text: c.text, bg: c.bg, border: c.border, dot, tier };
 }
 
 export default function GPPortal() {

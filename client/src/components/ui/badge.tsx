@@ -17,6 +17,23 @@ const badgeVariants = cva(
           "border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20",
         outline:
           "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+        // ── Semantic variants ─────────────────────────────────────
+        // Use these by INTENT (success/warning/danger/info/neutral)
+        // rather than by color (green/red/blue) so the visual
+        // language stays consistent across the app even if the
+        // underlying palette changes. The color aliases below are
+        // kept for back-compat with code that already imports them.
+        success:
+          "border-emerald-200 bg-emerald-50 text-emerald-700",
+        warning:
+          "border-amber-200 bg-amber-50 text-amber-700",
+        danger:
+          "border-rose-200 bg-rose-50 text-rose-700",
+        info:
+          "border-blue-200 bg-blue-50 text-blue-700",
+        neutral:
+          "border-slate-200 bg-slate-50 text-slate-600",
+        // ── Color aliases (legacy) ────────────────────────────────
         green:
           "border-emerald-500/20 bg-emerald-500/15 text-emerald-400",
         violet:

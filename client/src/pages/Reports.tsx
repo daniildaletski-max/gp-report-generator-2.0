@@ -130,6 +130,11 @@ export default function ReportsPage() {
   });
 
   const [deletingReportId, setDeletingReportId] = useState<number | null>(null);
+  // Confirmation dialog state for the bulk "Generate ALL teams" action.
+  // Replaces a `window.confirm()` call so the prompt matches the rest
+  // of the design system (and so the user can scan / cancel without a
+  // browser-native blocking dialog).
+  const [showGenerateAllConfirm, setShowGenerateAllConfirm] = useState(false);
 
   // Statistics
   const stats = useMemo(() => {
@@ -384,9 +389,9 @@ export default function ReportsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'finalized':
-        return <Badge className="bg-green-500/20 text-green-400 border border-green-500/30">Finalized</Badge>;
+        return <Badge variant="success">Finalized</Badge>;
       case 'generated':
-        return <Badge variant="secondary">Generated</Badge>;
+        return <Badge variant="warning">Generated</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -443,14 +448,7 @@ export default function ReportsPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="outline"
-              onClick={() => {
-                const now = new Date();
-                if (!confirm(`Generate Team Monthly Overview reports for ALL teams for ${now.toLocaleString('en-US', { month: 'long', year: 'numeric' })}?\n\nEach team's report will be created and emailed to its FM.`)) return;
-                generateAllMutation.mutate({
-                  reportMonth: now.getMonth() + 1,
-                  reportYear: now.getFullYear(),
-                });
-              }}
+              onClick={() => setShowGenerateAllConfirm(true)}
               disabled={generateAllMutation.isPending}
               title="Generate + email reports for every team in one click"
             >
@@ -889,10 +887,12 @@ export default function ReportsPage() {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => setViewingReport(item)}
+                            aria-label="View report"
+                            title="View report"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          
+
                           {/* Download/Export Excel */}
                           {item.report.excelFileUrl ? (
                             <>
@@ -901,6 +901,7 @@ export default function ReportsPage() {
                                 size="icon"
                                 className="h-8 w-8"
                                 onClick={() => window.open(item.report.excelFileUrl!, "_blank")}
+                                aria-label="Download Excel"
                                 title="Download Excel"
                               >
                                 <Download className="h-4 w-4" />
@@ -911,6 +912,7 @@ export default function ReportsPage() {
                                 className="h-8 w-8"
                                 onClick={() => handleExport(item.report.id)}
                                 disabled={isExporting === item.report.id}
+                                aria-label="Regenerate Excel"
                                 title="Regenerate Excel"
                               >
                                 {isExporting === item.report.id ? (
@@ -927,6 +929,7 @@ export default function ReportsPage() {
                               className="h-8 w-8"
                               onClick={() => handleExport(item.report.id)}
                               disabled={isExporting === item.report.id}
+                              aria-label="Export to Excel"
                               title="Export to Excel"
                             >
                               {isExporting === item.report.id ? (
@@ -936,7 +939,7 @@ export default function ReportsPage() {
                               )}
                             </Button>
                           )}
-                          
+
                           {/* Google Sheets Export */}
                           {googleSheetsStatus?.available && (
                             <Button
@@ -945,6 +948,7 @@ export default function ReportsPage() {
                               className="h-8 w-8 text-green-400 hover:text-green-300"
                               onClick={() => handleGoogleSheetsExport(item.report.id)}
                               disabled={isExportingSheets === item.report.id}
+                              aria-label={item.report.googleSheetsUrl ? "Regenerate Google Sheet" : "Export to Google Sheets"}
                               title={item.report.googleSheetsUrl ? "Regenerate Google Sheet" : "Export to Google Sheets"}
                             >
                               {isExportingSheets === item.report.id ? (
@@ -954,7 +958,7 @@ export default function ReportsPage() {
                               )}
                             </Button>
                           )}
-                          
+
                           {/* Open existing Google Sheet */}
                           {item.report.googleSheetsUrl && (
                             <Button
@@ -962,6 +966,7 @@ export default function ReportsPage() {
                               size="icon"
                               className="h-8 w-8 text-green-400 hover:text-green-300"
                               onClick={() => window.open(item.report.googleSheetsUrl!, "_blank")}
+                              aria-label="Open Google Sheet"
                               title="Open Google Sheet"
                             >
                               <ExternalLink className="h-4 w-4" />
@@ -976,6 +981,8 @@ export default function ReportsPage() {
                                 size="icon"
                                 className="h-8 w-8 text-destructive hover:text-destructive"
                                 disabled={deletingReportId === item.report.id}
+                                aria-label="Delete report"
+                                title="Delete report"
                               >
                                 {deletingReportId === item.report.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1053,7 +1060,7 @@ export default function ReportsPage() {
               <div className="flex items-center gap-2">
                 {getStatusBadge(viewingReport.report.status)}
                 {viewingReport.report.excelFileUrl && (
-                  <Badge variant="outline" className="bg-green-500/20 text-green-400 border-green-500/30">
+                  <Badge variant="success">
                     <Download className="h-3 w-3 mr-1" />
                     Exported
                   </Badge>
@@ -1068,6 +1075,8 @@ export default function ReportsPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => copyToClipboard(viewingReport.report.fmPerformance, "FM Performance")}
+                      aria-label="Copy FM Performance to clipboard"
+                      title="Copy to clipboard"
                     >
                       <Copy className="h-3 w-3" />
                     </Button>
@@ -1077,7 +1086,7 @@ export default function ReportsPage() {
                   </div>
                 </div>
               )}
-              
+
               {viewingReport.report.goalsThisMonth && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -1086,6 +1095,8 @@ export default function ReportsPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => copyToClipboard(viewingReport.report.goalsThisMonth, "Goals")}
+                      aria-label="Copy Goals to clipboard"
+                      title="Copy to clipboard"
                     >
                       <Copy className="h-3 w-3" />
                     </Button>
@@ -1095,7 +1106,7 @@ export default function ReportsPage() {
                   </div>
                 </div>
               )}
-              
+
               {viewingReport.report.teamOverview && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -1104,6 +1115,8 @@ export default function ReportsPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => copyToClipboard(viewingReport.report.teamOverview, "Team Overview")}
+                      aria-label="Copy Team Overview to clipboard"
+                      title="Copy to clipboard"
                     >
                       <Copy className="h-3 w-3" />
                     </Button>
@@ -1168,6 +1181,35 @@ export default function ReportsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Bulk-generate confirmation — replaces a window.confirm() with
+          a design-system-consistent AlertDialog. */}
+      <AlertDialog open={showGenerateAllConfirm} onOpenChange={setShowGenerateAllConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Generate reports for ALL teams?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Creates a Team Monthly Overview for every team for{" "}
+              <strong>{new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}</strong>.
+              Each team's report will be generated and emailed to its FM. Existing reports for this period are skipped.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const now = new Date();
+                generateAllMutation.mutate({
+                  reportMonth: now.getMonth() + 1,
+                  reportYear: now.getFullYear(),
+                });
+              }}
+            >
+              Generate all
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1269,15 +1311,15 @@ function CoverageMatrix({
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
+            <Badge variant="success" className="rounded-full px-2.5 py-1 gap-1.5">
               <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />Finalized
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700">
+            </Badge>
+            <Badge variant="warning" className="rounded-full px-2.5 py-1 gap-1.5">
               <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />Draft
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200 text-slate-500">
+            </Badge>
+            <Badge variant="neutral" className="rounded-full px-2.5 py-1 gap-1.5">
               <span className="h-2 w-2 rounded-full border border-slate-300 bg-slate-100 shrink-0" />Missing
-            </span>
+            </Badge>
           </div>
         </div>
       </CardHeader>
