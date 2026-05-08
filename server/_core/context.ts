@@ -30,12 +30,20 @@ export async function createContext(
         // Best-effort — fall back to the SDK-cached user on DB error.
       }
     }
-    // Env-based admin override — any email listed in `ADMIN_EMAILS`
-    // is treated as admin without touching the DB. Lets the system
-    // creator keep admin access across DB resets and bootstrap
-    // a brand-new install before any DB-level admin exists.
-    if (user?.email && ENV.adminEmails.includes(user.email.trim().toLowerCase())) {
-      user = { ...user, role: "admin" };
+    // Env-based admin override — any user whose openId matches
+    // OWNER_OPEN_ID, or whose email is listed in ADMIN_EMAILS, is
+    // treated as admin without touching the DB. Lets the system
+    // creator keep admin access across DB resets and bootstrap a
+    // brand-new install before any DB-level admin exists. The
+    // existing ownerOpenId path on user-upsert only fires on the
+    // FIRST sign-in, so without this an owner whose row was created
+    // before OWNER_OPEN_ID was wired up stays role='user' forever.
+    if (user) {
+      const isOwnerByOpenId = ENV.ownerOpenId && user.openId === ENV.ownerOpenId;
+      const isAdminByEmail = !!user.email && ENV.adminEmails.includes(user.email.trim().toLowerCase());
+      if (isOwnerByOpenId || isAdminByEmail) {
+        user = { ...user, role: "admin" };
+      }
     }
   } catch (error) {
     // Authentication is optional for public procedures.
