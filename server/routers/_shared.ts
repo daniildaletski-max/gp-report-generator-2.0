@@ -20,6 +20,40 @@ import { createLogger } from "../services/logger";
 
 const log = createLogger("Router");
 
+type ReportRecipient = {
+  user: { id: number; role: string; email?: string | null; name?: string | null };
+  fallbackToCaller: boolean;
+};
+
+/**
+ * Routes the Team Monthly Overview email to the team's Floor Manager
+ * (the user the team is linked to via `fmTeams.userId`) instead of the
+ * caller. Falls back to the caller only when the team has no FM linked
+ * or the linked FM has no email on file — matching the bulk-generate
+ * behaviour so single and bulk paths stay consistent.
+ */
+export async function resolveReportRecipient(
+  ctx: { user: { id: number; role: string; email?: string | null; name?: string | null } },
+  team: { userId?: number | null },
+): Promise<ReportRecipient> {
+  if (team.userId && team.userId !== ctx.user.id) {
+    const owner = await db.getUserById(team.userId);
+    if (owner?.email) {
+      return {
+        user: {
+          id: owner.id,
+          role: owner.role ?? "user",
+          email: owner.email,
+          name: owner.name ?? null,
+        },
+        fallbackToCaller: false,
+      };
+    }
+    return { user: ctx.user, fallbackToCaller: true };
+  }
+  return { user: ctx.user, fallbackToCaller: false };
+}
+
 export async function generateExcelAndEmail(
   ctx: { user: { id: number; role: string; email?: string | null; name?: string | null } },
   reportId: number,

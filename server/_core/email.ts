@@ -57,15 +57,23 @@ export async function getFromAddress(opts?: { skipCache?: boolean }): Promise<st
   try {
     const resend = new Resend(ENV.resendApiKey);
     const { data } = await resend.domains.list();
-    const verifiedDomain = data?.data?.find(
-      (d: any) => d.status === "verified" || d.status === "active"
-    );
+    // Accept any status where DKIM + SPF are good enough for sending.
+    // Resend's dashboard shows "Partially Verified" when sending records
+    // are green but the optional receiving MX is still pending — that
+    // domain is fully usable for outbound mail and the API surfaces it
+    // as `verified` (or `active` on legacy keys, `partially_verified`
+    // on newer ones). Without `partially_verified` here we'd ignore a
+    // perfectly good sending domain and silently fall back to
+    // resend.dev — which only delivers to the account owner.
+    const sendableStatuses = new Set(["verified", "active", "partially_verified"]);
+    const verifiedDomain = data?.data?.find((d: any) => sendableStatuses.has(d.status));
     if (verifiedDomain) {
       resolved = `GP Report Generator <reports@${verifiedDomain.name}>`;
-      console.log(`[Email] Using verified domain: ${verifiedDomain.name}`);
+      console.log(`[Email] Using verified domain: ${verifiedDomain.name} (status=${verifiedDomain.status})`);
     } else {
+      const seenStatuses = data?.data?.map((d: any) => `${d.name}:${d.status}`).join(", ") || "(none)";
       resolved = "GP Report Generator <reports@resend.dev>";
-      console.log("[Email] No verified domain found, using resend.dev fallback");
+      console.log(`[Email] No verified domain found, using resend.dev fallback. Domains seen: ${seenStatuses}`);
     }
   } catch (err) {
     console.warn("[Email] Failed to check domains, using resend.dev fallback:", err);
