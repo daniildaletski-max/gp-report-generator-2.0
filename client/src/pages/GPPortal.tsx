@@ -533,6 +533,57 @@ export default function GPPortal() {
           }
         />
 
+        {/* Big achievement progress banner — replaces the previous quiet
+            "X/6" pill in the Achievements section header with a full-
+            width hero strip the GP sees as soon as they scroll past the
+            pulse. Hard to miss; reinforces how close they are to the
+            next reward. */}
+        {(() => {
+          const unlocked = achievements.filter(a => a.unlocked).length;
+          const total = achievements.length;
+          if (total === 0) return null;
+          const pct = total > 0 ? (unlocked / total) * 100 : 0;
+          const remaining = total - unlocked;
+          return (
+            <section className="relative overflow-hidden rounded-3xl border border-amber-200/60 bg-gradient-to-r from-amber-50 via-white to-yellow-50 shadow-lg shadow-amber-100/40">
+              <div className="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-gradient-to-br from-amber-300/40 to-yellow-300/40 blur-3xl pointer-events-none" aria-hidden />
+              <div className="relative p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+                <div className="flex items-center gap-4 min-w-0 flex-1">
+                  <div className="shrink-0 h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center shadow-lg shadow-amber-200/60">
+                    <Trophy className="h-7 w-7 sm:h-8 sm:w-8 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-amber-700">Achievements</p>
+                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
+                      <span className="tabular-nums">{unlocked}</span>
+                      <span className="text-amber-400 mx-1">/</span>
+                      <span className="tabular-nums text-amber-600">{total}</span>
+                      <span className="text-slate-400 font-bold ml-2 text-base sm:text-lg">unlocked</span>
+                    </h2>
+                    <p className="text-sm text-slate-500 mt-0.5">
+                      {remaining === 0
+                        ? "🎉 You've unlocked everything — legendary!"
+                        : `${remaining} reward${remaining === 1 ? "" : "s"} away from a perfect collection`}
+                    </p>
+                  </div>
+                </div>
+                {/* Big progress bar — shown right of the title on desktop, below on mobile */}
+                <div className="sm:max-w-sm w-full">
+                  <div className="relative h-3 rounded-full bg-slate-100 overflow-hidden shadow-inner">
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 shadow-md transition-[width] duration-700 ease-out"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-slate-400 text-right tabular-nums font-semibold">
+                    {pct.toFixed(0)}%
+                  </p>
+                </div>
+              </div>
+            </section>
+          );
+        })()}
+
         {/* Score Overview Cards — with month-over-month delta chips per category */}
         <section>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
