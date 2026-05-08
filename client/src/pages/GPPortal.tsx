@@ -274,20 +274,59 @@ export default function GPPortal() {
   const achievements = useMemo(() => {
     if (!data) return [];
     const totalEvals = data.evaluations.length;
-    const avgScore = totalEvals > 0 
-      ? data.evaluations.reduce((s: number, e: any) => s + (e.totalScore || 0), 0) / totalEvals 
+    const avgScore = totalEvals > 0
+      ? data.evaluations.reduce((s: number, e: any) => s + (e.totalScore || 0), 0) / totalEvals
       : 0;
     const perfectScores = data.evaluations.filter((e: any) => (e.totalScore || 0) >= MAX_TOTAL_SCORE).length;
     const mistakes = data.monthlyStats?.current?.mistakes ?? 0;
     const attitude = data.monthlyStats?.current?.attitude ?? 0;
-    
+    const bestScore = totalEvals > 0
+      ? Math.max(...data.evaluations.map((e: any) => e.totalScore || 0))
+      : 0;
+
+    // Each badge surfaces a progress hint when locked so the GP can see
+    // how close they are to the next unlock — turns the locked column
+    // from "missing rewards" into "next goals".
     return [
-      { icon: Star, title: 'First Steps', description: 'Complete your first evaluation', unlocked: totalEvals >= 1, color: 'bg-amber-50 border-amber-200' },
-      { icon: Flame, title: 'On Fire', description: 'Complete 5 evaluations', unlocked: totalEvals >= 5, color: 'bg-orange-50 border-orange-200' },
-      { icon: Crown, title: 'Excellence', description: 'Average score above 20', unlocked: avgScore >= 20, color: 'bg-yellow-50 border-yellow-200' },
-      { icon: Gem, title: 'Perfect Score', description: `Get a perfect ${MAX_TOTAL_SCORE}/${MAX_TOTAL_SCORE}`, unlocked: perfectScores > 0, color: 'bg-purple-50 border-purple-200' },
-      { icon: Shield, title: 'Flawless', description: 'Zero mistakes this month', unlocked: mistakes === 0, color: 'bg-green-50 border-green-200' },
-      { icon: Heart, title: 'Team Player', description: 'Positive attitude score', unlocked: attitude > 0, color: 'bg-pink-50 border-pink-200' },
+      {
+        icon: Star, title: 'First Steps', description: 'Complete your first evaluation',
+        unlocked: totalEvals >= 1, color: 'bg-amber-50 border-amber-200',
+        progress: Math.min(1, totalEvals / 1),
+        progressLabel: totalEvals >= 1 ? null : "0 / 1 evaluations",
+      },
+      {
+        icon: Flame, title: 'On Fire', description: 'Complete 5 evaluations',
+        unlocked: totalEvals >= 5, color: 'bg-orange-50 border-orange-200',
+        progress: Math.min(1, totalEvals / 5),
+        progressLabel: totalEvals >= 5 ? null : `${totalEvals} / 5 evals`,
+      },
+      {
+        icon: Crown, title: 'Excellence', description: 'Average score above 20',
+        unlocked: avgScore >= 20, color: 'bg-yellow-50 border-yellow-200',
+        progress: avgScore >= 20 ? 1 : Math.max(0, Math.min(1, avgScore / 20)),
+        progressLabel: avgScore >= 20 ? null : `${avgScore.toFixed(1)} / 20 avg`,
+      },
+      {
+        icon: Gem, title: 'Perfect Score', description: `Get a perfect ${MAX_TOTAL_SCORE}/${MAX_TOTAL_SCORE}`,
+        unlocked: perfectScores > 0, color: 'bg-purple-50 border-purple-200',
+        // Progress here = how close their best ever is to a perfect run.
+        progress: perfectScores > 0 ? 1 : Math.max(0, Math.min(1, bestScore / MAX_TOTAL_SCORE)),
+        progressLabel: perfectScores > 0 ? null : `Best ${bestScore} / ${MAX_TOTAL_SCORE}`,
+      },
+      {
+        icon: Shield, title: 'Flawless', description: 'Zero mistakes this month',
+        unlocked: mistakes === 0, color: 'bg-green-50 border-green-200',
+        // Once a mistake lands the badge is gone for the month — nothing
+        // to "progress" toward, so leave it as a clean lock.
+        progress: null,
+        progressLabel: mistakes === 0 ? null : `${mistakes} mistake${mistakes === 1 ? "" : "s"} so far`,
+      },
+      {
+        icon: Heart, title: 'Team Player', description: 'Positive attitude score',
+        unlocked: attitude > 0, color: 'bg-pink-50 border-pink-200',
+        progress: null,
+        progressLabel: attitude > 0 ? null : "Earn positive feedback",
+      },
     ];
   }, [data]);
 
@@ -442,6 +481,26 @@ export default function GPPortal() {
                 ? new Date(recentEvaluations[0].evaluationDate)
                 : null
             }
+            // Pin a concrete next-step to the hero so the GP sees what
+            // separates them from the next tier — keeps motivation
+            // anchored to the same vocabulary as the badge inside the
+            // ring. `null` while already at Elite (top tier).
+            nextTier={(() => {
+              const pct = (avgScore / MAX_TOTAL_SCORE) * 100;
+              const thresholds = [
+                { name: "Pro", pct: 80 },
+                { name: "Solid", pct: 70 },
+                { name: "Rising", pct: 50 },
+              ];
+              if (pct >= 90) return null;
+              const next = pct >= 80 ? { name: "Elite", pct: 90 }
+                : pct >= 70 ? thresholds[0]
+                : pct >= 50 ? thresholds[1]
+                : thresholds[2];
+              const target = (next.pct / 100) * MAX_TOTAL_SCORE;
+              const pointsAway = Math.max(0.1, target - avgScore);
+              return { nextName: next.name, pointsAway };
+            })()}
           />
         )}
 
@@ -595,20 +654,35 @@ export default function GPPortal() {
             Monthly Details panel (where the date-filter bug fix is visible) is
             never more than one click away. Active tab persists in `?tab=`. */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="bg-white border border-slate-200 shadow-sm h-auto p-1 grid grid-cols-4 w-full sm:w-auto sm:inline-flex gap-1">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm py-2 px-3 text-xs sm:text-sm font-semibold">
+          {/* Pill-style tab bar — softer rounding, gold gradient on active,
+              tighter spacing. Keeps icons-only on mobile, icon+label on
+              desktop so the strip doesn't crowd small screens. */}
+          <TabsList className="bg-white/80 backdrop-blur-sm border border-slate-200/80 shadow-sm h-auto p-1 rounded-2xl grid grid-cols-4 w-full sm:w-auto sm:inline-flex gap-1">
+            <TabsTrigger
+              value="overview"
+              className="rounded-xl data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/50 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:bg-amber-50/60 transition-all duration-200 py-2 px-3 text-xs sm:text-sm font-semibold"
+            >
               <LayoutDashboard className="h-3.5 w-3.5 sm:mr-1.5" />
               <span className="hidden sm:inline">Overview</span>
             </TabsTrigger>
-            <TabsTrigger value="trend" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm py-2 px-3 text-xs sm:text-sm font-semibold">
+            <TabsTrigger
+              value="trend"
+              className="rounded-xl data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/50 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:bg-amber-50/60 transition-all duration-200 py-2 px-3 text-xs sm:text-sm font-semibold"
+            >
               <TrendingUp className="h-3.5 w-3.5 sm:mr-1.5" />
               <span className="hidden sm:inline">Trend</span>
             </TabsTrigger>
-            <TabsTrigger value="evaluations" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm py-2 px-3 text-xs sm:text-sm font-semibold">
+            <TabsTrigger
+              value="evaluations"
+              className="rounded-xl data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/50 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:bg-amber-50/60 transition-all duration-200 py-2 px-3 text-xs sm:text-sm font-semibold"
+            >
               <Eye className="h-3.5 w-3.5 sm:mr-1.5" />
               <span className="hidden sm:inline">Evaluations</span>
             </TabsTrigger>
-            <TabsTrigger value="month" className="data-[state=active]:bg-amber-500 data-[state=active]:text-white data-[state=active]:shadow-sm py-2 px-3 text-xs sm:text-sm font-semibold">
+            <TabsTrigger
+              value="month"
+              className="rounded-xl data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/50 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:bg-amber-50/60 transition-all duration-200 py-2 px-3 text-xs sm:text-sm font-semibold"
+            >
               <Calendar className="h-3.5 w-3.5 sm:mr-1.5" />
               <span className="hidden sm:inline">Month</span>
             </TabsTrigger>
@@ -628,6 +702,7 @@ export default function GPPortal() {
                     value={totalEvals}
                     label="Total Evaluations"
                     color="bg-amber-50"
+                    hint={totalEvals === 0 ? "No evals logged yet" : null}
                   />
                   <StatCard
                     icon={AlertTriangle}
@@ -636,18 +711,24 @@ export default function GPPortal() {
                     color="bg-red-50"
                     trend={data.monthlyStats?.previous ?
                       (data.monthlyStats.current?.mistakes ?? 0) - (data.monthlyStats.previous.mistakes ?? 0) : undefined}
+                    trendIsPositiveWhenDown
+                    hint={(data.monthlyStats?.current?.mistakes ?? 0) === 0 ? "Clean month so far" : null}
                   />
                   <StatCard
                     icon={ThumbsUp}
                     value={data.monthlyStats?.current?.attitude ?? 0}
                     label="Attitude Score"
                     color="bg-green-50"
+                    trend={data.monthlyStats?.previous ?
+                      (data.monthlyStats.current?.attitude ?? 0) - (data.monthlyStats.previous.attitude ?? 0) : undefined}
+                    hint={(data.monthlyStats?.current?.attitude ?? 0) === 0 ? "No feedback yet this month" : null}
                   />
                   <StatCard
                     icon={Gamepad2}
                     value={data.monthlyStats?.current?.totalGames ?? 0}
                     label="Total Games"
                     color="bg-blue-50"
+                    hint={(data.monthlyStats?.current?.totalGames ?? 0) === 0 ? "Logged automatically from evals" : null}
                   />
                 </div>
               </div>
