@@ -1204,7 +1204,10 @@ function CoverageMatrix({
       out.push({
         month: d.getMonth() + 1,
         year: d.getFullYear(),
-        label: d.toLocaleString("en-US", { month: "short", year: "2-digit" }),
+        // Full 4-digit year so the header reads unambiguously — the
+        // earlier `year: "2-digit"` produced "MAY 26" which the FM
+        // misread as "May 26th" instead of "May 2026".
+        label: d.toLocaleString("en-US", { month: "short", year: "numeric" }),
       });
     }
     return out;
