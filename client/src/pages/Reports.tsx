@@ -305,12 +305,14 @@ export default function ReportsPage() {
       // Automatically export to Excel and send email with attachment
       let emailSent = false;
       let emailAddress: string | null = null;
+      let emailFailureReason: string | null = null;
       let excelUrl: string | null = null;
       try {
         setGenerationStep(2);
         const exportResult = await exportMutation.mutateAsync({ reportId: result.id });
         emailSent = exportResult.emailSent;
         emailAddress = exportResult.emailAddress;
+        emailFailureReason = (exportResult as any).emailFailureReason ?? null;
         excelUrl = exportResult.excelUrl;
         setGenerationStep(3);
       } catch (exportError: any) {
@@ -326,6 +328,17 @@ export default function ReportsPage() {
             <span className="text-xs text-green-200">📧 Excel report sent to {emailAddress}</span>
           </div>,
           { duration: 6000 }
+        );
+      } else if (emailAddress && emailFailureReason) {
+        // Surface the real Resend failure to the operator so they can
+        // fix the underlying issue (domain verification, API key, etc.)
+        // rather than chasing a vague "pending" hint.
+        toast.error(
+          <div className="flex flex-col gap-1">
+            <span>Report generated, but email to {emailAddress} failed</span>
+            <span className="text-xs opacity-90">{emailFailureReason}</span>
+          </div>,
+          { duration: 10000 }
         );
       } else if (excelUrl) {
         toast.success("Report generated & Excel exported successfully");
@@ -372,7 +385,18 @@ export default function ReportsPage() {
           { duration: 5000 }
         );
       } else if (result.emailAddress) {
-        toast.success("Excel file generated. Email delivery pending...");
+        // Email resolution succeeded, but Resend rejected the send.
+        // Surface the actual reason so the operator can act
+        // (verify domain / set RESEND_API_KEY / check Resend dashboard)
+        // instead of seeing a vague "delivery pending" hint.
+        const reason = (result as any).emailFailureReason as string | null | undefined;
+        toast.error(
+          <div className="flex flex-col gap-1">
+            <span>Excel file generated, but email to {result.emailAddress} failed</span>
+            {reason && <span className="text-xs opacity-90">{reason}</span>}
+          </div>,
+          { duration: 10000 }
+        );
       } else {
         toast.success("Excel file generated with embedded chart");
       }
