@@ -168,6 +168,27 @@ async function ensureRealNameColumn(): Promise<void> {
 }
 
 /**
+ * Idempotent schema repair for `fm_teams.managerEmail`. Mirror of
+ * `ensureRealNameColumn` — Manus's deploy pipeline doesn't run the
+ * drizzle migration files (`drizzle/0024_team_manager_email.sql`),
+ * so without this every query against `fm_teams` after PR #97 fails
+ * with "Unknown column 'managerEmail' in field list" and the Reports
+ * page goes blank.
+ */
+async function ensureManagerEmailColumn(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.execute(sql`ALTER TABLE \`fm_teams\` ADD COLUMN \`managerEmail\` varchar(320) NULL`);
+    log.info("Schema repair: added `managerEmail` column to fm_teams");
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    if (/Duplicate column|already exists/i.test(msg)) return;
+    throw e;
+  }
+}
+
+/**
  * Boot-time credential audit for the automation pipeline.
  *
  * History: misconfigured env vars used to fail silently — `RESEND_API_KEY`
@@ -464,6 +485,9 @@ async function startServer() {
     // MySQL throws "Duplicate column" which we swallow.
     ensureRealNameColumn().catch(err => {
       log.warn("realName boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    ensureManagerEmailColumn().catch(err => {
+      log.warn("managerEmail boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
     });
     // Automation credentials audit — surfaces missing RESEND_API_KEY /
     // PERSONA_* / STUDIOWORKS_* env vars in deploy logs so operators
