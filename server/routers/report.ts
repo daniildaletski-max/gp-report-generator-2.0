@@ -558,6 +558,13 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         reportData: { stats, attendance },
         status: "generated",
         generatedById: ctx.user.id,
+        // Pin the report to the team's owner so the team's FM can
+        // re-export it later, mirroring `generateAllForMonth`. Without
+        // this `report.userId` stays null and the access check in
+        // `exportToExcel` blocks even the FM who owns the team — which
+        // surfaced as "Access denied: You can only export your own
+        // reports" when admins clicked Regenerate on a non-admin team.
+        userId: team.userId ?? ctx.user.id,
       });
 
       await notifyOwner({
