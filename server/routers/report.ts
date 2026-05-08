@@ -6,7 +6,7 @@ import { MONTH_NAMES } from "@shared/const";
 import { invokeLLM } from "../_core/llm";
 import { notifyOwner } from "../_core/notification";
 import { exportToGoogleSheets, isGoogleSheetsAvailable } from "../services/googleSheetsService";
-import { generateExcelAndEmail, extractEvaluationFromImage, parseEvaluationDate, EvaluationDataSchema } from "./_shared";
+import { generateExcelAndEmail, resolveReportRecipient, extractEvaluationFromImage, parseEvaluationDate, EvaluationDataSchema } from "./_shared";
 import { createLogger } from "../services/logger";
 const log = createLogger("Router");
 
@@ -565,9 +565,20 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         content: `A new Team Monthly Overview report has been generated for ${team.teamName} - ${MONTH_NAMES[input.reportMonth - 1]} ${input.reportYear}`,
       });
 
-      await generateExcelAndEmail(ctx, report.id);
+      // Route the email to the team's Floor Manager so each manager
+      // receives their own team's report on their own inbox — even
+      // when an admin triggered the generation. Falls back to the
+      // caller only when the team has no FM linked or the linked FM
+      // has no email on file.
+      const recipient = await resolveReportRecipient(ctx, team);
+      const result = await generateExcelAndEmail(recipient, report.id);
 
-      return { ...report };
+      return {
+        ...report,
+        emailSent: result.emailSent,
+        recipientEmail: recipient.user.email ?? null,
+        fallbackToCaller: recipient.fallbackToCaller,
+      };
     }),
 
   /**
@@ -633,46 +644,21 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
             generatedById: ctx.user.id,
             userId: team.userId ?? ctx.user.id,
           });
-          // Email recipient: when an admin runs the bulk job they
-          // shouldn't get every team's email — each report belongs to
-          // a different FM. Look up the team owner's email/name so
-          // generateExcelAndEmail addresses the message to them. Fall
-          // back to the caller's email when the team has no owner OR
-          // the FM exists but has no email on file. We track this
-          // fallback explicitly so the result can warn the operator
-          // that "5 reports succeeded, but 3 ended up in YOUR inbox
-          // because the FMs aren't configured" — surfaces the misconfig
-          // instead of silently dumping everything on the admin.
-          let recipientCtx: { user: { id: number; role: string; email?: string | null; name?: string | null } } = ctx;
-          let fallbackToCaller = false;
-          if (team.userId && team.userId !== ctx.user.id) {
-            const owner = await db.getUserById(team.userId);
-            if (owner?.email) {
-              recipientCtx = {
-                user: {
-                  id: owner.id,
-                  role: owner.role ?? "fm",
-                  email: owner.email,
-                  name: owner.name ?? null,
-                },
-              };
-            } else {
-              // FM linked but no email → admin's inbox catches it.
-              fallbackToCaller = true;
-            }
-          } else if (!team.userId) {
-            // No FM linked at all → admin's inbox catches it.
-            fallbackToCaller = true;
-          }
-          const result = await generateExcelAndEmail(recipientCtx, report.id);
+          // Each report belongs to a different FM, so route the
+          // email to the team owner via the shared resolver. Falls
+          // back to the caller (admin) only when the team has no
+          // owner or the owner has no email — surfaced via
+          // `fallbackToCaller` so the toast can warn the operator.
+          const recipient = await resolveReportRecipient(ctx, team);
+          const result = await generateExcelAndEmail(recipient, report.id);
           results.push({
             teamId: team.id,
             teamName: team.teamName,
             status: "success",
             reportId: report.id,
             emailSent: result.emailSent,
-            recipientEmail: recipientCtx.user.email ?? null,
-            fallbackToCaller,
+            recipientEmail: recipient.user.email ?? null,
+            fallbackToCaller: recipient.fallbackToCaller,
           });
         } catch (e) {
           log.error(`Bulk generate failed for team ${team.id}`, e instanceof Error ? e : new Error(String(e)));
@@ -719,7 +705,13 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       // Overview text in the Reports UI). Opt out of the Resend
       // idempotency key so the second send actually goes through
       // instead of being silently dedup'd against the original.
-      return generateExcelAndEmail(ctx, input.reportId, { idempotent: false });
+      //
+      // Route to the team's FM so a re-export from an admin still
+      // lands in the manager's inbox, matching the `generate` path.
+      const reportWithTeam = await db.getReportWithTeam(input.reportId);
+      if (!reportWithTeam) throw new TRPCError({ code: 'NOT_FOUND', message: 'Report not found' });
+      const recipient = await resolveReportRecipient(ctx, reportWithTeam.team ?? { userId: null });
+      return generateExcelAndEmail(recipient, input.reportId, { idempotent: false });
     }),
 
   exportToGoogleSheets: protectedProcedure
