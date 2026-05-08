@@ -2,6 +2,7 @@ import type { CreateExpressContextOptions } from "@trpc/server/adapters/express"
 import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
 import { getUserById } from "../db/users";
+import { ENV } from "./env";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -28,6 +29,13 @@ export async function createContext(
       } catch {
         // Best-effort — fall back to the SDK-cached user on DB error.
       }
+    }
+    // Env-based admin override — any email listed in `ADMIN_EMAILS`
+    // is treated as admin without touching the DB. Lets the system
+    // creator keep admin access across DB resets and bootstrap
+    // a brand-new install before any DB-level admin exists.
+    if (user?.email && ENV.adminEmails.includes(user.email.trim().toLowerCase())) {
+      user = { ...user, role: "admin" };
     }
   } catch (error) {
     // Authentication is optional for public procedures.

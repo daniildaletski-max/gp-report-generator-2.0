@@ -9,4 +9,16 @@ export const ENV = {
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   cookieDomain: process.env.COOKIE_DOMAIN ?? "",
+  /**
+   * Comma-separated list of email addresses that should always be
+   * treated as admins, regardless of `users.role` in the DB. Use
+   * this to bootstrap the first admin without manual SQL — and to
+   * keep the system creator's account admin across DB resets.
+   *
+   * Example: `ADMIN_EMAILS=daniil.daletski@studioworks.ee,ops@…`
+   */
+  adminEmails: (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean),
 };
