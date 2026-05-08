@@ -187,19 +187,24 @@ export function PerformancePulseHero({
   const dashOffset = circumference * (1 - pct / 100);
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-amber-200/50 shadow-lg shadow-amber-100/40">
-      {/* Layered background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white via-amber-50/40 to-yellow-50" aria-hidden />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(251,191,36,0.12),transparent_60%)]" aria-hidden />
-      <div className={`absolute -top-24 -right-20 h-72 w-72 rounded-full blur-3xl opacity-30 bg-gradient-to-br ${tierAccent}`} aria-hidden />
+    <section className="relative overflow-hidden rounded-3xl border border-amber-200/60 shadow-2xl shadow-amber-200/30">
+      {/* Layered background — richer gradient + subtle moving glow */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white via-amber-50/60 to-yellow-50" aria-hidden />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(251,191,36,0.18),transparent_60%)]" aria-hidden />
+      <div className={`absolute -top-32 -right-24 h-96 w-96 rounded-full blur-3xl opacity-40 bg-gradient-to-br ${tierAccent}`} aria-hidden />
+      <div className="absolute -bottom-24 -left-24 h-72 w-72 rounded-full blur-3xl opacity-30 bg-gradient-to-tr from-amber-200/60 to-yellow-200/60" aria-hidden />
       {/* Gold shimmer line at top */}
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-400 to-transparent" aria-hidden />
+      {/* Subtle decorative dot grid */}
+      <div className="absolute inset-0 opacity-[0.04] [background-image:radial-gradient(circle,_#000_1px,_transparent_1px)] [background-size:18px_18px]" aria-hidden />
 
-      <div className="relative grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 sm:gap-8 p-6 sm:p-8 items-center">
-        {/* Ring + tier badge */}
-        <div className="relative h-48 w-48 mx-auto md:mx-0 shrink-0">
-          {/* Outer glow ring */}
-          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-200/40 to-yellow-200/40 blur-xl scale-110" aria-hidden />
+      <div className="relative grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 sm:gap-12 p-8 sm:p-10 lg:p-12 items-center">
+        {/* Ring + tier badge — much bigger, magazine-cover scale */}
+        <div className="relative h-56 w-56 sm:h-72 sm:w-72 mx-auto md:mx-0 shrink-0">
+          {/* Outer glow ring (animated pulse) */}
+          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-200/50 to-yellow-200/50 blur-2xl scale-110 animate-[pulse_4s_ease-in-out_infinite]" aria-hidden />
+          {/* Outer faint dashed ring for visual depth */}
+          <div className="absolute inset-2 rounded-full border-2 border-dashed border-amber-200/50 animate-[spin_60s_linear_infinite]" aria-hidden />
           <svg viewBox="0 0 200 200" className="h-full w-full -rotate-90 relative">
             <defs>
               <linearGradient id="pulseRing" x1="0" y1="0" x2="1" y2="1">
@@ -213,7 +218,7 @@ export function PerformancePulseHero({
               </filter>
             </defs>
             {/* Track */}
-            <circle cx="100" cy="100" r={radius} fill="none" stroke="#f3e8d0" strokeWidth="14" />
+            <circle cx="100" cy="100" r={radius} fill="none" stroke="#f3e8d0" strokeWidth="12" />
             {/* Progress arc */}
             <circle
               cx="100"
@@ -221,7 +226,7 @@ export function PerformancePulseHero({
               r={radius}
               fill="none"
               stroke="url(#pulseRing)"
-              strokeWidth="14"
+              strokeWidth="12"
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={dashOffset}
@@ -230,61 +235,61 @@ export function PerformancePulseHero({
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className={`mb-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wide bg-gradient-to-br ${tierAccent} text-white shadow-sm`}>
-              <TierIcon className="h-3 w-3" />
+            <div className={`mb-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest bg-gradient-to-br ${tierAccent} text-white shadow-lg`}>
+              <TierIcon className="h-3.5 w-3.5" />
               {tierName}
             </div>
-            <div className="text-5xl font-bold text-slate-900 tabular-nums leading-none">
+            <div className="text-6xl sm:text-7xl font-black text-slate-900 tabular-nums leading-none drop-shadow-sm">
               {animated.toFixed(1)}
             </div>
-            <div className="text-xs text-slate-400 mt-1">/ {maxScore}</div>
+            <div className="text-sm text-slate-400 mt-1.5 font-medium">/ {maxScore}</div>
           </div>
         </div>
 
-        {/* Greeting + insight chips */}
-        <div className="space-y-4">
+        {/* Greeting + insight chips — bigger typography */}
+        <div className="space-y-5">
           <div>
-            <p className="text-xs sm:text-sm text-amber-600/80 uppercase tracking-widest font-semibold">{greeting}</p>
-            <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 leading-tight mt-1">
+            <p className="text-xs sm:text-sm text-amber-600 uppercase tracking-[0.2em] font-bold">{greeting}</p>
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 leading-[1.05] mt-2 tracking-tight">
               {gpFirstName}'s{" "}
-              <span className="bg-gradient-to-r from-amber-600 to-yellow-600 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 bg-clip-text text-transparent">
                 performance pulse
               </span>
             </h1>
-            <p className="text-sm text-slate-500 mt-1.5">
+            <p className="text-base text-slate-500 mt-3">
               {evaluationsCount} evaluation{evaluationsCount !== 1 ? "s" : ""} on record · keep stacking the wins
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {delta !== null && (
-              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border shadow-sm ${
+              <span className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-full border shadow-sm ${
                 delta >= 0
                   ? "bg-emerald-50 border-emerald-200 text-emerald-700"
                   : "bg-rose-50 border-rose-200 text-rose-700"
               }`}>
-                {delta >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                {delta >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                 {delta >= 0 ? "+" : ""}{delta.toFixed(1)} pts {deltaLabel ? `vs ${deltaLabel}` : ""}
               </span>
             )}
             {cleanStreak >= 2 && (
-              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border shadow-sm ${
+              <span className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-full border shadow-sm ${
                 cleanStreak >= 5
                   ? "bg-amber-50 border-amber-200 text-amber-700"
                   : "bg-yellow-50 border-yellow-200 text-yellow-700"
               }`}>
-                {cleanStreak >= 5 ? <Crown className="h-3.5 w-3.5" /> : <Flame className="h-3.5 w-3.5" />}
+                {cleanStreak >= 5 ? <Crown className="h-4 w-4" /> : <Flame className="h-4 w-4" />}
                 {cleanStreak} perfect in a row
               </span>
             )}
             {lastEvaluationDate && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border bg-slate-50 border-slate-200 text-slate-600 shadow-sm">
-                <Zap className="h-3.5 w-3.5 text-amber-500" />
+              <span className="inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-full border bg-white border-slate-200 text-slate-600 shadow-sm">
+                <Zap className="h-4 w-4 text-amber-500" />
                 Last eval {formatDistanceToNow(lastEvaluationDate, { addSuffix: true })}
               </span>
             )}
             {nextTier && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border bg-white border-amber-200 text-amber-700 shadow-sm">
-                <Target className="h-3.5 w-3.5" />
+              <span className="inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-full border bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-300 text-amber-700 shadow-sm">
+                <Target className="h-4 w-4" />
                 {nextTier.pointsAway.toFixed(1)} pts → {nextTier.nextName}
               </span>
             )}
@@ -350,11 +355,11 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
           </div>
         </div>
         <div className="mb-3">
-          <div className="flex items-baseline gap-1 flex-wrap">
-            <span className="text-3xl sm:text-4xl font-bold text-slate-900">{score.toFixed(1)}</span>
-            <span className="text-lg text-slate-400">/{maxScore}</span>
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <span className="text-4xl sm:text-5xl font-black text-slate-900 tabular-nums leading-none tracking-tight">{score.toFixed(1)}</span>
+            <span className="text-xl text-slate-400 font-medium">/{maxScore}</span>
             {showDelta && (
-              <span className={`ml-1 inline-flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full border ${
+              <span className={`ml-1 inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full border ${
                 (delta as number) > 0
                   ? "bg-emerald-50 border-emerald-200 text-emerald-700"
                   : "bg-rose-50 border-rose-200 text-rose-700"
@@ -364,7 +369,7 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
               </span>
             )}
           </div>
-          <p className="text-sm text-slate-500 mt-1">{label}</p>
+          <p className="text-sm font-semibold text-slate-600 mt-1.5 uppercase tracking-wider">{label}</p>
         </div>
         {/* Progress bar with gold gradient */}
         <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
