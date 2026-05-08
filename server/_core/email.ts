@@ -25,10 +25,15 @@ let lastDomainCheck = 0;
 const DOMAIN_CHECK_INTERVAL = 5 * 60 * 1000; // Re-check every 5 minutes
 
 /**
- * Determines the best "from" address by checking if gpreportgen.info is verified in Resend.
+ * Determines the best "from" address by checking if a domain is verified in Resend.
  * Falls back to reports@resend.dev if not verified.
+ *
+ * Exported so the boot-time audit can call this and log which
+ * from-address the system will actually use — letting the operator
+ * confirm a newly-verified Resend domain has taken effect without
+ * sending a real test email.
  */
-async function getFromAddress(): Promise<string> {
+export async function getFromAddress(): Promise<string> {
   const now = Date.now();
   
   // Return cached value if still fresh
