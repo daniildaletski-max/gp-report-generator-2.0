@@ -160,6 +160,7 @@ export function PerformancePulseHero({
   deltaLabel,
   cleanStreak,
   lastEvaluationDate,
+  nextTier,
 }: {
   gpFirstName: string;
   greeting: string;
@@ -173,6 +174,11 @@ export function PerformancePulseHero({
   deltaLabel: string | null;
   cleanStreak: number;
   lastEvaluationDate: Date | null;
+  /** Optional tier-progress hint, e.g. { nextName: "Pro", pointsAway: 1.4 }.
+   *  When set, surfaces "1.4 pts → Pro" so the GP has a concrete next
+   *  goal anchored to the same tier vocabulary as the badge inside the
+   *  ring. Pass `null` when already top-tier. */
+  nextTier?: { nextName: string; pointsAway: number } | null;
 }) {
   const animated = useCountUp(avgScore, 900);
   const pct = maxScore > 0 ? Math.min(100, Math.max(0, (avgScore / maxScore) * 100)) : 0;
@@ -274,6 +280,12 @@ export function PerformancePulseHero({
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border bg-slate-50 border-slate-200 text-slate-600 shadow-sm">
                 <Zap className="h-3.5 w-3.5 text-amber-500" />
                 Last eval {formatDistanceToNow(lastEvaluationDate, { addSuffix: true })}
+              </span>
+            )}
+            {nextTier && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border bg-white border-amber-200 text-amber-700 shadow-sm">
+                <Target className="h-3.5 w-3.5" />
+                {nextTier.pointsAway.toFixed(1)} pts → {nextTier.nextName}
               </span>
             )}
           </div>
@@ -393,26 +405,75 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
 // Achievement badge — locked/unlocked tile
 // ============================================================================
 
-export function AchievementBadge({ icon: Icon, title, description, unlocked, color }: {
-  icon: typeof Star; title: string; description: string; unlocked: boolean; color: string;
+export function AchievementBadge({ icon: Icon, title, description, unlocked, color, progress, progressLabel }: {
+  icon: typeof Star;
+  title: string;
+  description: string;
+  unlocked: boolean;
+  color: string;
+  /** 0–1 progress to unlock. When set on a locked badge, a progress bar
+   *  + percentage replace the dim grayscale state — turns "locked"
+   *  badges into a visible goal instead of dead space. */
+  progress?: number | null;
+  /** Short progress hint, e.g. "3/5 evaluations" or "+1.2 to go". */
+  progressLabel?: string | null;
 }) {
+  const showProgress = !unlocked && typeof progress === "number" && progress > 0;
+  const almostThere = showProgress && (progress as number) >= 0.66;
   return (
     <div className={`relative p-4 rounded-xl border transition-all duration-300 group cursor-default ${
       unlocked
         ? `${color} shadow-sm hover:shadow-md hover:shadow-amber-100/60 hover:-translate-y-0.5`
-        : 'bg-slate-50 border-slate-200 opacity-50 grayscale'
+        : showProgress
+          ? `bg-white border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 ${almostThere ? "ring-1 ring-amber-200/80" : ""}`
+          : 'bg-slate-50 border-slate-200 opacity-60'
     }`}>
       {/* Gold shimmer on hover for unlocked */}
       {unlocked && (
         <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-amber-50/40 to-transparent pointer-events-none" aria-hidden />
       )}
+      {/* "Almost there" pulse halo */}
+      {almostThere && (
+        <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-amber-50/60 to-transparent pointer-events-none" aria-hidden />
+      )}
       <div className="flex items-center gap-3 relative">
-        <div className={`p-2.5 rounded-xl transition-all duration-300 ${unlocked ? 'bg-white/80 border border-amber-200/60 group-hover:scale-110 group-hover:border-amber-300' : 'bg-slate-100'}`}>
-          <Icon className={`h-5 w-5 ${unlocked ? 'text-amber-700' : 'text-slate-400'}`} />
+        <div className={`p-2.5 rounded-xl transition-all duration-300 ${
+          unlocked
+            ? 'bg-white/80 border border-amber-200/60 group-hover:scale-110 group-hover:border-amber-300'
+            : showProgress
+              ? `bg-amber-50 border ${almostThere ? "border-amber-300" : "border-amber-100"} group-hover:scale-110`
+              : 'bg-slate-100 border border-transparent'
+        }`}>
+          <Icon className={`h-5 w-5 ${
+            unlocked ? 'text-amber-700' : showProgress ? 'text-amber-500' : 'text-slate-400'
+          }`} />
         </div>
-        <div>
-          <p className={`font-semibold text-sm ${unlocked ? 'text-slate-800' : 'text-slate-400'}`}>{title}</p>
-          <p className={`text-xs ${unlocked ? 'text-slate-500' : 'text-slate-400'}`}>{description}</p>
+        <div className="min-w-0 flex-1">
+          <p className={`font-semibold text-sm truncate ${
+            unlocked ? 'text-slate-800' : showProgress ? 'text-slate-700' : 'text-slate-400'
+          }`}>{title}</p>
+          <p className={`text-xs truncate ${
+            unlocked ? 'text-slate-500' : showProgress ? 'text-slate-500' : 'text-slate-400'
+          }`}>{description}</p>
+          {showProgress && (
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-[width] duration-700 ease-out ${
+                    almostThere
+                      ? "bg-gradient-to-r from-amber-400 to-yellow-500"
+                      : "bg-gradient-to-r from-slate-300 to-amber-300"
+                  }`}
+                  style={{ width: `${Math.min(100, Math.max(4, (progress as number) * 100))}%` }}
+                />
+              </div>
+              <span className={`text-[10px] font-semibold tabular-nums shrink-0 ${
+                almostThere ? "text-amber-700" : "text-slate-500"
+              }`}>
+                {progressLabel ?? `${Math.round((progress as number) * 100)}%`}
+              </span>
+            </div>
+          )}
         </div>
       </div>
       {unlocked && (
@@ -428,9 +489,24 @@ export function AchievementBadge({ icon: Icon, title, description, unlocked, col
 // Stat card — compact metric tile with gold hover
 // ============================================================================
 
-export function StatCard({ icon: Icon, value, label, color, trend }: {
-  icon: typeof Eye; value: string | number; label: string; color: string; trend?: number;
+export function StatCard({ icon: Icon, value, label, color, trend, hint, trendIsPositiveWhenDown }: {
+  icon: typeof Eye;
+  value: string | number;
+  label: string;
+  color: string;
+  trend?: number;
+  /** Short sub-line ("vs last month", "of 13 in team"). Replaces the
+   *  empty caption space below the label so zero-stat cards aren't
+   *  visually dead. */
+  hint?: string | null;
+  /** When true (e.g. for "Mistakes") a NEGATIVE trend is good and
+   *  should render in green. Defaults to "up = good = green" semantics. */
+  trendIsPositiveWhenDown?: boolean;
 }) {
+  // Decide trend tone from `trendIsPositiveWhenDown` so each card can
+  // express its own "lower is better" vs "higher is better" intent.
+  const trendIsGood =
+    trend !== undefined && trend !== 0 && (trendIsPositiveWhenDown ? trend < 0 : trend > 0);
   return (
     <div className={`relative ${color} rounded-2xl border border-slate-200/80 overflow-hidden group hover:shadow-md hover:shadow-amber-100/40 hover:-translate-y-0.5 transition-all duration-300 cursor-default`}>
       {/* Gold shimmer on hover */}
@@ -440,17 +516,24 @@ export function StatCard({ icon: Icon, value, label, color, trend }: {
           <div className="bg-white/90 p-2.5 sm:p-3 rounded-xl shrink-0 shadow-sm border border-amber-100/60 group-hover:scale-110 group-hover:border-amber-200 transition-all duration-300">
             <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-amber-700" />
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-2xl sm:text-3xl font-bold text-slate-900">{value}</p>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-2xl sm:text-3xl font-bold text-slate-900 leading-none">{value}</p>
               {trend !== undefined && trend !== 0 && (
-                <div className={`flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full ${trend > 0 ? 'text-red-600 bg-red-50' : 'text-emerald-600 bg-emerald-50'}`}>
+                <div className={`flex items-center gap-0.5 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                  trendIsGood
+                    ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                    : 'text-rose-700 bg-rose-50 border border-rose-200'
+                }`}>
                   {trend > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                   <span>{trend > 0 ? '+' : ''}{trend.toFixed(1)}</span>
                 </div>
               )}
             </div>
-            <p className="text-xs sm:text-sm text-slate-500 truncate">{label}</p>
+            <p className="text-xs sm:text-sm text-slate-500 truncate mt-0.5">{label}</p>
+            {hint && (
+              <p className="text-[11px] text-slate-400 truncate mt-0.5">{hint}</p>
+            )}
           </div>
         </div>
       </div>
