@@ -14,6 +14,8 @@ import { createLogger } from "../services/logger";
 import { requestTracingMiddleware, requestValidation } from "../services/requestTracing";
 import { cache } from "../services/cache";
 import { checkHealth as checkDbHealth, getDb } from "../db/connection";
+import { ENV } from "./env";
+import * as db from "../db";
 
 const log = createLogger("Server");
 
@@ -162,6 +164,95 @@ async function ensureRealNameColumn(): Promise<void> {
     // MySQL: "Duplicate column name" → already there, this is the steady-state.
     if (/Duplicate column|already exists/i.test(msg)) return;
     throw e;
+  }
+}
+
+/**
+ * Boot-time credential audit for the automation pipeline.
+ *
+ * History: misconfigured env vars used to fail silently — `RESEND_API_KEY`
+ * absence made every monthly report email return `false` from
+ * `sendReportEmail` with only a `console.warn`, and Persona/Studioworks
+ * cron jobs would log "Credentials not configured — skipped" once and
+ * then silently never run again. Operators only discovered the
+ * misconfig weeks later when an FM asked "where's my report?".
+ *
+ * This function runs once at server boot and emits LOUD log entries
+ * for any integration that's plausibly required but missing its
+ * credentials. Non-fatal — the server still comes up — but the
+ * messages land in deploy logs where they're hard to miss.
+ *
+ * Checks:
+ * 1. RESEND_API_KEY (always required for monthly emails) — log.error
+ *    if missing.
+ * 2. Persona credentials — log.error if any team has personaProjectId
+ *    set (i.e. Persona auto-sync is expected to do work) but
+ *    PERSONA_USERNAME/PASSWORD are missing.
+ * 3. Studioworks credentials — log.warn if STUDIOWORKS_SYNC_CRON is
+ *    enabled (default: every 6h) but credentials are missing.
+ *
+ * No-op silent path: each integration that's correctly configured
+ * just passes through; only failures log.
+ */
+async function validateAutomationCredentials(): Promise<void> {
+  const issues: string[] = [];
+
+  // 1. Resend (monthly report emails). Always required when any FM is
+  // expected to receive a report, so we treat absence as an error.
+  if (!ENV.resendApiKey) {
+    log.error(
+      "[BootAudit] RESEND_API_KEY is not set — monthly report emails WILL NOT be delivered. " +
+      "Set the env var on your deploy host (Resend dashboard → API Keys → create) and restart.",
+      new Error("RESEND_API_KEY missing"),
+    );
+    issues.push("RESEND_API_KEY");
+  }
+
+  // 2. Persona credentials — only required when at least one team has
+  // a personaProjectId configured. Otherwise the auto-sync cron sits
+  // idle and there's nothing to warn about.
+  const hasPersonaUser = !!process.env.PERSONA_USERNAME;
+  const hasPersonaPass = !!process.env.PERSONA_PASSWORD;
+  if (!hasPersonaUser || !hasPersonaPass) {
+    try {
+      const allTeams = await db.getAllFmTeams();
+      const teamsExpectingPersona = allTeams.filter(t => (t as any).personaProjectId);
+      if (teamsExpectingPersona.length > 0) {
+        const names = teamsExpectingPersona.map(t => t.teamName).join(", ");
+        log.error(
+          `[BootAudit] PERSONA_USERNAME/PERSONA_PASSWORD missing but ${teamsExpectingPersona.length} team(s) have personaProjectId configured: ${names}. ` +
+          `Persona auto-sync will skip every run; attendance data will go stale. Set both env vars and restart.`,
+          new Error("PERSONA_* credentials missing"),
+        );
+        issues.push("PERSONA_*");
+      }
+    } catch (e) {
+      // DB not reachable yet — Persona check is informational, don't
+      // block the audit on it.
+      log.warn("[BootAudit] Could not check teams for personaProjectId (DB not ready)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  // 3. Studioworks — warn rather than error since the integration is
+  // optional and many deploys don't use it. Only flag when the cron
+  // is actively enabled.
+  const studioCronEnabled = (process.env.STUDIOWORKS_SYNC_CRON ?? "").toLowerCase() !== "off";
+  const hasStudioUser = !!process.env.STUDIOWORKS_USERNAME;
+  const hasStudioPass = !!process.env.STUDIOWORKS_PASSWORD;
+  if (studioCronEnabled && (!hasStudioUser || !hasStudioPass)) {
+    log.warn(
+      "[BootAudit] STUDIOWORKS_USERNAME/PASSWORD missing — Studioworks auto-sync will skip every run. " +
+      "Set credentials or set STUDIOWORKS_SYNC_CRON=off to silence this warning.",
+    );
+    issues.push("STUDIOWORKS_*");
+  }
+
+  if (issues.length === 0) {
+    log.info("[BootAudit] Automation credentials OK (Resend / Persona / Studioworks)");
+  } else {
+    log.warn(`[BootAudit] ${issues.length} automation integration(s) missing config: ${issues.join(", ")}. See errors above for remediation.`);
   }
 }
 
@@ -330,6 +421,13 @@ async function startServer() {
     // MySQL throws "Duplicate column" which we swallow.
     ensureRealNameColumn().catch(err => {
       log.warn("realName boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Automation credentials audit — surfaces missing RESEND_API_KEY /
+    // PERSONA_* / STUDIOWORKS_* env vars in deploy logs so operators
+    // catch misconfig at startup instead of weeks later when an FM
+    // asks why a report didn't arrive. See `validateAutomationCredentials`.
+    validateAutomationCredentials().catch(err => {
+      log.warn("Boot credential audit failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
     });
   });
 
