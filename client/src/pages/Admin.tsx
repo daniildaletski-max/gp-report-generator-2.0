@@ -3956,7 +3956,19 @@ function SystemHealthMonitor() {
   const lastChecked = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : '—';
   const isOnline = health?.status === 'ok';
   const dbConnected = health?.database?.status === 'connected';
-  const memoryPercent = health?.memory ? Math.round((health.memory.heapUsed / health.memory.heapTotal) * 100) : 0;
+  // Use the real V8 heap cap (`heapLimit`) as the denominator instead
+  // of `heapTotal` (the current V8 allocation). Otherwise the bar
+  // sits at 95%+ as a steady state because V8 sizes `heapTotal` just
+  // ahead of `heapUsed` and grows lazily — meaningless for an
+  // operator. Falls back to `heapTotal` when `heapLimit` isn't yet
+  // present (older API responses).
+  const memoryDenominator =
+    (health?.memory && (health.memory as any).heapLimit) ||
+    health?.memory?.heapTotal ||
+    0;
+  const memoryPercent = health?.memory && memoryDenominator > 0
+    ? Math.round((health.memory.heapUsed / memoryDenominator) * 100)
+    : 0;
 
   return (
     <div className="unified-card">
@@ -4081,10 +4093,13 @@ function SystemHealthMonitor() {
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>Heap: {formatBytes(health?.memory?.heapUsed ?? 0)}</span>
-                    <span>/ {formatBytes(health?.memory?.heapTotal ?? 0)}</span>
+                    <span>/ {formatBytes(memoryDenominator)} cap</span>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    RSS: {formatBytes(health?.memory?.rss ?? 0)}
+                  <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                    <span>RSS: {formatBytes(health?.memory?.rss ?? 0)}</span>
+                    {health?.memory?.heapTotal !== undefined && (
+                      <span className="text-muted-foreground/70">· allocated {formatBytes(health.memory.heapTotal)}</span>
+                    )}
                   </div>
                 </div>
               </div>
