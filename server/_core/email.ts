@@ -43,6 +43,17 @@ export async function getFromAddress(opts?: { skipCache?: boolean }): Promise<st
   const skipCache = opts?.skipCache === true;
   const now = Date.now();
 
+  // Highest priority: explicit `RESEND_FROM_EMAIL` env override. When
+  // set, skip the entire auto-detection dance — guarantees the
+  // operator always knows what address gets stamped on outgoing mail
+  // and avoids the resend.dev fallback when Resend's domain status
+  // happens to use a label we don't enumerate. Format: bare email or
+  // `Display Name <email@domain>`.
+  if (ENV.resendFromEmail) {
+    const raw = ENV.resendFromEmail.trim();
+    return raw.includes("<") ? raw : `GP Report Generator <${raw}>`;
+  }
+
   // Cached fast-path — only when the caller is happy with cached
   // values (the normal send path is, the boot audit is not).
   if (!skipCache && cachedFromAddress && (now - lastDomainCheck) < DOMAIN_CHECK_INTERVAL) {
@@ -57,23 +68,29 @@ export async function getFromAddress(opts?: { skipCache?: boolean }): Promise<st
   try {
     const resend = new Resend(ENV.resendApiKey);
     const { data } = await resend.domains.list();
-    // Accept any status where DKIM + SPF are good enough for sending.
-    // Resend's dashboard shows "Partially Verified" when sending records
-    // are green but the optional receiving MX is still pending — that
-    // domain is fully usable for outbound mail and the API surfaces it
-    // as `verified` (or `active` on legacy keys, `partially_verified`
-    // on newer ones). Without `partially_verified` here we'd ignore a
-    // perfectly good sending domain and silently fall back to
-    // resend.dev — which only delivers to the account owner.
-    const sendableStatuses = new Set(["verified", "active", "partially_verified"]);
-    const verifiedDomain = data?.data?.find((d: any) => sendableStatuses.has(d.status));
+    // Be permissive: only EXCLUDE statuses that explicitly mean the
+    // domain is broken or never started. Anything else (verified,
+    // active, partially_verified, or any new label Resend introduces)
+    // is treated as sendable — lets newly-rolled-out status names
+    // work without a code change. This was the underlying cause of
+    // the "from-address resend.dev not allowed" errors operators kept
+    // hitting after Resend renamed `pending` flows.
+    const blockedStatuses = new Set(["failed", "failure", "temporary_failure", "not_started"]);
+    const sendableDomains = (data?.data ?? []).filter((d: any) => !blockedStatuses.has(d.status));
+    // Prefer any domain that explicitly looks "verified-ish"; otherwise
+    // accept the first non-blocked domain. Either way, a real domain
+    // beats the resend.dev fallback.
+    const preferred = sendableDomains.find((d: any) =>
+      ["verified", "active", "partially_verified"].includes(d.status),
+    );
+    const verifiedDomain = preferred ?? sendableDomains[0];
     if (verifiedDomain) {
       resolved = `GP Report Generator <reports@${verifiedDomain.name}>`;
-      console.log(`[Email] Using verified domain: ${verifiedDomain.name} (status=${verifiedDomain.status})`);
+      console.log(`[Email] Using domain: ${verifiedDomain.name} (status=${verifiedDomain.status})`);
     } else {
       const seenStatuses = data?.data?.map((d: any) => `${d.name}:${d.status}`).join(", ") || "(none)";
       resolved = "GP Report Generator <reports@resend.dev>";
-      console.log(`[Email] No verified domain found, using resend.dev fallback. Domains seen: ${seenStatuses}`);
+      console.warn(`[Email] No sendable domain found, using resend.dev fallback. Domains seen: ${seenStatuses}. Set RESEND_FROM_EMAIL to override.`);
     }
   } catch (err) {
     console.warn("[Email] Failed to check domains, using resend.dev fallback:", err);

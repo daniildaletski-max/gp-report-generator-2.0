@@ -8,6 +8,18 @@ export const ENV = {
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
+  /**
+   * Optional explicit "from" address for outgoing email. When set,
+   * bypasses the auto-detection of a verified Resend domain and
+   * always stamps this address on outgoing mail. Use this when the
+   * Resend API surfaces a domain status the auto-detector doesn't
+   * recognise (newer Resend statuses, partial verifications), or
+   * when you want a specific display name.
+   *
+   * Format: bare email (`reports@yourdomain.com`) or full RFC line
+   * (`GP Report Generator <reports@yourdomain.com>`).
+   */
+  resendFromEmail: process.env.RESEND_FROM_EMAIL ?? "",
   cookieDomain: process.env.COOKIE_DOMAIN ?? "",
   /**
    * Comma-separated list of email addresses that should always be
