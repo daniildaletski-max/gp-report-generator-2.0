@@ -41,37 +41,37 @@ export function AICoachCard({
     : null;
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50 via-white to-yellow-50 shadow-sm hover:shadow-md transition-shadow duration-300">
-      {/* Decorative ambient glow */}
-      <div className="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-gradient-to-br from-amber-300/30 to-yellow-300/30 blur-3xl pointer-events-none" aria-hidden />
-      <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-gradient-to-tr from-amber-200/20 to-transparent blur-2xl pointer-events-none" aria-hidden />
+    <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow transition-shadow duration-300">
+      {/* One restrained corner accent — same family as the hero,
+          replaces the previous ambient-glow soup. */}
+      <div className="pointer-events-none absolute -top-12 -right-12 h-36 w-36 rounded-full bg-amber-100/40 blur-2xl" aria-hidden />
 
       <div className="relative p-5 sm:p-6">
-        <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-500 shadow-md shadow-amber-200/50">
-              <Wand2 className="h-4 w-4 text-white" />
+            <div className="p-2 rounded-xl bg-amber-50 border border-amber-200">
+              <Wand2 className="h-4 w-4 text-amber-600" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-700">AI Coach</p>
-              <h3 className="text-base font-bold text-slate-900 leading-tight">
+              <p className="text-[10px] uppercase tracking-[0.18em] font-semibold text-slate-500">AI Coach</p>
+              <h3 className="text-base font-semibold text-slate-900 leading-tight mt-0.5">
                 {isLoading ? "Reading your evaluations…" : insights?.headline || "Your personalised summary"}
               </h3>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             <button
               onClick={onRefresh}
               disabled={isFetching}
-              className="p-1.5 rounded-lg hover:bg-amber-100/60 transition-colors disabled:opacity-50"
+              className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-50"
               aria-label="Regenerate insights"
               title="Regenerate insights"
             >
-              <RefreshCw className={`h-3.5 w-3.5 text-amber-600 ${isFetching ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3.5 w-3.5 text-slate-500 ${isFetching ? "animate-spin" : ""}`} />
             </button>
             <button
               onClick={() => setCollapsed(c => !c)}
-              className="p-1.5 rounded-lg hover:bg-amber-100/60 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
               aria-label={collapsed ? "Expand" : "Collapse"}
             >
               {collapsed ? <ChevronDown className="h-3.5 w-3.5 text-slate-500" /> : <ChevronUp className="h-3.5 w-3.5 text-slate-500" />}
@@ -187,109 +187,94 @@ export function PerformancePulseHero({
   const dashOffset = circumference * (1 - pct / 100);
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-amber-200/60 shadow-2xl shadow-amber-200/30">
-      {/* Layered background — richer gradient + subtle moving glow */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white via-amber-50/60 to-yellow-50" aria-hidden />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(251,191,36,0.18),transparent_60%)]" aria-hidden />
-      <div className={`absolute -top-32 -right-24 h-96 w-96 rounded-full blur-3xl opacity-40 bg-gradient-to-br ${tierAccent}`} aria-hidden />
-      <div className="absolute -bottom-24 -left-24 h-72 w-72 rounded-full blur-3xl opacity-30 bg-gradient-to-tr from-amber-200/60 to-yellow-200/60" aria-hidden />
-      {/* Gold shimmer line at top */}
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-400 to-transparent" aria-hidden />
-      {/* Subtle decorative dot grid */}
-      <div className="absolute inset-0 opacity-[0.04] [background-image:radial-gradient(circle,_#000_1px,_transparent_1px)] [background-size:18px_18px]" aria-hidden />
+    <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      {/* Single soft gold corner glow — replaces the previous five
+          stacked gradients/dot-grids that were making the hero feel
+          busy. One subtle accent reads more "premium" than three
+          competing ones. */}
+      <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-gradient-to-br from-amber-200/40 to-yellow-200/0 blur-3xl" aria-hidden />
+      {/* Hairline accent at the top — same treatment as cards below
+          so the hero reads as part of the same family. */}
+      <div className="pointer-events-none absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent" aria-hidden />
 
-      <div className="relative grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 sm:gap-12 p-8 sm:p-10 lg:p-12 items-center">
-        {/* Ring + tier badge — much bigger, magazine-cover scale */}
-        <div className="relative h-56 w-56 sm:h-72 sm:w-72 mx-auto md:mx-0 shrink-0">
-          {/* Outer glow ring (animated pulse) */}
-          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-200/50 to-yellow-200/50 blur-2xl scale-110 animate-[pulse_4s_ease-in-out_infinite]" aria-hidden />
-          {/* Outer faint dashed ring for visual depth */}
-          <div className="absolute inset-2 rounded-full border-2 border-dashed border-amber-200/50 animate-[spin_60s_linear_infinite]" aria-hidden />
+      <div className="relative grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 sm:gap-10 p-7 sm:p-9 items-center">
+        {/* Ring + tier badge — moderated to a confident size, not
+            magazine-cover. Fewer rotating layers; one progress arc. */}
+        <div className="relative h-44 w-44 sm:h-52 sm:w-52 mx-auto md:mx-0 shrink-0">
           <svg viewBox="0 0 200 200" className="h-full w-full -rotate-90 relative">
             <defs>
               <linearGradient id="pulseRing" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#f59e0b" />
-                <stop offset="60%" stopColor="#d97706" />
+                <stop offset="0%" stopColor="#fbbf24" />
                 <stop offset="100%" stopColor="#f97316" />
               </linearGradient>
-              <filter id="ringGlow">
-                <feGaussianBlur stdDeviation="3" result="blur" />
-                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-              </filter>
             </defs>
-            {/* Track */}
-            <circle cx="100" cy="100" r={radius} fill="none" stroke="#f3e8d0" strokeWidth="12" />
-            {/* Progress arc */}
+            <circle cx="100" cy="100" r={radius} fill="none" stroke="#f1f5f9" strokeWidth="10" />
             <circle
               cx="100"
               cy="100"
               r={radius}
               fill="none"
               stroke="url(#pulseRing)"
-              strokeWidth="12"
+              strokeWidth="10"
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={dashOffset}
-              filter="url(#ringGlow)"
               style={{ transition: "stroke-dashoffset 900ms cubic-bezier(0.16, 1, 0.3, 1)" }}
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className={`mb-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest bg-gradient-to-br ${tierAccent} text-white shadow-lg`}>
-              <TierIcon className="h-3.5 w-3.5" />
+            <div className={`mb-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-widest bg-gradient-to-br ${tierAccent} text-white`}>
+              <TierIcon className="h-3 w-3" />
               {tierName}
             </div>
-            <div className="text-6xl sm:text-7xl font-black text-slate-900 tabular-nums leading-none drop-shadow-sm">
+            <div className="text-5xl sm:text-6xl font-bold text-slate-900 tabular-nums leading-none">
               {animated.toFixed(1)}
             </div>
-            <div className="text-sm text-slate-400 mt-1.5 font-medium">/ {maxScore}</div>
+            <div className="text-xs text-slate-400 mt-1.5 font-medium tracking-wide">/ {maxScore}</div>
           </div>
         </div>
 
-        {/* Greeting + insight chips — bigger typography */}
-        <div className="space-y-5">
+        {/* Greeting + insight chips — calmer typography, one weight
+            instead of two, plain text headline (no gradient text). */}
+        <div className="space-y-4">
           <div>
-            <p className="text-xs sm:text-sm text-amber-600 uppercase tracking-[0.2em] font-bold">{greeting}</p>
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 leading-[1.05] mt-2 tracking-tight">
-              {gpFirstName}'s{" "}
-              <span className="bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 bg-clip-text text-transparent">
-                performance pulse
-              </span>
+            <p className="text-[11px] text-slate-500 uppercase tracking-[0.2em] font-semibold">{greeting}</p>
+            <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 leading-tight mt-1.5 tracking-tight">
+              {gpFirstName}'s performance pulse
             </h1>
-            <p className="text-base text-slate-500 mt-3">
+            <p className="text-sm text-slate-500 mt-2">
               {evaluationsCount} evaluation{evaluationsCount !== 1 ? "s" : ""} on record · keep stacking the wins
             </p>
           </div>
+          {/* Calmer chip row — uniform style, single accent colour,
+              no shadow soup. Each chip reads as the same "kind of
+              thing" and the hero stops shouting. */}
           <div className="flex items-center gap-2 flex-wrap">
             {delta !== null && (
-              <span className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-full border shadow-sm ${
+              <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${
                 delta >= 0
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                  : "bg-rose-50 border-rose-200 text-rose-700"
+                  ? "border-emerald-200 bg-emerald-50/60 text-emerald-700"
+                  : "border-rose-200 bg-rose-50/60 text-rose-700"
               }`}>
-                {delta >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                {delta >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
                 {delta >= 0 ? "+" : ""}{delta.toFixed(1)} pts {deltaLabel ? `vs ${deltaLabel}` : ""}
               </span>
             )}
             {cleanStreak >= 2 && (
-              <span className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-full border shadow-sm ${
-                cleanStreak >= 5
-                  ? "bg-amber-50 border-amber-200 text-amber-700"
-                  : "bg-yellow-50 border-yellow-200 text-yellow-700"
-              }`}>
-                {cleanStreak >= 5 ? <Crown className="h-4 w-4" /> : <Flame className="h-4 w-4" />}
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-amber-200 bg-amber-50/60 text-amber-700">
+                {cleanStreak >= 5 ? <Crown className="h-3.5 w-3.5" /> : <Flame className="h-3.5 w-3.5" />}
                 {cleanStreak} perfect in a row
               </span>
             )}
             {lastEvaluationDate && (
-              <span className="inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-full border bg-white border-slate-200 text-slate-600 shadow-sm">
-                <Zap className="h-4 w-4 text-amber-500" />
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-slate-200 bg-white text-slate-600">
+                <Zap className="h-3.5 w-3.5 text-amber-500" />
                 Last eval {formatDistanceToNow(lastEvaluationDate, { addSuffix: true })}
               </span>
             )}
             {nextTier && (
-              <span className="inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-full border bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-300 text-amber-700 shadow-sm">
-                <Target className="h-4 w-4" />
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-amber-200 bg-amber-50/60 text-amber-700">
+                <Target className="h-3.5 w-3.5" />
                 {nextTier.pointsAway.toFixed(1)} pts → {nextTier.nextName}
               </span>
             )}
@@ -323,84 +308,89 @@ export function ScoreCard({ score, maxScore, label, icon: Icon, accentColor, bgC
   const showDelta = typeof delta === "number" && delta !== 0;
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl ${bgColor} p-5 sm:p-6 border border-slate-200/80 shadow-sm hover:shadow-lg hover:shadow-amber-100/50 transition-all duration-300 group hover:-translate-y-1 cursor-default`}>
-      {/* Gold shimmer on hover */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-amber-50/50 to-transparent pointer-events-none" aria-hidden />
-      {/* Top accent line */}
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-400/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" aria-hidden />
-
+    <div className={`relative overflow-hidden rounded-2xl bg-white p-5 sm:p-6 border border-slate-200 shadow-sm hover:shadow transition-shadow duration-300`}>
       <div className="relative z-10">
-        <div className="flex items-center justify-between mb-4">
-          <div className={`p-2.5 rounded-xl border ${accentColor} group-hover:scale-110 transition-transform duration-300`}>
-            <Icon className="h-5 w-5" />
+        <div className="flex items-center justify-between mb-5">
+          <div className={`p-2 rounded-xl border ${accentColor}`}>
+            <Icon className="h-4 w-4" />
           </div>
           <div className="flex items-center gap-2">
             {tooltip && (
               <div className="relative">
                 <button
                   onClick={() => setShowTooltip(!showTooltip)}
-                  className="p-1 rounded-full hover:bg-amber-100 transition-colors"
+                  className="p-1 rounded-full hover:bg-slate-100 transition-colors"
+                  aria-label="Score formula"
                 >
-                  <Info className="h-3.5 w-3.5 text-slate-400 hover:text-amber-600" />
+                  <Info className="h-3.5 w-3.5 text-slate-400" />
                 </button>
                 {showTooltip && (
-                  <div className="absolute right-0 top-7 z-50 w-48 p-3 bg-white border border-amber-200 rounded-xl text-xs text-slate-600 shadow-lg shadow-amber-100/50">
+                  <div className="absolute right-0 top-7 z-50 w-48 p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 shadow-md">
                     {tooltip}
-                    <div className="absolute -top-1 right-3 w-2 h-2 bg-white border-l border-t border-amber-200 rotate-45" />
                   </div>
                 )}
               </div>
             )}
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${status.badge}`}>{status.text}</span>
+            <span className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border ${status.badge}`}>{status.text}</span>
           </div>
         </div>
         <div className="mb-3">
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="text-4xl sm:text-5xl font-black text-slate-900 tabular-nums leading-none tracking-tight">{score.toFixed(1)}</span>
-            <span className="text-xl text-slate-400 font-medium">/{maxScore}</span>
+          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500 font-semibold">{label}</p>
+          <div className="flex items-baseline gap-1.5 flex-wrap mt-1">
+            <span className="text-4xl sm:text-[44px] font-bold text-slate-900 tabular-nums leading-none tracking-tight">{score.toFixed(1)}</span>
+            <span className="text-lg text-slate-400 font-normal">/ {maxScore}</span>
             {showDelta && (
-              <span className={`ml-1 inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full border ${
+              <span className={`ml-1 inline-flex items-center gap-0.5 text-[11px] font-medium px-1.5 py-0.5 rounded-full ${
                 (delta as number) > 0
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                  : "bg-rose-50 border-rose-200 text-rose-700"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-rose-50 text-rose-700"
               }`}>
                 {(delta as number) > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                 {(delta as number) > 0 ? "+" : ""}{(delta as number).toFixed(1)}
               </span>
             )}
           </div>
-          <p className="text-sm font-semibold text-slate-600 mt-1.5 uppercase tracking-wider">{label}</p>
         </div>
-        {/* Progress bar with gold gradient */}
-        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+        {/* Slim progress bar — single accent colour, no gradient
+            soup. Width animates on first paint. */}
+        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 rounded-full transition-all duration-1000 ease-out shadow-sm"
-            style={{ width: `${percentage}%` }}
+            className="h-full rounded-full transition-[width] duration-1000 ease-out"
+            style={{ width: `${percentage}%`, backgroundColor: sparkColor || "#f59e0b" }}
           />
         </div>
-        {trend && trend.length >= 2 && (
-          <div className="mt-3 h-10 -mx-1" aria-hidden>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trend} margin={{ top: 2, right: 2, left: 2, bottom: 0 }}>
-                <defs>
-                  <linearGradient id={`spark-${label}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={sparkColor || "#f59e0b"} stopOpacity={0.4} />
-                    <stop offset="100%" stopColor={sparkColor || "#f59e0b"} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke={sparkColor || "#f59e0b"}
-                  strokeWidth={2}
-                  fill={`url(#spark-${label})`}
-                  isAnimationActive={false}
-                  dot={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+        {trend && trend.length >= 2 && (() => {
+          // SVG `id` attributes can't contain whitespace — when the
+          // label has a space ("Overall Score", "Game Performance")
+          // the `url(#spark-Overall Score)` reference becomes invalid
+          // and the fill silently falls back to the default black
+          // colour, producing the dirty grey smudge under the line.
+          // Slugify the label so the gradient resolves cleanly.
+          const slug = label.replace(/\s+/g, "-").toLowerCase();
+          return (
+            <div className="mt-3 h-10 -mx-1" aria-hidden>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={trend} margin={{ top: 2, right: 2, left: 2, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id={`spark-${slug}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={sparkColor || "#f59e0b"} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={sparkColor || "#f59e0b"} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke={sparkColor || "#f59e0b"}
+                    strokeWidth={2}
+                    fill={`url(#spark-${slug})`}
+                    isAnimationActive={false}
+                    dot={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -787,25 +777,28 @@ export function AtAGlanceStrip({
   const recencyLabel = lastEvaluationDate
     ? formatDistanceToNow(lastEvaluationDate, { addSuffix: true })
     : "—";
-  const tiles: Array<{ icon: typeof Eye; label: string; value: string | number; tone: string }> = [
-    { icon: Eye, label: "Evaluations", value: evalCount, tone: "bg-amber-50 border-amber-200 text-amber-800" },
-    { icon: AlertTriangle, label: "Mistakes", value: mistakes, tone: "bg-red-50 border-red-200 text-red-700" },
-    { icon: ThumbsUp, label: "Attitude", value: attitude > 0 ? `+${attitude}` : `${attitude}`, tone: "bg-emerald-50 border-emerald-200 text-emerald-700" },
-    { icon: Clock, label: "Last eval", value: recencyLabel, tone: "bg-slate-50 border-slate-200 text-slate-700" },
+  // Single neutral tile — distinguishes itself by the icon tint
+  // alone, not the whole tile background. Reads as a clean
+  // "card row" instead of four competing colour blocks.
+  const tiles: Array<{ icon: typeof Eye; label: string; value: string | number; iconCls: string }> = [
+    { icon: Eye, label: "Evaluations", value: evalCount, iconCls: "text-amber-600 bg-amber-50 border-amber-100" },
+    { icon: AlertTriangle, label: "Mistakes", value: mistakes, iconCls: mistakes > 0 ? "text-rose-600 bg-rose-50 border-rose-100" : "text-emerald-600 bg-emerald-50 border-emerald-100" },
+    { icon: ThumbsUp, label: "Attitude", value: attitude > 0 ? `+${attitude}` : `${attitude}`, iconCls: attitude > 0 ? "text-emerald-600 bg-emerald-50 border-emerald-100" : "text-slate-500 bg-slate-50 border-slate-100" },
+    { icon: Clock, label: "Last eval", value: recencyLabel, iconCls: "text-slate-500 bg-slate-50 border-slate-100" },
   ];
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {tiles.map(t => (
         <div
           key={t.label}
-          className={`rounded-xl border p-3 sm:p-4 ${t.tone} flex items-center gap-3 hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200 cursor-default`}
+          className="rounded-xl border border-slate-200 bg-white p-3.5 sm:p-4 flex items-center gap-3 hover:shadow-sm transition-shadow duration-200"
         >
-          <div className="bg-white/90 p-2 rounded-lg border border-white/60 shrink-0 shadow-sm">
+          <div className={`shrink-0 inline-flex items-center justify-center h-9 w-9 rounded-lg border ${t.iconCls}`}>
             <t.icon className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wider opacity-60 font-medium">{t.label}</p>
-            <p className="text-lg sm:text-xl font-bold truncate leading-tight">{t.value}</p>
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400 font-semibold">{t.label}</p>
+            <p className="text-lg sm:text-xl font-semibold text-slate-900 truncate leading-tight tabular-nums mt-0.5">{t.value}</p>
           </div>
         </div>
       ))}

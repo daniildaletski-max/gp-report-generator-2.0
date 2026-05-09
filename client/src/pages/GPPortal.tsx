@@ -415,17 +415,11 @@ export default function GPPortal() {
   const mistakeCount = monthDetails?.stats?.mistakes ?? 0;
 
   return (
-    <div className="min-h-screen text-slate-900 relative bg-gradient-to-b from-amber-50/40 via-slate-50 to-slate-50">
-      {/* Decorative ambient backdrop — soft gold glow at the top of
-          the viewport so the dashboard feels lit rather than flat. */}
-      <div className="pointer-events-none fixed inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_60%_60%_at_50%_0%,rgba(251,191,36,0.18),transparent_70%)]" aria-hidden />
-
-      {/* Header — sticky personal bar. Surfaces the GP's name, tier
-          badge, current clean-streak, and refresh button so the
-          context stays visible no matter how far they scroll. */}
-      <header className="relative z-20 border-b border-amber-200/60 bg-gradient-to-r from-white via-amber-50/40 to-white backdrop-blur-md sticky top-0 shadow-sm">
-        {/* Top hairline shimmer */}
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" aria-hidden />
+    <div className="min-h-screen text-slate-900 relative bg-slate-50/60">
+      {/* Header — sticky personal bar. Calm white surface, single
+          hairline accent at the bottom. Lets the hero own the gold
+          accent without a competing tinted strip up top. */}
+      <header className="relative z-20 border-b border-slate-200 bg-white/85 backdrop-blur-md sticky top-0">
         <div className="container py-3 sm:py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br ${tier?.color ?? "from-amber-400 to-amber-600"} flex items-center justify-center shadow-sm shrink-0`}>
