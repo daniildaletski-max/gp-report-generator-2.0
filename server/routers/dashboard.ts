@@ -206,6 +206,14 @@ export const dashboardRouter = router({
       // Get process-level metrics directly
       const uptime = process.uptime();
       const memUsage = process.memoryUsage();
+      // V8 max-old-space cap. Without this the dashboard percent
+      // (heapUsed / heapTotal) is misleading: heapTotal is the
+      // current V8 allocation, not the ceiling — so 95% there can
+      // mean "V8 hasn't grown the heap any more yet", not "we're
+      // out of memory". `heap_size_limit` is the actual cap that
+      // matters; surface it so the UI can compute a meaningful %.
+      const v8 = await import("v8");
+      const heapStats = v8.getHeapStatistics();
       const latency = Date.now() - startTime;
 
       // Test database connectivity
@@ -229,6 +237,7 @@ export const dashboardRouter = router({
         memory: {
           heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
           heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+          heapLimit: Math.round(heapStats.heap_size_limit / 1024 / 1024),
           rss: Math.round(memUsage.rss / 1024 / 1024),
         },
         database: {
@@ -244,7 +253,7 @@ export const dashboardRouter = router({
         uptime: process.uptime(),
         nodeVersion: process.version,
         latency: Date.now() - startTime,
-        memory: { heapUsed: 0, heapTotal: 0, rss: 0 },
+        memory: { heapUsed: 0, heapTotal: 0, heapLimit: 0, rss: 0 },
         database: { status: 'unknown', latency: 0 },
         environment: process.env.NODE_ENV || 'development',
       };
