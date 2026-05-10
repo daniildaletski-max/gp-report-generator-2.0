@@ -165,6 +165,10 @@ export function PerformancePulseHero({
   cleanStreak,
   lastEvaluationDate,
   nextTier,
+  availableMonths,
+  selectedMonth,
+  selectedYear,
+  onMonthChange,
 }: {
   gpFirstName: string;
   greeting: string;
