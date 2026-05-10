@@ -510,6 +510,10 @@ export default function GPPortal() {
             greeting={greeting}
             avgScore={avgScore}
             maxScore={MAX_TOTAL_SCORE}
+            avgAppearance={avgAppearance}
+            maxAppearance={MAX_APPEARANCE_SCORE}
+            avgGamePerf={avgGamePerf}
+            maxGamePerf={MAX_GAME_PERFORMANCE_SCORE}
             evaluationsCount={data.evaluations.length}
             tierName={tier.name}
             tierAccent={tier.color}
