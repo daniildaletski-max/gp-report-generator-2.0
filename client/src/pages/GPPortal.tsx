@@ -15,7 +15,7 @@ import {
 import { useState, useEffect, useMemo } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
 import { getScoreTone, SCORE_TONE_CLASSES } from "@/lib/scoreTone";
-import { MAX_TOTAL_SCORE, MAX_APPEARANCE_SCORE, MAX_GAME_PERFORMANCE_SCORE, SCORE_CONFIG, MONTH_NAMES } from "../../../shared/const";
+import { MAX_TOTAL_SCORE, MAX_APPEARANCE_SCORE, MAX_GAME_PERFORMANCE_SCORE, SCORE_CONFIG, MONTH_NAMES, MONTH_NAMES_SHORT } from "../../../shared/const";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
 import { getTips } from "@/lib/improvementTips";
 
@@ -546,6 +546,19 @@ export default function GPPortal() {
               const pointsAway = Math.max(0.1, target - avgScore);
               return { nextName: next.name, pointsAway };
             })()}
+            availableMonths={(data.monthlyHistory as any[])?.map((m: any) => ({
+              month: m.month as number,
+              year: m.year as number,
+              label: MONTH_NAMES_SHORT[(m.month as number) - 1],
+              evalCount: Number(m.evalCount || 0),
+            })) ?? []}
+            selectedMonth={detailMonth}
+            selectedYear={detailYear}
+            onMonthChange={(m, y) => {
+              setDetailMonth(m);
+              setDetailYear(y);
+              setActiveTab('month');
+            }}
           />
         )}
 

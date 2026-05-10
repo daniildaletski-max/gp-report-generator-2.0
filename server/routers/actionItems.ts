@@ -46,11 +46,12 @@ export const actionItemsRouter = router({
     }).optional())
     .query(async ({ ctx, input }) => {
       const gpId = input?.gpId ?? undefined;
+      const teamId = input?.teamId ?? undefined;
       if (gpId) await ensureCanReadGp(ctx, gpId);
 
       return db.listActionItems({
         gpId,
-        teamId: input?.teamId ?? undefined,
+        teamId,
         userId: ctx.user.role === "admin" ? undefined : ctx.user.id,
         includeAllStatuses: input?.includeAllStatuses,
       });

@@ -4,7 +4,7 @@
  * v2.0 — Premium gold/white design system, enhanced micro-interactions,
  * improved mobile-first layout, and refined visual hierarchy.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Star, Eye, Scissors, TrendingUp, TrendingDown, Info, ChevronLeft, ChevronRight,
   Target, Calendar, Clock, AlertTriangle, ThumbsUp, Flame, Crown, Sparkles, Zap,
@@ -190,9 +190,22 @@ export function PerformancePulseHero({
    *  goal anchored to the same tier vocabulary as the badge inside the
    *  ring. Pass `null` when already top-tier. */
   nextTier?: { nextName: string; pointsAway: number } | null;
+  /** Month selector — when provided, renders a compact month picker
+   *  inline with the hero so GPs can switch months without scrolling. */
+  availableMonths?: Array<{ month: number; year: number; label: string; evalCount: number }>;
+  selectedMonth?: number;
+  selectedYear?: number;
+  onMonthChange?: (month: number, year: number) => void;
 }) {
   const animated = useCountUp(avgScore, 900);
   const overallPct = maxScore > 0 ? Math.min(100, Math.max(0, (avgScore / maxScore) * 100)) : 0;
+
+  // Animate bars from 0% → target on mount / data change
+  const [barMounted, setBarMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setBarMounted(true));
+    return () => { cancelAnimationFrame(id); setBarMounted(false); };
+  }, [avgScore, avgAppearance, avgGamePerf]);
   const appearancePct = (avgAppearance != null && maxAppearance && maxAppearance > 0)
     ? Math.min(100, Math.max(0, (avgAppearance / maxAppearance) * 100))
     : null;
@@ -269,7 +282,7 @@ export function PerformancePulseHero({
           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
             <div
               className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-[width] duration-1000 ease-out"
-              style={{ width: `${overallPct}%` }}
+              style={{ width: barMounted ? `${overallPct}%` : '0%' }}
             />
           </div>
           <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400 font-medium tabular-nums">
@@ -282,6 +295,33 @@ export function PerformancePulseHero({
             )}
           </div>
         </div>
+
+        {/* Month selector — compact inline picker so GPs can switch
+            the viewed month directly from the hero card. */}
+        {availableMonths && availableMonths.length > 0 && onMonthChange && (
+          <div className="mt-5 flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] uppercase tracking-[0.14em] text-slate-400 font-semibold mr-1">Month</span>
+            {availableMonths.map(m => {
+              const isActive = m.month === selectedMonth && m.year === selectedYear;
+              return (
+                <button
+                  key={`${m.year}-${m.month}`}
+                  onClick={() => onMonthChange(m.month, m.year)}
+                  disabled={m.evalCount === 0}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all duration-200 border ${
+                    isActive
+                      ? 'bg-gradient-to-br from-amber-500 to-yellow-500 text-white border-amber-400 shadow-sm shadow-amber-200/50'
+                      : m.evalCount > 0
+                        ? 'bg-white border-slate-200 text-slate-600 hover:border-amber-300 hover:bg-amber-50/50'
+                        : 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Sub-scores — two clean rows, each with label + value + slim
             colored bar. No more concentric ring soup. */}
@@ -304,7 +344,10 @@ export function PerformancePulseHero({
                 <div className="mt-2 h-1 bg-slate-100 rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full ${s.bg} transition-[width] duration-1000 ease-out`}
-                    style={{ width: `${s.pct}%` }}
+                    style={{
+                      width: barMounted ? `${s.pct}%` : '0%',
+                      transitionDelay: s.key === 'appearance' ? '200ms' : '400ms',
+                    }}
                   />
                 </div>
               </div>
