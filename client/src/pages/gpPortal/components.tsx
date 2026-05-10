@@ -152,6 +152,10 @@ export function PerformancePulseHero({
   greeting,
   avgScore,
   maxScore,
+  avgAppearance,
+  maxAppearance,
+  avgGamePerf,
+  maxGamePerf,
   evaluationsCount,
   tierName,
   tierAccent,
@@ -166,6 +170,13 @@ export function PerformancePulseHero({
   greeting: string;
   avgScore: number;
   maxScore: number;
+  /** Optional sub-scores. When provided, the hero renders three
+   *  Apple-Watch-style concentric rings (Overall · Appearance · Game)
+   *  instead of a single pulse ring. */
+  avgAppearance?: number;
+  maxAppearance?: number;
+  avgGamePerf?: number;
+  maxGamePerf?: number;
   evaluationsCount: number;
   tierName: string;
   tierAccent: string;
@@ -181,10 +192,24 @@ export function PerformancePulseHero({
   nextTier?: { nextName: string; pointsAway: number } | null;
 }) {
   const animated = useCountUp(avgScore, 900);
-  const pct = maxScore > 0 ? Math.min(100, Math.max(0, (avgScore / maxScore) * 100)) : 0;
+  // Three rings, drawn concentrically. Outer = overall (amber),
+  // middle = appearance (emerald), inner = game performance (blue).
+  // Keeps strokes thick enough to read as distinct, gaps tight enough
+  // to feel like one composition. Falls back to a single ring when
+  // sub-scores aren't passed (legacy callers).
+  const overallPct = maxScore > 0 ? Math.min(100, Math.max(0, (avgScore / maxScore) * 100)) : 0;
+  const appearancePct = (avgAppearance != null && maxAppearance && maxAppearance > 0)
+    ? Math.min(100, Math.max(0, (avgAppearance / maxAppearance) * 100))
+    : null;
+  const gamePerfPct = (avgGamePerf != null && maxGamePerf && maxGamePerf > 0)
+    ? Math.min(100, Math.max(0, (avgGamePerf / maxGamePerf) * 100))
+    : null;
+  const showRings = appearancePct != null && gamePerfPct != null;
   const radius = 86;
   const circumference = 2 * Math.PI * radius;
-  const dashOffset = circumference * (1 - pct / 100);
+  const dashOffset = circumference * (1 - overallPct / 100);
+  const r2 = 66, c2 = 2 * Math.PI * r2, o2 = (appearancePct ?? 0) ? c2 * (1 - (appearancePct as number) / 100) : c2;
+  const r3 = 46, c3 = 2 * Math.PI * r3, o3 = (gamePerfPct ?? 0) ? c3 * (1 - (gamePerfPct as number) / 100) : c3;
 
   return (
     <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -197,46 +222,71 @@ export function PerformancePulseHero({
           so the hero reads as part of the same family. */}
       <div className="pointer-events-none absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent" aria-hidden />
 
-      <div className="relative grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 sm:gap-10 p-7 sm:p-9 items-center">
-        {/* Ring + tier badge — moderated to a confident size, not
-            magazine-cover. Fewer rotating layers; one progress arc. */}
-        <div className="relative h-44 w-44 sm:h-52 sm:w-52 mx-auto md:mx-0 shrink-0">
+      <div className="relative grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 sm:gap-12 p-7 sm:p-10 items-center">
+        {/* Activity Rings — three concentric SVG rings, Apple-Watch
+            style. Outer amber = overall, middle emerald = appearance,
+            inner blue = game performance. Tells three stories at one
+            glance instead of a single overall pulse. Score in the
+            middle stays the dominant readout. */}
+        <div className="relative h-52 w-52 sm:h-60 sm:w-60 mx-auto md:mx-0 shrink-0">
           <svg viewBox="0 0 200 200" className="h-full w-full -rotate-90 relative">
             <defs>
-              <linearGradient id="pulseRing" x1="0" y1="0" x2="1" y2="1">
+              <linearGradient id="ringOverall" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stopColor="#fbbf24" />
                 <stop offset="100%" stopColor="#f97316" />
               </linearGradient>
+              <linearGradient id="ringAppearance" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#34d399" />
+                <stop offset="100%" stopColor="#10b981" />
+              </linearGradient>
+              <linearGradient id="ringGamePerf" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#60a5fa" />
+                <stop offset="100%" stopColor="#3b82f6" />
+              </linearGradient>
             </defs>
-            <circle cx="100" cy="100" r={radius} fill="none" stroke="#f1f5f9" strokeWidth="10" />
+            {/* Tracks */}
+            <circle cx="100" cy="100" r={radius} fill="none" stroke="#fef3c7" strokeWidth="10" opacity="0.5" />
+            {showRings && <circle cx="100" cy="100" r={r2} fill="none" stroke="#d1fae5" strokeWidth="10" opacity="0.5" />}
+            {showRings && <circle cx="100" cy="100" r={r3} fill="none" stroke="#dbeafe" strokeWidth="10" opacity="0.5" />}
+            {/* Progress arcs */}
             <circle
-              cx="100"
-              cy="100"
-              r={radius}
-              fill="none"
-              stroke="url(#pulseRing)"
-              strokeWidth="10"
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={dashOffset}
+              cx="100" cy="100" r={radius} fill="none"
+              stroke="url(#ringOverall)" strokeWidth="10" strokeLinecap="round"
+              strokeDasharray={circumference} strokeDashoffset={dashOffset}
               style={{ transition: "stroke-dashoffset 900ms cubic-bezier(0.16, 1, 0.3, 1)" }}
             />
+            {showRings && (
+              <circle
+                cx="100" cy="100" r={r2} fill="none"
+                stroke="url(#ringAppearance)" strokeWidth="10" strokeLinecap="round"
+                strokeDasharray={c2} strokeDashoffset={o2}
+                style={{ transition: "stroke-dashoffset 900ms cubic-bezier(0.16, 1, 0.3, 1) 100ms" }}
+              />
+            )}
+            {showRings && (
+              <circle
+                cx="100" cy="100" r={r3} fill="none"
+                stroke="url(#ringGamePerf)" strokeWidth="10" strokeLinecap="round"
+                strokeDasharray={c3} strokeDashoffset={o3}
+                style={{ transition: "stroke-dashoffset 900ms cubic-bezier(0.16, 1, 0.3, 1) 200ms" }}
+              />
+            )}
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <div className={`mb-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-widest bg-gradient-to-br ${tierAccent} text-white`}>
               <TierIcon className="h-3 w-3" />
               {tierName}
             </div>
-            <div className="text-5xl sm:text-6xl font-bold text-slate-900 tabular-nums leading-none">
+            <div className="text-5xl sm:text-[56px] font-bold text-slate-900 tabular-nums leading-none">
               {animated.toFixed(1)}
             </div>
-            <div className="text-xs text-slate-400 mt-1.5 font-medium tracking-wide">/ {maxScore}</div>
+            <div className="text-[11px] text-slate-400 mt-1.5 font-medium tracking-wide">of {maxScore}</div>
           </div>
         </div>
 
-        {/* Greeting + insight chips — calmer typography, one weight
-            instead of two, plain text headline (no gradient text). */}
-        <div className="space-y-4">
+        {/* Greeting + ring legend + insight chips — anchors the rings
+            with named values so the gradient ribbons aren't decorative. */}
+        <div className="space-y-5">
           <div>
             <p className="text-[11px] text-slate-500 uppercase tracking-[0.2em] font-semibold">{greeting}</p>
             <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 leading-tight mt-1.5 tracking-tight">
@@ -246,6 +296,37 @@ export function PerformancePulseHero({
               {evaluationsCount} evaluation{evaluationsCount !== 1 ? "s" : ""} on record · keep stacking the wins
             </p>
           </div>
+
+          {/* Three ring legend rows — one per arc. Each shows label,
+              numeric value, and a slim mini-bar in the matching colour
+              so the rings have an explicit translation. */}
+          {showRings && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3">
+              {[
+                { key: "overall", label: "Overall", value: avgScore, max: maxScore, pct: overallPct, color: "#f97316", bg: "bg-gradient-to-r from-amber-400 to-orange-500" },
+                { key: "appearance", label: "Appearance", value: avgAppearance!, max: maxAppearance!, pct: appearancePct!, color: "#10b981", bg: "bg-gradient-to-r from-emerald-400 to-emerald-500" },
+                { key: "game", label: "Game perf.", value: avgGamePerf!, max: maxGamePerf!, pct: gamePerfPct!, color: "#3b82f6", bg: "bg-gradient-to-r from-blue-400 to-blue-500" },
+              ].map(r => (
+                <div key={r.key} className="space-y-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: r.color }} aria-hidden />
+                      {r.label}
+                    </span>
+                    <span className="text-sm font-semibold text-slate-700 tabular-nums">
+                      {r.value.toFixed(1)}<span className="text-slate-400 font-normal"> / {r.max}</span>
+                    </span>
+                  </div>
+                  <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${r.bg} transition-[width] duration-1000 ease-out`}
+                      style={{ width: `${r.pct}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {/* Calmer chip row — uniform style, single accent colour,
               no shadow soup. Each chip reads as the same "kind of
               thing" and the hero stops shouting. */}
