@@ -192,11 +192,6 @@ export function PerformancePulseHero({
   nextTier?: { nextName: string; pointsAway: number } | null;
 }) {
   const animated = useCountUp(avgScore, 900);
-  // Three rings, drawn concentrically. Outer = overall (amber),
-  // middle = appearance (emerald), inner = game performance (blue).
-  // Keeps strokes thick enough to read as distinct, gaps tight enough
-  // to feel like one composition. Falls back to a single ring when
-  // sub-scores aren't passed (legacy callers).
   const overallPct = maxScore > 0 ? Math.min(100, Math.max(0, (avgScore / maxScore) * 100)) : 0;
   const appearancePct = (avgAppearance != null && maxAppearance && maxAppearance > 0)
     ? Math.min(100, Math.max(0, (avgAppearance / maxAppearance) * 100))
@@ -204,163 +199,118 @@ export function PerformancePulseHero({
   const gamePerfPct = (avgGamePerf != null && maxGamePerf && maxGamePerf > 0)
     ? Math.min(100, Math.max(0, (avgGamePerf / maxGamePerf) * 100))
     : null;
-  const showRings = appearancePct != null && gamePerfPct != null;
-  const radius = 86;
-  const circumference = 2 * Math.PI * radius;
-  const dashOffset = circumference * (1 - overallPct / 100);
-  const r2 = 66, c2 = 2 * Math.PI * r2, o2 = (appearancePct ?? 0) ? c2 * (1 - (appearancePct as number) / 100) : c2;
-  const r3 = 46, c3 = 2 * Math.PI * r3, o3 = (gamePerfPct ?? 0) ? c3 * (1 - (gamePerfPct as number) / 100) : c3;
+  const showSubScores = appearancePct != null && gamePerfPct != null;
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      {/* Single soft gold corner glow — replaces the previous five
-          stacked gradients/dot-grids that were making the hero feel
-          busy. One subtle accent reads more "premium" than three
-          competing ones. */}
-      <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-gradient-to-br from-amber-200/40 to-yellow-200/0 blur-3xl" aria-hidden />
-      {/* Hairline accent at the top — same treatment as cards below
-          so the hero reads as part of the same family. */}
-      <div className="pointer-events-none absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent" aria-hidden />
+    <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white">
+      {/* Single warm corner glow — the only decorative element. */}
+      <div className="pointer-events-none absolute -top-32 -right-24 h-72 w-72 rounded-full bg-gradient-to-br from-amber-100/70 to-yellow-50/0 blur-3xl" aria-hidden />
+      {/* Hairline accent at top — one line, not five. */}
+      <div className="pointer-events-none absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-amber-300/50 to-transparent" aria-hidden />
 
-      <div className="relative grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 sm:gap-12 p-7 sm:p-10 items-center">
-        {/* Activity Rings — three concentric SVG rings, Apple-Watch
-            style. Outer amber = overall, middle emerald = appearance,
-            inner blue = game performance. Tells three stories at one
-            glance instead of a single overall pulse. Score in the
-            middle stays the dominant readout. */}
-        <div className="relative h-52 w-52 sm:h-60 sm:w-60 mx-auto md:mx-0 shrink-0">
-          <svg viewBox="0 0 200 200" className="h-full w-full -rotate-90 relative">
-            <defs>
-              <linearGradient id="ringOverall" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#fbbf24" />
-                <stop offset="100%" stopColor="#f97316" />
-              </linearGradient>
-              <linearGradient id="ringAppearance" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#34d399" />
-                <stop offset="100%" stopColor="#10b981" />
-              </linearGradient>
-              <linearGradient id="ringGamePerf" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#60a5fa" />
-                <stop offset="100%" stopColor="#3b82f6" />
-              </linearGradient>
-            </defs>
-            {/* Tracks */}
-            <circle cx="100" cy="100" r={radius} fill="none" stroke="#fef3c7" strokeWidth="10" opacity="0.5" />
-            {showRings && <circle cx="100" cy="100" r={r2} fill="none" stroke="#d1fae5" strokeWidth="10" opacity="0.5" />}
-            {showRings && <circle cx="100" cy="100" r={r3} fill="none" stroke="#dbeafe" strokeWidth="10" opacity="0.5" />}
-            {/* Progress arcs */}
-            <circle
-              cx="100" cy="100" r={radius} fill="none"
-              stroke="url(#ringOverall)" strokeWidth="10" strokeLinecap="round"
-              strokeDasharray={circumference} strokeDashoffset={dashOffset}
-              style={{ transition: "stroke-dashoffset 900ms cubic-bezier(0.16, 1, 0.3, 1)" }}
-            />
-            {showRings && (
-              <circle
-                cx="100" cy="100" r={r2} fill="none"
-                stroke="url(#ringAppearance)" strokeWidth="10" strokeLinecap="round"
-                strokeDasharray={c2} strokeDashoffset={o2}
-                style={{ transition: "stroke-dashoffset 900ms cubic-bezier(0.16, 1, 0.3, 1) 100ms" }}
-              />
-            )}
-            {showRings && (
-              <circle
-                cx="100" cy="100" r={r3} fill="none"
-                stroke="url(#ringGamePerf)" strokeWidth="10" strokeLinecap="round"
-                strokeDasharray={c3} strokeDashoffset={o3}
-                style={{ transition: "stroke-dashoffset 900ms cubic-bezier(0.16, 1, 0.3, 1) 200ms" }}
-              />
-            )}
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className={`mb-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-widest bg-gradient-to-br ${tierAccent} text-white`}>
-              <TierIcon className="h-3 w-3" />
-              {tierName}
-            </div>
-            <div className="text-5xl sm:text-[56px] font-bold text-slate-900 tabular-nums leading-none">
-              {animated.toFixed(1)}
-            </div>
-            <div className="text-[11px] text-slate-400 mt-1.5 font-medium tracking-wide">of {maxScore}</div>
-          </div>
+      <div className="relative p-7 sm:p-9">
+        {/* Header row — greeting + tier chip pinned right. Reads as
+            metadata above the headline, not a decorated banner. */}
+        <div className="flex items-start justify-between gap-3 mb-5">
+          <p className="text-[11px] text-slate-500 uppercase tracking-[0.2em] font-semibold">{greeting}</p>
+          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-widest bg-gradient-to-br ${tierAccent} text-white shrink-0`}>
+            <TierIcon className="h-3 w-3" />
+            {tierName}
+          </span>
         </div>
 
-        {/* Greeting + ring legend + insight chips — anchors the rings
-            with named values so the gradient ribbons aren't decorative. */}
-        <div className="space-y-5">
-          <div>
-            <p className="text-[11px] text-slate-500 uppercase tracking-[0.2em] font-semibold">{greeting}</p>
-            <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 leading-tight mt-1.5 tracking-tight">
-              {gpFirstName}'s performance pulse
-            </h1>
-            <p className="text-sm text-slate-500 mt-2">
-              {evaluationsCount} evaluation{evaluationsCount !== 1 ? "s" : ""} on record · keep stacking the wins
-            </p>
-          </div>
+        {/* Name */}
+        <h1 className="text-3xl sm:text-5xl font-bold text-slate-900 leading-[1.1] tracking-tight">
+          {gpFirstName}'s pulse
+        </h1>
+        <p className="text-sm text-slate-500 mt-2">
+          {evaluationsCount} evaluation{evaluationsCount !== 1 ? "s" : ""} on record · keep stacking the wins
+        </p>
 
-          {/* Three ring legend rows — one per arc. Each shows label,
-              numeric value, and a slim mini-bar in the matching colour
-              so the rings have an explicit translation. */}
-          {showRings && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3">
-              {[
-                { key: "overall", label: "Overall", value: avgScore, max: maxScore, pct: overallPct, color: "#f97316", bg: "bg-gradient-to-r from-amber-400 to-orange-500" },
-                { key: "appearance", label: "Appearance", value: avgAppearance!, max: maxAppearance!, pct: appearancePct!, color: "#10b981", bg: "bg-gradient-to-r from-emerald-400 to-emerald-500" },
-                { key: "game", label: "Game perf.", value: avgGamePerf!, max: maxGamePerf!, pct: gamePerfPct!, color: "#3b82f6", bg: "bg-gradient-to-r from-blue-400 to-blue-500" },
-              ].map(r => (
-                <div key={r.key} className="space-y-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
-                      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: r.color }} aria-hidden />
-                      {r.label}
-                    </span>
-                    <span className="text-sm font-semibold text-slate-700 tabular-nums">
-                      {r.value.toFixed(1)}<span className="text-slate-400 font-normal"> / {r.max}</span>
-                    </span>
-                  </div>
-                  <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${r.bg} transition-[width] duration-1000 ease-out`}
-                      style={{ width: `${r.pct}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {/* Calmer chip row — uniform style, single accent colour,
-              no shadow soup. Each chip reads as the same "kind of
-              thing" and the hero stops shouting. */}
-          <div className="flex items-center gap-2 flex-wrap">
+        {/* Primary metric — score, max, delta, all in one elegant
+            line. The big number anchors the hero without a giant
+            ring stealing real estate. */}
+        <div className="mt-7 flex flex-col sm:flex-row sm:items-end gap-x-6 gap-y-3 sm:flex-wrap">
+          <div className="flex items-baseline gap-2">
+            <span className="text-6xl sm:text-7xl font-bold text-slate-900 tabular-nums leading-none tracking-tight">
+              {animated.toFixed(1)}
+            </span>
+            <span className="text-2xl text-slate-300 font-light leading-none">/ {maxScore}</span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap pb-1">
             {delta !== null && (
-              <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${
+              <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${
                 delta >= 0
-                  ? "border-emerald-200 bg-emerald-50/60 text-emerald-700"
-                  : "border-rose-200 bg-rose-50/60 text-rose-700"
+                  ? "border-emerald-200 bg-emerald-50/70 text-emerald-700"
+                  : "border-rose-200 bg-rose-50/70 text-rose-700"
               }`}>
-                {delta >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-                {delta >= 0 ? "+" : ""}{delta.toFixed(1)} pts {deltaLabel ? `vs ${deltaLabel}` : ""}
-              </span>
-            )}
-            {cleanStreak >= 2 && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-amber-200 bg-amber-50/60 text-amber-700">
-                {cleanStreak >= 5 ? <Crown className="h-3.5 w-3.5" /> : <Flame className="h-3.5 w-3.5" />}
-                {cleanStreak} perfect in a row
-              </span>
-            )}
-            {lastEvaluationDate && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-slate-200 bg-white text-slate-600">
-                <Zap className="h-3.5 w-3.5 text-amber-500" />
-                Last eval {formatDistanceToNow(lastEvaluationDate, { addSuffix: true })}
+                {delta >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                {delta >= 0 ? "+" : ""}{delta.toFixed(1)} {deltaLabel ? `vs ${deltaLabel}` : ""}
               </span>
             )}
             {nextTier && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-amber-200 bg-amber-50/60 text-amber-700">
-                <Target className="h-3.5 w-3.5" />
-                {nextTier.pointsAway.toFixed(1)} pts → {nextTier.nextName}
+              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50/70 text-amber-700">
+                <Target className="h-3 w-3" />
+                {nextTier.pointsAway.toFixed(1)} to {nextTier.nextName}
+              </span>
+            )}
+            {cleanStreak >= 2 && (
+              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50/70 text-amber-700">
+                {cleanStreak >= 5 ? <Crown className="h-3 w-3" /> : <Flame className="h-3 w-3" />}
+                {cleanStreak} clean in a row
               </span>
             )}
           </div>
         </div>
+
+        {/* Primary progress bar — horizontal, takes the full width.
+            Replaces the ring as the visual reference for "where am I". */}
+        <div className="mt-5">
+          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-[width] duration-1000 ease-out"
+              style={{ width: `${overallPct}%` }}
+            />
+          </div>
+          <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400 font-medium tabular-nums">
+            <span>{overallPct.toFixed(0)}% of max</span>
+            {lastEvaluationDate && (
+              <span className="inline-flex items-center gap-1 text-slate-500">
+                <Zap className="h-3 w-3 text-amber-500" />
+                Last eval {formatDistanceToNow(lastEvaluationDate, { addSuffix: true })}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Sub-scores — two clean rows, each with label + value + slim
+            colored bar. No more concentric ring soup. */}
+        {showSubScores && (
+          <div className="mt-7 pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+            {[
+              { key: "appearance", label: "Appearance", value: avgAppearance!, max: maxAppearance!, pct: appearancePct!, color: "#10b981", bg: "bg-emerald-500" },
+              { key: "game", label: "Game performance", value: avgGamePerf!, max: maxGamePerf!, pct: gamePerfPct!, color: "#3b82f6", bg: "bg-blue-500" },
+            ].map(s => (
+              <div key={s.key}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-slate-500 font-semibold">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: s.color }} aria-hidden />
+                    {s.label}
+                  </span>
+                  <span className="text-sm font-semibold text-slate-800 tabular-nums">
+                    {s.value.toFixed(1)}<span className="text-slate-400 font-normal"> / {s.max}</span>
+                  </span>
+                </div>
+                <div className="mt-2 h-1 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${s.bg} transition-[width] duration-1000 ease-out`}
+                    style={{ width: `${s.pct}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
