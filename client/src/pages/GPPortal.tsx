@@ -2,6 +2,7 @@ import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { format } from "date-fns";
@@ -893,11 +894,39 @@ export default function GPPortal() {
                                 replaces the small inline score so the
                                 eye lands on the number first. */}
                             <div className="flex items-start gap-3">
-                              <div className={`relative shrink-0 h-14 w-14 rounded-2xl border-2 ${sc.border} bg-white flex flex-col items-center justify-center shadow-sm`}>
-                                <span className={`text-xl font-bold tabular-nums leading-none ${sc.text}`}>{eval_.totalScore}</span>
-                                <span className="text-[9px] text-slate-400 leading-none mt-0.5">/{MAX_TOTAL_SCORE}</span>
-                                <span className={`absolute -top-1 -right-1 h-3 w-3 rounded-full ring-2 ring-white ${sc.dot}`} aria-hidden />
-                              </div>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className={`relative shrink-0 h-14 w-14 rounded-2xl border-2 ${sc.border} bg-white flex flex-col items-center justify-center shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200`}>
+                                    <span className={`text-xl font-bold tabular-nums leading-none ${sc.text}`}>{eval_.totalScore}</span>
+                                    <span className="text-[9px] text-slate-400 leading-none mt-0.5">/{MAX_TOTAL_SCORE}</span>
+                                    <span className={`absolute -top-1 -right-1 h-3 w-3 rounded-full ring-2 ring-white ${sc.dot}`} aria-hidden />
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="right" sideOffset={8} className="p-0 bg-white border border-slate-200 shadow-lg rounded-xl max-w-[220px]">
+                                  <div className="p-3">
+                                    <p className="text-[11px] font-semibold text-slate-700 mb-2">Score Breakdown</p>
+                                    <div className="space-y-1.5">
+                                      {subs.map(s => {
+                                        const pct = s.max > 0 ? (s.value / s.max) * 100 : 0;
+                                        const ssc = scoreColor(s.value, s.max);
+                                        return (
+                                          <div key={s.key} className="flex items-center gap-2">
+                                            <span className="text-[10px] text-slate-500 w-10 shrink-0">{s.label}</span>
+                                            <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                              <div className={`h-full rounded-full ${ssc.dot.replace('bg-', 'bg-')}`} style={{ width: `${pct}%` }} />
+                                            </div>
+                                            <span className={`text-[10px] font-semibold tabular-nums ${ssc.text}`}>{s.value}/{s.max}</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                    <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
+                                      <span className="text-[10px] text-slate-500">Total</span>
+                                      <span className={`text-xs font-bold ${sc.text}`}>{eval_.totalScore}/{MAX_TOTAL_SCORE}</span>
+                                    </div>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2 mb-1">
                                   <p className="text-sm font-semibold text-slate-800 truncate">

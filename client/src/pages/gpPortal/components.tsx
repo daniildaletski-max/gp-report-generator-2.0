@@ -246,8 +246,11 @@ export function PerformancePulseHero({
 
         {/* Primary metric — score, max, delta, all in one elegant
             line. The big number anchors the hero without a giant
-            ring stealing real estate. */}
-        <div className="mt-7 flex flex-col sm:flex-row sm:items-end gap-x-6 gap-y-3 sm:flex-wrap">
+            ring stealing real estate. Wrapped in a transition container
+            that fades/slides when the month changes. */}
+        <div
+          key={`${selectedMonth}-${selectedYear}`}
+          className="mt-7 flex flex-col sm:flex-row sm:items-end gap-x-6 gap-y-3 sm:flex-wrap animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
           <div className="flex items-baseline gap-2">
             <span className="text-6xl sm:text-7xl font-bold text-slate-900 tabular-nums leading-none tracking-tight">
               {animated.toFixed(1)}
@@ -330,7 +333,7 @@ export function PerformancePulseHero({
         {/* Sub-scores — two clean rows, each with label + value + slim
             colored bar. No more concentric ring soup. */}
         {showSubScores && (
-          <div className="mt-7 pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+          <div key={`sub-${selectedMonth}-${selectedYear}`} className="mt-7 pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 animate-in fade-in-0 slide-in-from-bottom-1 duration-500">
             {[
               { key: "appearance", label: "Appearance", value: avgAppearance!, max: maxAppearance!, pct: appearancePct!, color: "#10b981", bg: "bg-emerald-500" },
               { key: "game", label: "Game performance", value: avgGamePerf!, max: maxGamePerf!, pct: gamePerfPct!, color: "#3b82f6", bg: "bg-blue-500" },
