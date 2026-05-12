@@ -169,6 +169,7 @@ export function PerformancePulseHero({
   selectedMonth,
   selectedYear,
   onMonthChange,
+  isLoadingMonth,
 }: {
   gpFirstName: string;
   greeting: string;
@@ -196,10 +197,11 @@ export function PerformancePulseHero({
   nextTier?: { nextName: string; pointsAway: number } | null;
   /** Month selector — when provided, renders a compact month picker
    *  inline with the hero so GPs can switch months without scrolling. */
-  availableMonths?: Array<{ month: number; year: number; label: string; evalCount: number }>;
+  availableMonths?: Array<{ month: number; year: number; label: string; evalCount: number; hasData?: boolean }>;
   selectedMonth?: number;
   selectedYear?: number;
   onMonthChange?: (month: number, year: number) => void;
+  isLoadingMonth?: boolean;
 }) {
   const animated = useCountUp(avgScore, 900);
   const overallPct = maxScore > 0 ? Math.min(100, Math.max(0, (avgScore / maxScore) * 100)) : 0;
@@ -241,7 +243,7 @@ export function PerformancePulseHero({
           {gpFirstName}'s pulse
         </h1>
         <p className="text-sm text-slate-500 mt-2">
-          {evaluationsCount} evaluation{evaluationsCount !== 1 ? "s" : ""} on record · keep stacking the wins
+          {evaluationsCount} evaluation{evaluationsCount !== 1 ? "s" : ""}{selectedMonth ? ` this month` : ` on record`} · keep stacking the wins
         </p>
 
         {/* Primary metric — score, max, delta, all in one elegant
@@ -250,7 +252,7 @@ export function PerformancePulseHero({
             that fades/slides when the month changes. */}
         <div
           key={`${selectedMonth}-${selectedYear}`}
-          className="mt-7 flex flex-col sm:flex-row sm:items-end gap-x-6 gap-y-3 sm:flex-wrap animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+          className={`mt-7 flex flex-col sm:flex-row sm:items-end gap-x-6 gap-y-3 sm:flex-wrap animate-in fade-in-0 slide-in-from-bottom-2 duration-300 ${isLoadingMonth ? 'opacity-50 transition-opacity' : ''}`}>
           <div className="flex items-baseline gap-2">
             <span className="text-6xl sm:text-7xl font-bold text-slate-900 tabular-nums leading-none tracking-tight">
               {animated.toFixed(1)}
@@ -314,11 +316,11 @@ export function PerformancePulseHero({
                 <button
                   key={`${m.year}-${m.month}`}
                   onClick={() => onMonthChange(m.month, m.year)}
-                  disabled={m.evalCount === 0}
+                  disabled={!(m.hasData ?? m.evalCount > 0)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all duration-200 border ${
                     isActive
                       ? 'bg-gradient-to-br from-amber-500 to-yellow-500 text-white border-amber-400 shadow-sm shadow-amber-200/50'
-                      : m.evalCount > 0
+                      : (m.hasData ?? m.evalCount > 0)
                         ? 'bg-white border-slate-200 text-slate-600 hover:border-amber-300 hover:bg-amber-50/50'
                         : 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
                   }`}
@@ -333,7 +335,7 @@ export function PerformancePulseHero({
         {/* Sub-scores — two clean rows, each with label + value + slim
             colored bar. No more concentric ring soup. */}
         {showSubScores && (
-          <div key={`sub-${selectedMonth}-${selectedYear}`} className="mt-7 pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 animate-in fade-in-0 slide-in-from-bottom-1 duration-500">
+          <div key={`sub-${selectedMonth}-${selectedYear}`} className={`mt-7 pt-5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 animate-in fade-in-0 slide-in-from-bottom-1 duration-500 ${isLoadingMonth ? 'opacity-50' : ''}`}>
             {[
               { key: "appearance", label: "Appearance", value: avgAppearance!, max: maxAppearance!, pct: appearancePct!, color: "#10b981", bg: "bg-emerald-500" },
               { key: "game", label: "Game performance", value: avgGamePerf!, max: maxGamePerf!, pct: gamePerfPct!, color: "#3b82f6", bg: "bg-blue-500" },

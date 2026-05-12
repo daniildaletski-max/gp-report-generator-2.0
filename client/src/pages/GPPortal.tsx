@@ -395,18 +395,32 @@ export default function GPPortal() {
   }
 
   const totalEvals = data.evaluations.length;
-  const avgScore = totalEvals > 0 
+  const avgScoreAll = totalEvals > 0 
     ? data.evaluations.reduce((s: number, e: any) => s + (e.totalScore || 0), 0) / totalEvals 
     : 0;
-  const avgAppearance = totalEvals > 0 
+  const avgAppearanceAll = totalEvals > 0 
     ? data.evaluations.reduce((s: number, e: any) => s + (e.appearanceScore || 0), 0) / totalEvals 
     : 0;
-  const avgGamePerf = totalEvals > 0 
+  const avgGamePerfAll = totalEvals > 0 
     ? data.evaluations.reduce((s: number, e: any) => s + (e.gamePerformanceTotalScore || 0), 0) / totalEvals 
     : 0;
   const recentEvaluations = [...data.evaluations].sort((a: any, b: any) => 
     new Date(b.evaluationDate || 0).getTime() - new Date(a.evaluationDate || 0).getTime()
   );
+
+  // Month-aware scores: when monthDetails is loaded, show scores for the
+  // selected month; otherwise fall back to the all-time average.
+  const monthEvals = (monthDetails?.evaluations ?? []) as any[];
+  const monthEvalCount = monthEvals.length;
+  const avgScore = monthEvalCount > 0
+    ? monthEvals.reduce((s: number, e: any) => s + (e.totalScore || 0), 0) / monthEvalCount
+    : avgScoreAll;
+  const avgAppearance = monthEvalCount > 0
+    ? monthEvals.reduce((s: number, e: any) => s + (e.appearanceScore || 0), 0) / monthEvalCount
+    : avgAppearanceAll;
+  const avgGamePerf = monthEvalCount > 0
+    ? monthEvals.reduce((s: number, e: any) => s + (e.gamePerformanceTotalScore || 0), 0) / monthEvalCount
+    : avgGamePerfAll;
 
   const errorDetails = monthDetails?.errorDetails || [];
   const attitudeDetails = monthDetails?.attitudeDetails || [];
@@ -509,13 +523,14 @@ export default function GPPortal() {
           <PerformancePulseHero
             gpFirstName={data.gpName.split(" ")[0]}
             greeting={greeting}
-            avgScore={avgScore}
+            avgScore={monthDetailsLoading ? avgScoreAll : avgScore}
             maxScore={MAX_TOTAL_SCORE}
-            avgAppearance={avgAppearance}
+            avgAppearance={monthDetailsLoading ? avgAppearanceAll : avgAppearance}
             maxAppearance={MAX_APPEARANCE_SCORE}
-            avgGamePerf={avgGamePerf}
+            avgGamePerf={monthDetailsLoading ? avgGamePerfAll : avgGamePerf}
             maxGamePerf={MAX_GAME_PERFORMANCE_SCORE}
-            evaluationsCount={data.evaluations.length}
+            evaluationsCount={monthDetailsLoading ? data.evaluations.length : (monthEvalCount > 0 ? monthEvalCount : data.evaluations.length)}
+            isLoadingMonth={monthDetailsLoading}
             tierName={tier.name}
             tierAccent={tier.color}
             TierIcon={tier.icon}
@@ -552,6 +567,7 @@ export default function GPPortal() {
               year: m.year as number,
               label: MONTH_NAMES_SHORT[(m.month as number) - 1],
               evalCount: Number(m.evalCount || 0),
+              hasData: Number(m.evalCount || 0) > 0 || Number(m.mistakes || 0) > 0 || (m.attitude != null && m.attitude !== 0),
             })) ?? []}
             selectedMonth={detailMonth}
             selectedYear={detailYear}
@@ -661,7 +677,7 @@ export default function GPPortal() {
         <section>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
             <ScoreCard
-              score={avgScore}
+              score={avgScoreAll}
               maxScore={MAX_TOTAL_SCORE}
               label="Overall Score"
               icon={Star}
@@ -673,7 +689,7 @@ export default function GPPortal() {
               sparkColor="#f59e0b"
             />
             <ScoreCard
-              score={avgAppearance}
+              score={avgAppearanceAll}
               maxScore={MAX_APPEARANCE_SCORE}
               label="Appearance"
               icon={Sparkles}
@@ -685,7 +701,7 @@ export default function GPPortal() {
               sparkColor="#10b981"
             />
             <ScoreCard
-              score={avgGamePerf}
+              score={avgGamePerfAll}
               maxScore={MAX_GAME_PERFORMANCE_SCORE}
               label="Game Performance"
               icon={Gamepad2}
@@ -1223,15 +1239,14 @@ export default function GPPortal() {
                 <div 
                   key={`${month.year}-${month.month}`}
                   className={`relative p-4 rounded-xl border transition-all duration-300 hover:scale-[1.03] cursor-pointer ${
-                    month.evalCount > 0 
+                    (month.evalCount > 0 || month.mistakes > 0 || (month.attitude != null && month.attitude !== 0))
                       ? 'bg-white border-slate-200 hover:border-amber-300 hover:shadow-md shadow-sm' 
                       : 'bg-slate-50 border-slate-100 opacity-50'
                   }`}
                   onClick={() => {
-                    if (month.evalCount > 0) {
-                      setDetailMonth(month.month);
-                      setDetailYear(month.year);
-                    }
+                    setDetailMonth(month.month);
+                    setDetailYear(month.year);
+                    setActiveTab('month');
                   }}
                 >
                   <p className="text-xs text-slate-500 font-medium mb-2">{month.label}</p>
@@ -1251,6 +1266,18 @@ export default function GPPortal() {
                           <span className="text-[10px] text-red-500">L: {month.lowScore}</span>
                         </div>
                       )}
+                    </>
+                  ) : (month.mistakes > 0 || (month.attitude != null && month.attitude !== 0)) ? (
+                    <>
+                      <p className="text-sm text-slate-500 mb-1">No evals</p>
+                      <div className="flex flex-wrap gap-1">
+                        {month.mistakes > 0 && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-200">{month.mistakes} err</span>
+                        )}
+                        {month.attitude != null && month.attitude !== 0 && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${month.attitude > 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200'}`}>{month.attitude > 0 ? '+' : ''}{month.attitude} att</span>
+                        )}
+                      </div>
                     </>
                   ) : (
                     <p className="text-sm text-slate-400">No data</p>
