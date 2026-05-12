@@ -210,9 +210,32 @@ export const gpAccessRouter = router({
       // Collapse cross-source dupes (FM uploaded a screenshot + the
       // same row appears in the monthly Excel) plus byte-identical
       // same-source dupes (parse-noise from re-uploads).
-      const errorDetails = dedupeErrorDetails(errorDetailsRaw);
+      let errorDetails = dedupeErrorDetails(errorDetailsRaw);
 
       const reportedMistakes = stats?.mistakes ?? 0;
+
+      // When we have a non-zero mistake count but no detail rows (happens
+      // when the Excel "Error Count Analysis" sheet recorded a count but
+      // the "Errors" detail sheet didn't contain matching rows for this GP,
+      // or the file was uploaded before the fallback-creation code existed),
+      // synthesize placeholder entries so the GP Portal always shows
+      // *something* rather than a misleading "No errors" empty state.
+      if (reportedMistakes > 0 && errorDetails.length === 0) {
+        const syntheticErrors = Array.from({ length: reportedMistakes }, (_, i) => ({
+          id: `synthetic-${i}`,
+          source: 'excel' as const,
+          errorType: null,
+          errorDescription: `Error #${i + 1} — recorded in evaluation data. Details will appear once the error file with descriptions is uploaded.`,
+          errorCategory: null,
+          severity: 'medium' as const,
+          gameType: null,
+          tableId: null,
+          screenshotUrl: null,
+          errorDate: new Date(input.year, input.month - 1, 15),
+          createdAt: new Date(),
+        }));
+        errorDetails = syntheticErrors;
+      }
 
       // When the count is zero, give the FM something actionable rather
       // than a generic "no errors" message — list the latest uploaded
