@@ -525,17 +525,7 @@ export function AchievementBadge({ icon: Icon, title, description, unlocked, col
       {/* Legendary rotating rim — only on unlocked legendary badges.
           A super-slow conic gradient halo so they pop without being
           distracting. */}
-      {unlocked && rarity === "legendary" && (
-        <div className="absolute -inset-px rounded-xl opacity-30 group-hover:opacity-60 transition-opacity duration-300 pointer-events-none [background:conic-gradient(from_0deg,#fbbf24_0deg,#f59e0b_90deg,#f97316_180deg,#fbbf24_270deg,#f59e0b_360deg)] animate-[spin_8s_linear_infinite] blur-sm" aria-hidden />
-      )}
-      {/* Gold shimmer on hover for unlocked */}
-      {unlocked && (
-        <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-amber-50/40 to-transparent pointer-events-none" aria-hidden />
-      )}
-      {/* "Almost there" pulse halo */}
-      {almostThere && (
-        <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-amber-50/60 to-transparent pointer-events-none" aria-hidden />
-      )}
+
       <div className="flex items-center gap-3 relative">
         <div className={`p-2.5 rounded-xl transition-all duration-300 ${
           unlocked
@@ -616,8 +606,7 @@ export function StatCard({ icon: Icon, value, label, color, trend, hint, trendIs
     trend !== undefined && trend !== 0 && (trendIsPositiveWhenDown ? trend < 0 : trend > 0);
   return (
     <div className={`relative ${color} rounded-2xl border border-slate-200/80 overflow-hidden group hover:shadow-md hover:shadow-amber-100/40 hover:-translate-y-0.5 transition-all duration-300 cursor-default`}>
-      {/* Gold shimmer on hover */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-amber-50/40 to-transparent pointer-events-none" aria-hidden />
+
       <div className="p-4 sm:p-5 relative">
         <div className="flex items-center gap-3 sm:gap-4 relative">
           <div className="bg-white/90 p-2.5 sm:p-3 rounded-xl shrink-0 shadow-sm border border-amber-100/60 group-hover:scale-110 group-hover:border-amber-200 transition-all duration-300">
@@ -794,8 +783,7 @@ export function MonthTabHeader({ selectedMonth, selectedYear, onChange, evalCoun
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-white to-amber-50/40 p-5 sm:p-6 shadow-sm">
-      {/* Decorative gold shimmer */}
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" aria-hidden />
+
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <button
