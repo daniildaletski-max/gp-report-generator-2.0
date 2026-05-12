@@ -77,43 +77,9 @@ export const errorFileRouter = router({
         return /^[A-Za-z\u00C0-\u024F\s'-]+$/.test(name) && name.length < 100;
       };
 
-      // PRIMARY SOURCE: "Error Count Analysis" sheet - column E has error counts EXCLUDING technical errors
-      // This is the authoritative source for error counts
-      const errorCountAnalysisSheet = workbook.getWorksheet('Error Count Analysis');
-      if (errorCountAnalysisSheet) {
-        log.info(' Using "Error Count Analysis" sheet (column C=name, column E=errors) as primary error count source (excludes technical errors)');
-        errorCountAnalysisSheet.eachRow((row, rowNumber) => {
-          if (rowNumber < 2) return; // Skip header
-          
-          const gpName = getCellValue(row.getCell(3)); // Column C - Employee Name (NOT column B which is Work load)
-          const errorCount = getNumericValue(row.getCell(5)); // Column E - Error count excluding technical errors
-          
-          if (!isValidGpName(gpName)) return;
-          
-          gpErrorCounts[gpName!] = errorCount;
-          totalErrorsCount += errorCount;
-        });
-      } else {
-        // Fallback: try "Error Count" sheet (column D) if "Error Count Analysis" doesn't exist
-        const errorCountSheet = workbook.getWorksheet('Error Count');
-        if (errorCountSheet) {
-          log.info(' Fallback: Using "Error Count" sheet (column D) - "Error Count Analysis" sheet not found');
-          errorCountSheet.eachRow((row, rowNumber) => {
-            if (rowNumber < 2) return; // Skip header
-            
-            const gpName = getCellValue(row.getCell(2)); // Column B
-            const errorCount = getNumericValue(row.getCell(4)); // Column D
-            
-            if (!isValidGpName(gpName)) return;
-            
-            gpErrorCounts[gpName!] = errorCount;
-            totalErrorsCount += errorCount;
-          });
-        }
-      }
-
-      // SECONDARY: Parse "Errors" sheet for error DETAILS only (descriptions, codes, dates)
-      // These details are stored for reference but do NOT affect the error count
+      // STEP 1: Parse "Errors" sheet for error DETAILS (descriptions, codes, dates)
+      // This is parsed FIRST so we can use it as a fallback for counts when
+      // "Error Count Analysis" formulas have no cached results.
       const errorsSheet = workbook.getWorksheet('Errors');
       if (errorsSheet) {
         let headerRow = 2;
@@ -140,7 +106,7 @@ export const errorFileRouter = router({
         
         log.debug(` Detected columns - Header row: ${headerRow}, GP Name: ${gpNameCol}, Date: ${dateCol}, Description: ${descCol}, Code: ${codeCol}, Game Type: ${gameTypeCol}, Table ID: ${tableIdCol}`);
         
-        // Parse error records for DETAILS only (not for counting)
+        // Parse error records
         errorsSheet.eachRow((row, rowNumber) => {
           if (rowNumber <= headerRow) return;
           
@@ -172,10 +138,77 @@ export const errorFileRouter = router({
           errorDetail.gameType = getCellValue(row.getCell(gameTypeCol)) || undefined;
           errorDetail.tableId = getCellValue(row.getCell(tableIdCol)) || undefined;
           
-          // Store details only - do NOT increment gpErrorCounts here
           if (!gpErrorDetails[gpName!]) gpErrorDetails[gpName!] = [];
           gpErrorDetails[gpName!].push(errorDetail);
         });
+      }
+
+      // STEP 2: Get error COUNTS.
+      // Strategy: Try "Error Count Analysis" sheet first (authoritative when
+      // formulas have cached results). Then ALWAYS supplement from the "Errors"
+      // sheet for any GP that has detail rows but is missing from ECA results
+      // (common when Excel is saved without full recalculation — only non-zero
+      // formula results get cached, and GPs whose name formula also lacks a
+      // cached result are invisible to the parser).
+      const errorCountAnalysisSheet = workbook.getWorksheet('Error Count Analysis');
+      if (errorCountAnalysisSheet) {
+        log.info(' Reading "Error Count Analysis" sheet (column C=name, column E=errors)');
+        errorCountAnalysisSheet.eachRow((row, rowNumber) => {
+          if (rowNumber < 2) return;
+          const gpName = getCellValue(row.getCell(3));
+          const errorCount = getNumericValue(row.getCell(5));
+          if (!isValidGpName(gpName)) return;
+          if (errorCount > 0) {
+            gpErrorCounts[gpName!] = errorCount;
+            totalErrorsCount += errorCount;
+          }
+        });
+      } else {
+        // Legacy fallback: "Error Count" sheet
+        const errorCountSheet = workbook.getWorksheet('Error Count');
+        if (errorCountSheet) {
+          log.info(' Fallback: Using "Error Count" sheet (column D)');
+          errorCountSheet.eachRow((row, rowNumber) => {
+            if (rowNumber < 2) return;
+            const gpName = getCellValue(row.getCell(2));
+            const errorCount = getNumericValue(row.getCell(4));
+            if (!isValidGpName(gpName)) return;
+            if (errorCount > 0) {
+              gpErrorCounts[gpName!] = errorCount;
+              totalErrorsCount += errorCount;
+            }
+          });
+        }
+      }
+
+      // SUPPLEMENT: For any GP that has detail rows in the "Errors" sheet
+      // but is NOT already in gpErrorCounts (or has count 0), compute their
+      // count from the detail rows. This handles:
+      //   - Excel files with partial formula caching (only non-zero results cached)
+      //   - GPs whose name formula in ECA has no cached result
+      //   - Files with no ECA sheet at all
+      if (Object.keys(gpErrorDetails).length > 0) {
+        let supplemented = 0;
+        for (const [gpName, details] of Object.entries(gpErrorDetails)) {
+          // Skip if ECA already provided a non-zero count for this GP
+          if (gpErrorCounts[gpName] && gpErrorCounts[gpName] > 0) continue;
+          
+          // Count non-technical errors (same logic as the COUNTIFS formula:
+          // total errors minus those with TV* error codes)
+          const nonTechnicalCount = details.filter(d => {
+            const code = (d.errorCode || '').trim().toUpperCase();
+            return !code.startsWith('TV');
+          }).length;
+          
+          if (nonTechnicalCount > 0) {
+            gpErrorCounts[gpName] = nonTechnicalCount;
+            totalErrorsCount += nonTechnicalCount;
+            supplemented++;
+          }
+        }
+        if (supplemented > 0) {
+          log.info(` Supplemented ${supplemented} GPs with error counts from "Errors" sheet (not found in ECA results)`);
+        }
       }
 
       // Save error file to database
@@ -497,17 +530,7 @@ export const errorFileRouter = router({
       const gpErrorCounts: Record<string, number> = {};
       const gpErrorDetails: Record<string, Array<{ date?: Date; description?: string; errorCode?: string; gameType?: string; tableId?: string }>> = {};
 
-      const errorCountAnalysisSheet = workbook.getWorksheet("Error Count Analysis");
-      if (errorCountAnalysisSheet) {
-        errorCountAnalysisSheet.eachRow((row: any, rowNumber: number) => {
-          if (rowNumber < 2) return;
-          const gpName = getCellValue(row.getCell(3));
-          const errorCount = getNumericValue(row.getCell(5));
-          if (!isValidGpName(gpName)) return;
-          gpErrorCounts[gpName!] = errorCount;
-        });
-      }
-
+      // STEP 1: Parse "Errors" sheet for details FIRST (needed for fallback counting)
       const errorsSheet = workbook.getWorksheet("Errors");
       if (errorsSheet) {
         let headerRow = 2;
@@ -554,6 +577,36 @@ export const errorFileRouter = router({
           if (!gpErrorDetails[gpName!]) gpErrorDetails[gpName!] = [];
           gpErrorDetails[gpName!].push(errorDetail);
         });
+      }
+
+      // STEP 2: Try "Error Count Analysis" for counts
+      const errorCountAnalysisSheet = workbook.getWorksheet("Error Count Analysis");
+      if (errorCountAnalysisSheet) {
+        errorCountAnalysisSheet.eachRow((row: any, rowNumber: number) => {
+          if (rowNumber < 2) return;
+          const gpName = getCellValue(row.getCell(3));
+          const errorCount = getNumericValue(row.getCell(5));
+          if (!isValidGpName(gpName)) return;
+          if (errorCount > 0) {
+            gpErrorCounts[gpName!] = errorCount;
+          }
+        });
+      }
+
+      // SUPPLEMENT: For any GP in Errors sheet details that is NOT already
+      // in gpErrorCounts, compute their count from the detail rows.
+      // This handles partial formula caching in ECA.
+      if (Object.keys(gpErrorDetails).length > 0) {
+        for (const [gpName, details] of Object.entries(gpErrorDetails)) {
+          if (gpErrorCounts[gpName] && gpErrorCounts[gpName] > 0) continue;
+          const nonTechnicalCount = details.filter(d => {
+            const code = (d.errorCode || '').trim().toUpperCase();
+            return !code.startsWith('TV');
+          }).length;
+          if (nonTechnicalCount > 0) {
+            gpErrorCounts[gpName] = nonTechnicalCount;
+          }
+        }
       }
 
       // Wipe existing gpErrors tied to this errorFile, then re-create.
