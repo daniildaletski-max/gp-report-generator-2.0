@@ -2,7 +2,7 @@ import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Tooltip as ShadTooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { format } from "date-fns";
@@ -14,7 +14,7 @@ import {
   MessageSquare, FileText, LayoutDashboard,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
 import { getScoreTone, SCORE_TONE_CLASSES } from "@/lib/scoreTone";
 import { MAX_TOTAL_SCORE, MAX_APPEARANCE_SCORE, MAX_GAME_PERFORMANCE_SCORE, SCORE_CONFIG, MONTH_NAMES, MONTH_NAMES_SHORT } from "../../../shared/const";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
@@ -894,7 +894,7 @@ export default function GPPortal() {
                                 replaces the small inline score so the
                                 eye lands on the number first. */}
                             <div className="flex items-start gap-3">
-                              <Tooltip>
+                              <ShadTooltip>
                                 <TooltipTrigger asChild>
                                   <div className={`relative shrink-0 h-14 w-14 rounded-2xl border-2 ${sc.border} bg-white flex flex-col items-center justify-center shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200`}>
                                     <span className={`text-xl font-bold tabular-nums leading-none ${sc.text}`}>{eval_.totalScore}</span>
@@ -926,7 +926,7 @@ export default function GPPortal() {
                                     </div>
                                   </div>
                                 </TooltipContent>
-                              </Tooltip>
+                              </ShadTooltip>
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2 mb-1">
                                   <p className="text-sm font-semibold text-slate-800 truncate">
@@ -1163,7 +1163,7 @@ export default function GPPortal() {
                         domain={[0, MAX_TOTAL_SCORE]}
                         ticks={[0, 5, 10, 15, 20, MAX_TOTAL_SCORE]}
                       />
-                      <Tooltip 
+                      <RechartsTooltip 
                         contentStyle={{ 
                           backgroundColor: '#ffffff', 
                           border: '1px solid #e2e8f0', 
