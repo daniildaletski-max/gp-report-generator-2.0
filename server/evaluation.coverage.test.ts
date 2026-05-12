@@ -25,24 +25,24 @@ describe("evaluation.coverage logic", () => {
   it("should classify GP with 0 evals as 'missing'", async () => {
     const evalCount = 0;
     let status: "complete" | "partial" | "missing" = "missing";
-    if (evalCount >= 6) status = "complete";
+    if (evalCount >= 10) status = "complete";
     else if (evalCount > 0) status = "partial";
     expect(status).toBe("missing");
   });
 
-  it("should classify GP with 1-5 evals as 'partial'", async () => {
-    for (const count of [1, 2, 3, 4, 5]) {
+  it("should classify GP with 1-9 evals as 'partial'", async () => {
+    for (const count of [1, 2, 3, 5, 7, 9]) {
       let status: "complete" | "partial" | "missing" = "missing";
-      if (count >= 6) status = "complete";
+      if (count >= 10) status = "complete";
       else if (count > 0) status = "partial";
       expect(status).toBe("partial");
     }
   });
 
-  it("should classify GP with 6+ evals as 'complete'", async () => {
-    for (const count of [6, 7, 10, 20]) {
+  it("should classify GP with 10+ evals as 'complete'", async () => {
+    for (const count of [10, 11, 15, 20]) {
       let status: "complete" | "partial" | "missing" = "missing";
-      if (count >= 6) status = "complete";
+      if (count >= 10) status = "complete";
       else if (count > 0) status = "partial";
       expect(status).toBe("complete");
     }

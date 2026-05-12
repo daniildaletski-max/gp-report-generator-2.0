@@ -1211,13 +1211,13 @@ function TeamCoveragePanel({ teams, selectedTeamId, onSelectTeam, coverageData, 
                             className={`h-full rounded-full transition-all duration-500 ${
                               gp.status === 'complete' ? 'bg-emerald-500' : gp.status === 'partial' ? 'bg-amber-500' : 'bg-red-400'
                             }`}
-                            style={{ width: `${Math.min((gp.evalCount / 6) * 100, 100)}%` }}
+                            style={{ width: `${Math.min((gp.evalCount / 10) * 100, 100)}%` }}
                           />
                         </div>
                         <span className={`text-[10px] font-bold tabular-nums ${
                           gp.status === 'complete' ? 'text-emerald-600' : gp.status === 'partial' ? 'text-amber-600' : 'text-red-500'
                         }`}>
-                          {gp.evalCount}/6
+                          {gp.evalCount}/10
                         </span>
                       </div>
 
@@ -1234,7 +1234,7 @@ function TeamCoveragePanel({ teams, selectedTeamId, onSelectTeam, coverageData, 
                     <p className="font-semibold text-sm">{gp.gpName}</p>
                     {gp.realName && <p className="text-xs text-muted-foreground">{gp.realName}</p>}
                     <div className="mt-1 space-y-0.5 text-xs">
-                      <p>{gp.evalCount} eval{gp.evalCount !== 1 ? 's' : ''} this month{gp.evalCount < 6 ? ` — ${6 - gp.evalCount} more needed` : ' — target reached'}</p>
+                      <p>{gp.evalCount} eval{gp.evalCount !== 1 ? 's' : ''} this month{gp.evalCount < 10 ? ` — ${10 - gp.evalCount} more needed` : ' — target reached'}</p>
                       {gp.avgScore != null && <p>Avg score: {gp.avgScore}/22</p>}
                       <p>{gp.totalEvalsAllTime} total evals all time</p>
                       {gp.lastEvalDate && (

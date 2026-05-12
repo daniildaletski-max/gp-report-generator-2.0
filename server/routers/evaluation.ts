@@ -566,7 +566,7 @@ export const evaluationRouter = router({
 
           // Determine status
           let status: 'complete' | 'partial' | 'missing' = 'missing';
-          if (monthEvals.length >= 6) status = 'complete';
+          if (monthEvals.length >= 10) status = 'complete';
           else if (monthEvals.length > 0) status = 'partial';
 
           return {
