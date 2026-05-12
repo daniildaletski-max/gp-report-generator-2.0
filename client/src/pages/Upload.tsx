@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/PageHeader";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +41,9 @@ import {
   CloudUpload,
   ImagePlus,
   Clipboard,
+  Users,
+  TrendingUp,
+  CircleDot,
 } from "lucide-react";
 
 // ============ TYPES ============
@@ -528,6 +532,24 @@ export default function UploadPage() {
   const processingRef = useRef(false);
 
   const { data: gpList } = trpc.gamePresenter.list.useQuery();
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
+  const [coverageMonth] = useState(() => {
+    const now = new Date();
+    return { month: now.getMonth() + 1, year: now.getFullYear() };
+  });
+
+  const { data: teamsList } = trpc.fmTeam.listWithGPs.useQuery();
+  const { data: coverageData, isLoading: coverageLoading } = trpc.evaluation.coverage.useQuery(
+    { month: coverageMonth.month, year: coverageMonth.year, teamId: selectedTeamId ?? undefined },
+    { enabled: !!selectedTeamId }
+  );
+
+  // Auto-select first team if user has only one
+  useEffect(() => {
+    if (teamsList && teamsList.length > 0 && !selectedTeamId) {
+      setSelectedTeamId(teamsList[0].id);
+    }
+  }, [teamsList]);
 
   const uploadEvaluationMutation = trpc.evaluation.uploadAndExtract.useMutation();
   const uploadAttitudeMutation = trpc.attitudeScreenshot.upload.useMutation();
@@ -819,6 +841,18 @@ export default function UploadPage() {
         </TabsList>
       </Tabs>
 
+      {/* Team Coverage Panel */}
+      {activeTab === "evaluations" && teamsList && teamsList.length > 0 && (
+        <TeamCoveragePanel
+          teams={teamsList}
+          selectedTeamId={selectedTeamId}
+          onSelectTeam={setSelectedTeamId}
+          coverageData={coverageData}
+          coverageLoading={coverageLoading}
+          coverageMonth={coverageMonth}
+        />
+      )}
+
       {/* GP Selector for Attitude — replaced native <select> with the
           Shadcn Select so it matches every other dropdown in the app
           and carries proper keyboard navigation / focus rings. */}
@@ -1047,6 +1081,179 @@ export default function UploadPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ============================================
+// Team Coverage Panel — shows GP evaluation coverage for the selected team
+// ============================================
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+interface TeamCoveragePanelProps {
+  teams: Array<{ id: number; teamName: string; gpCount: number }>;
+  selectedTeamId: number | null;
+  onSelectTeam: (id: number) => void;
+  coverageData: Array<{
+    teamId: number;
+    teamName: string;
+    gps: Array<{
+      gpId: number;
+      gpName: string;
+      realName: string | null;
+      evalCount: number;
+      avgScore: number | null;
+      lastEvalDate: Date | string | null;
+      totalEvalsAllTime: number;
+      status: 'complete' | 'partial' | 'missing';
+    }>;
+    summary: { total: number; complete: number; partial: number; missing: number };
+  }> | undefined;
+  coverageLoading: boolean;
+  coverageMonth: { month: number; year: number };
+}
+
+function TeamCoveragePanel({ teams, selectedTeamId, onSelectTeam, coverageData, coverageLoading, coverageMonth }: TeamCoveragePanelProps) {
+  const teamData = coverageData?.[0];
+  const summary = teamData?.summary;
+  const monthLabel = `${MONTH_NAMES[coverageMonth.month - 1]} ${coverageMonth.year}`;
+
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      {/* Header with team selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-b border-border bg-muted/30">
+        <div className="flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
+            <Users className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Team Coverage</h3>
+            <p className="text-xs text-muted-foreground">{monthLabel} evaluation progress</p>
+          </div>
+        </div>
+        <Select
+          value={selectedTeamId ? String(selectedTeamId) : undefined}
+          onValueChange={(v) => onSelectTeam(Number(v))}
+        >
+          <SelectTrigger className="w-full sm:w-[220px] bg-background h-9 text-sm">
+            <SelectValue placeholder="Select team..." />
+          </SelectTrigger>
+          <SelectContent>
+            {teams.map((team) => (
+              <SelectItem key={team.id} value={String(team.id)}>
+                {team.teamName} ({team.gpCount} GPs)
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Summary strip */}
+      {summary && !coverageLoading && (
+        <div className="grid grid-cols-3 gap-px bg-border">
+          <div className="bg-card px-4 py-2.5 text-center">
+            <p className="text-lg font-bold tabular-nums text-emerald-600">{summary.complete}</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Complete</p>
+          </div>
+          <div className="bg-card px-4 py-2.5 text-center">
+            <p className="text-lg font-bold tabular-nums text-amber-600">{summary.partial}</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">In Progress</p>
+          </div>
+          <div className="bg-card px-4 py-2.5 text-center">
+            <p className="text-lg font-bold tabular-nums text-red-500">{summary.missing}</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Missing</p>
+          </div>
+        </div>
+      )}
+
+      {/* GP Grid */}
+      <div className="p-3">
+        {coverageLoading && (
+          <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Loading coverage data...</span>
+          </div>
+        )}
+
+        {!coverageLoading && !teamData && selectedTeamId && (
+          <div className="text-center py-6 text-sm text-muted-foreground">
+            No GPs assigned to this team yet.
+          </div>
+        )}
+
+        {!coverageLoading && teamData && teamData.gps.length > 0 && (
+          <TooltipProvider delayDuration={200}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+              {teamData.gps.map((gp) => (
+                <Tooltip key={gp.gpId}>
+                  <TooltipTrigger asChild>
+                    <div className={`relative rounded-lg border p-2.5 transition-all hover:shadow-sm cursor-default ${
+                      gp.status === 'complete'
+                        ? 'border-emerald-200 bg-emerald-50/50'
+                        : gp.status === 'partial'
+                          ? 'border-amber-200 bg-amber-50/40'
+                          : 'border-red-200/60 bg-red-50/30'
+                    }`}>
+                      {/* Status dot */}
+                      <div className={`absolute top-2 right-2 h-2 w-2 rounded-full ${
+                        gp.status === 'complete' ? 'bg-emerald-500' : gp.status === 'partial' ? 'bg-amber-500' : 'bg-red-400'
+                      }`} />
+
+                      <p className="text-xs font-semibold text-foreground truncate pr-4" title={gp.gpName}>
+                        {gp.gpName}
+                      </p>
+
+                      {/* Eval count bar */}
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              gp.status === 'complete' ? 'bg-emerald-500' : gp.status === 'partial' ? 'bg-amber-500' : 'bg-red-400'
+                            }`}
+                            style={{ width: `${Math.min((gp.evalCount / 6) * 100, 100)}%` }}
+                          />
+                        </div>
+                        <span className={`text-[10px] font-bold tabular-nums ${
+                          gp.status === 'complete' ? 'text-emerald-600' : gp.status === 'partial' ? 'text-amber-600' : 'text-red-500'
+                        }`}>
+                          {gp.evalCount}/6
+                        </span>
+                      </div>
+
+                      {/* Avg score if available */}
+                      {gp.avgScore != null && (
+                        <div className="mt-1.5 flex items-center gap-1">
+                          <TrendingUp className="h-2.5 w-2.5 text-muted-foreground" />
+                          <span className="text-[10px] text-muted-foreground">avg <strong className="text-foreground">{gp.avgScore}</strong>/22</span>
+                        </div>
+                      )}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[200px]">
+                    <p className="font-semibold text-sm">{gp.gpName}</p>
+                    {gp.realName && <p className="text-xs text-muted-foreground">{gp.realName}</p>}
+                    <div className="mt-1 space-y-0.5 text-xs">
+                      <p>{gp.evalCount} eval{gp.evalCount !== 1 ? 's' : ''} this month{gp.evalCount < 6 ? ` — ${6 - gp.evalCount} more needed` : ' — target reached'}</p>
+                      {gp.avgScore != null && <p>Avg score: {gp.avgScore}/22</p>}
+                      <p>{gp.totalEvalsAllTime} total evals all time</p>
+                      {gp.lastEvalDate && (
+                        <p className="text-muted-foreground">Last: {new Date(gp.lastEvalDate).toLocaleDateString()}</p>
+                      )}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+          </TooltipProvider>
+        )}
+
+        {!coverageLoading && teamData && teamData.gps.length === 0 && (
+          <div className="text-center py-6 text-sm text-muted-foreground">
+            No GPs in this team. Assign GPs in the Admin panel.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -507,4 +507,102 @@ export const evaluationRouter = router({
       const count = await db.deleteEvaluationsByDateRange(input.startDate, input.endDate);
       return { success: true, deletedCount: count };
     }),
+
+  /**
+   * Coverage — for the Upload page team selector.
+   * Returns each GP in the user's teams with their eval count for the
+   * given month, average score, and last eval date so the FM can see
+   * who still needs evaluations.
+   */
+  coverage: protectedProcedure
+    .input(z.object({
+      month: z.number().min(1).max(12),
+      year: z.number(),
+      teamId: z.number().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      // Get teams for this user
+      let teams: Array<{ id: number; teamName: string; gamePresenters: Array<{ id: number; name: string; realName: string | null }> }>;
+      if (ctx.user.role === 'admin') {
+        const allTeams = await db.getAllTeamsWithGPs();
+        teams = allTeams.map(t => ({
+          id: t.id,
+          teamName: t.teamName,
+          gamePresenters: t.gamePresenters.map(gp => ({ id: gp.id, name: gp.name, realName: gp.realName })),
+        }));
+      } else {
+        const userTeams = await db.getTeamsWithGPsByUser(ctx.user.id);
+        teams = userTeams.map(t => ({
+          id: t.id,
+          teamName: t.teamName,
+          gamePresenters: t.gamePresenters.map(gp => ({ id: gp.id, name: gp.name, realName: gp.realName })),
+        }));
+      }
+
+      // Filter to specific team if requested
+      if (input.teamId) {
+        teams = teams.filter(t => t.id === input.teamId);
+      }
+
+      const startDate = new Date(input.year, input.month - 1, 1);
+      const endDate = new Date(input.year, input.month, 0, 23, 59, 59);
+
+      const result = await Promise.all(teams.map(async (team) => {
+        const gpCoverage = await Promise.all(team.gamePresenters.map(async (gp) => {
+          const monthEvals = await db.getEvaluationsByGPAndMonth(gp.id, input.year, input.month);
+          const allEvals = await db.getEvaluationsByGP(gp.id);
+          // Sort newest first
+          allEvals.sort((a, b) => {
+            const ta = (a.evaluationDate ?? a.createdAt ?? new Date(0)).getTime?.() ?? 0;
+            const tb = (b.evaluationDate ?? b.createdAt ?? new Date(0)).getTime?.() ?? 0;
+            return tb - ta;
+          });
+          const lastEval = allEvals[0] ?? null;
+          const lastDate = lastEval?.evaluationDate ?? lastEval?.createdAt ?? null;
+
+          // Average score this month
+          const scores = monthEvals.map(e => e.totalScore).filter((s): s is number => s != null && s > 0);
+          const avgScore = scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null;
+
+          // Determine status
+          let status: 'complete' | 'partial' | 'missing' = 'missing';
+          if (monthEvals.length >= 6) status = 'complete';
+          else if (monthEvals.length > 0) status = 'partial';
+
+          return {
+            gpId: gp.id,
+            gpName: gp.name,
+            realName: gp.realName,
+            evalCount: monthEvals.length,
+            avgScore,
+            lastEvalDate: lastDate,
+            totalEvalsAllTime: allEvals.length,
+            status,
+          };
+        }));
+
+        // Sort: missing first, then partial, then complete; alphabetical within
+        const statusRank: Record<string, number> = { missing: 0, partial: 1, complete: 2 };
+        gpCoverage.sort((a, b) => {
+          const sa = statusRank[a.status] ?? 99;
+          const sb = statusRank[b.status] ?? 99;
+          if (sa !== sb) return sa - sb;
+          return a.gpName.localeCompare(b.gpName);
+        });
+
+        return {
+          teamId: team.id,
+          teamName: team.teamName,
+          gps: gpCoverage,
+          summary: {
+            total: gpCoverage.length,
+            complete: gpCoverage.filter(g => g.status === 'complete').length,
+            partial: gpCoverage.filter(g => g.status === 'partial').length,
+            missing: gpCoverage.filter(g => g.status === 'missing').length,
+          },
+        };
+      }));
+
+      return result;
+    }),
 });
