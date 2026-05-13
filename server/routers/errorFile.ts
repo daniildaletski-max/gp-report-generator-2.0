@@ -227,37 +227,17 @@ export const errorFileRouter = router({
       // We do NOT delete all errors for this month/year when uploading a new file type,
       // as that would wipe out errors from the other error type (playgon vs MG).
       
-      // Update GP mistakes directly from parsed error counts
+      // STEP 3: Deduplicate error details per GP and compute CORRECT mistake counts.
+      // The ECA sheet (or raw row count) gives inflated numbers because it counts
+      // every row including duplicates of the same incident. The dashboard should
+      // show the number of UNIQUE non-technical errors.
       const createdErrorRecords: number[] = [];
+      const dedupedGpErrorCounts: Record<string, number> = {};
 
-      // GP match scope: admins upload tenant-wide files (one Excel
-      // covers every team), so matching against the uploader's
-      // own GPs only would silently miss every GP that belongs to
-      // a different FM. Admin -> match across ALL GPs. FM -> match
-      // only their own (tenant isolation).
-      const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
-
-      // Batch update — single gamePresenters read for the whole file
-      // instead of one read per GP name.
-      const batch = await db.updateGPMistakesBatch(
-        Object.entries(gpErrorCounts),
-        input.month,
-        input.year,
-        matchScopeUserId,
-      );
-      const updatedGPs = batch.matched;
-      const notFoundGPs = batch.notFound;
-      const ambiguousGPs = batch.ambiguous;
-
-      for (const [gpName, count] of Object.entries(gpErrorCounts)) {
-        
-        // Create individual error records with descriptions if available
+      for (const [gpName, _rawCount] of Object.entries(gpErrorCounts)) {
         const rawDetails = gpErrorDetails[gpName] || [];
-        // Dedupe parse-noise: the "Errors" sheet sometimes carries
-        // the same row 2-3× (re-pastes / backfills). Source of truth
-        // for the COUNT is the "Error Count Analysis" sheet column E
-        // (`count` above); we drop duplicates here so the per-row
-        // detail list matches that count instead of inflating it.
+        
+        // Dedupe: collapse rows with identical signature (same code + table + game type + date + description)
         const seenSig = new Set<string>();
         const details: typeof rawDetails = [];
         for (const d of rawDetails) {
@@ -272,8 +252,19 @@ export const errorFileRouter = router({
           seenSig.add(sig);
           details.push(d);
         }
+        
+        // Filter out technical errors (TV codes) from the deduped list
+        const nonTechnicalDetails = details.filter(d => {
+          const code = (d.errorCode || '').trim().toUpperCase();
+          return !code.startsWith('TV');
+        });
+        
+        // The CORRECT mistake count = number of unique non-technical errors
+        const correctCount = nonTechnicalDetails.length;
+        dedupedGpErrorCounts[gpName] = correctCount;
+        
+        // Create individual error records with full details (store ALL deduped, including TV)
         if (details.length > 0) {
-          // Create individual error records with full details
           for (const detail of details) {
             const errorRecord = await db.createGpError({
               gpName,
@@ -287,23 +278,41 @@ export const errorFileRouter = router({
             });
             createdErrorRecords.push(errorRecord.id);
           }
-        } else if (count > 0) {
+        } else if (correctCount > 0) {
           // Fallback: create summary record without details
           const errorRecord = await db.createGpError({
             gpName,
             errorFileId: errorFile.id,
             errorDate: new Date(input.year, input.month - 1, 15),
-            errorDescription: `${count} error(s) recorded`,
+            errorDescription: `${correctCount} error(s) recorded`,
             userId: ctx.user.id, // Data isolation
           });
           createdErrorRecords.push(errorRecord.id);
         }
       }
 
+      // GP match scope: admins upload tenant-wide files (one Excel
+      // covers every team), so matching against the uploader's
+      // own GPs only would silently miss every GP that belongs to
+      // a different FM. Admin -> match across ALL GPs. FM -> match
+      // only their own (tenant isolation).
+      const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
+
+      // Batch update — use DEDUPED non-technical counts (not raw ECA counts)
+      const batch = await db.updateGPMistakesBatch(
+        Object.entries(dedupedGpErrorCounts),
+        input.month,
+        input.year,
+        matchScopeUserId,
+      );
+      const updatedGPs = batch.matched;
+      const notFoundGPs = batch.notFound;
+      const ambiguousGPs = batch.ambiguous;
+
       return {
         ...errorFile,
         parsedErrors: totalErrorsCount,
-        gpErrorCounts,
+        gpErrorCounts: dedupedGpErrorCounts,
         gpErrorDetails,
         updatedGPs,
         notFoundGPs,
@@ -613,26 +622,13 @@ export const errorFileRouter = router({
       await db.deleteGpErrorsByMonthYear(file.month, file.year, ctx.user.id, file.id);
 
       let recordsCreated = 0;
-      // Admin rescan covers every team's GPs; FM rescan stays scoped.
-      const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
-      // Batch update — single gamePresenters read up front, then we
-      // iterate the entries again below to recreate the per-row
-      // gpErrors detail records (after parse-time dedup).
-      const batch = await db.updateGPMistakesBatch(
-        Object.entries(gpErrorCounts),
-        file.month,
-        file.year,
-        matchScopeUserId,
-      );
-      const updatedGPs = batch.matched;
-      const notFoundGPs = batch.notFound;
-      const ambiguousGPs = batch.ambiguous;
-      for (const [gpName, count] of Object.entries(gpErrorCounts)) {
-        // Dedupe parse-noise (same as the upload path above) so the
-        // rescan doesn't reinflate the per-row list with duplicate
-        // "Errors" sheet rows. "Error Count Analysis" column E stays
-        // the authoritative count.
+      const dedupedGpErrorCounts: Record<string, number> = {};
+
+      // STEP 3: Deduplicate and compute CORRECT mistake counts per GP
+      for (const [gpName, _rawCount] of Object.entries(gpErrorCounts)) {
         const rawDetails = gpErrorDetails[gpName] || [];
+        
+        // Dedupe: collapse rows with identical signature
         const seenSig = new Set<string>();
         const details: typeof rawDetails = [];
         for (const d of rawDetails) {
@@ -647,6 +643,17 @@ export const errorFileRouter = router({
           seenSig.add(sig);
           details.push(d);
         }
+        
+        // Filter out technical errors (TV codes) from the deduped list
+        const nonTechnicalDetails = details.filter(d => {
+          const code = (d.errorCode || '').trim().toUpperCase();
+          return !code.startsWith('TV');
+        });
+        
+        // The CORRECT mistake count = number of unique non-technical errors
+        dedupedGpErrorCounts[gpName] = nonTechnicalDetails.length;
+        
+        // Create individual error records with full details (store ALL deduped, including TV)
         if (details.length > 0) {
           for (const detail of details) {
             await db.createGpError({
@@ -661,17 +668,30 @@ export const errorFileRouter = router({
             });
             recordsCreated++;
           }
-        } else if (count > 0) {
+        } else if (nonTechnicalDetails.length > 0) {
           await db.createGpError({
             gpName,
             errorFileId: file.id,
             errorDate: new Date(file.year, file.month - 1, 15),
-            errorDescription: `${count} error(s) recorded`,
+            errorDescription: `${nonTechnicalDetails.length} error(s) recorded`,
             userId: ctx.user.id,
           });
           recordsCreated++;
         }
       }
+
+      // Admin rescan covers every team's GPs; FM rescan stays scoped.
+      const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
+      // Batch update — use DEDUPED non-technical counts (not raw ECA counts)
+      const batch = await db.updateGPMistakesBatch(
+        Object.entries(dedupedGpErrorCounts),
+        file.month,
+        file.year,
+        matchScopeUserId,
+      );
+      const updatedGPs = batch.matched;
+      const notFoundGPs = batch.notFound;
+      const ambiguousGPs = batch.ambiguous;
 
       log.info(`Reprocessed errorFile ${file.id}: ${recordsCreated} gpErrors recreated, ${updatedGPs.length} GPs matched, ${notFoundGPs.length} unmatched`);
       return {
@@ -681,7 +701,7 @@ export const errorFileRouter = router({
         updatedGPs,
         notFoundGPs,
         ambiguousGPs,
-        totalErrorsCounted: Object.values(gpErrorCounts).reduce((s, n) => s + n, 0),
+        totalErrorsCounted: Object.values(dedupedGpErrorCounts).reduce((s, n) => s + n, 0),
       };
     }),
 });
