@@ -1,0 +1,46 @@
+{
+  "build_command": "pnpm run build",
+  "capabilities": [
+    "db",
+    "server",
+    "user"
+  ],
+  "dev_command": "pnpm run dev",
+  "env_vars": {
+    "DATABASE_URL": "mysql://3siEZZHP6GxHny4.362c1c443853:jGd2c1PCkm3h7Q0DIfG9@gateway02.us-east-1.prod.aws.tidbcloud.com:4000/iWK4WHPw4uyWQ7HVMxhuBF?ssl={\"rejectUnauthorized\":true}"
+  },
+  "experiments": null,
+  "git_remote": {
+    "repo_url": "s3://vida-prod-gitrepo/webdev-git/310519663246817166/iWK4WHPw4uyWQ7HVMxhuBF",
+    "access_key_id": "ASIAZV3A2ECZJ3NPRUWW",
+    "secret_access_key": "51tBqimkMZPYNesm+FMqq20fhU2em50UFia0WXzR",
+    "session_token": "IQoJb3JpZ2luX2VjED4aCXVzLWVhc3QtMSJHMEUCIQDXQPzjeosgwcm5BjrX/fyyeGzmKa63sizBAHtbHT2WIwIgaPnqd8ZccZNhJxhxC8cidzDXsZ4ACy+mY9ZrTCAw0b4q9gMIBxAEGgw2NjUzODYwOTg4NjYiDDGEvrFnocpjJPwmJirTA2WWwkQN+4fDkm9tlyLhRJNm2kaSXhB4UhedHJ13IxZzCkV2Iom3YI/Qqeb+p7OObffBj3+lh5P7Woe5XBUM8DIZ+De81DgAEURXkRf7SO8AZ02W3zdB/OHpMFRa/TDGoKdOyTunAQPdT/AT4TpVlFkY2Ug50Jn2EUSFDhaGT5FQjNyP2K6mKOVDvxH1gFfnGaACq///vsQQ6ALFhf2qPH/0YKnoCGhQEScfax/7VFGZoYjXexbBl91P7wyBbjbncjyiRN6+ZEzuEwXb+b7RpNXTKclwcD1ydElaCk/y6KnPGd8EJkcpg15sbTXzvdbWGcDOTlbXNRwUSUu66FZyZ8jIiGtJMCevOBKdDhcUqjbs9pzLzhkcH1f7Ie1ZyAAxX3L1Jbh2uQypoupxeKLJ1KRwRjSzF0t0CnweaZkkFKbhJu/V5GP5Lfd2Clnt2V3b8qCENKmsvY5/VhQ2GI1hGFSN2ZxpV/xkAzHp0b0lBhxq6tSJNJMY2nGIuZ42A3Nfj7kBeG2p1oXEI8XKnXmK4OV3vk4qctsPooyz7LirjCta2oi8QeG6XIhJR2Y064mpNW7pJlYX6N5zqVO5CXtrWlrr2e+djvWcNzw+64hZBD+zTZgcMK+UvNAGOp0BMXgHuKekiQYJhtzPbS8dDsiAHo43Z2a45sILZMlNhIUCKiHx6Mx4XshnT98Nd7uSrDZsBZfrnTXr3aHfvhXKf+o6oNP5ruV8nQVT1OvHOocNHuPC+vUoGzCvVWXF2eUfmM7EbJcyOBrjqbi9l04VeNWkqW/YPPe84P7h+f6jPBtCmO3We7R4XKZMk8jf0PJU+wUegnLvgTuMSY9huQ==",
+    "expiration": "2026-05-22T01:35:43.000Z"
+  },
+  "name": "gp-report-generator",
+  "path": "/home/ubuntu/gp-report-generator",
+  "port": 3000,
+  "secrets": {
+    "BUILT_IN_FORGE_API_KEY": "7s66oXFanHNtKHuFp42wJG",
+    "BUILT_IN_FORGE_API_URL": "https://forge.manus.ai",
+    "JWT_SECRET": "D2oGLvymawntFbcyJW6FzJ",
+    "OAUTH_SERVER_URL": "https://api.manus.im",
+    "OWNER_NAME": "Daniil Daletski",
+    "OWNER_OPEN_ID": "E5NzZkxbvyX75tw5cyc7tR",
+    "PERSONA_PASSWORD": "Green0710!",
+    "PERSONA_USERNAME": "Floor.Managers",
+    "RESEND_API_KEY": "re_L6GmGCio_PcmmSjA3R5zgP9eHFtjyaME5",
+    "STUDIOWORKS_PASSWORD": "qh5qBfX0K",
+    "STUDIOWORKS_USERNAME": "daniildaletski",
+    "VITE_ANALYTICS_ENDPOINT": "https://manus-analytics.com",
+    "VITE_ANALYTICS_WEBSITE_ID": "588a8544-85ab-4ddd-9c6b-336dbdcd4653",
+    "VITE_APP_ID": "iWK4WHPw4uyWQ7HVMxhuBF",
+    "VITE_APP_LOGO": "https://files.manuscdn.com/user_upload_by_module/web_dev_logo/310519663246817166/ZWRLROXgdiKRbxcX.png",
+    "VITE_APP_TITLE": "GP Report Generator",
+    "VITE_FRONTEND_FORGE_API_KEY": "VLMppZnqo9rdpGF8HSUByJ",
+    "VITE_FRONTEND_FORGE_API_URL": "https://forge.manus.ai",
+    "VITE_OAUTH_PORTAL_URL": "https://manus.im"
+  },
+  "template_id": "web-db-user",
+  "test_command": "pnpm test"
+}
