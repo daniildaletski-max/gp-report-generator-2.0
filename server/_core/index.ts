@@ -14,6 +14,7 @@ import { createLogger } from "../services/logger";
 import { requestTracingMiddleware, requestValidation } from "../services/requestTracing";
 import { cache } from "../services/cache";
 import { checkHealth as checkDbHealth, getDb } from "../db/connection";
+import { ensureRubricSchema } from "../db/rubricMigration";
 import { ENV } from "./env";
 import * as db from "../db";
 
@@ -488,6 +489,13 @@ async function startServer() {
     });
     ensureManagerEmailColumn().catch(err => {
       log.warn("managerEmail boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Versioned-rubric schema (Phase 2): creates rubric_* tables, adds
+    // evaluations.rubricVersionId / scores, seeds rubric v1 and backfills
+    // legacy rows. Idempotent; same "Manus doesn't run migrations" reason
+    // as the column repairs above. See server/db/rubricMigration.ts.
+    ensureRubricSchema().catch(err => {
+      log.warn("rubric schema boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
     });
     // Automation credentials audit — surfaces missing RESEND_API_KEY /
     // PERSONA_* / STUDIOWORKS_* env vars in deploy logs so operators

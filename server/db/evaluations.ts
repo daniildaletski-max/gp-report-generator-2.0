@@ -55,6 +55,11 @@ export async function createEvaluation(data: InsertEvaluation): Promise<Evaluati
     appearanceScore: computed.appearanceScore,
     gamePerformanceTotalScore: computed.gamePerformanceTotalScore,
     totalScore,
+    // Dual-write the forward-looking shape: per-criterion JSON + the
+    // rubric version this was scored under (v1 today). Legacy columns
+    // above are still written so existing readers keep working.
+    scores: computed.perCriterion,
+    rubricVersionId: data.rubricVersionId ?? DEFAULT_RUBRIC_V1.rubricVersionId,
   });
   const newEval = await db.select().from(evaluations).where(eq(evaluations.id, Number(result[0].insertId))).limit(1);
   return newEval[0];
@@ -89,6 +94,7 @@ export async function updateEvaluation(id: number, data: Partial<InsertEvaluatio
       updateData.appearanceScore = computed.appearanceScore;
       updateData.gamePerformanceTotalScore = computed.gamePerformanceTotalScore;
       updateData.totalScore = computed.totalScore;
+      updateData.scores = computed.perCriterion;
     }
   }
 

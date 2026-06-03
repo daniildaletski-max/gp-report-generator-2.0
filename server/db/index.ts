@@ -155,3 +155,10 @@ export {
   deleteAlias, getAliasById, loadAliasMapForTeam,
 } from "./personaAliases";
 export type { PersonaAliasWithGp } from "./personaAliases";
+
+// Rubric (versioned scoring)
+export {
+  assembleRubricVersion, getActiveRubricVersion,
+  getRubricVersionById, invalidateRubricCache,
+} from "./rubric";
+export { ensureRubricSchema } from "./rubricMigration";

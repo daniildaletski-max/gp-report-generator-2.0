@@ -99,6 +99,19 @@ export const evaluations = mysqlTable("evaluations", {
   // Calculated scores for template
   appearanceScore: int("appearanceScore"), // Hair + Makeup + Outfit + Posture
   gamePerformanceTotalScore: int("gamePerformanceTotalScore"), // Dealing + GamePerf
+  /**
+   * Rubric version this evaluation was scored under. Null on legacy rows
+   * until the boot-time backfill tags them as v1 (rubric_versions.id = 1).
+   * Lets historical scores stay comparable when the rubric changes.
+   */
+  rubricVersionId: int("rubricVersionId"),
+  /**
+   * Per-criterion scores keyed by criterion key (e.g. { hair: 3, ... }).
+   * The forward-looking source of truth that replaces the fixed
+   * `<criterion>Score` columns. Dual-written alongside the legacy columns
+   * during the transition; backfilled from them for historical rows.
+   */
+  scores: json("scores").$type<Record<string, number>>(),
   screenshotUrl: text("screenshotUrl"),
   screenshotKey: varchar("screenshotKey", { length: 512 }),
   rawExtractedData: json("rawExtractedData"),
@@ -110,6 +123,71 @@ export const evaluations = mysqlTable("evaluations", {
 
 export type Evaluation = typeof evaluations.$inferSelect;
 export type InsertEvaluation = typeof evaluations.$inferInsert;
+
+/**
+ * Rubrics — a named scoring scheme. Today there is exactly one ("Default
+ * GP Evaluation"), but the table exists so the rubric can be edited and
+ * re-versioned from the admin UI instead of being hardcoded across the
+ * schema, const.ts, the exporters and the portal.
+ */
+export const rubrics = mysqlTable("rubrics", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  isActive: int("isActive").default(1).notNull(), // 1 = active, 0 = retired
+  createdById: int("createdById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Rubric = typeof rubrics.$inferSelect;
+export type InsertRubric = typeof rubrics.$inferInsert;
+
+/**
+ * Rubric versions — an immutable snapshot of a rubric's criteria. Editing
+ * a rubric creates a new version rather than mutating the current one, so
+ * an evaluation scored under v1 stays comparable forever. `version` 1 is
+ * the seeded original (Hair/Makeup/Outfit/Posture = 12, Dealing/Game = 10).
+ */
+export const rubricVersions = mysqlTable("rubric_versions", {
+  id: int("id").autoincrement().primaryKey(),
+  rubricId: int("rubricId").notNull(),
+  version: int("version").notNull(), // 1, 2, 3, …
+  label: varchar("label", { length: 255 }).notNull(),
+  /** First date this version applies to. New evaluations pick the active
+   *  version effective on their evaluation date. */
+  effectiveFrom: timestamp("effectiveFrom"),
+  /** Sum of all criteria maxes — denormalised for quick "/22"-style display. */
+  totalMax: int("totalMax").default(0).notNull(),
+  /** Once locked, the version's criteria must not change (enforced in app). */
+  isLocked: int("isLocked").default(0).notNull(),
+  /** 1 = this is the version new evaluations are scored under for its rubric. */
+  isActive: int("isActive").default(0).notNull(),
+  createdById: int("createdById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type RubricVersion = typeof rubricVersions.$inferSelect;
+export type InsertRubricVersion = typeof rubricVersions.$inferInsert;
+
+/**
+ * Rubric criteria — one row per scored criterion within a version. Column
+ * names avoid the MySQL reserved words `key` and `group`.
+ */
+export const rubricCriteria = mysqlTable("rubric_criteria", {
+  id: int("id").autoincrement().primaryKey(),
+  versionId: int("versionId").notNull(),
+  /** Stable identifier, e.g. "hair". Matches the JSON key in evaluations.scores. */
+  key: varchar("criterionKey", { length: 64 }).notNull(),
+  label: varchar("label", { length: 255 }).notNull(),
+  description: text("description"),
+  maxScore: int("maxScore").notNull(),
+  /** Roll-up bucket: "appearance" or "game". */
+  group: mysqlEnum("criterionGroup", ["appearance", "game"]).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+});
+
+export type RubricCriterion = typeof rubricCriteria.$inferSelect;
+export type InsertRubricCriterion = typeof rubricCriteria.$inferInsert;
 
 /**
  * GP Monthly Attendance - tracks attendance metrics per GP per month
