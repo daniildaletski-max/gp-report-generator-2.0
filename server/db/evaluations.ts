@@ -6,8 +6,33 @@ import { eq, and, or, gte, lte, desc, sql, inArray } from "drizzle-orm";
 import { evaluations, InsertEvaluation, Evaluation, gamePresenters } from "../../drizzle/schema";
 import { getDb } from "./connection";
 import { createLogger } from "../services/logger";
+import { computeEvaluationScores, DEFAULT_RUBRIC_V1, type CriterionScores } from "../../shared/scoring";
 
 const log = createLogger("DB:Evaluations");
+
+/**
+ * Map the legacy per-criterion columns on an (insert) evaluation row to
+ * the rubric's criterion keys, so the scoring engine can derive the
+ * appearance / game-performance / total subtotals from one place.
+ *
+ * The keys here mirror `DEFAULT_RUBRIC_V1`. When the rubric moves into
+ * the database (Phase 2) this mapping stays — only the rubric argument
+ * to `computeEvaluationScores` changes.
+ */
+function criterionScoresFromColumns(
+  row: Partial<Pick<InsertEvaluation,
+    | "hairScore" | "makeupScore" | "outfitScore" | "postureScore"
+    | "dealingStyleScore" | "gamePerformanceScore">>,
+): CriterionScores {
+  return {
+    hair: row.hairScore,
+    makeup: row.makeupScore,
+    outfit: row.outfitScore,
+    posture: row.postureScore,
+    dealingStyle: row.dealingStyleScore,
+    gamePerformance: row.gamePerformanceScore,
+  };
+}
 
 // ============================================
 // CRUD
@@ -16,9 +41,21 @@ const log = createLogger("DB:Evaluations");
 export async function createEvaluation(data: InsertEvaluation): Promise<Evaluation> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const appearanceScore = (data.hairScore || 0) + (data.makeupScore || 0) + (data.outfitScore || 0) + (data.postureScore || 0);
-  const gamePerformanceTotalScore = (data.dealingStyleScore || 0) + (data.gamePerformanceScore || 0);
-  const result = await db.insert(evaluations).values({ ...data, appearanceScore, gamePerformanceTotalScore });
+  // Single source of truth: derive appearance / game-performance / total
+  // from the per-criterion scores. Previously `totalScore` was left as
+  // the (often null) input, forcing callers to patch it with a follow-up
+  // UPDATE. We compute it here so every write path is consistent.
+  const computed = computeEvaluationScores(criterionScoresFromColumns(data), DEFAULT_RUBRIC_V1);
+  // Prefer the derived total. Fall back to an explicitly-supplied total
+  // only when no sub-scores were provided (derived === 0) so we never
+  // discard a legacy/external "total-only" value.
+  const totalScore = computed.totalScore > 0 ? computed.totalScore : (data.totalScore ?? computed.totalScore);
+  const result = await db.insert(evaluations).values({
+    ...data,
+    appearanceScore: computed.appearanceScore,
+    gamePerformanceTotalScore: computed.gamePerformanceTotalScore,
+    totalScore,
+  });
   const newEval = await db.select().from(evaluations).where(eq(evaluations.id, Number(result[0].insertId))).limit(1);
   return newEval[0];
 }
@@ -27,33 +64,35 @@ export async function updateEvaluation(id: number, data: Partial<InsertEvaluatio
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const updateData: Record<string, unknown> = { ...data };
-  if (data.hairScore !== undefined || data.makeupScore !== undefined || data.outfitScore !== undefined || data.postureScore !== undefined) {
+
+  // If any per-criterion score is part of this update, recompute the
+  // appearance / game-performance / total subtotals from the merged
+  // (incoming over stored) scores — in one read instead of the previous
+  // three SELECT round-trips.
+  const touchesScores =
+    data.hairScore !== undefined || data.makeupScore !== undefined ||
+    data.outfitScore !== undefined || data.postureScore !== undefined ||
+    data.dealingStyleScore !== undefined || data.gamePerformanceScore !== undefined;
+
+  if (touchesScores) {
     const current = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
     if (current.length > 0) {
-      const hair = data.hairScore ?? current[0].hairScore ?? 0;
-      const makeup = data.makeupScore ?? current[0].makeupScore ?? 0;
-      const outfit = data.outfitScore ?? current[0].outfitScore ?? 0;
-      const posture = data.postureScore ?? current[0].postureScore ?? 0;
-      updateData.appearanceScore = hair + makeup + outfit + posture;
+      const merged = criterionScoresFromColumns({
+        hairScore: data.hairScore ?? current[0].hairScore,
+        makeupScore: data.makeupScore ?? current[0].makeupScore,
+        outfitScore: data.outfitScore ?? current[0].outfitScore,
+        postureScore: data.postureScore ?? current[0].postureScore,
+        dealingStyleScore: data.dealingStyleScore ?? current[0].dealingStyleScore,
+        gamePerformanceScore: data.gamePerformanceScore ?? current[0].gamePerformanceScore,
+      });
+      const computed = computeEvaluationScores(merged, DEFAULT_RUBRIC_V1);
+      updateData.appearanceScore = computed.appearanceScore;
+      updateData.gamePerformanceTotalScore = computed.gamePerformanceTotalScore;
+      updateData.totalScore = computed.totalScore;
     }
   }
-  if (data.dealingStyleScore !== undefined || data.gamePerformanceScore !== undefined) {
-    const current = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
-    if (current.length > 0) {
-      const dealing = data.dealingStyleScore ?? current[0].dealingStyleScore ?? 0;
-      const gamePerf = data.gamePerformanceScore ?? current[0].gamePerformanceScore ?? 0;
-      updateData.gamePerformanceTotalScore = dealing + gamePerf;
-    }
-  }
-  if (updateData.appearanceScore !== undefined || updateData.gamePerformanceTotalScore !== undefined) {
-    const current = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
-    if (current.length > 0) {
-      const appearance = (updateData.appearanceScore as number) ?? current[0].appearanceScore ?? 0;
-      const gamePerf = (updateData.gamePerformanceTotalScore as number) ?? current[0].gamePerformanceTotalScore ?? 0;
-      updateData.totalScore = appearance + gamePerf;
-    }
-  }
-  await db.update(evaluations).set(updateData as any).where(eq(evaluations.id, id));
+
+  await db.update(evaluations).set(updateData as Partial<InsertEvaluation>).where(eq(evaluations.id, id));
   const updated = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
   return updated.length > 0 ? updated[0] : null;
 }

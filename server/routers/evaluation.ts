@@ -124,7 +124,7 @@ export const evaluationRouter = router({
         evaluatorName: cleanName(evaluatorName),
         evaluationDate,
         game: cleanGame(game),
-        totalScore: null, // recomputed by createEvaluation
+        totalScore: null, // derived from sub-scores by createEvaluation
         hairScore: hairScore ?? null,
         hairMaxScore: 3,
         hairComment: cleanComment(hairComment),
@@ -143,24 +143,14 @@ export const evaluationRouter = router({
         gamePerformanceScore: gamePerformanceScore ?? null,
         gamePerformanceMaxScore: 5,
         gamePerformanceComment: cleanComment(gamePerformanceComment),
-        // Total score is computed by createEvaluation from the
-        // appearance + gamePerformance helpers; we provide null and
-        // recompute the manual sum here too so the API response
-        // contains a useful totalScore even if the helper changes.
+        // appearance / gamePerformance / total are all derived inside
+        // createEvaluation from the per-criterion scores above.
         rawExtractedData: { source: "manual", enteredAt: new Date().toISOString() } as any,
         uploadedById: ctx.user.id,
         userId: ctx.user.id,
       });
 
-      // Backfill totalScore — createEvaluation sets appearance + game-
-      // performance derived scores, but leaves totalScore as the input
-      // (we passed null). Compute and update.
-      const total = (evaluation.appearanceScore ?? 0) + (evaluation.gamePerformanceTotalScore ?? 0);
-      if (total > 0) {
-        await db.updateEvaluation(evaluation.id, { totalScore: total });
-      }
-
-      return { success: true, evaluation: { ...evaluation, totalScore: total || evaluation.totalScore } };
+      return { success: true, evaluation };
     }),
 
   list: protectedProcedure.query(async ({ ctx }) => {
