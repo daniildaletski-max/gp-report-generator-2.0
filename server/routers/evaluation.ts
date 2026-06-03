@@ -5,6 +5,7 @@ import * as db from "../db";
 import { storagePut } from "../storage";
 import { nanoid } from "nanoid";
 import { generateExcelAndEmail, extractEvaluationFromImage, parseEvaluationDate, EvaluationDataSchema } from "./_shared";
+import { SCORE_CONFIG } from "@shared/const";
 
 export const evaluationRouter = router({
   uploadAndExtract: protectedProcedure
@@ -400,12 +401,15 @@ export const evaluationRouter = router({
       evaluationDate: z.date().optional(),
       game: z.string().max(100).optional(),
       totalScore: z.number().min(0).max(100).optional(),
-      hairScore: z.number().min(0).max(5).optional(),
-      makeupScore: z.number().min(0).max(5).optional(),
-      outfitScore: z.number().min(0).max(5).optional(),
-      postureScore: z.number().min(0).max(5).optional(),
-      dealingStyleScore: z.number().min(0).max(10).optional(),
-      gamePerformanceScore: z.number().min(0).max(10).optional(),
+      // Bounds come from the rubric (SCORE_CONFIG) so they can't drift from
+      // the real maxes — the previous hardcoded values let outfit/posture
+      // reach 5 and dealing/game reach 10, well above their actual caps.
+      hairScore: z.number().min(0).max(SCORE_CONFIG.hair.max).optional(),
+      makeupScore: z.number().min(0).max(SCORE_CONFIG.makeup.max).optional(),
+      outfitScore: z.number().min(0).max(SCORE_CONFIG.outfit.max).optional(),
+      postureScore: z.number().min(0).max(SCORE_CONFIG.posture.max).optional(),
+      dealingStyleScore: z.number().min(0).max(SCORE_CONFIG.dealingStyle.max).optional(),
+      gamePerformanceScore: z.number().min(0).max(SCORE_CONFIG.gamePerformance.max).optional(),
       hairComment: z.string().max(1000).optional(),
       makeupComment: z.string().max(1000).optional(),
       outfitComment: z.string().max(1000).optional(),
@@ -457,6 +461,27 @@ export const evaluationRouter = router({
         }
       }
       return await db.getEvaluationRevisions(input.id);
+    }),
+
+  /** Evaluations flagged for human review — scoped to the caller unless admin. */
+  needsReview: protectedProcedure.query(async ({ ctx }) => {
+    return await db.getEvaluationsNeedingReview(ctx.user.role === "admin" ? undefined : ctx.user.id);
+  }),
+
+  /** Dismiss the review flag after a human has checked the evaluation. */
+  clearReview: protectedProcedure
+    .input(z.object({ id: z.number().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const evaluation = await db.getEvaluationWithGP(input.id);
+      if (!evaluation) throw new TRPCError({ code: 'NOT_FOUND', message: 'Evaluation not found' });
+      if (ctx.user.role !== 'admin') {
+        const evalUserId = evaluation.evaluation?.userId || evaluation.evaluation?.uploadedById;
+        if (evalUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+        }
+      }
+      await db.clearEvaluationReviewFlag(input.id);
+      return { success: true };
     }),
 
   delete: protectedProcedure

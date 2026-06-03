@@ -6,7 +6,7 @@ import { eq, and, or, gte, lte, desc, sql, inArray } from "drizzle-orm";
 import { evaluations, InsertEvaluation, Evaluation, gamePresenters } from "../../drizzle/schema";
 import { getDb } from "./connection";
 import { createLogger } from "../services/logger";
-import { computeEvaluationScores, DEFAULT_RUBRIC_V1, type CriterionScores } from "../../shared/scoring";
+import { computeEvaluationScores, assessEvaluationQuality, DEFAULT_RUBRIC_V1, type CriterionScores } from "../../shared/scoring";
 import { diffEvaluation, recordEvaluationRevision } from "./evaluationHistory";
 
 const log = createLogger("DB:Evaluations");
@@ -46,11 +46,16 @@ export async function createEvaluation(data: InsertEvaluation): Promise<Evaluati
   // from the per-criterion scores. Previously `totalScore` was left as
   // the (often null) input, forcing callers to patch it with a follow-up
   // UPDATE. We compute it here so every write path is consistent.
-  const computed = computeEvaluationScores(criterionScoresFromColumns(data), DEFAULT_RUBRIC_V1);
+  const criterionScores = criterionScoresFromColumns(data);
+  const computed = computeEvaluationScores(criterionScores, DEFAULT_RUBRIC_V1);
   // Prefer the derived total. Fall back to an explicitly-supplied total
   // only when no sub-scores were provided (derived === 0) so we never
   // discard a legacy/external "total-only" value.
   const totalScore = computed.totalScore > 0 ? computed.totalScore : (data.totalScore ?? computed.totalScore);
+  // Flag suspect rows (out-of-range score, or an AI total that disagrees
+  // with the sub-scores) so they land in the review queue rather than
+  // silently skewing averages.
+  const quality = assessEvaluationQuality(criterionScores, DEFAULT_RUBRIC_V1, { providedTotal: data.totalScore });
   const result = await db.insert(evaluations).values({
     ...data,
     appearanceScore: computed.appearanceScore,
@@ -61,6 +66,8 @@ export async function createEvaluation(data: InsertEvaluation): Promise<Evaluati
     // above are still written so existing readers keep working.
     scores: computed.perCriterion,
     rubricVersionId: data.rubricVersionId ?? DEFAULT_RUBRIC_V1.rubricVersionId,
+    needsReview: quality.needsReview ? 1 : 0,
+    reviewReason: quality.reasons.join(" ") || null,
   });
   const newEval = await db.select().from(evaluations).where(eq(evaluations.id, Number(result[0].insertId))).limit(1);
   return newEval[0];
@@ -319,4 +326,33 @@ export async function getGpEvaluationsForPortal(gpId: number) {
     appearanceScore: evaluations.appearanceScore, gamePerformanceTotalScore: evaluations.gamePerformanceTotalScore,
     screenshotUrl: evaluations.screenshotUrl, createdAt: evaluations.createdAt,
   }).from(evaluations).where(eq(evaluations.gamePresenterId, gpId)).orderBy(desc(evaluations.evaluationDate));
+}
+
+// ============================================
+// REVIEW QUEUE (quality flag)
+// ============================================
+
+/**
+ * Evaluations flagged for human review (out-of-range scores or an
+ * AI total that disagreed with the sub-scores). Scoped to a user when
+ * `userId` is given (non-admin), unscoped for admins.
+ */
+export async function getEvaluationsNeedingReview(userId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const cond = userId == null
+    ? eq(evaluations.needsReview, 1)
+    : and(eq(evaluations.needsReview, 1), or(eq(evaluations.userId, userId), eq(evaluations.uploadedById, userId)));
+  return await db.select({ evaluation: evaluations, gamePresenter: gamePresenters })
+    .from(evaluations)
+    .leftJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+    .where(cond)
+    .orderBy(desc(evaluations.createdAt));
+}
+
+/** Dismiss the review flag once a human has checked the evaluation. */
+export async function clearEvaluationReviewFlag(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(evaluations).set({ needsReview: 0, reviewReason: null }).where(eq(evaluations.id, id));
 }

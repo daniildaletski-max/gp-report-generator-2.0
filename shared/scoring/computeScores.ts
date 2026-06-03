@@ -139,3 +139,42 @@ export function validateCriterionScores(
 
   return issues;
 }
+
+export interface QualityAssessment {
+  /** True when the evaluation looks suspect and a human should re-check it. */
+  needsReview: boolean;
+  /** Human-readable reasons, empty when clean. */
+  reasons: string[];
+}
+
+/**
+ * Decide whether an evaluation needs a human review. Pure. Flags:
+ *   - any out-of-range / unknown-criterion score (via validateCriterionScores)
+ *   - a provided total that disagrees with the sum of sub-scores, which is
+ *     the classic "AI read the grand total but mis-parsed a sub-score"
+ *     extraction error.
+ *
+ * Used at write time to set `evaluations.needsReview` so bad extractions
+ * surface in a queue instead of silently skewing averages.
+ */
+export function assessEvaluationQuality(
+  rawScores: CriterionScores,
+  rubric: RubricVersionDef,
+  opts: { providedTotal?: number | null } = {},
+): QualityAssessment {
+  const reasons = validateCriterionScores(rawScores, rubric).map((i) => i.message);
+
+  if (opts.providedTotal != null) {
+    const derived = computeEvaluationScores(rawScores, rubric).totalScore;
+    // Only meaningful when at least one sub-score was supplied; a
+    // total-only row (derived 0) is a legitimate legacy shape, not a
+    // mismatch.
+    if (derived > 0 && opts.providedTotal !== derived) {
+      reasons.push(
+        `Provided total ${opts.providedTotal} does not match the sum of sub-scores (${derived}).`,
+      );
+    }
+  }
+
+  return { needsReview: reasons.length > 0, reasons };
+}

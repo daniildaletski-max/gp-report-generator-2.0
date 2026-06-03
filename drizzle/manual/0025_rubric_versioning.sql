@@ -58,6 +58,9 @@ CREATE TABLE IF NOT EXISTS `rubric_criteria` (
 
 ALTER TABLE `evaluations` ADD COLUMN `rubricVersionId` int NULL;
 ALTER TABLE `evaluations` ADD COLUMN `scores` json NULL;
+-- Quality-review flag (Phase 6a): set at write time for suspect rows.
+ALTER TABLE `evaluations` ADD COLUMN `needsReview` int NULL DEFAULT 0;
+ALTER TABLE `evaluations` ADD COLUMN `reviewReason` varchar(512) NULL;
 
 -- 3. Seed rubric v1 (must match shared/scoring DEFAULT_RUBRIC_V1) -------------
 

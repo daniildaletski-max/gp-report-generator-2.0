@@ -112,6 +112,13 @@ export const evaluations = mysqlTable("evaluations", {
    * during the transition; backfilled from them for historical rows.
    */
   scores: json("scores").$type<Record<string, number>>(),
+  /**
+   * 1 when the evaluation looks suspect (out-of-range score, or an
+   * AI-provided total that disagrees with the sum of sub-scores) and a
+   * human should re-check it. Drives the "needs review" queue.
+   */
+  needsReview: int("needsReview").default(0),
+  reviewReason: varchar("reviewReason", { length: 512 }),
   screenshotUrl: text("screenshotUrl"),
   screenshotKey: varchar("screenshotKey", { length: 512 }),
   rawExtractedData: json("rawExtractedData"),

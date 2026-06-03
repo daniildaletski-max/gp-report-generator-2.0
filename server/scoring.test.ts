@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeEvaluationScores,
   validateCriterionScores,
+  assessEvaluationQuality,
   DEFAULT_RUBRIC_V1,
   rubricMaxTotal,
   groupMaxTotal,
@@ -191,5 +192,42 @@ describe("validateCriterionScores", () => {
 
   it("allows missing criteria (treated as 0, not an error)", () => {
     expect(validateCriterionScores({ hair: 3 }, DEFAULT_RUBRIC_V1)).toEqual([]);
+  });
+});
+
+describe("assessEvaluationQuality", () => {
+  const ok = { hair: 3, makeup: 3, outfit: 3, posture: 3, dealingStyle: 5, gamePerformance: 5 };
+
+  it("clean, consistent scores → no review", () => {
+    const r = assessEvaluationQuality(ok, DEFAULT_RUBRIC_V1, { providedTotal: 22 });
+    expect(r.needsReview).toBe(false);
+    expect(r.reasons).toEqual([]);
+  });
+
+  it("flags an out-of-range score", () => {
+    const r = assessEvaluationQuality({ ...ok, hair: 9 }, DEFAULT_RUBRIC_V1);
+    expect(r.needsReview).toBe(true);
+    expect(r.reasons.join(" ")).toMatch(/Hair/);
+  });
+
+  it("flags an AI total that disagrees with the sub-scores", () => {
+    // sub-scores sum to 20, but the extraction claimed 22
+    const r = assessEvaluationQuality(
+      { hair: 3, makeup: 3, outfit: 3, posture: 1, dealingStyle: 5, gamePerformance: 5 },
+      DEFAULT_RUBRIC_V1,
+      { providedTotal: 22 },
+    );
+    expect(r.needsReview).toBe(true);
+    expect(r.reasons.join(" ")).toMatch(/does not match/);
+  });
+
+  it("does not flag a matching provided total", () => {
+    const r = assessEvaluationQuality(ok, DEFAULT_RUBRIC_V1, { providedTotal: 22 });
+    expect(r.needsReview).toBe(false);
+  });
+
+  it("ignores a total-only row (no sub-scores) — legacy shape, not a mismatch", () => {
+    const r = assessEvaluationQuality({}, DEFAULT_RUBRIC_V1, { providedTotal: 18 });
+    expect(r.needsReview).toBe(false);
   });
 });

@@ -99,6 +99,18 @@ export async function ensureRubricSchema(): Promise<void> {
     "ALTER TABLE `evaluations` ADD COLUMN `scores` json NULL",
     "evaluations.scores",
   );
+  // Quality-review flag (Phase 6a) — set at write time when an evaluation
+  // looks suspect, so bad extractions surface in a queue.
+  await addColumnIfMissing(
+    db,
+    "ALTER TABLE `evaluations` ADD COLUMN `needsReview` int NULL DEFAULT 0",
+    "evaluations.needsReview",
+  );
+  await addColumnIfMissing(
+    db,
+    "ALTER TABLE `evaluations` ADD COLUMN `reviewReason` varchar(512) NULL",
+    "evaluations.reviewReason",
+  );
 
   // ----------------------------------------------------------------- 3
   // Seed rubric v1 from the code-side definition so the two never drift.
