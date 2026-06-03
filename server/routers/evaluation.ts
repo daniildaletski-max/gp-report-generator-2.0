@@ -412,6 +412,8 @@ export const evaluationRouter = router({
       postureComment: z.string().max(1000).optional(),
       dealingStyleComment: z.string().max(1000).optional(),
       gamePerformanceComment: z.string().max(1000).optional(),
+      /** Optional note explaining the edit — recorded in the audit trail. */
+      reason: z.string().max(500).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       // Check ownership before update - user-based data isolation
@@ -423,8 +425,8 @@ export const evaluationRouter = router({
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only edit your own evaluations' });
         }
       }
-      
-      const { id, ...data } = input;
+
+      const { id, reason, ...data } = input;
       // Sanitize text fields
       if (data.evaluatorName) data.evaluatorName = db.sanitizeString(data.evaluatorName, 255);
       if (data.game) data.game = db.sanitizeString(data.game, 100);
@@ -434,21 +436,27 @@ export const evaluationRouter = router({
       if (data.postureComment) data.postureComment = db.sanitizeString(data.postureComment, 1000);
       if (data.dealingStyleComment) data.dealingStyleComment = db.sanitizeString(data.dealingStyleComment, 1000);
       if (data.gamePerformanceComment) data.gamePerformanceComment = db.sanitizeString(data.gamePerformanceComment, 1000);
-      
-      // Recalculate derived scores when individual scores change
-      const updateData: any = { ...data };
-      const hairS = data.hairScore ?? evaluation.evaluation?.hairScore ?? 0;
-      const makeupS = data.makeupScore ?? evaluation.evaluation?.makeupScore ?? 0;
-      const outfitS = data.outfitScore ?? evaluation.evaluation?.outfitScore ?? 0;
-      const postureS = data.postureScore ?? evaluation.evaluation?.postureScore ?? 0;
-      const dealingS = data.dealingStyleScore ?? evaluation.evaluation?.dealingStyleScore ?? 0;
-      const gamePerfS = data.gamePerformanceScore ?? evaluation.evaluation?.gamePerformanceScore ?? 0;
-      updateData.appearanceScore = (hairS || 0) + (makeupS || 0) + (outfitS || 0) + (postureS || 0);
-      updateData.gamePerformanceTotalScore = (dealingS || 0) + (gamePerfS || 0);
-      updateData.totalScore = updateData.appearanceScore + updateData.gamePerformanceTotalScore;
-      
-      const updated = await db.updateEvaluation(id, updateData);
+
+      // Derived scores (appearance / game / total) and the per-criterion
+      // JSON are recomputed inside updateEvaluation via the scoring engine;
+      // the edit is also captured in the evaluation_revisions audit trail.
+      const updated = await db.updateEvaluation(id, data, { editedById: ctx.user.id, reason });
       return { success: true, evaluation: updated };
+    }),
+
+  /** Edit history (newest first) for one evaluation — owner / admin only. */
+  history: protectedProcedure
+    .input(z.object({ id: z.number().positive() }))
+    .query(async ({ ctx, input }) => {
+      const evaluation = await db.getEvaluationWithGP(input.id);
+      if (!evaluation) throw new TRPCError({ code: 'NOT_FOUND', message: 'Evaluation not found' });
+      if (ctx.user.role !== 'admin') {
+        const evalUserId = evaluation.evaluation?.userId || evaluation.evaluation?.uploadedById;
+        if (evalUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+        }
+      }
+      return await db.getEvaluationRevisions(input.id);
     }),
 
   delete: protectedProcedure

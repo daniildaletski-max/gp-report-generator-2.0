@@ -162,3 +162,9 @@ export {
   getRubricVersionById, invalidateRubricCache,
 } from "./rubric";
 export { ensureRubricSchema } from "./rubricMigration";
+
+// Evaluation edit history (audit trail)
+export {
+  ensureEvaluationHistorySchema, diffEvaluation,
+  recordEvaluationRevision, getEvaluationRevisions,
+} from "./evaluationHistory";

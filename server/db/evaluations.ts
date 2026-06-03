@@ -7,6 +7,7 @@ import { evaluations, InsertEvaluation, Evaluation, gamePresenters } from "../..
 import { getDb } from "./connection";
 import { createLogger } from "../services/logger";
 import { computeEvaluationScores, DEFAULT_RUBRIC_V1, type CriterionScores } from "../../shared/scoring";
+import { diffEvaluation, recordEvaluationRevision } from "./evaluationHistory";
 
 const log = createLogger("DB:Evaluations");
 
@@ -65,36 +66,56 @@ export async function createEvaluation(data: InsertEvaluation): Promise<Evaluati
   return newEval[0];
 }
 
-export async function updateEvaluation(id: number, data: Partial<InsertEvaluation>): Promise<Evaluation | null> {
+export async function updateEvaluation(
+  id: number,
+  data: Partial<InsertEvaluation>,
+  meta?: { editedById?: number; reason?: string },
+): Promise<Evaluation | null> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const updateData: Record<string, unknown> = { ...data };
 
+  // Read the row once — needed both to recompute derived scores and to
+  // snapshot the "before" state for the audit trail.
+  const currentRows = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
+  const current = currentRows.length > 0 ? currentRows[0] : null;
+
   // If any per-criterion score is part of this update, recompute the
   // appearance / game-performance / total subtotals from the merged
-  // (incoming over stored) scores — in one read instead of the previous
-  // three SELECT round-trips.
+  // (incoming over stored) scores via the single scoring engine.
   const touchesScores =
     data.hairScore !== undefined || data.makeupScore !== undefined ||
     data.outfitScore !== undefined || data.postureScore !== undefined ||
     data.dealingStyleScore !== undefined || data.gamePerformanceScore !== undefined;
 
-  if (touchesScores) {
-    const current = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
-    if (current.length > 0) {
-      const merged = criterionScoresFromColumns({
-        hairScore: data.hairScore ?? current[0].hairScore,
-        makeupScore: data.makeupScore ?? current[0].makeupScore,
-        outfitScore: data.outfitScore ?? current[0].outfitScore,
-        postureScore: data.postureScore ?? current[0].postureScore,
-        dealingStyleScore: data.dealingStyleScore ?? current[0].dealingStyleScore,
-        gamePerformanceScore: data.gamePerformanceScore ?? current[0].gamePerformanceScore,
+  if (touchesScores && current) {
+    const merged = criterionScoresFromColumns({
+      hairScore: data.hairScore ?? current.hairScore,
+      makeupScore: data.makeupScore ?? current.makeupScore,
+      outfitScore: data.outfitScore ?? current.outfitScore,
+      postureScore: data.postureScore ?? current.postureScore,
+      dealingStyleScore: data.dealingStyleScore ?? current.dealingStyleScore,
+      gamePerformanceScore: data.gamePerformanceScore ?? current.gamePerformanceScore,
+    });
+    const computed = computeEvaluationScores(merged, DEFAULT_RUBRIC_V1);
+    updateData.appearanceScore = computed.appearanceScore;
+    updateData.gamePerformanceTotalScore = computed.gamePerformanceTotalScore;
+    updateData.totalScore = computed.totalScore;
+    updateData.scores = computed.perCriterion;
+  }
+
+  // Audit trail: record what changed (old -> new) before applying it.
+  // Best-effort inside recordEvaluationRevision — never blocks the edit.
+  if (current) {
+    const changedFields = diffEvaluation(current as Record<string, unknown>, updateData);
+    if (Object.keys(changedFields).length > 0) {
+      await recordEvaluationRevision({
+        evaluationId: id,
+        editedById: meta?.editedById ?? null,
+        reason: meta?.reason ?? null,
+        changedFields,
+        snapshotBefore: current,
       });
-      const computed = computeEvaluationScores(merged, DEFAULT_RUBRIC_V1);
-      updateData.appearanceScore = computed.appearanceScore;
-      updateData.gamePerformanceTotalScore = computed.gamePerformanceTotalScore;
-      updateData.totalScore = computed.totalScore;
-      updateData.scores = computed.perCriterion;
     }
   }
 

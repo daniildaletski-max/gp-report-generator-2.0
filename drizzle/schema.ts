@@ -190,6 +190,29 @@ export type RubricCriterion = typeof rubricCriteria.$inferSelect;
 export type InsertRubricCriterion = typeof rubricCriteria.$inferInsert;
 
 /**
+ * Evaluation revisions — an append-only audit trail of edits to an
+ * evaluation. Every `updateEvaluation` that actually changes a field
+ * writes one row here BEFORE applying the change, capturing who edited
+ * it, an optional reason, the changed fields (old -> new) and a full
+ * snapshot of the row as it was. Makes score edits explainable instead
+ * of silently destructive ("I was given 14, then it became 12").
+ */
+export const evaluationRevisions = mysqlTable("evaluation_revisions", {
+  id: int("id").autoincrement().primaryKey(),
+  evaluationId: int("evaluationId").notNull(),
+  editedById: int("editedById"),
+  reason: text("reason"),
+  /** Map of field -> { old, new } for the fields that changed. */
+  changedFields: json("changedFields").$type<Record<string, { old: unknown; new: unknown }>>(),
+  /** Full evaluation row as it stood before this edit. */
+  snapshotBefore: json("snapshotBefore"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type EvaluationRevision = typeof evaluationRevisions.$inferSelect;
+export type InsertEvaluationRevision = typeof evaluationRevisions.$inferInsert;
+
+/**
  * GP Monthly Attendance - tracks attendance metrics per GP per month
  */
 export const gpMonthlyAttendance = mysqlTable("gp_monthly_attendance", {

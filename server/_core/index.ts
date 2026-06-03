@@ -15,6 +15,7 @@ import { requestTracingMiddleware, requestValidation } from "../services/request
 import { cache } from "../services/cache";
 import { checkHealth as checkDbHealth, getDb } from "../db/connection";
 import { ensureRubricSchema } from "../db/rubricMigration";
+import { ensureEvaluationHistorySchema } from "../db/evaluationHistory";
 import { ENV } from "./env";
 import * as db from "../db";
 
@@ -496,6 +497,11 @@ async function startServer() {
     // as the column repairs above. See server/db/rubricMigration.ts.
     ensureRubricSchema().catch(err => {
       log.warn("rubric schema boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Evaluation edit-history table (Phase 3) — audit trail for score
+    // edits. Same idempotent boot-install pattern.
+    ensureEvaluationHistorySchema().catch(err => {
+      log.warn("evaluation history schema boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
     });
     // Automation credentials audit — surfaces missing RESEND_API_KEY /
     // PERSONA_* / STUDIOWORKS_* env vars in deploy logs so operators
