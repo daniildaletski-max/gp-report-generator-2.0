@@ -161,6 +161,7 @@ export type { PersonaAliasWithGp } from "./personaAliases";
 export {
   assembleRubricVersion, getActiveRubricVersion,
   getRubricVersionById, invalidateRubricCache,
+  listRubricVersions, createRubricVersion, setActiveRubricVersion,
 } from "./rubric";
 export { ensureRubricSchema } from "./rubricMigration";
 

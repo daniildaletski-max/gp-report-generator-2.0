@@ -28,6 +28,7 @@ import { personaSyncRouter } from "./routers/personaSync";
 import { studioworksSyncRouter } from "./routers/studioworksSync";
 import { actionItemsRouter } from "./routers/actionItems";
 import { searchRouter } from "./routers/search";
+import { rubricRouter } from "./routers/rubric";
 
 export const appRouter = router({
   system: systemRouter,
@@ -49,6 +50,7 @@ export const appRouter = router({
   studioworksSync: studioworksSyncRouter,
   actionItems: actionItemsRouter,
   search: searchRouter,
+  rubric: rubricRouter,
 });
 
 export type AppRouter = typeof appRouter;

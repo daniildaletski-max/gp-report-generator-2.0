@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { assembleRubricVersion } from "./db/rubric";
-import { computeEvaluationScores, DEFAULT_RUBRIC_V1 } from "@shared/scoring";
+import {
+  computeEvaluationScores,
+  validateRubricDraft,
+  DEFAULT_RUBRIC_V1,
+  type RubricCriterionDraft,
+} from "@shared/scoring";
 
 /**
  * Rows as they'd come back from `rubric_versions` / `rubric_criteria`.
@@ -52,5 +57,53 @@ describe("assembleRubricVersion", () => {
     const snapshot = input.map((c) => c.key);
     assembleRubricVersion(versionRow, input);
     expect(input.map((c) => c.key)).toEqual(snapshot);
+  });
+});
+
+describe("validateRubricDraft", () => {
+  const good: RubricCriterionDraft[] = [
+    { key: "hair", label: "Hair", maxScore: 3, group: "appearance" },
+    { key: "dealingStyle", label: "Dealing Style", maxScore: 5, group: "game" },
+  ];
+
+  it("accepts a well-formed draft", () => {
+    expect(validateRubricDraft(good)).toEqual([]);
+  });
+
+  it("rejects an empty draft", () => {
+    const issues = validateRubricDraft([]);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].index).toBeNull();
+  });
+
+  it("flags duplicate keys", () => {
+    const issues = validateRubricDraft([
+      { key: "hair", label: "Hair", maxScore: 3, group: "appearance" },
+      { key: "hair", label: "Hair 2", maxScore: 2, group: "appearance" },
+    ]);
+    expect(issues.some((i) => /Duplicate/.test(i.message))).toBe(true);
+  });
+
+  it("flags missing key / label", () => {
+    const issues = validateRubricDraft([
+      { key: "", label: "", maxScore: 3, group: "appearance" },
+    ]);
+    expect(issues.some((i) => /key is required/.test(i.message))).toBe(true);
+    expect(issues.some((i) => /label is required/.test(i.message))).toBe(true);
+  });
+
+  it("flags non-integer / sub-1 maxScore", () => {
+    const issues = validateRubricDraft([
+      { key: "hair", label: "Hair", maxScore: 0, group: "appearance" },
+      { key: "makeup", label: "Makeup", maxScore: 2.5, group: "appearance" },
+    ]);
+    expect(issues.filter((i) => /maxScore/.test(i.message))).toHaveLength(2);
+  });
+
+  it("flags an invalid group", () => {
+    const issues = validateRubricDraft([
+      { key: "hair", label: "Hair", maxScore: 3, group: "bogus" as unknown as "appearance" },
+    ]);
+    expect(issues.some((i) => /invalid group/.test(i.message))).toBe(true);
   });
 });

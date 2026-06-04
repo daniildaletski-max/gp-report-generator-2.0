@@ -140,3 +140,57 @@ export function groupMaxTotal(
     .filter((c) => c.group === group)
     .reduce((sum, c) => sum + c.maxScore, 0);
 }
+
+// ---------------------------------------------------------------------------
+// Authoring — validating a proposed new rubric version before it's saved.
+// ---------------------------------------------------------------------------
+
+/** A criterion as supplied by the admin UI when creating a new version. */
+export interface RubricCriterionDraft {
+  key: string;
+  label: string;
+  description?: string;
+  maxScore: number;
+  group: CriterionGroup;
+  sortOrder?: number;
+}
+
+export interface RubricDraftIssue {
+  /** Index of the offending criterion, or null for whole-draft issues. */
+  index: number | null;
+  message: string;
+}
+
+/**
+ * Validate a proposed set of criteria before persisting a new version.
+ * Pure; returns an empty array when the draft is well-formed. Enforced
+ * both in the API (defence in depth) and usable by the admin UI for
+ * inline feedback.
+ */
+export function validateRubricDraft(criteria: RubricCriterionDraft[]): RubricDraftIssue[] {
+  const issues: RubricDraftIssue[] = [];
+  if (!criteria || criteria.length === 0) {
+    return [{ index: null, message: "A rubric version needs at least one criterion." }];
+  }
+  const seen = new Set<string>();
+  criteria.forEach((c, i) => {
+    const key = (c.key ?? "").trim();
+    if (!key) {
+      issues.push({ index: i, message: "Criterion key is required." });
+    } else if (seen.has(key)) {
+      issues.push({ index: i, message: `Duplicate criterion key "${key}".` });
+    } else {
+      seen.add(key);
+    }
+    if (!(c.label ?? "").trim()) {
+      issues.push({ index: i, message: "Criterion label is required." });
+    }
+    if (!Number.isInteger(c.maxScore) || c.maxScore < 1) {
+      issues.push({ index: i, message: `Criterion "${key || i}" needs an integer maxScore >= 1.` });
+    }
+    if (c.group !== "appearance" && c.group !== "game") {
+      issues.push({ index: i, message: `Criterion "${key || i}" has an invalid group.` });
+    }
+  });
+  return issues;
+}
