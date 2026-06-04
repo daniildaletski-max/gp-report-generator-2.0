@@ -247,6 +247,23 @@ export const gamePresenterRouter = router({
       return result;
     }),
 
+  // Revert a manual attitude override back to the screenshot-derived value
+  clearAttitudeOverride: protectedProcedure
+    .input(z.object({
+      gpId: z.number().positive(),
+      month: z.number().min(1).max(12),
+      year: z.number().min(2020).max(2100),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const gp = await db.getGamePresenterById(input.gpId);
+      if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
+      if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+      }
+      await db.clearAttitudeOverride(input.gpId, input.month, input.year);
+      return { success: true };
+    }),
+
   // Bulk reset mistakes for multiple GPs
   bulkResetMistakes: protectedProcedure
     .input(z.object({

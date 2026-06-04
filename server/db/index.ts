@@ -62,11 +62,13 @@ export {
   getEvaluationWithGP, getEvaluationsWithGP, getEvaluationsWithGPByUser,
   getEvaluationsByTeam,
   getGPMonthlyStats, getGPEvaluationsForDataSheet, getGpEvaluationsForPortal,
+  getEvaluationsNeedingReview, clearEvaluationReviewFlag,
 } from "./evaluations";
 
 // Attendance
 export {
   getOrCreateAttendance, findAttendance, updateAttendance, getAttendanceByTeamMonth, getAttendanceTrends,
+  ensureMistakesConsolidated,
 } from "./attendance";
 
 // Monthly Stats
@@ -75,9 +77,14 @@ export {
   getMonthlyGpStatsByTeam, getAllMonthlyGpStats, getMonthlyGpStats,
   getGamePresentersByTeamWithStats,
   bulkUpdateMonthlyGpStats, bulkSetAttitude, bulkResetMistakes,
-  incrementGPMistakes, updateGPAttitude,
+  incrementGPMistakes,
   getGpMonthlyHistory, getTeamPeerAverages, syncErrorsFromGoogleSheets,
 } from "./monthlyStats";
+
+// Attitude (hybrid: derived from screenshots + manual override)
+export {
+  ensureAttitudeManualColumn, recomputeGPAttitudeFromScreenshots, clearAttitudeOverride,
+} from "./attitude";
 export type { BulkGpStatsUpdate, GoogleSheetsErrorData } from "./monthlyStats";
 
 // Errors
@@ -155,3 +162,17 @@ export {
   deleteAlias, getAliasById, loadAliasMapForTeam,
 } from "./personaAliases";
 export type { PersonaAliasWithGp } from "./personaAliases";
+
+// Rubric (versioned scoring)
+export {
+  assembleRubricVersion, getActiveRubricVersion,
+  getRubricVersionById, invalidateRubricCache,
+  listRubricVersions, createRubricVersion, setActiveRubricVersion,
+} from "./rubric";
+export { ensureRubricSchema } from "./rubricMigration";
+
+// Evaluation edit history (audit trail)
+export {
+  ensureEvaluationHistorySchema, diffEvaluation,
+  recordEvaluationRevision, getEvaluationRevisions,
+} from "./evaluationHistory";

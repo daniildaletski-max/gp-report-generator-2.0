@@ -30,7 +30,11 @@ export async function updateMonthlyGpStats(
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const stats = await getOrCreateMonthlyGpStats(gpId, month, year);
-  await db.update(monthlyGpStats).set(data).where(eq(monthlyGpStats.id, stats.id));
+  const patch: Record<string, unknown> = { ...data };
+  // A manual attitude edit pins the value (hybrid model): mark it an
+  // override so screenshot-driven recomputation won't clobber it.
+  if (data.attitude !== undefined) patch.attitudeIsManual = 1;
+  await db.update(monthlyGpStats).set(patch).where(eq(monthlyGpStats.id, stats.id));
   const updated = await db.select().from(monthlyGpStats).where(eq(monthlyGpStats.id, stats.id)).limit(1);
   return updated.length > 0 ? updated[0] : null;
 }
@@ -96,7 +100,7 @@ export async function bulkUpdateMonthlyGpStats(
     try {
       const stats = await getOrCreateMonthlyGpStats(update.gpId, month, year);
       const updateData: Record<string, any> = { updatedById };
-      if (update.attitude !== undefined) updateData.attitude = update.attitude;
+      if (update.attitude !== undefined) { updateData.attitude = update.attitude; updateData.attitudeIsManual = 1; }
       if (update.mistakes !== undefined) updateData.mistakes = update.mistakes;
       if (update.notes !== undefined) updateData.notes = update.notes;
       await db.update(monthlyGpStats).set(updateData).where(eq(monthlyGpStats.id, stats.id));
@@ -113,7 +117,8 @@ export async function bulkSetAttitude(gpIds: number[], attitude: number, month: 
   for (const gpId of gpIds) {
     try {
       const stats = await getOrCreateMonthlyGpStats(gpId, month, year);
-      await db.update(monthlyGpStats).set({ attitude, updatedById }).where(eq(monthlyGpStats.id, stats.id));
+      // Manual set → pin as an override (hybrid model).
+      await db.update(monthlyGpStats).set({ attitude, attitudeIsManual: 1, updatedById }).where(eq(monthlyGpStats.id, stats.id));
       success++;
     } catch { failed++; }
   }
@@ -139,14 +144,6 @@ export async function incrementGPMistakes(gamePresenterId: number, month: number
   if (!db) return;
   const stats = await getOrCreateMonthlyGpStats(gamePresenterId, month, year);
   await db.update(monthlyGpStats).set({ mistakes: (stats.mistakes || 0) + 1 }).where(eq(monthlyGpStats.id, stats.id));
-}
-
-export async function updateGPAttitude(gamePresenterId: number, month: number, year: number, attitudeScore: number): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  const stats = await getOrCreateMonthlyGpStats(gamePresenterId, month, year);
-  const currentAttitude = stats.attitude ?? 0;
-  await db.update(monthlyGpStats).set({ attitude: currentAttitude + attitudeScore }).where(eq(monthlyGpStats.id, stats.id));
 }
 
 // ============================================

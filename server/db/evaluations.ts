@@ -6,8 +6,34 @@ import { eq, and, or, gte, lte, desc, sql, inArray } from "drizzle-orm";
 import { evaluations, InsertEvaluation, Evaluation, gamePresenters } from "../../drizzle/schema";
 import { getDb } from "./connection";
 import { createLogger } from "../services/logger";
+import { computeEvaluationScores, assessEvaluationQuality, DEFAULT_RUBRIC_V1, type CriterionScores } from "../../shared/scoring";
+import { diffEvaluation, recordEvaluationRevision } from "./evaluationHistory";
 
 const log = createLogger("DB:Evaluations");
+
+/**
+ * Map the legacy per-criterion columns on an (insert) evaluation row to
+ * the rubric's criterion keys, so the scoring engine can derive the
+ * appearance / game-performance / total subtotals from one place.
+ *
+ * The keys here mirror `DEFAULT_RUBRIC_V1`. When the rubric moves into
+ * the database (Phase 2) this mapping stays — only the rubric argument
+ * to `computeEvaluationScores` changes.
+ */
+function criterionScoresFromColumns(
+  row: Partial<Pick<InsertEvaluation,
+    | "hairScore" | "makeupScore" | "outfitScore" | "postureScore"
+    | "dealingStyleScore" | "gamePerformanceScore">>,
+): CriterionScores {
+  return {
+    hair: row.hairScore,
+    makeup: row.makeupScore,
+    outfit: row.outfitScore,
+    posture: row.postureScore,
+    dealingStyle: row.dealingStyleScore,
+    gamePerformance: row.gamePerformanceScore,
+  };
+}
 
 // ============================================
 // CRUD
@@ -16,44 +42,91 @@ const log = createLogger("DB:Evaluations");
 export async function createEvaluation(data: InsertEvaluation): Promise<Evaluation> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const appearanceScore = (data.hairScore || 0) + (data.makeupScore || 0) + (data.outfitScore || 0) + (data.postureScore || 0);
-  const gamePerformanceTotalScore = (data.dealingStyleScore || 0) + (data.gamePerformanceScore || 0);
-  const result = await db.insert(evaluations).values({ ...data, appearanceScore, gamePerformanceTotalScore });
+  // Single source of truth: derive appearance / game-performance / total
+  // from the per-criterion scores. Previously `totalScore` was left as
+  // the (often null) input, forcing callers to patch it with a follow-up
+  // UPDATE. We compute it here so every write path is consistent.
+  const criterionScores = criterionScoresFromColumns(data);
+  const computed = computeEvaluationScores(criterionScores, DEFAULT_RUBRIC_V1);
+  // Prefer the derived total. Fall back to an explicitly-supplied total
+  // only when no sub-scores were provided (derived === 0) so we never
+  // discard a legacy/external "total-only" value.
+  const totalScore = computed.totalScore > 0 ? computed.totalScore : (data.totalScore ?? computed.totalScore);
+  // Flag suspect rows (out-of-range score, or an AI total that disagrees
+  // with the sub-scores) so they land in the review queue rather than
+  // silently skewing averages.
+  const quality = assessEvaluationQuality(criterionScores, DEFAULT_RUBRIC_V1, { providedTotal: data.totalScore });
+  const result = await db.insert(evaluations).values({
+    ...data,
+    appearanceScore: computed.appearanceScore,
+    gamePerformanceTotalScore: computed.gamePerformanceTotalScore,
+    totalScore,
+    // Dual-write the forward-looking shape: per-criterion JSON + the
+    // rubric version this was scored under (v1 today). Legacy columns
+    // above are still written so existing readers keep working.
+    scores: computed.perCriterion,
+    rubricVersionId: data.rubricVersionId ?? DEFAULT_RUBRIC_V1.rubricVersionId,
+    needsReview: quality.needsReview ? 1 : 0,
+    reviewReason: quality.reasons.join(" ") || null,
+  });
   const newEval = await db.select().from(evaluations).where(eq(evaluations.id, Number(result[0].insertId))).limit(1);
   return newEval[0];
 }
 
-export async function updateEvaluation(id: number, data: Partial<InsertEvaluation>): Promise<Evaluation | null> {
+export async function updateEvaluation(
+  id: number,
+  data: Partial<InsertEvaluation>,
+  meta?: { editedById?: number; reason?: string },
+): Promise<Evaluation | null> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const updateData: Record<string, unknown> = { ...data };
-  if (data.hairScore !== undefined || data.makeupScore !== undefined || data.outfitScore !== undefined || data.postureScore !== undefined) {
-    const current = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
-    if (current.length > 0) {
-      const hair = data.hairScore ?? current[0].hairScore ?? 0;
-      const makeup = data.makeupScore ?? current[0].makeupScore ?? 0;
-      const outfit = data.outfitScore ?? current[0].outfitScore ?? 0;
-      const posture = data.postureScore ?? current[0].postureScore ?? 0;
-      updateData.appearanceScore = hair + makeup + outfit + posture;
+
+  // Read the row once — needed both to recompute derived scores and to
+  // snapshot the "before" state for the audit trail.
+  const currentRows = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
+  const current = currentRows.length > 0 ? currentRows[0] : null;
+
+  // If any per-criterion score is part of this update, recompute the
+  // appearance / game-performance / total subtotals from the merged
+  // (incoming over stored) scores via the single scoring engine.
+  const touchesScores =
+    data.hairScore !== undefined || data.makeupScore !== undefined ||
+    data.outfitScore !== undefined || data.postureScore !== undefined ||
+    data.dealingStyleScore !== undefined || data.gamePerformanceScore !== undefined;
+
+  if (touchesScores && current) {
+    const merged = criterionScoresFromColumns({
+      hairScore: data.hairScore ?? current.hairScore,
+      makeupScore: data.makeupScore ?? current.makeupScore,
+      outfitScore: data.outfitScore ?? current.outfitScore,
+      postureScore: data.postureScore ?? current.postureScore,
+      dealingStyleScore: data.dealingStyleScore ?? current.dealingStyleScore,
+      gamePerformanceScore: data.gamePerformanceScore ?? current.gamePerformanceScore,
+    });
+    const computed = computeEvaluationScores(merged, DEFAULT_RUBRIC_V1);
+    updateData.appearanceScore = computed.appearanceScore;
+    updateData.gamePerformanceTotalScore = computed.gamePerformanceTotalScore;
+    updateData.totalScore = computed.totalScore;
+    updateData.scores = computed.perCriterion;
+  }
+
+  // Audit trail: record what changed (old -> new) before applying it.
+  // Best-effort inside recordEvaluationRevision — never blocks the edit.
+  if (current) {
+    const changedFields = diffEvaluation(current as Record<string, unknown>, updateData);
+    if (Object.keys(changedFields).length > 0) {
+      await recordEvaluationRevision({
+        evaluationId: id,
+        editedById: meta?.editedById ?? null,
+        reason: meta?.reason ?? null,
+        changedFields,
+        snapshotBefore: current,
+      });
     }
   }
-  if (data.dealingStyleScore !== undefined || data.gamePerformanceScore !== undefined) {
-    const current = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
-    if (current.length > 0) {
-      const dealing = data.dealingStyleScore ?? current[0].dealingStyleScore ?? 0;
-      const gamePerf = data.gamePerformanceScore ?? current[0].gamePerformanceScore ?? 0;
-      updateData.gamePerformanceTotalScore = dealing + gamePerf;
-    }
-  }
-  if (updateData.appearanceScore !== undefined || updateData.gamePerformanceTotalScore !== undefined) {
-    const current = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
-    if (current.length > 0) {
-      const appearance = (updateData.appearanceScore as number) ?? current[0].appearanceScore ?? 0;
-      const gamePerf = (updateData.gamePerformanceTotalScore as number) ?? current[0].gamePerformanceTotalScore ?? 0;
-      updateData.totalScore = appearance + gamePerf;
-    }
-  }
-  await db.update(evaluations).set(updateData as any).where(eq(evaluations.id, id));
+
+  await db.update(evaluations).set(updateData as Partial<InsertEvaluation>).where(eq(evaluations.id, id));
   const updated = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
   return updated.length > 0 ? updated[0] : null;
 }
@@ -253,4 +326,33 @@ export async function getGpEvaluationsForPortal(gpId: number) {
     appearanceScore: evaluations.appearanceScore, gamePerformanceTotalScore: evaluations.gamePerformanceTotalScore,
     screenshotUrl: evaluations.screenshotUrl, createdAt: evaluations.createdAt,
   }).from(evaluations).where(eq(evaluations.gamePresenterId, gpId)).orderBy(desc(evaluations.evaluationDate));
+}
+
+// ============================================
+// REVIEW QUEUE (quality flag)
+// ============================================
+
+/**
+ * Evaluations flagged for human review (out-of-range scores or an
+ * AI total that disagreed with the sub-scores). Scoped to a user when
+ * `userId` is given (non-admin), unscoped for admins.
+ */
+export async function getEvaluationsNeedingReview(userId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const cond = userId == null
+    ? eq(evaluations.needsReview, 1)
+    : and(eq(evaluations.needsReview, 1), or(eq(evaluations.userId, userId), eq(evaluations.uploadedById, userId)));
+  return await db.select({ evaluation: evaluations, gamePresenter: gamePresenters })
+    .from(evaluations)
+    .leftJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+    .where(cond)
+    .orderBy(desc(evaluations.createdAt));
+}
+
+/** Dismiss the review flag once a human has checked the evaluation. */
+export async function clearEvaluationReviewFlag(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(evaluations).set({ needsReview: 0, reviewReason: null }).where(eq(evaluations.id, id));
 }

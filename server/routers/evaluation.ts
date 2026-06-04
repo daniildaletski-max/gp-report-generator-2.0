@@ -5,6 +5,7 @@ import * as db from "../db";
 import { storagePut } from "../storage";
 import { nanoid } from "nanoid";
 import { generateExcelAndEmail, extractEvaluationFromImage, parseEvaluationDate, EvaluationDataSchema } from "./_shared";
+import { SCORE_CONFIG } from "@shared/const";
 
 export const evaluationRouter = router({
   uploadAndExtract: protectedProcedure
@@ -124,7 +125,7 @@ export const evaluationRouter = router({
         evaluatorName: cleanName(evaluatorName),
         evaluationDate,
         game: cleanGame(game),
-        totalScore: null, // recomputed by createEvaluation
+        totalScore: null, // derived from sub-scores by createEvaluation
         hairScore: hairScore ?? null,
         hairMaxScore: 3,
         hairComment: cleanComment(hairComment),
@@ -143,24 +144,14 @@ export const evaluationRouter = router({
         gamePerformanceScore: gamePerformanceScore ?? null,
         gamePerformanceMaxScore: 5,
         gamePerformanceComment: cleanComment(gamePerformanceComment),
-        // Total score is computed by createEvaluation from the
-        // appearance + gamePerformance helpers; we provide null and
-        // recompute the manual sum here too so the API response
-        // contains a useful totalScore even if the helper changes.
+        // appearance / gamePerformance / total are all derived inside
+        // createEvaluation from the per-criterion scores above.
         rawExtractedData: { source: "manual", enteredAt: new Date().toISOString() } as any,
         uploadedById: ctx.user.id,
         userId: ctx.user.id,
       });
 
-      // Backfill totalScore — createEvaluation sets appearance + game-
-      // performance derived scores, but leaves totalScore as the input
-      // (we passed null). Compute and update.
-      const total = (evaluation.appearanceScore ?? 0) + (evaluation.gamePerformanceTotalScore ?? 0);
-      if (total > 0) {
-        await db.updateEvaluation(evaluation.id, { totalScore: total });
-      }
-
-      return { success: true, evaluation: { ...evaluation, totalScore: total || evaluation.totalScore } };
+      return { success: true, evaluation };
     }),
 
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -410,18 +401,23 @@ export const evaluationRouter = router({
       evaluationDate: z.date().optional(),
       game: z.string().max(100).optional(),
       totalScore: z.number().min(0).max(100).optional(),
-      hairScore: z.number().min(0).max(5).optional(),
-      makeupScore: z.number().min(0).max(5).optional(),
-      outfitScore: z.number().min(0).max(5).optional(),
-      postureScore: z.number().min(0).max(5).optional(),
-      dealingStyleScore: z.number().min(0).max(10).optional(),
-      gamePerformanceScore: z.number().min(0).max(10).optional(),
+      // Bounds come from the rubric (SCORE_CONFIG) so they can't drift from
+      // the real maxes — the previous hardcoded values let outfit/posture
+      // reach 5 and dealing/game reach 10, well above their actual caps.
+      hairScore: z.number().min(0).max(SCORE_CONFIG.hair.max).optional(),
+      makeupScore: z.number().min(0).max(SCORE_CONFIG.makeup.max).optional(),
+      outfitScore: z.number().min(0).max(SCORE_CONFIG.outfit.max).optional(),
+      postureScore: z.number().min(0).max(SCORE_CONFIG.posture.max).optional(),
+      dealingStyleScore: z.number().min(0).max(SCORE_CONFIG.dealingStyle.max).optional(),
+      gamePerformanceScore: z.number().min(0).max(SCORE_CONFIG.gamePerformance.max).optional(),
       hairComment: z.string().max(1000).optional(),
       makeupComment: z.string().max(1000).optional(),
       outfitComment: z.string().max(1000).optional(),
       postureComment: z.string().max(1000).optional(),
       dealingStyleComment: z.string().max(1000).optional(),
       gamePerformanceComment: z.string().max(1000).optional(),
+      /** Optional note explaining the edit — recorded in the audit trail. */
+      reason: z.string().max(500).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       // Check ownership before update - user-based data isolation
@@ -433,8 +429,8 @@ export const evaluationRouter = router({
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only edit your own evaluations' });
         }
       }
-      
-      const { id, ...data } = input;
+
+      const { id, reason, ...data } = input;
       // Sanitize text fields
       if (data.evaluatorName) data.evaluatorName = db.sanitizeString(data.evaluatorName, 255);
       if (data.game) data.game = db.sanitizeString(data.game, 100);
@@ -444,21 +440,48 @@ export const evaluationRouter = router({
       if (data.postureComment) data.postureComment = db.sanitizeString(data.postureComment, 1000);
       if (data.dealingStyleComment) data.dealingStyleComment = db.sanitizeString(data.dealingStyleComment, 1000);
       if (data.gamePerformanceComment) data.gamePerformanceComment = db.sanitizeString(data.gamePerformanceComment, 1000);
-      
-      // Recalculate derived scores when individual scores change
-      const updateData: any = { ...data };
-      const hairS = data.hairScore ?? evaluation.evaluation?.hairScore ?? 0;
-      const makeupS = data.makeupScore ?? evaluation.evaluation?.makeupScore ?? 0;
-      const outfitS = data.outfitScore ?? evaluation.evaluation?.outfitScore ?? 0;
-      const postureS = data.postureScore ?? evaluation.evaluation?.postureScore ?? 0;
-      const dealingS = data.dealingStyleScore ?? evaluation.evaluation?.dealingStyleScore ?? 0;
-      const gamePerfS = data.gamePerformanceScore ?? evaluation.evaluation?.gamePerformanceScore ?? 0;
-      updateData.appearanceScore = (hairS || 0) + (makeupS || 0) + (outfitS || 0) + (postureS || 0);
-      updateData.gamePerformanceTotalScore = (dealingS || 0) + (gamePerfS || 0);
-      updateData.totalScore = updateData.appearanceScore + updateData.gamePerformanceTotalScore;
-      
-      const updated = await db.updateEvaluation(id, updateData);
+
+      // Derived scores (appearance / game / total) and the per-criterion
+      // JSON are recomputed inside updateEvaluation via the scoring engine;
+      // the edit is also captured in the evaluation_revisions audit trail.
+      const updated = await db.updateEvaluation(id, data, { editedById: ctx.user.id, reason });
       return { success: true, evaluation: updated };
+    }),
+
+  /** Edit history (newest first) for one evaluation — owner / admin only. */
+  history: protectedProcedure
+    .input(z.object({ id: z.number().positive() }))
+    .query(async ({ ctx, input }) => {
+      const evaluation = await db.getEvaluationWithGP(input.id);
+      if (!evaluation) throw new TRPCError({ code: 'NOT_FOUND', message: 'Evaluation not found' });
+      if (ctx.user.role !== 'admin') {
+        const evalUserId = evaluation.evaluation?.userId || evaluation.evaluation?.uploadedById;
+        if (evalUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+        }
+      }
+      return await db.getEvaluationRevisions(input.id);
+    }),
+
+  /** Evaluations flagged for human review — scoped to the caller unless admin. */
+  needsReview: protectedProcedure.query(async ({ ctx }) => {
+    return await db.getEvaluationsNeedingReview(ctx.user.role === "admin" ? undefined : ctx.user.id);
+  }),
+
+  /** Dismiss the review flag after a human has checked the evaluation. */
+  clearReview: protectedProcedure
+    .input(z.object({ id: z.number().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const evaluation = await db.getEvaluationWithGP(input.id);
+      if (!evaluation) throw new TRPCError({ code: 'NOT_FOUND', message: 'Evaluation not found' });
+      if (ctx.user.role !== 'admin') {
+        const evalUserId = evaluation.evaluation?.userId || evaluation.evaluation?.uploadedById;
+        if (evalUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+        }
+      }
+      await db.clearEvaluationReviewFlag(input.id);
+      return { success: true };
     }),
 
   delete: protectedProcedure

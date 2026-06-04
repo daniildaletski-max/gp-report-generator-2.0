@@ -14,6 +14,10 @@ import { createLogger } from "../services/logger";
 import { requestTracingMiddleware, requestValidation } from "../services/requestTracing";
 import { cache } from "../services/cache";
 import { checkHealth as checkDbHealth, getDb } from "../db/connection";
+import { ensureRubricSchema } from "../db/rubricMigration";
+import { ensureEvaluationHistorySchema } from "../db/evaluationHistory";
+import { ensureAttitudeManualColumn } from "../db/attitude";
+import { ensureMistakesConsolidated } from "../db/attendance";
 import { ENV } from "./env";
 import * as db from "../db";
 
@@ -488,6 +492,26 @@ async function startServer() {
     });
     ensureManagerEmailColumn().catch(err => {
       log.warn("managerEmail boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Versioned-rubric schema (Phase 2): creates rubric_* tables, adds
+    // evaluations.rubricVersionId / scores, seeds rubric v1 and backfills
+    // legacy rows. Idempotent; same "Manus doesn't run migrations" reason
+    // as the column repairs above. See server/db/rubricMigration.ts.
+    ensureRubricSchema().catch(err => {
+      log.warn("rubric schema boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Evaluation edit-history table (Phase 3) — audit trail for score
+    // edits. Same idempotent boot-install pattern.
+    ensureEvaluationHistorySchema().catch(err => {
+      log.warn("evaluation history schema boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Attitude hybrid column (Phase 4) — monthly_gp_stats.attitudeIsManual.
+    ensureAttitudeManualColumn().catch(err => {
+      log.warn("attitude column boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Consolidate mistakes onto monthly_gp_stats (Phase 5) — idempotent.
+    ensureMistakesConsolidated().catch(err => {
+      log.warn("mistakes consolidation boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
     });
     // Automation credentials audit — surfaces missing RESEND_API_KEY /
     // PERSONA_* / STUDIOWORKS_* env vars in deploy logs so operators

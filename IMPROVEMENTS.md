@@ -1,5 +1,17 @@
 # GP Report Generator - System Improvements
 
+> ⚠️ **Historical / partially inaccurate.** This document (and
+> `IMPROVEMENTS_CHECKLIST.md`, `IMPLEMENTATION_SUMMARY.md`,
+> `QUICK_START_IMPROVEMENTS.md`) describe an earlier proposed iteration.
+> Several items below were **never actually shipped** — notably
+> `server/services/bonusCalculator.ts` and its "18 tests", and the
+> `shared/validation.ts` / `server/services/dataValidation.ts` modules
+> (the latter were dead code and have since been removed). The real,
+> implemented scoring overhaul (single scoring engine, versioned rubric,
+> edit history, needs-review, attitude/mistakes fixes — all
+> MariaDB-validated) lives in the "Scoring system overhaul" PR. Treat the
+> sections below as aspirational notes, not a record of shipped code.
+
 This document outlines the comprehensive improvements made to the GP Report Generator system to enhance performance, reliability, and user experience.
 
 ## 1. Dependency and Build Fixes

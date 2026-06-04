@@ -99,6 +99,26 @@ export const evaluations = mysqlTable("evaluations", {
   // Calculated scores for template
   appearanceScore: int("appearanceScore"), // Hair + Makeup + Outfit + Posture
   gamePerformanceTotalScore: int("gamePerformanceTotalScore"), // Dealing + GamePerf
+  /**
+   * Rubric version this evaluation was scored under. Null on legacy rows
+   * until the boot-time backfill tags them as v1 (rubric_versions.id = 1).
+   * Lets historical scores stay comparable when the rubric changes.
+   */
+  rubricVersionId: int("rubricVersionId"),
+  /**
+   * Per-criterion scores keyed by criterion key (e.g. { hair: 3, ... }).
+   * The forward-looking source of truth that replaces the fixed
+   * `<criterion>Score` columns. Dual-written alongside the legacy columns
+   * during the transition; backfilled from them for historical rows.
+   */
+  scores: json("scores").$type<Record<string, number>>(),
+  /**
+   * 1 when the evaluation looks suspect (out-of-range score, or an
+   * AI-provided total that disagrees with the sum of sub-scores) and a
+   * human should re-check it. Drives the "needs review" queue.
+   */
+  needsReview: int("needsReview").default(0),
+  reviewReason: varchar("reviewReason", { length: 512 }),
   screenshotUrl: text("screenshotUrl"),
   screenshotKey: varchar("screenshotKey", { length: 512 }),
   rawExtractedData: json("rawExtractedData"),
@@ -112,6 +132,94 @@ export type Evaluation = typeof evaluations.$inferSelect;
 export type InsertEvaluation = typeof evaluations.$inferInsert;
 
 /**
+ * Rubrics — a named scoring scheme. Today there is exactly one ("Default
+ * GP Evaluation"), but the table exists so the rubric can be edited and
+ * re-versioned from the admin UI instead of being hardcoded across the
+ * schema, const.ts, the exporters and the portal.
+ */
+export const rubrics = mysqlTable("rubrics", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  isActive: int("isActive").default(1).notNull(), // 1 = active, 0 = retired
+  createdById: int("createdById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Rubric = typeof rubrics.$inferSelect;
+export type InsertRubric = typeof rubrics.$inferInsert;
+
+/**
+ * Rubric versions — an immutable snapshot of a rubric's criteria. Editing
+ * a rubric creates a new version rather than mutating the current one, so
+ * an evaluation scored under v1 stays comparable forever. `version` 1 is
+ * the seeded original (Hair/Makeup/Outfit/Posture = 12, Dealing/Game = 10).
+ */
+export const rubricVersions = mysqlTable("rubric_versions", {
+  id: int("id").autoincrement().primaryKey(),
+  rubricId: int("rubricId").notNull(),
+  version: int("version").notNull(), // 1, 2, 3, …
+  label: varchar("label", { length: 255 }).notNull(),
+  /** First date this version applies to. New evaluations pick the active
+   *  version effective on their evaluation date. */
+  effectiveFrom: timestamp("effectiveFrom"),
+  /** Sum of all criteria maxes — denormalised for quick "/22"-style display. */
+  totalMax: int("totalMax").default(0).notNull(),
+  /** Once locked, the version's criteria must not change (enforced in app). */
+  isLocked: int("isLocked").default(0).notNull(),
+  /** 1 = this is the version new evaluations are scored under for its rubric. */
+  isActive: int("isActive").default(0).notNull(),
+  createdById: int("createdById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type RubricVersion = typeof rubricVersions.$inferSelect;
+export type InsertRubricVersion = typeof rubricVersions.$inferInsert;
+
+/**
+ * Rubric criteria — one row per scored criterion within a version. Column
+ * names avoid the MySQL reserved words `key` and `group`.
+ */
+export const rubricCriteria = mysqlTable("rubric_criteria", {
+  id: int("id").autoincrement().primaryKey(),
+  versionId: int("versionId").notNull(),
+  /** Stable identifier, e.g. "hair". Matches the JSON key in evaluations.scores. */
+  key: varchar("criterionKey", { length: 64 }).notNull(),
+  label: varchar("label", { length: 255 }).notNull(),
+  description: text("description"),
+  maxScore: int("maxScore").notNull(),
+  /** Roll-up bucket: "appearance" or "game". */
+  group: mysqlEnum("criterionGroup", ["appearance", "game"]).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+});
+
+export type RubricCriterion = typeof rubricCriteria.$inferSelect;
+export type InsertRubricCriterion = typeof rubricCriteria.$inferInsert;
+
+/**
+ * Evaluation revisions — an append-only audit trail of edits to an
+ * evaluation. Every `updateEvaluation` that actually changes a field
+ * writes one row here BEFORE applying the change, capturing who edited
+ * it, an optional reason, the changed fields (old -> new) and a full
+ * snapshot of the row as it was. Makes score edits explainable instead
+ * of silently destructive ("I was given 14, then it became 12").
+ */
+export const evaluationRevisions = mysqlTable("evaluation_revisions", {
+  id: int("id").autoincrement().primaryKey(),
+  evaluationId: int("evaluationId").notNull(),
+  editedById: int("editedById"),
+  reason: text("reason"),
+  /** Map of field -> { old, new } for the fields that changed. */
+  changedFields: json("changedFields").$type<Record<string, { old: unknown; new: unknown }>>(),
+  /** Full evaluation row as it stood before this edit. */
+  snapshotBefore: json("snapshotBefore"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type EvaluationRevision = typeof evaluationRevisions.$inferSelect;
+export type InsertEvaluationRevision = typeof evaluationRevisions.$inferInsert;
+
+/**
  * GP Monthly Attendance - tracks attendance metrics per GP per month
  */
 export const gpMonthlyAttendance = mysqlTable("gp_monthly_attendance", {
@@ -119,6 +227,8 @@ export const gpMonthlyAttendance = mysqlTable("gp_monthly_attendance", {
   gamePresenterId: int("gamePresenterId").notNull(),
   month: int("month").notNull(), // 1-12
   year: int("year").notNull(),
+  /** @deprecated Source of truth is monthly_gp_stats.mistakes. Kept for
+   *  back-compat; ensureMistakesConsolidated() backfills stats from here. */
   mistakes: int("mistakes").default(0),
   extraShifts: int("extraShifts").default(0),
   lateToWork: int("lateToWork").default(0),
@@ -241,7 +351,13 @@ export const monthlyGpStats = mysqlTable("monthly_gp_stats", {
   gamePresenterId: int("gamePresenterId").notNull(),
   month: int("month").notNull(), // 1-12
   year: int("year").notNull(),
-  attitude: int("attitude"), // Score 1-5 or similar
+  attitude: int("attitude"), // Net attitude: sum of +1/-1 screenshot events, or a manual override
+  /**
+   * 1 = `attitude` was set manually by an FM and must NOT be recomputed
+   * from screenshots. 0/null = derived: attitude is kept in sync with the
+   * sum of attitudeScreenshots scores for this GP/month.
+   */
+  attitudeIsManual: int("attitudeIsManual").default(0),
   mistakes: int("mistakes").default(0), // Count of mistakes
   totalGames: int("totalGames").default(0), // Total games played for bonus calculation
   notes: text("notes"), // Optional notes

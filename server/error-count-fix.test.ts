@@ -119,8 +119,10 @@ describe('Error Count Fix - Architecture Verification', () => {
       const fs = await import('fs');
       const source = fs.readFileSync('./server/db/attendance.ts', 'utf-8');
 
-      // Should contain the comment about using monthlyGpStats as primary
-      expect(source).toContain('Use monthlyGpStats.mistakes as the primary source');
+      // Should document monthlyGpStats.mistakes as the source of truth.
+      // (Phase 5 consolidated to a single source — stronger than the old
+      // primary-with-attendance-fallback.)
+      expect(source).toContain('monthlyGpStats.mistakes is the single source of truth');
     });
 
     it('googleSheetsService should prioritize monthlyStats.mistakes', async () => {
