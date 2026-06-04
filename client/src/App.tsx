@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, ShieldAlert, CalendarCheck, Zap } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -24,6 +24,7 @@ const Attendance = lazy(() => import("./pages/Attendance"));
 const Workspace = lazy(() => import("./pages/Workspace"));
 const GPPortal = lazy(() => import("./pages/GPPortal"));
 const InvitePage = lazy(() => import("./pages/InvitePage"));
+const Review = lazy(() => import("./pages/Review"));
 
 function PageLoader() {
   return (
@@ -47,6 +48,9 @@ const baseSidebarItems = [
   { href: "/evaluations", label: "Evaluations", icon: FileCheck },
   { href: "/reports", label: "Reports", icon: FileSpreadsheet },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck },
+  // Placed after the first five so the mobile bottom nav (slice 0..5)
+  // is unchanged; Review lives in the desktop sidebar.
+  { href: "/review", label: "Review", icon: ShieldAlert },
 ];
 
 // Admin-only item
@@ -88,6 +92,11 @@ function DashboardRoutes() {
             <Route path="/evaluations">
               <RouteErrorBoundary fallbackTitle="Evaluations failed to load">
                 <Evaluations />
+              </RouteErrorBoundary>
+            </Route>
+            <Route path="/review">
+              <RouteErrorBoundary fallbackTitle="Review queue failed to load">
+                <Review />
               </RouteErrorBoundary>
             </Route>
             <Route path="/reports">
@@ -155,6 +164,7 @@ function Router() {
       <Route path="/dashboard" component={DashboardRoutes} />
       <Route path="/upload" component={DashboardRoutes} />
       <Route path="/evaluations" component={DashboardRoutes} />
+      <Route path="/review" component={DashboardRoutes} />
       <Route path="/reports" component={DashboardRoutes} />
       <Route path="/admin" component={DashboardRoutes} />
       <Route path="/attendance" component={DashboardRoutes} />

@@ -32,9 +32,11 @@ import {
   ArrowLeftRight,
   TrendingUp,
   TrendingDown,
-  Minus
+  Minus,
+  History
 } from "lucide-react";
 import { format } from "date-fns";
+import { EvaluationHistory } from "./EvaluationHistory";
 
 interface EvaluationData {
   id: number;
@@ -246,7 +248,7 @@ export default function EvaluationDetailView({
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
           <div className="px-6 py-2 border-b bg-background">
-            <TabsList className="grid w-full max-w-md grid-cols-3">
+            <TabsList className="grid w-full max-w-xl grid-cols-4">
               <TabsTrigger value="comparison" className="flex items-center gap-2">
                 <ArrowLeftRight className="h-4 w-4" />
                 Compare
@@ -258,6 +260,10 @@ export default function EvaluationDetailView({
               <TabsTrigger value="screenshot" className="flex items-center gap-2">
                 <Eye className="h-4 w-4" />
                 Screenshot
+              </TabsTrigger>
+              <TabsTrigger value="history" className="flex items-center gap-2">
+                <History className="h-4 w-4" />
+                History
               </TabsTrigger>
             </TabsList>
           </div>
@@ -517,6 +523,12 @@ export default function EvaluationDetailView({
                   )}
                 </div>
               </ScrollArea>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="history" className="flex-1 m-0 p-6 data-[state=inactive]:hidden overflow-hidden">
+            <div className="max-w-3xl mx-auto h-full">
+              <EvaluationHistory evaluationId={evaluation.id} enabled={activeTab === "history"} />
             </div>
           </TabsContent>
         </Tabs>
