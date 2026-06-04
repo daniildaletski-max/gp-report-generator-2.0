@@ -16,6 +16,7 @@ import { cache } from "../services/cache";
 import { checkHealth as checkDbHealth, getDb } from "../db/connection";
 import { ensureRubricSchema } from "../db/rubricMigration";
 import { ensureEvaluationHistorySchema } from "../db/evaluationHistory";
+import { ensureAttitudeManualColumn } from "../db/attitude";
 import { ENV } from "./env";
 import * as db from "../db";
 
@@ -502,6 +503,10 @@ async function startServer() {
     // edits. Same idempotent boot-install pattern.
     ensureEvaluationHistorySchema().catch(err => {
       log.warn("evaluation history schema boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Attitude hybrid column (Phase 4) — monthly_gp_stats.attitudeIsManual.
+    ensureAttitudeManualColumn().catch(err => {
+      log.warn("attitude column boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
     });
     // Automation credentials audit — surfaces missing RESEND_API_KEY /
     // PERSONA_* / STUDIOWORKS_* env vars in deploy logs so operators

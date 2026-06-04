@@ -20,37 +20,10 @@
 import { sql } from "drizzle-orm";
 import { getDb } from "./connection";
 import { createLogger } from "../services/logger";
+import { addColumnIfMissing } from "./_schemaUtils";
 import { DEFAULT_RUBRIC_V1, rubricMaxTotal } from "../../shared/scoring";
 
 const log = createLogger("DB:RubricMigration");
-
-type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
-
-/**
- * Detect "column already exists" across the Drizzle error wrapping.
- * Drizzle raises a DrizzleQueryError whose `.message` is the generic
- * "Failed query: ALTER TABLE …" — the real "Duplicate column name" text
- * and the canonical MySQL code (1060 / ER_DUP_FIELDNAME) live on
- * `e.cause`. Checking only `e.message` (as the original guard did) misses
- * it and re-throws on every re-run, breaking idempotency.
- */
-function isDuplicateColumnError(e: any): boolean {
-  const codes = [e?.code, e?.errno, e?.cause?.code, e?.cause?.errno];
-  if (codes.includes("ER_DUP_FIELDNAME") || codes.includes(1060)) return true;
-  const text = `${e?.message ?? ""} ${e?.cause?.message ?? ""} ${e?.cause?.sqlMessage ?? ""}`;
-  return /duplicate column|already exists/i.test(text);
-}
-
-/** Add a column, treating "already there" as success. */
-async function addColumnIfMissing(db: Db, ddl: string, label: string): Promise<void> {
-  try {
-    await db.execute(sql.raw(ddl));
-    log.info(`Schema repair: added ${label}`);
-  } catch (e: any) {
-    if (isDuplicateColumnError(e)) return;
-    throw e;
-  }
-}
 
 export async function ensureRubricSchema(): Promise<void> {
   const db = await getDb();

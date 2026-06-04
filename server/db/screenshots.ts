@@ -6,6 +6,16 @@ import { attitudeScreenshots, InsertAttitudeScreenshot, AttitudeScreenshot } fro
 import { getDb } from "./connection";
 import { createLogger } from "../services/logger";
 import { monthRange } from "./_dateRange";
+import { recomputeGPAttitudeFromScreenshots } from "./attitude";
+
+/** Re-derive a GP's monthly attitude after a screenshot row changed,
+ *  using the row's effective (entry) date to pick the month bucket. */
+async function recomputeForRow(row: { gamePresenterId: number | null; evaluationDate: Date | null; createdAt: Date }): Promise<void> {
+  if (row.gamePresenterId == null) return;
+  const eff = row.evaluationDate ?? row.createdAt ?? new Date();
+  const d = new Date(eff);
+  await recomputeGPAttitudeFromScreenshots(row.gamePresenterId, d.getMonth() + 1, d.getFullYear());
+}
 
 /**
  * Filter expression that matches rows whose entry-time `evaluationDate`
@@ -51,7 +61,9 @@ export async function getAttitudeScreenshotsByGpId(gamePresenterId: number, mont
 export async function deleteAttitudeScreenshot(id: number): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  const rows = await db.select().from(attitudeScreenshots).where(eq(attitudeScreenshots.id, id)).limit(1);
   await db.delete(attitudeScreenshots).where(eq(attitudeScreenshots.id, id));
+  if (rows.length > 0) await recomputeForRow(rows[0]);
   return true;
 }
 
@@ -102,5 +114,6 @@ export async function deleteAttitudeScreenshotByUser(id: number, userId: number)
   if (!screenshot.length) throw new Error("Attitude screenshot not found");
   if (screenshot[0].uploadedById !== userId) throw new Error("Access denied");
   await db.delete(attitudeScreenshots).where(eq(attitudeScreenshots.id, id));
+  await recomputeForRow(screenshot[0]);
   return true;
 }

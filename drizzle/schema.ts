@@ -349,7 +349,13 @@ export const monthlyGpStats = mysqlTable("monthly_gp_stats", {
   gamePresenterId: int("gamePresenterId").notNull(),
   month: int("month").notNull(), // 1-12
   year: int("year").notNull(),
-  attitude: int("attitude"), // Score 1-5 or similar
+  attitude: int("attitude"), // Net attitude: sum of +1/-1 screenshot events, or a manual override
+  /**
+   * 1 = `attitude` was set manually by an FM and must NOT be recomputed
+   * from screenshots. 0/null = derived: attitude is kept in sync with the
+   * sum of attitudeScreenshots scores for this GP/month.
+   */
+  attitudeIsManual: int("attitudeIsManual").default(0),
   mistakes: int("mistakes").default(0), // Count of mistakes
   totalGames: int("totalGames").default(0), // Total games played for bonus calculation
   notes: text("notes"), // Optional notes

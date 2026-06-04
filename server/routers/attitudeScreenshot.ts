@@ -229,10 +229,13 @@ Respond with a JSON object containing an array of ALL entries found:
         else scoreByMonth.set(key, { month: entryMonth, year: entryYear, total: score });
       }
 
-      // Update monthly stats per (year, month) bucket — see comment above.
+      // Re-derive the monthly attitude cache from ALL screenshots in each
+      // touched bucket (the rows above are already inserted). Recomputing
+      // from source — instead of the old blind increment — is idempotent
+      // on re-upload and respects a manual override (hybrid model).
       if (gamePresenterId) {
-        for (const { month: bm, year: by, total } of Array.from(scoreByMonth.values())) {
-          if (total !== 0) await db.updateGPAttitude(gamePresenterId, bm, by, total);
+        for (const { month: bm, year: by } of Array.from(scoreByMonth.values())) {
+          await db.recomputeGPAttitudeFromScreenshots(gamePresenterId, bm, by);
         }
       }
 

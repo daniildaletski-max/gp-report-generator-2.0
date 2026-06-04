@@ -76,9 +76,14 @@ export {
   getMonthlyGpStatsByTeam, getAllMonthlyGpStats, getMonthlyGpStats,
   getGamePresentersByTeamWithStats,
   bulkUpdateMonthlyGpStats, bulkSetAttitude, bulkResetMistakes,
-  incrementGPMistakes, updateGPAttitude,
+  incrementGPMistakes,
   getGpMonthlyHistory, getTeamPeerAverages, syncErrorsFromGoogleSheets,
 } from "./monthlyStats";
+
+// Attitude (hybrid: derived from screenshots + manual override)
+export {
+  ensureAttitudeManualColumn, recomputeGPAttitudeFromScreenshots, clearAttitudeOverride,
+} from "./attitude";
 export type { BulkGpStatsUpdate, GoogleSheetsErrorData } from "./monthlyStats";
 
 // Errors
