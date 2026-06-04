@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SlidersHorizontal, ShieldAlert, Plus, Trash2, CheckCircle2, Star } from "lucide-react";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { SlidersHorizontal, ShieldAlert, Plus, Trash2, CheckCircle2, Star, Info } from "lucide-react";
 
 type Group = "appearance" | "game";
 interface DraftCriterion {
@@ -114,6 +115,18 @@ export default function Rubric() {
         subtitle="Define how evaluations are scored. New versions are immutable snapshots — past scores keep their original rubric."
         icon={SlidersHorizontal}
       />
+
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertTitle>Foundation preview</AlertTitle>
+        <AlertDescription>
+          Rubric versions are stored and tagged onto evaluations for history,
+          but scoring, the GP portal and exports still use the built-in v1
+          rubric. Creating or activating a version is recorded but does not yet
+          change how evaluations are scored or displayed — full configurability
+          (custom criteria flowing through scores and reports) is the next step.
+        </AlertDescription>
+      </Alert>
 
       {/* Existing versions */}
       <Card>
