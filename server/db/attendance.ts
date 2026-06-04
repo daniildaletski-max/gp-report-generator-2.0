@@ -1,9 +1,38 @@
 /**
  * GP Monthly Attendance Database Operations
  */
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { gpMonthlyAttendance, InsertGpMonthlyAttendance, GpMonthlyAttendance, gamePresenters, monthlyGpStats } from "../../drizzle/schema";
 import { getDb } from "./connection";
+
+/**
+ * One-shot, idempotent backfill consolidating mistake counts onto the
+ * single source of truth (monthly_gp_stats.mistakes). Historically the
+ * count was mirrored on gp_monthly_attendance.mistakes too; that column
+ * is deprecated. This raises stats to any higher legacy attendance value
+ * and creates stats rows for attendance-only months that carry mistakes,
+ * so reading mistakes from stats alone never under-reports. Safe to run
+ * on every boot — both statements are no-ops once consolidated.
+ */
+export async function ensureMistakesConsolidated(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.execute(sql.raw(`
+    UPDATE \`monthly_gp_stats\` s
+    JOIN \`gp_monthly_attendance\` a
+      ON a.gamePresenterId = s.gamePresenterId AND a.month = s.month AND a.year = s.year
+    SET s.mistakes = a.mistakes
+    WHERE COALESCE(a.mistakes, 0) > COALESCE(s.mistakes, 0)
+  `));
+  await db.execute(sql.raw(`
+    INSERT INTO \`monthly_gp_stats\` (gamePresenterId, month, year, mistakes)
+    SELECT a.gamePresenterId, a.month, a.year, a.mistakes
+    FROM \`gp_monthly_attendance\` a
+    LEFT JOIN \`monthly_gp_stats\` s
+      ON s.gamePresenterId = a.gamePresenterId AND s.month = a.month AND s.year = a.year
+    WHERE s.id IS NULL AND COALESCE(a.mistakes, 0) > 0
+  `));
+}
 
 /**
  * Read-only attendance lookup — does NOT create a zero-filled row
@@ -104,21 +133,15 @@ export async function getAttendanceTrends(teamId: number, months: number = 6) {
       gpCount: teamGPs.length,
     };
 
-    // Use monthlyGpStats.mistakes as the primary source for mistake counts
-    // Build a set of GP IDs that have stats data
-    const gpMistakesFromStats = new Set<number>();
+    // monthlyGpStats.mistakes is the single source of truth for mistakes.
+    // (gp_monthly_attendance.mistakes is deprecated; the boot backfill in
+    // ensureMistakesConsolidated keeps stats >= attendance so nothing is
+    // lost, which lets us read mistakes from stats alone here.)
     for (const stat of statsData) {
-      if (stat.stats?.gamePresenterId) {
-        gpMistakesFromStats.add(stat.stats.gamePresenterId);
-        totals.totalMistakes += stat.stats.mistakes ?? 0;
-      }
+      totals.totalMistakes += stat.stats?.mistakes ?? 0;
     }
 
     for (const att of attendanceData) {
-      // Only use attendance.mistakes as fallback if no stats record exists for this GP
-      if (att.attendance?.gamePresenterId && !gpMistakesFromStats.has(att.attendance.gamePresenterId)) {
-        totals.totalMistakes += att.attendance?.mistakes ?? 0;
-      }
       totals.totalExtraShifts += att.attendance?.extraShifts ?? 0;
       totals.totalLateToWork += att.attendance?.lateToWork ?? 0;
       totals.totalMissedDays += att.attendance?.missedDays ?? 0;

@@ -227,6 +227,8 @@ export const gpMonthlyAttendance = mysqlTable("gp_monthly_attendance", {
   gamePresenterId: int("gamePresenterId").notNull(),
   month: int("month").notNull(), // 1-12
   year: int("year").notNull(),
+  /** @deprecated Source of truth is monthly_gp_stats.mistakes. Kept for
+   *  back-compat; ensureMistakesConsolidated() backfills stats from here. */
   mistakes: int("mistakes").default(0),
   extraShifts: int("extraShifts").default(0),
   lateToWork: int("lateToWork").default(0),
