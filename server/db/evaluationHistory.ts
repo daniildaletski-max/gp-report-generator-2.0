@@ -95,13 +95,35 @@ export async function recordEvaluationRevision(rev: InsertEvaluationRevision): P
   }
 }
 
+/**
+ * Normalise a JSON column to a parsed value. MySQL 8 returns native JSON
+ * already parsed; MariaDB (JSON = LONGTEXT) hands back a string. Parsing
+ * defensively here means consumers (e.g. the History UI reading
+ * `changedFields`) get an object on either engine.
+ */
+function parseJsonColumn<T = unknown>(v: unknown): T {
+  if (typeof v === "string") {
+    try {
+      return JSON.parse(v) as T;
+    } catch {
+      return v as T;
+    }
+  }
+  return v as T;
+}
+
 /** Newest-first edit history for one evaluation. */
 export async function getEvaluationRevisions(evaluationId: number): Promise<EvaluationRevision[]> {
   const db = await getDb();
   if (!db) return [];
-  return await db
+  const rows = await db
     .select()
     .from(evaluationRevisions)
     .where(eq(evaluationRevisions.evaluationId, evaluationId))
     .orderBy(desc(evaluationRevisions.createdAt));
+  return rows.map((r) => ({
+    ...r,
+    changedFields: parseJsonColumn(r.changedFields),
+    snapshotBefore: parseJsonColumn(r.snapshotBefore),
+  })) as EvaluationRevision[];
 }
