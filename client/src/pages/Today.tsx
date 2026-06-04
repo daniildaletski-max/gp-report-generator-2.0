@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GPDetailDrawer } from "@/components/GPDetailDrawer";
+import { QuickEvalDialog } from "@/components/QuickEvalDialog";
 import { formatDistanceToNow } from "date-fns";
 import {
   Sun, AlertTriangle, AlertCircle, Lightbulb, TrendingUp, Info,
@@ -69,6 +70,7 @@ export default function Today() {
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const [drawerGpId, setDrawerGpId] = useState<number | null>(null);
+  const [quickEval, setQuickEval] = useState<{ id: number; name?: string } | null>(null);
 
   const insightsQ = trpc.dashboard.insights.useQuery({}, { staleTime: 60_000 });
   const tasksQ = trpc.actionItems.list.useQuery({}, { staleTime: 30_000 });
@@ -170,12 +172,20 @@ export default function Today() {
                           </button>
                         )}
                       </div>
-                      {(i.action?.href || i.metadata?.gpId) && (
-                        <Button size="sm" variant="outline" className="shrink-0" onClick={() => openInsight(i)}>
-                          {i.action?.label ?? "Open"}
-                          <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                        </Button>
-                      )}
+                      <div className="flex flex-col gap-1.5 shrink-0">
+                        {(i.action?.href || i.metadata?.gpId) && (
+                          <Button size="sm" variant="outline" onClick={() => openInsight(i)}>
+                            {i.action?.label ?? "Open"}
+                            <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                          </Button>
+                        )}
+                        {i.metadata?.gpId && (
+                          <Button size="sm" variant="ghost" className="text-primary hover:bg-primary/10"
+                            onClick={() => setQuickEval({ id: i.metadata!.gpId!, name: i.metadata?.gpName })}>
+                            <Zap className="h-3.5 w-3.5 mr-1" /> Evaluate
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -229,10 +239,16 @@ export default function Today() {
                           )}
                         </div>
                       </div>
-                      <Button size="sm" variant="ghost" className="shrink-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                        onClick={() => completeTask.mutate({ id: t.id })} disabled={completeTask.isPending}>
-                        <CheckCircle2 className="h-4 w-4 mr-1" /> Done
-                      </Button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button size="sm" variant="ghost" className="text-primary hover:bg-primary/10" title="Quick evaluate"
+                          onClick={() => setQuickEval({ id: t.gamePresenterId, name: t.gamePresenter?.name })}>
+                          <Zap className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                          onClick={() => completeTask.mutate({ id: t.id })} disabled={completeTask.isPending}>
+                          <CheckCircle2 className="h-4 w-4 mr-1" /> Done
+                        </Button>
+                      </div>
                     </div>
                   );
                 })}
@@ -295,6 +311,13 @@ export default function Today() {
       </div>
 
       <GPDetailDrawer gpId={drawerGpId} open={drawerGpId !== null} onOpenChange={(o) => { if (!o) setDrawerGpId(null); }} />
+
+      <QuickEvalDialog
+        gpId={quickEval?.id ?? null}
+        gpName={quickEval?.name}
+        open={quickEval !== null}
+        onOpenChange={(o) => { if (!o) setQuickEval(null); }}
+      />
     </div>
   );
 }
