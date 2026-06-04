@@ -129,6 +129,11 @@ export default function Today() {
               : "You're all caught up. Nothing needs you right now. ✨"
         }
         icon={Sun}
+        actions={
+          <Button variant="outline" size="sm" onClick={() => navigate("/assistant")}>
+            <Sparkles className="h-4 w-4 mr-1.5 text-primary" /> Ask AI
+          </Button>
+        }
       />
 
       {/* quick stat strip */}
