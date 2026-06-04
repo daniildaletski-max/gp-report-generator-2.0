@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, ShieldAlert, CalendarCheck, Zap } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, ShieldAlert, CalendarCheck, Zap, SlidersHorizontal } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -25,6 +25,7 @@ const Workspace = lazy(() => import("./pages/Workspace"));
 const GPPortal = lazy(() => import("./pages/GPPortal"));
 const InvitePage = lazy(() => import("./pages/InvitePage"));
 const Review = lazy(() => import("./pages/Review"));
+const Rubric = lazy(() => import("./pages/Rubric"));
 
 function PageLoader() {
   return (
@@ -59,13 +60,17 @@ const adminSidebarItem = { href: "/admin", label: "Admin", icon: Shield };
 // FM-only item (Team Management)
 const fmSidebarItem = { href: "/admin", label: "Team", icon: Settings };
 
+// Admin-only rubric manager
+const rubricSidebarItem = { href: "/rubric", label: "Rubric", icon: SlidersHorizontal };
+
 function DashboardRoutes() {
   const { user } = useAuth();
-  
+
   // Build sidebar items based on role
   const sidebarItems = [
     ...baseSidebarItems,
     user?.role === "admin" ? adminSidebarItem : fmSidebarItem,
+    ...(user?.role === "admin" ? [rubricSidebarItem] : []),
   ];
 
   // Mobile-only bottom navigation. Mirrors the sidebar but renders only on
@@ -97,6 +102,11 @@ function DashboardRoutes() {
             <Route path="/review">
               <RouteErrorBoundary fallbackTitle="Review queue failed to load">
                 <Review />
+              </RouteErrorBoundary>
+            </Route>
+            <Route path="/rubric">
+              <RouteErrorBoundary fallbackTitle="Rubric manager failed to load">
+                <Rubric />
               </RouteErrorBoundary>
             </Route>
             <Route path="/reports">
@@ -165,6 +175,7 @@ function Router() {
       <Route path="/upload" component={DashboardRoutes} />
       <Route path="/evaluations" component={DashboardRoutes} />
       <Route path="/review" component={DashboardRoutes} />
+      <Route path="/rubric" component={DashboardRoutes} />
       <Route path="/reports" component={DashboardRoutes} />
       <Route path="/admin" component={DashboardRoutes} />
       <Route path="/attendance" component={DashboardRoutes} />
