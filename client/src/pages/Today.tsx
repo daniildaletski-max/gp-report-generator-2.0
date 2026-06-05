@@ -12,70 +12,49 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { GPDetailDrawer } from "@/components/GPDetailDrawer";
 import { QuickEvalDialog } from "@/components/QuickEvalDialog";
 import { formatDistanceToNow } from "date-fns";
+import { MONTH_NAMES } from "@shared/const";
 import {
-  Sun, AlertTriangle, AlertCircle, Lightbulb, TrendingUp, Info,
-  CheckCircle2, Circle, ArrowRight, User, Activity, Sparkles,
-  CalendarClock, ListChecks, Zap,
+  Sun, CheckCircle2, Circle, User, ListChecks, Zap, Sparkles,
+  ClipboardCheck, CalendarClock, ArrowRight, Trophy,
 } from "lucide-react";
 
 /**
- * "Today" — the personal command center. Answers "what do I need to do
- * right now?" in one place by unifying three signals that were previously
- * scattered across the notifications bell, the command palette, the GP
- * drawer and a buried dashboard section:
- *   1. Needs action — server-computed insights (overdue coverage, missing
- *      reports, stale sync, regressions) each with a 1-click next step.
- *   2. My coaching tasks — open/in-progress action items, completed inline.
- *   3. Wins & activity — improvements + the recent activity feed (passive).
+ * Today — the personal "do the work" surface. Deliberately NOT a second
+ * dashboard: the Dashboard already shows the greeting, "what needs your
+ * attention" insights and the activity feed. Today is action-first and
+ * complements it with the two things that page can't do inline:
+ *   1. Evaluations to do — the month's pending GPs (the core pain: only a
+ *      fraction are evaluated), each knocked out with Quick-eval in seconds.
+ *   2. My coaching tasks — open action items, completed inline.
  *
- * Self-contained: reuses dashboard.insights / dashboard.activityFeed /
- * actionItems.list+stats+complete and the shared GPDetailDrawer — no
- * changes to the mega-pages.
+ * Reuses existing endpoints (evaluation.coverage, actionItems.list/stats/
+ * complete) + the shared GPDetailDrawer and QuickEvalDialog.
  */
 
-// ---- severity styling -------------------------------------------------------
+const EVAL_TARGET = 10; // a GP is "complete" for the month at >= 10 evals
 
-type Severity = "alert" | "warning" | "recommendation" | "celebration" | "info";
-
-const SEVERITY_META: Record<Severity, { icon: React.ElementType; ring: string; chip: string; dot: string }> = {
-  alert:          { icon: AlertTriangle, ring: "border-rose-200 bg-rose-50/60",    chip: "text-rose-700 border-rose-200 bg-rose-50",       dot: "bg-rose-500" },
-  warning:        { icon: AlertCircle,   ring: "border-amber-200 bg-amber-50/60",  chip: "text-amber-700 border-amber-200 bg-amber-50",    dot: "bg-amber-500" },
-  recommendation: { icon: Lightbulb,     ring: "border-sky-200 bg-sky-50/50",      chip: "text-sky-700 border-sky-200 bg-sky-50",          dot: "bg-sky-500" },
-  celebration:    { icon: TrendingUp,    ring: "border-emerald-200 bg-emerald-50/60", chip: "text-emerald-700 border-emerald-200 bg-emerald-50", dot: "bg-emerald-500" },
-  info:           { icon: Info,          ring: "border-slate-200 bg-slate-50/60",  chip: "text-slate-600 border-slate-200 bg-slate-50",    dot: "bg-slate-400" },
+type PendingGp = {
+  gpId: number;
+  gpName: string;
+  teamName: string;
+  evalCount: number;
+  status: "missing" | "partial" | "complete";
 };
-
-const PRIORITY_META: Record<"high" | "medium" | "low", { label: string; chip: string }> = {
-  high:   { label: "High",   chip: "text-rose-700 border-rose-200 bg-rose-50" },
-  medium: { label: "Medium", chip: "text-amber-700 border-amber-200 bg-amber-50" },
-  low:    { label: "Low",    chip: "text-slate-600 border-slate-200 bg-slate-50" },
-};
-
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
-}
-
-function relTime(ts: Date | string | null | undefined): string {
-  if (!ts) return "";
-  try { return formatDistanceToNow(new Date(ts), { addSuffix: true }); } catch { return ""; }
-}
-
-// ---- page -------------------------------------------------------------------
 
 export default function Today() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
   const [drawerGpId, setDrawerGpId] = useState<number | null>(null);
   const [quickEval, setQuickEval] = useState<{ id: number; name?: string } | null>(null);
 
-  const insightsQ = trpc.dashboard.insights.useQuery({}, { staleTime: 60_000 });
+  const coverageQ = trpc.evaluation.coverage.useQuery({ month, year }, { staleTime: 60_000 });
   const tasksQ = trpc.actionItems.list.useQuery({}, { staleTime: 30_000 });
   const statsQ = trpc.actionItems.stats.useQuery({}, { staleTime: 30_000 });
-  const activityQ = trpc.dashboard.activityFeed.useQuery({ limit: 8 }, { staleTime: 60_000 });
 
   const completeTask = trpc.actionItems.complete.useMutation({
     onSuccess: () => {
@@ -86,36 +65,44 @@ export default function Today() {
     onError: (e) => toast.error("Could not update: " + e.message),
   });
 
-  const insights = insightsQ.data ?? [];
-  const needsAction = useMemo(
-    () => insights.filter((i) => i.severity === "alert" || i.severity === "warning" || i.severity === "recommendation"),
-    [insights],
-  );
-  const wins = useMemo(() => insights.filter((i) => i.severity === "celebration"), [insights]);
+  // Flatten coverage → totals + the pending queue (missing first, then the
+  // GPs furthest from target).
+  const { totalGps, completeGps, pending } = useMemo(() => {
+    const teams = coverageQ.data ?? [];
+    let total = 0;
+    let complete = 0;
+    const q: PendingGp[] = [];
+    for (const team of teams) {
+      total += team.summary.total;
+      complete += team.summary.complete;
+      for (const gp of team.gps) {
+        if (gp.status !== "complete") {
+          q.push({ gpId: gp.gpId, gpName: gp.gpName, teamName: team.teamName, evalCount: gp.evalCount, status: gp.status });
+        }
+      }
+    }
+    const rank = { missing: 0, partial: 1, complete: 2 } as const;
+    q.sort((a, b) => (rank[a.status] - rank[b.status]) || (a.evalCount - b.evalCount) || a.gpName.localeCompare(b.gpName));
+    return { totalGps: total, completeGps: complete, pending: q };
+  }, [coverageQ.data]);
 
   const tasks = useMemo(() => {
     const rank = { high: 0, medium: 1, low: 2 } as const;
     return [...(tasksQ.data ?? [])].sort((a, b) => {
       const ad = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
       const bd = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
-      if (ad !== bd) return ad - bd; // soonest due first
+      if (ad !== bd) return ad - bd;
       return rank[a.priority] - rank[b.priority];
     });
   }, [tasksQ.data]);
 
   const stats = statsQ.data;
-  const activity = activityQ.data ?? [];
-  const isLoading = insightsQ.isLoading || tasksQ.isLoading;
-
-  // "N things need you" = action-required insights + overdue tasks.
-  const needYou = needsAction.length + (stats?.overdue ?? 0);
-
+  const isLoading = coverageQ.isLoading || tasksQ.isLoading;
   const firstName = (user?.name ?? "").trim().split(" ")[0] || "there";
+  const pct = totalGps > 0 ? Math.round((completeGps / totalGps) * 100) : 0;
 
-  const openInsight = (i: (typeof insights)[number]) => {
-    if (i.action?.href) navigate(i.action.href);
-    else if (i.metadata?.gpId) setDrawerGpId(i.metadata.gpId);
-  };
+  // Quick-eval invalidates coverage so a GP's progress updates live.
+  const onEvalSaved = () => utils.evaluation.coverage.invalidate();
 
   return (
     <div className="space-y-6 p-4 md:p-6 animate-fade-in">
@@ -123,82 +110,89 @@ export default function Today() {
         title={`${greeting()}, ${firstName}`}
         subtitle={
           isLoading
-            ? "Pulling together your day…"
-            : needYou > 0
-              ? `${needYou} thing${needYou === 1 ? "" : "s"} need${needYou === 1 ? "s" : ""} you today.`
-              : "You're all caught up. Nothing needs you right now. ✨"
+            ? "Pulling together your work…"
+            : pending.length === 0
+              ? `Every GP is fully evaluated for ${MONTH_NAMES[month - 1]}. ✨`
+              : `${pending.length} GP${pending.length === 1 ? "" : "s"} still need evaluations this month.`
         }
         icon={Sun}
         actions={
-          <Button variant="outline" size="sm" onClick={() => navigate("/assistant")}>
-            <Sparkles className="h-4 w-4 mr-1.5 text-primary" /> Ask AI
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate("/assistant")}>
+              <Sparkles className="h-4 w-4 mr-1.5 text-primary" /> Ask AI
+            </Button>
+            {pending.length > 0 && (
+              <Button size="sm" onClick={() => setQuickEval({ id: pending[0].gpId, name: pending[0].gpName })}>
+                <Zap className="h-4 w-4 mr-1.5" /> Evaluate next
+              </Button>
+            )}
+          </div>
         }
       />
 
-      {/* quick stat strip */}
+      {/* progress strip */}
       {!isLoading && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatChip icon={AlertTriangle} label="Needs action" value={needsAction.length} tone="rose" />
-          <StatChip icon={ListChecks} label="Open tasks" value={(stats?.open ?? 0) + (stats?.inProgress ?? 0)} tone="sky" />
-          <StatChip icon={CalendarClock} label="Overdue" value={stats?.overdue ?? 0} tone="amber" />
-          <StatChip icon={TrendingUp} label="Recent wins" value={wins.length} tone="emerald" />
-        </div>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium flex items-center gap-2">
+                <ClipboardCheck className="h-4 w-4 text-primary" />
+                {MONTH_NAMES[month - 1]} {year} — evaluation progress
+              </span>
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {completeGps}/{totalGps} complete · {pct}%
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-primary to-primary/70 transition-all" style={{ width: `${pct}%` }} />
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* main column */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Needs action */}
-          <Section title="Needs action" icon={Zap} count={needsAction.length}>
+        {/* Evaluations to do */}
+        <div className="lg:col-span-2">
+          <Section title="Evaluations to do" icon={ClipboardCheck} count={pending.length}>
             {isLoading ? (
               <LoadingRows />
-            ) : needsAction.length === 0 ? (
-              <EmptyState icon={CheckCircle2} size="compact" title="All clear" description="No alerts or recommendations right now." />
+            ) : pending.length === 0 ? (
+              <EmptyState icon={Trophy} size="compact" title="All evaluated" description={`Every GP has reached ${EVAL_TARGET} evaluations this month. Great work.`} />
             ) : (
               <div className="space-y-2">
-                {needsAction.map((i) => {
-                  const meta = SEVERITY_META[i.severity as Severity] ?? SEVERITY_META.info;
-                  const Icon = meta.icon;
-                  return (
-                    <div key={i.id} className={`flex items-start gap-3 rounded-xl border p-3 ${meta.ring}`}>
-                      <span className={`mt-0.5 shrink-0 h-8 w-8 rounded-lg border flex items-center justify-center ${meta.chip}`}>
-                        <Icon className="h-4 w-4" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-sm text-foreground">{i.title}</p>
-                        <p className="text-sm text-muted-foreground">{i.description}</p>
-                        {i.metadata?.gpName && (
-                          <button
-                            onClick={() => i.metadata?.gpId && setDrawerGpId(i.metadata.gpId)}
-                            className="text-xs text-primary hover:underline mt-0.5 inline-flex items-center gap-1"
-                          >
-                            <User className="h-3 w-3" /> {i.metadata.gpName}
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-1.5 shrink-0">
-                        {(i.action?.href || i.metadata?.gpId) && (
-                          <Button size="sm" variant="outline" onClick={() => openInsight(i)}>
-                            {i.action?.label ?? "Open"}
-                            <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                          </Button>
-                        )}
-                        {i.metadata?.gpId && (
-                          <Button size="sm" variant="ghost" className="text-primary hover:bg-primary/10"
-                            onClick={() => setQuickEval({ id: i.metadata!.gpId!, name: i.metadata?.gpName })}>
-                            <Zap className="h-3.5 w-3.5 mr-1" /> Evaluate
-                          </Button>
-                        )}
-                      </div>
+                {pending.map((p) => (
+                  <div key={p.gpId} className="flex items-center gap-3 rounded-xl border bg-card p-3 hover:bg-muted/30 transition-colors">
+                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/15 flex items-center justify-center shrink-0">
+                      <span className="text-xs font-bold text-primary">{p.gpName.charAt(0)}</span>
                     </div>
-                  );
-                })}
+                    <div className="min-w-0 flex-1">
+                      <button onClick={() => setDrawerGpId(p.gpId)} className="font-medium text-sm text-foreground hover:text-primary hover:underline truncate block text-left">
+                        {p.gpName}
+                      </button>
+                      <p className="text-xs text-muted-foreground truncate">{p.teamName}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="w-20 hidden sm:block">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="text-[11px] tabular-nums text-muted-foreground">{p.evalCount}/{EVAL_TARGET}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-1">
+                          <div className={`h-full rounded-full ${p.status === "missing" ? "bg-rose-400" : "bg-amber-400"}`} style={{ width: `${Math.min(100, (p.evalCount / EVAL_TARGET) * 100)}%` }} />
+                        </div>
+                      </div>
+                      <Button size="sm" onClick={() => setQuickEval({ id: p.gpId, name: p.gpName })}>
+                        <Zap className="h-4 w-4 mr-1" /> Evaluate
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </Section>
+        </div>
 
-          {/* My coaching tasks */}
+        {/* My coaching tasks */}
+        <div>
           <Section
             title="My coaching tasks"
             icon={ListChecks}
@@ -206,16 +200,15 @@ export default function Today() {
             badge={stats?.overdue ? `${stats.overdue} overdue` : undefined}
           >
             {isLoading ? (
-              <LoadingRows />
+              <LoadingRows rows={3} />
             ) : tasks.length === 0 ? (
               <EmptyState icon={Sparkles} size="compact" title="No open tasks" description="Coaching items you create or accept from AI suggestions show up here." />
             ) : (
               <div className="space-y-2">
                 {tasks.map((t) => {
                   const overdue = t.dueDate && new Date(t.dueDate) < new Date();
-                  const pr = PRIORITY_META[t.priority];
                   return (
-                    <div key={t.id} className="flex items-start gap-3 rounded-xl border bg-card p-3 hover:bg-muted/30 transition-colors">
+                    <div key={t.id} className="flex items-start gap-2.5 rounded-xl border bg-card p-3">
                       <button
                         onClick={() => completeTask.mutate({ id: t.id })}
                         disabled={completeTask.isPending}
@@ -227,88 +220,23 @@ export default function Today() {
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-sm text-foreground">{t.title}</p>
                         <div className="flex items-center gap-2 flex-wrap mt-1">
-                          <button
-                            onClick={() => setDrawerGpId(t.gamePresenterId)}
-                            className="text-xs text-primary hover:underline inline-flex items-center gap-1"
-                          >
+                          <button onClick={() => setDrawerGpId(t.gamePresenterId)} className="text-xs text-primary hover:underline inline-flex items-center gap-1">
                             <User className="h-3 w-3" /> {t.gamePresenter?.name ?? "GP"}
                           </button>
-                          <Badge variant="outline" className={`text-[10px] ${pr.chip}`}>{pr.label}</Badge>
                           {t.dueDate && (
                             <Badge variant="outline" className={`text-[10px] ${overdue ? "text-rose-700 border-rose-200 bg-rose-50" : "text-muted-foreground"}`}>
-                              {overdue ? "Overdue " : "Due "}{relTime(t.dueDate)}
+                              <CalendarClock className="h-3 w-3 mr-1" />{overdue ? "Overdue " : "Due "}{relTime(t.dueDate)}
                             </Badge>
-                          )}
-                          {t.source === "ai_insight" && (
-                            <Badge variant="outline" className="text-[10px] text-violet-700 border-violet-200 bg-violet-50">AI</Badge>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button size="sm" variant="ghost" className="text-primary hover:bg-primary/10" title="Quick evaluate"
-                          onClick={() => setQuickEval({ id: t.gamePresenterId, name: t.gamePresenter?.name })}>
-                          <Zap className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                          onClick={() => completeTask.mutate({ id: t.id })} disabled={completeTask.isPending}>
-                          <CheckCircle2 className="h-4 w-4 mr-1" /> Done
-                        </Button>
-                      </div>
+                      <Button size="sm" variant="ghost" className="shrink-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                        onClick={() => completeTask.mutate({ id: t.id })} disabled={completeTask.isPending}>
+                        <CheckCircle2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   );
                 })}
-              </div>
-            )}
-          </Section>
-        </div>
-
-        {/* side column */}
-        <div className="space-y-6">
-          {/* Wins */}
-          {wins.length > 0 && (
-            <Section title="Recent wins" icon={TrendingUp} count={wins.length}>
-              <div className="space-y-2">
-                {wins.map((w) => (
-                  <button
-                    key={w.id}
-                    onClick={() => w.metadata?.gpId && setDrawerGpId(w.metadata.gpId)}
-                    className="w-full text-left flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 hover:bg-emerald-50 transition-colors"
-                  >
-                    <TrendingUp className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-emerald-900">{w.title}</p>
-                      <p className="text-xs text-emerald-700/80">{w.description}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </Section>
-          )}
-
-          {/* Activity */}
-          <Section title="Just happened" icon={Activity} count={activity.length}>
-            {activityQ.isLoading ? (
-              <LoadingRows rows={3} />
-            ) : activity.length === 0 ? (
-              <EmptyState icon={Activity} size="compact" title="Quiet so far" description="Uploads, reports and syncs will show up here." />
-            ) : (
-              <div className="space-y-1">
-                {activity.map((a) => (
-                  <button
-                    key={a.id}
-                    onClick={() => a.href && navigate(a.href)}
-                    className="w-full text-left flex items-start gap-2.5 rounded-lg p-2 hover:bg-muted/50 transition-colors"
-                  >
-                    <span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
-                      a.status === "failed" ? "bg-rose-500" : a.status === "partial" ? "bg-amber-500" : "bg-emerald-500"
-                    }`} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-foreground truncate">{a.title}</p>
-                      {a.detail && <p className="text-xs text-muted-foreground truncate">{a.detail}</p>}
-                      <p className="text-[11px] text-muted-foreground/70">{relTime(a.timestamp)}</p>
-                    </div>
-                  </button>
-                ))}
               </div>
             )}
           </Section>
@@ -322,12 +250,25 @@ export default function Today() {
         gpName={quickEval?.name}
         open={quickEval !== null}
         onOpenChange={(o) => { if (!o) setQuickEval(null); }}
+        onSaved={onEvalSaved}
       />
     </div>
   );
 }
 
-// ---- small building blocks --------------------------------------------------
+// ---- helpers ----------------------------------------------------------------
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function relTime(ts: Date | string | null | undefined): string {
+  if (!ts) return "";
+  try { return formatDistanceToNow(new Date(ts), { addSuffix: true }); } catch { return ""; }
+}
 
 function Section({ title, icon: Icon, count, badge, children }: {
   title: string; icon: React.ElementType; count?: number; badge?: string; children: React.ReactNode;
@@ -349,29 +290,7 @@ function Section({ title, icon: Icon, count, badge, children }: {
   );
 }
 
-function StatChip({ icon: Icon, label, value, tone }: {
-  icon: React.ElementType; label: string; value: number; tone: "rose" | "sky" | "amber" | "emerald";
-}) {
-  const toneMap = {
-    rose: "text-rose-600 bg-rose-50 border-rose-200",
-    sky: "text-sky-600 bg-sky-50 border-sky-200",
-    amber: "text-amber-600 bg-amber-50 border-amber-200",
-    emerald: "text-emerald-600 bg-emerald-50 border-emerald-200",
-  } as const;
-  return (
-    <div className="rounded-xl border bg-card p-3 flex items-center gap-3">
-      <span className={`h-9 w-9 rounded-lg border flex items-center justify-center ${toneMap[tone]}`}>
-        <Icon className="h-4 w-4" />
-      </span>
-      <div>
-        <p className="text-xl font-bold tabular-nums leading-none">{value}</p>
-        <p className="text-[11px] text-muted-foreground mt-1">{label}</p>
-      </div>
-    </div>
-  );
-}
-
-function LoadingRows({ rows = 4 }: { rows?: number }) {
+function LoadingRows({ rows = 5 }: { rows?: number }) {
   return (
     <div className="space-y-2">
       {Array.from({ length: rows }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
