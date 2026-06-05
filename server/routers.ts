@@ -29,6 +29,7 @@ import { studioworksSyncRouter } from "./routers/studioworksSync";
 import { actionItemsRouter } from "./routers/actionItems";
 import { searchRouter } from "./routers/search";
 import { rubricRouter } from "./routers/rubric";
+import { assistantRouter } from "./routers/assistant";
 
 export const appRouter = router({
   system: systemRouter,
@@ -51,6 +52,7 @@ export const appRouter = router({
   actionItems: actionItemsRouter,
   search: searchRouter,
   rubric: rubricRouter,
+  assistant: assistantRouter,
 });
 
 export type AppRouter = typeof appRouter;

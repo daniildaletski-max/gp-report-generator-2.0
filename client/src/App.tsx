@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, ShieldAlert, CalendarCheck, Zap, SlidersHorizontal } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, ShieldAlert, CalendarCheck, Zap, SlidersHorizontal, Sun, Sparkles } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -26,6 +26,8 @@ const GPPortal = lazy(() => import("./pages/GPPortal"));
 const InvitePage = lazy(() => import("./pages/InvitePage"));
 const Review = lazy(() => import("./pages/Review"));
 const Rubric = lazy(() => import("./pages/Rubric"));
+const Today = lazy(() => import("./pages/Today"));
+const Assistant = lazy(() => import("./pages/Assistant"));
 
 function PageLoader() {
   return (
@@ -43,6 +45,7 @@ function PageLoader() {
 
 // Base sidebar items for all users
 const baseSidebarItems = [
+  { href: "/today", label: "Today", icon: Sun },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/workspace", label: "Workspace", icon: Zap },
   { href: "/upload", label: "Upload", icon: UploadIcon },
@@ -50,8 +53,9 @@ const baseSidebarItems = [
   { href: "/reports", label: "Reports", icon: FileSpreadsheet },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck },
   // Placed after the first five so the mobile bottom nav (slice 0..5)
-  // is unchanged; Review lives in the desktop sidebar.
+  // is unchanged; these live in the desktop sidebar.
   { href: "/review", label: "Review", icon: ShieldAlert },
+  { href: "/assistant", label: "Assistant", icon: Sparkles },
 ];
 
 // Admin-only item
@@ -84,6 +88,11 @@ function DashboardRoutes() {
         <div className="pb-20 md:pb-0">
           <Suspense fallback={<PageLoader />}>
           <Switch>
+            <Route path="/today">
+              <RouteErrorBoundary fallbackTitle="Today failed to load">
+                <Today />
+              </RouteErrorBoundary>
+            </Route>
             <Route path="/dashboard">
               <RouteErrorBoundary fallbackTitle="Dashboard failed to load">
                 <Dashboard />
@@ -102,6 +111,11 @@ function DashboardRoutes() {
             <Route path="/review">
               <RouteErrorBoundary fallbackTitle="Review queue failed to load">
                 <Review />
+              </RouteErrorBoundary>
+            </Route>
+            <Route path="/assistant">
+              <RouteErrorBoundary fallbackTitle="Assistant failed to load">
+                <Assistant />
               </RouteErrorBoundary>
             </Route>
             <Route path="/rubric">
@@ -171,10 +185,12 @@ function Router() {
         )}
       </Route>
       {/* All dashboard pages use DashboardRoutes for consistent sidebar */}
+      <Route path="/today" component={DashboardRoutes} />
       <Route path="/dashboard" component={DashboardRoutes} />
       <Route path="/upload" component={DashboardRoutes} />
       <Route path="/evaluations" component={DashboardRoutes} />
       <Route path="/review" component={DashboardRoutes} />
+      <Route path="/assistant" component={DashboardRoutes} />
       <Route path="/rubric" component={DashboardRoutes} />
       <Route path="/reports" component={DashboardRoutes} />
       <Route path="/admin" component={DashboardRoutes} />

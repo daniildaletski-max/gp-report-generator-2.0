@@ -24,7 +24,7 @@ import { GPDetailDrawer } from "@/components/GPDetailDrawer";
 import { PageHeader } from "@/components/PageHeader";
 import {
   CalendarCheck, Save, Loader2, Users, AlertTriangle,
-  Clock, TrendingUp, TrendingDown, Minus, RotateCcw,
+  Clock, TrendingUp, TrendingDown, Minus, RotateCcw, RefreshCw,
   ChevronDown, ChevronUp, Briefcase, Timer, CalendarX,
   Stethoscope, MessageSquare, BarChart3, Info, LineChart as LineChartIcon,
   CalendarDays, X
@@ -97,6 +97,25 @@ export default function AttendancePage() {
       toast.error(`Failed to save: ${error.message}`);
     },
   });
+
+  // Pull HR attendance (sick / late / missed) straight from Persona for the
+  // selected team + month, so the grid auto-fills instead of manual entry.
+  const syncMutation = trpc.personaSync.syncTeam.useMutation({
+    onSuccess: (res) => {
+      const matched = (res as { matched?: number }).matched ?? 0;
+      const unmatched = (res as { unmatched?: number }).unmatched ?? 0;
+      toast.success(
+        `Persona sync complete — ${matched} matched${unmatched ? `, ${unmatched} unmatched` : ""}`,
+      );
+      refetch();
+    },
+    onError: (error) => toast.error(`Persona sync failed: ${error.message}`),
+  });
+  const isSyncing = syncMutation.isPending;
+  const handleSyncPersona = useCallback(() => {
+    if (!teamId) { toast.error("Select a team first"); return; }
+    syncMutation.mutate({ teamId, month: selectedMonth, year: selectedYear });
+  }, [teamId, selectedMonth, selectedYear, syncMutation]);
 
   // Avoid wiping user edits when the query just refetches in the background.
   // Only repopulate rows when the underlying scope (team/month/year) changes
@@ -242,32 +261,51 @@ export default function AttendancePage() {
         title="Attendance"
         subtitle="Track extra shifts, late arrivals, missed days, and sick leaves for your team"
         icon={CalendarCheck}
-        actions={hasDirtyRows ? (
+        actions={
           <>
             <Button
               variant="outline"
               size="sm"
-              onClick={handleReset}
+              onClick={handleSyncPersona}
+              disabled={isSyncing || !teamId}
               className="glass-button text-muted-foreground hover:text-foreground"
+              title="Pull sick / late / missed days from Persona for this team & month"
             >
-              <RotateCcw className="h-4 w-4 mr-1" />
-              Reset
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={isSaving}
-              className="btn-pulse bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary text-white font-semibold shadow-lg shadow-primary/20"
-            >
-              {isSaving ? (
+              {isSyncing ? (
                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
               ) : (
-                <Save className="h-4 w-4 mr-1" />
+                <RefreshCw className="h-4 w-4 mr-1" />
               )}
-              Save Changes ({rows.filter(r => r.isDirty).length})
+              Sync from Persona
             </Button>
+            {hasDirtyRows && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleReset}
+                  className="glass-button text-muted-foreground hover:text-foreground"
+                >
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  Reset
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="btn-pulse bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary text-white font-semibold shadow-lg shadow-primary/20"
+                >
+                  {isSaving ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-1" />
+                  )}
+                  Save Changes ({rows.filter(r => r.isDirty).length})
+                </Button>
+              </>
+            )}
           </>
-        ) : null}
+        }
       />
 
       {/* Filters Row */}
