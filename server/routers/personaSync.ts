@@ -22,6 +22,7 @@ import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import * as db from "../db";
 import { syncPersonaAttendance, testPersonaConnection, type PersonaWorkerAttendance } from "../services/personaScraper";
 import { createLogger } from "../services/logger";
+import { publish } from "../_core/events";
 
 const log = createLogger("PersonaSync");
 
@@ -572,6 +573,8 @@ export const personaSyncRouter = router({
         if (result.status === "failed") {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: result.error || "Sync failed" });
         }
+        // Realtime: attendance screens refresh the instant Persona lands.
+        publish({ type: "attendance.changed", source: "persona", teamId: input.teamId, userId: ctx.user.id });
         return { success: true, ...result, month: input.month, year: input.year };
       } catch (error) {
         if (error instanceof TRPCError) throw error;

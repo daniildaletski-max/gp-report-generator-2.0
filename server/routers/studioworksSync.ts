@@ -18,6 +18,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { router, adminProcedure, protectedProcedure } from "../_core/trpc";
 import * as db from "../db";
+import { publish } from "../_core/events";
 import {
   syncStudioworksEvaluations,
   testStudioworksConnection,
@@ -293,6 +294,8 @@ export const studioworksSyncRouter = router({
 
     log.info(`Studioworks sync: source=${result.source} found=${result.evaluations.length} inserted=${inserted} skipped=${skippedExisting} unmatched=${unmatched} errors=${errors}`);
 
+    if (inserted > 0) publish({ type: "evaluations.changed", source: "studioworks", count: inserted });
+
     return {
       status,
       source: result.source,
@@ -404,6 +407,8 @@ export const studioworksSyncRouter = router({
           unmatched > 0 || errors > 0 ? "partial" : "success";
 
       log.info(`Studioworks import-batch (user=${ctx.user.id}): submitted=${input.evaluations.length} inserted=${inserted} skipped=${skippedExisting} unmatched=${unmatched} errors=${errors}`);
+
+      if (inserted > 0) publish({ type: "evaluations.changed", source: "studioworks", userId: ctx.user.id, count: inserted });
 
       return {
         status,

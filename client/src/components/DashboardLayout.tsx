@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
+import { useLiveEvents } from "@/hooks/useLiveEvents";
 import { LayoutDashboard, LogOut, PanelLeft, Search } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState, createContext, useContext, useCallback } from "react";
 import { useLocation } from "wouter";
@@ -123,6 +124,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  const live = useLiveEvents(); // one SSE connection for the whole dashboard session
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -390,6 +392,16 @@ function DashboardLayoutContent({
           />
         )}
         <main className="flex-1 p-4">{children}</main>
+
+        {/* Realtime connection indicator (desktop). The behaviour — live
+            cache invalidation — runs regardless; this just shows the state. */}
+        <div
+          className="hidden md:flex fixed bottom-3 right-3 z-40 items-center gap-1.5 rounded-full border bg-card/90 backdrop-blur px-2.5 py-1 text-[11px] shadow-sm select-none"
+          title={live.connected ? "Live updates connected" : "Live updates reconnecting…"}
+        >
+          <span className={`h-2 w-2 rounded-full ${live.connected ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/40"}`} />
+          <span className="text-muted-foreground">{live.connected ? "Live" : "Offline"}</span>
+        </div>
       </SidebarInset>
 
       <CommandPalette open={palette.open} onOpenChange={palette.setOpen} initialQuery={palette.query} />

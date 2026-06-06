@@ -7,7 +7,8 @@ import { sql } from "drizzle-orm";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
-import { createContext } from "./context";
+import { createContext, authenticateUser } from "./context";
+import { subscribe, subscriberCount } from "./events";
 import { serveStatic, setupVite } from "./vite";
 import { initScheduledReports, initStudioworksSync, initAutoCoaching, initPersonaAutoSync } from "../scheduledReports";
 import { createLogger } from "../services/logger";
@@ -407,6 +408,58 @@ async function startServer() {
   app.use("/api/trpc/attitudeScreenshot.upload", rateLimiter({ windowMs: 60_000, max: 30, keyPrefix: "upload" }));
   app.use("/api/trpc/errorFile.upload", rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "file-upload" }));
 
+  // Realtime stream (Server-Sent Events). Browsers open one long-lived
+  // GET here; the server pushes small "X changed" signals (never data) so
+  // the client invalidates the relevant TanStack Query caches and refetches
+  // through the normal scoped tRPC procedures. Non-admins only receive
+  // events that are un-scoped (broadcast) or carry their own userId — and
+  // since the payload has no PII and the refetch is server-scoped, nothing
+  // leaks regardless.
+  //
+  // Headers disable proxy buffering (X-Accel-Buffering) and caching; a
+  // 25s heartbeat comment keeps intermediaries from closing the idle
+  // connection. EventSource on the client auto-reconnects, and the app
+  // still has its existing polling as a fallback if a proxy cuts the stream.
+  app.get("/api/events", async (req, res) => {
+    const user = await authenticateUser(req as any);
+    if (!user) { res.status(401).end(); return; }
+    const isAdmin = user.role === "admin";
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    res.write(`retry: 5000\n\n`);
+    res.write(`event: hello\ndata: ${JSON.stringify({ at: new Date().toISOString() })}\n\n`);
+    // @ts-ignore - flushHeaders exists on Node's ServerResponse
+    res.flushHeaders?.();
+
+    const unsubscribe = subscribe((e) => {
+      // Scope: admins see everything; others see broadcast events (no
+      // userId) or their own. The payload is just a change signal.
+      if (!isAdmin && e.userId != null && e.userId !== user.id) return;
+      try {
+        res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
+      } catch {
+        // write after close — cleaned up below
+      }
+    });
+
+    const heartbeat = setInterval(() => {
+      try { res.write(`: hb ${Date.now()}\n\n`); } catch { /* closed */ }
+    }, 25_000);
+
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+      try { res.end(); } catch { /* already ended */ }
+    };
+    req.on("close", cleanup);
+    req.on("error", cleanup);
+  });
+
   // Liveness check: cheap, never touches the DB.
   app.get("/api/health", (_req, res) => {
     res.json({
@@ -415,6 +468,7 @@ async function startServer() {
       uptime: process.uptime(),
       nodeVersion: process.version,
       cache: cache.getStats(),
+      sseClients: subscriberCount(),
     });
   });
 

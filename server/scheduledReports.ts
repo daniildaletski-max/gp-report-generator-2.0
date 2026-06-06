@@ -664,6 +664,14 @@ async function runStudioworksAutoSync() {
       }
     }
     log.info(`[StudioworksAutoSync] inserted=${inserted} skipped=${skipped} unmatched=${unmatched} total=${result.evaluations.length}`);
+    // Realtime: tell every open client the moment fresh evals land so their
+    // screens refresh without waiting for the next poll. Broadcast (no
+    // userId) — clients refetch their own server-scoped queries.
+    if (inserted > 0) {
+      const { publish } = await import("./_core/events");
+      publish({ type: "sync.completed", source: "studioworks", inserted });
+      publish({ type: "evaluations.changed", source: "studioworks", count: inserted });
+    }
   } catch (err) {
     log.error("[StudioworksAutoSync] failed", err instanceof Error ? err : new Error(String(err)));
   } finally {
