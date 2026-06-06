@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, ShieldAlert, CalendarCheck, Zap, SlidersHorizontal, Sun, Sparkles, ScanLine, BadgeEuro } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, ShieldAlert, CalendarCheck, Zap, SlidersHorizontal, Sun, Sparkles, ScanLine, BadgeEuro, Trophy } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -30,6 +30,7 @@ const Today = lazy(() => import("./pages/Today"));
 const Assistant = lazy(() => import("./pages/Assistant"));
 const UploadBulk = lazy(() => import("./pages/UploadBulk"));
 const Bonus = lazy(() => import("./pages/Bonus"));
+const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 
 function PageLoader() {
   return (
@@ -55,6 +56,7 @@ const baseSidebarItems = [
   { href: "/reports", label: "Reports", icon: FileSpreadsheet },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck },
   { href: "/bonus", label: "Bonus", icon: BadgeEuro },
+  { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   // Placed after the first five so the mobile bottom nav (slice 0..5)
   // is unchanged; these live in the desktop sidebar.
   { href: "/upload-bulk", label: "Bulk AI", icon: ScanLine },
@@ -152,6 +154,11 @@ function DashboardRoutes() {
                 <Bonus />
               </RouteErrorBoundary>
             </Route>
+            <Route path="/leaderboard">
+              <RouteErrorBoundary fallbackTitle="Leaderboard failed to load">
+                <Leaderboard />
+              </RouteErrorBoundary>
+            </Route>
             <Route path="/workspace">
               <RouteErrorBoundary fallbackTitle="Workspace failed to load">
                 <Workspace />
@@ -211,6 +218,7 @@ function Router() {
       <Route path="/admin" component={DashboardRoutes} />
       <Route path="/attendance" component={DashboardRoutes} />
       <Route path="/bonus" component={DashboardRoutes} />
+      <Route path="/leaderboard" component={DashboardRoutes} />
       <Route path="/workspace" component={DashboardRoutes} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
