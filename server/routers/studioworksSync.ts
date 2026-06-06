@@ -235,6 +235,302 @@ async function importOne(
   }
 }
 
+// ============================================
+// Excel export importer
+//
+// The most robust ingest path: the FM clicks "Export report XLS" in
+// Studioworks, uploads the .xlsx here, and we parse it server-side with
+// the SAME exceljs the error-file importer uses. No Puppeteer/Chromium,
+// no browser console, no bookmarklet cross-origin blocks.
+//
+// We don't know Studioworks' exact export columns, so the parser is
+// header-driven and tolerant: it scans the first rows for a header,
+// classifies each column by name (presenter / date / score / the six
+// sub-criteria / evaluator / game), and reads rows beneath it. Anything
+// it can't classify is ignored. The raw headers are echoed back so the
+// UI (and we) can see exactly what the export contained.
+// ============================================
+
+/** Local-timezone ISO day (yyyy-mm-dd). Avoids the off-by-one that
+ *  toISOString() introduces when the deploy host runs in a non-UTC zone
+ *  (Studioworks is an Estonian/UTC+2-3 operation). */
+function isoDay(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** FNV-1a — stable per-row id so re-parsing the same file yields the
+ *  same externalIds (used only as React keys; dedup happens on
+ *  gpId/date/evaluator/game in importOne). */
+function fnv1a(s: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+
+type ExcelCell = { value: any } | undefined | null;
+
+function cellText(cell: ExcelCell): string | null {
+  const v = cell?.value;
+  if (v == null) return null;
+  if (typeof v === "string") return v.trim() || null;
+  if (typeof v === "number") return String(v);
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === "object") {
+    const o = v as any;
+    if (o.text != null) return String(o.text).trim() || null;
+    if (Array.isArray(o.richText)) return o.richText.map((p: any) => p.text).join("").trim() || null;
+    if (o.result != null) return String(o.result).trim() || null;
+    if (o.hyperlink != null && o.text != null) return String(o.text).trim() || null;
+  }
+  return String(v).trim() || null;
+}
+
+function cellNumber(cell: ExcelCell): number | null {
+  const v = cell?.value;
+  if (v == null) return null;
+  if (typeof v === "number") return v;
+  if (typeof v === "object" && v !== null && "result" in (v as any) && typeof (v as any).result === "number") {
+    return (v as any).result;
+  }
+  const s = cellText(cell);
+  if (!s) return null;
+  // First number in the cell — handles "18", "18/24", "18 pts", "18,5".
+  const m = s.match(/-?\d+(?:[.,]\d+)?/);
+  if (!m) return null;
+  const n = Number(m[0].replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+function cellDate(cell: ExcelCell): string | null {
+  const v = cell?.value;
+  if (v == null) return null;
+  if (v instanceof Date) return isoDay(v);
+  if (typeof v === "number") {
+    // Excel serial date: days since 1899-12-30.
+    return isoDay(new Date(Math.round((v - 25569) * 86400 * 1000)));
+  }
+  if (typeof v === "object" && v !== null && "result" in (v as any) && (v as any).result instanceof Date) {
+    return isoDay((v as any).result);
+  }
+  const s = cellText(cell);
+  if (!s) return null;
+  // European day-first numeric dates: dd.mm.yyyy or dd/mm/yyyy. Handled
+  // before parseStudioworksDate because new Date() misreads them.
+  const dm = s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+  if (dm) {
+    const day = Number(dm[1]), mon = Number(dm[2]), yr = Number(dm[3]);
+    if (mon >= 1 && mon <= 12 && day >= 1 && day <= 31) return isoDay(new Date(yr, mon - 1, day));
+  }
+  const d = parseStudioworksDate(s);
+  return d ? isoDay(d) : null;
+}
+
+type ColumnKind =
+  | "name" | "evaluator" | "date" | "game" | "totalScore" | "comment"
+  | "hair" | "makeup" | "outfit" | "posture" | "dealingStyle" | "gamePerformance"
+  // Markers that identify the WRONG export (the /people summary).
+  | "attendance" | "workload" | "bonus" | "since";
+
+/** Map a header label to a known column kind, or null when unrecognised.
+ *  Order matters: specific sub-criteria are tested before the generic
+ *  "score" catch-all so e.g. "Hair score" → hair, not totalScore. */
+function classifyHeader(raw: string): ColumnKind | null {
+  const s = raw.toLowerCase().replace(/[._/\-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!s) return null;
+  // Sub-criteria (most specific first).
+  if (/\bhair\b/.test(s)) return "hair";
+  if (/make ?up/.test(s)) return "makeup";
+  if (/\b(outfit|clothing|dress|attire|costume|wardrobe)\b/.test(s)) return "outfit";
+  if (/\b(posture|body language|stance|presence)\b/.test(s)) return "posture";
+  if (/dealing/.test(s)) return "dealingStyle";
+  if (/(game ?perf|performance|game ?comment|commentary|gameplay)/.test(s)) return "gamePerformance";
+  // Aggregate-export markers (used only to detect the wrong file).
+  if (/attendance/.test(s)) return "attendance";
+  if (/workload/.test(s)) return "workload";
+  if (/bonus/.test(s)) return "bonus";
+  if (/^since$/.test(s)) return "since";
+  // Identity / meta.
+  if (/(evaluator|reviewer|assessor|graded by|evaluated by|checked by|author|supervisor)/.test(s)) return "evaluator";
+  if (/(game type|game name|^game$|table|studio)/.test(s)) return "game";
+  if (/(presenter|game presenter|^gp$|gp name|employee|dealer|staff|^name$|full name|^person$)/.test(s)) return "name";
+  if (/(date|evaluated on|created|submitted|^day$|when)/.test(s)) return "date";
+  if (/(comment|note|feedback|remark|summary)/.test(s)) return "comment";
+  // Generic score — last so specific criteria win.
+  if (/(total|score|result|points|overall|grade|rating|evaluation|mark)/.test(s)) return "totalScore";
+  return null;
+}
+
+interface ExcelRawEval {
+  externalId: string;
+  presenterName: string;
+  evaluatorName?: string;
+  date: string;
+  game?: string;
+  totalScore?: number;
+  ratings: {
+    hair?: { score: number; maxScore: number };
+    makeup?: { score: number; maxScore: number };
+    outfit?: { score: number; maxScore: number };
+    posture?: { score: number; maxScore: number };
+    dealingStyle?: { score: number; maxScore: number };
+    gamePerformance?: { score: number; maxScore: number };
+  };
+  overallComment?: string;
+}
+
+interface SheetParseResult {
+  rows: ExcelRawEval[];
+  sheetName: string;
+  headerRowNumber: number;
+  detectedColumns: string[];
+  rawHeaders: string[];
+  totalDataRows: number;
+  skippedRows: number;
+  warnings: string[];
+  looksAggregate: boolean;
+}
+
+const SUBCRITERIA_MAX: Record<string, number> = {
+  hair: 3, makeup: 3, outfit: 3, posture: 3, dealingStyle: 5, gamePerformance: 5,
+};
+
+function isLikelyName(s: string | null): boolean {
+  if (!s) return false;
+  const t = s.trim();
+  if (t.length < 2 || t.length > 80) return false;
+  if (/^\d+$/.test(t)) return false;
+  // Require at least one letter (Latin incl. extended, Greek, Cyrillic).
+  // Explicit ranges instead of \p{L} so we don't need the /u flag, which
+  // tsc rejects without an es6+ target.
+  if (!/[A-Za-zÀ-ɏͰ-ϿЀ-ӿ]/.test(t)) return false;
+  const lower = t.toLowerCase();
+  if (["total", "grand total", "name", "presenter", "gp name", "employee", "sum", "average", "avg"].includes(lower)) return false;
+  return true;
+}
+
+/** Parse a single worksheet into evaluation rows. Best-effort: returns
+ *  an empty `rows` with explanatory `warnings` when the layout doesn't
+ *  match (so the caller can surface actionable feedback). */
+function parseSheet(sheet: any): SheetParseResult {
+  const warnings: string[] = [];
+  const sheetName: string = sheet?.name || "Sheet";
+
+  let headerRowNumber = 0;
+  let colMap: Partial<Record<ColumnKind, number>> = {};
+  let rawHeaders: string[] = [];
+  const maxScan = Math.min(8, sheet?.rowCount || 8);
+  for (let r = 1; r <= maxScan; r++) {
+    const row = sheet.getRow(r);
+    const localMap: Partial<Record<ColumnKind, number>> = {};
+    const headers: string[] = [];
+    row.eachCell({ includeEmpty: false }, (cell: any, colNumber: number) => {
+      const txt = cellText(cell);
+      if (!txt) return;
+      headers.push(txt);
+      const kind = classifyHeader(txt);
+      if (kind && localMap[kind] == null) localMap[kind] = colNumber; // first column wins per kind
+    });
+    const hasName = localMap.name != null;
+    const hasEvalSignal =
+      localMap.date != null || localMap.totalScore != null ||
+      localMap.hair != null || localMap.dealingStyle != null || localMap.gamePerformance != null;
+    if (hasName && hasEvalSignal) {
+      headerRowNumber = r;
+      colMap = localMap;
+      rawHeaders = headers;
+      break;
+    }
+    if (headers.length > rawHeaders.length) rawHeaders = headers; // richest row as fallback context
+  }
+
+  const looksAggregate =
+    (colMap.attendance != null || colMap.workload != null || colMap.bonus != null || colMap.since != null) &&
+    colMap.date == null && colMap.hair == null && colMap.dealingStyle == null && colMap.gamePerformance == null;
+
+  // Reject the People summary export. Its "Evaluation" column ("3/57")
+  // would otherwise be misread as a score and create garbage rows — so
+  // we refuse it and point the user at the right export. The real
+  // Evaluations export always has a Date column, so this never fires for
+  // it (looksAggregate requires date == null).
+  if (looksAggregate) {
+    warnings.push(`This looks like the People summary export (workload / attendance / bonus / since columns). It holds per-person totals — e.g. "3/57" evaluations done — not individual evaluations with scores. Open the Evaluations page in Studioworks and use its "Export report XLS" instead.`);
+    return { rows: [], sheetName, headerRowNumber, detectedColumns: [], rawHeaders, totalDataRows: 0, skippedRows: 0, warnings, looksAggregate };
+  }
+
+  if (headerRowNumber === 0) {
+    warnings.push(`Couldn't find an evaluations header on sheet "${sheetName}". Columns seen: ${rawHeaders.slice(0, 14).join(", ") || "(none)"}.`);
+    return { rows: [], sheetName, headerRowNumber: 0, detectedColumns: [], rawHeaders, totalDataRows: 0, skippedRows: 0, warnings, looksAggregate };
+  }
+
+  const detectedColumns = (Object.keys(colMap) as ColumnKind[]).map(String);
+  const rows: ExcelRawEval[] = [];
+  let totalDataRows = 0;
+  let skippedRows = 0;
+  const lastRow = sheet.rowCount || 0;
+  for (let r = headerRowNumber + 1; r <= lastRow; r++) {
+    const row = sheet.getRow(r);
+    const name = colMap.name != null ? cellText(row.getCell(colMap.name)) : null;
+    if (!isLikelyName(name)) { if (name) skippedRows++; continue; }
+    totalDataRows++;
+
+    const dateStr = colMap.date != null ? cellDate(row.getCell(colMap.date)) : null;
+    const date = dateStr ?? isoDay(new Date());
+    const evaluatorName = colMap.evaluator != null ? (cellText(row.getCell(colMap.evaluator)) ?? undefined) : undefined;
+    const game = colMap.game != null ? (cellText(row.getCell(colMap.game)) ?? undefined) : undefined;
+
+    let totalScore: number | undefined =
+      colMap.totalScore != null ? (cellNumber(row.getCell(colMap.totalScore)) ?? undefined) : undefined;
+    // importBatch caps totalScore at 0..100; drop anything outside so a
+    // single odd cell can't fail the whole commit's validation.
+    if (totalScore != null && (totalScore < 0 || totalScore > 100)) totalScore = undefined;
+
+    const ratings: ExcelRawEval["ratings"] = {};
+    for (const k of ["hair", "makeup", "outfit", "posture", "dealingStyle", "gamePerformance"] as const) {
+      const col = colMap[k];
+      if (col != null) {
+        const sc = cellNumber(row.getCell(col));
+        if (sc != null) ratings[k] = { score: sc, maxScore: SUBCRITERIA_MAX[k] };
+      }
+    }
+
+    const overallComment = colMap.comment != null ? (cellText(row.getCell(colMap.comment)) ?? undefined) : undefined;
+    const externalId = `xlsx-${fnv1a(`${name}|${date}|${evaluatorName ?? ""}|${game ?? ""}`)}-${r}`;
+    rows.push({ externalId, presenterName: name!.trim(), evaluatorName, date, game, totalScore, ratings, overallComment });
+  }
+
+  if (rows.length === 0 && totalDataRows === 0) {
+    warnings.push(`Found the header on "${sheetName}" but no data rows under it. Columns: ${rawHeaders.slice(0, 14).join(", ")}.`);
+  }
+
+  return { rows, sheetName, headerRowNumber, detectedColumns, rawHeaders, totalDataRows, skippedRows, warnings, looksAggregate };
+}
+
+/** Parse a whole workbook, choosing whichever sheet yields the most
+ *  evaluation rows (tie-break: more recognised columns). */
+export function parseStudioworksWorkbook(wb: any): SheetParseResult {
+  const sheets: any[] = wb?.worksheets || [];
+  if (sheets.length === 0) {
+    return { rows: [], sheetName: "", headerRowNumber: 0, detectedColumns: [], rawHeaders: [], totalDataRows: 0, skippedRows: 0, warnings: ["The workbook has no sheets."], looksAggregate: false };
+  }
+  const results = sheets.map(parseSheet);
+  results.sort((a, b) => {
+    if (b.rows.length !== a.rows.length) return b.rows.length - a.rows.length;
+    return b.detectedColumns.length - a.detectedColumns.length;
+  });
+  const best = results[0];
+  if (best.rows.length === 0) {
+    const allWarnings = Array.from(new Set(results.flatMap(r => r.warnings)));
+    return { ...best, warnings: allWarnings.length ? allWarnings : best.warnings };
+  }
+  return best;
+}
+
 export const studioworksSyncRouter = router({
   /**
    * Diagnostic probe — runs login + page load + extraction discovery
@@ -245,6 +541,59 @@ export const studioworksSyncRouter = router({
   testConnection: adminProcedure.mutation(async () => {
     return await testStudioworksConnection();
   }),
+
+  /**
+   * Parse an uploaded Studioworks "Export report XLS" file into preview
+   * rows — does NOT write to DB. The FM reviews/deselects rows in the
+   * UI, then commits them through `importBatch` (same matcher/dedup as
+   * every other ingest path).
+   *
+   * Header-driven & tolerant: works whether the export is name-first or
+   * date-first, totals-only or with the six sub-criteria, and across
+   * date formats ("6 Jun 2026", ISO, dd.mm.yyyy, Excel serials). The
+   * raw headers are echoed back so an unexpected layout is diagnosable
+   * at a glance instead of silently importing nothing.
+   *
+   * FM-accessible (not admin-only) — FMs ingest their own teams.
+   */
+  parseExcel: protectedProcedure
+    .input(z.object({
+      fileBase64: z.string().min(1),
+      filename: z.string().max(255).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const ExcelJS = await import("exceljs");
+      // Tolerate a data-URL prefix ("data:...;base64,XXXX").
+      const b64 = input.fileBase64.includes(",")
+        ? input.fileBase64.slice(input.fileBase64.indexOf(",") + 1)
+        : input.fileBase64;
+      const buf = Buffer.from(b64, "base64");
+      if (buf.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "The uploaded file was empty or could not be decoded." });
+      }
+      const wb = new ExcelJS.default.Workbook();
+      try {
+        await wb.xlsx.load(buf as any);
+      } catch (e) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Couldn't read that as an .xlsx file${e instanceof Error ? `: ${e.message}` : ""}. Make sure you exported "Export report XLS" (not CSV or PDF).`,
+        });
+      }
+      const parsed = parseStudioworksWorkbook(wb);
+      log.info(`Studioworks parseExcel (user=${ctx.user.id}): file="${input.filename ?? "?"}" sheet="${parsed.sheetName}" rows=${parsed.rows.length} skipped=${parsed.skippedRows} cols=[${parsed.detectedColumns.join(",")}]`);
+      return {
+        rows: parsed.rows,
+        sheetName: parsed.sheetName,
+        headerRowNumber: parsed.headerRowNumber,
+        detectedColumns: parsed.detectedColumns,
+        rawHeaders: parsed.rawHeaders,
+        totalDataRows: parsed.totalDataRows,
+        skippedRows: parsed.skippedRows,
+        warnings: parsed.warnings,
+        looksAggregate: parsed.looksAggregate,
+      };
+    }),
 
   /**
    * Pull evaluations and insert them. Per-row errors don't stop the
@@ -345,7 +694,7 @@ export const studioworksSyncRouter = router({
          *  this GP id directly. Used by the unmatched-resolver UI when
          *  the importer couldn't auto-match a name. */
         forceGpId: z.number().int().positive().optional(),
-      })).min(1).max(500),
+      })).min(1).max(1000),
     }))
     .mutation(async ({ ctx, input }): Promise<StudioworksSyncSummary> => {
       const details: ImportDetail[] = [];
