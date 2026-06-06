@@ -733,10 +733,8 @@ export const personaSyncRouter = router({
   syncAllTeams: protectedProcedure
     .input(z.object({ month: z.number().min(1).max(12), year: z.number().min(2020).max(2030) }))
     .mutation(async ({ ctx, input }) => {
-      const allTeams = await db.getAllFmTeams();
-      const teams = ctx.user.role === "admin"
-        ? allTeams
-        : allTeams.filter(t => t.userId === ctx.user.id);
+      // One shared database — sync every team's Persona project.
+      const teams = await db.getAllFmTeams();
 
       const results: Array<{
         teamId: number;

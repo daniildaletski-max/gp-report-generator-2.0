@@ -68,18 +68,22 @@ export async function updateAttendance(id: number, data: Partial<InsertGpMonthly
   await db.update(gpMonthlyAttendance).set(data).where(eq(gpMonthlyAttendance.id, id));
 }
 
-export async function getAttendanceByTeamMonth(teamId: number, month: number, year: number) {
+export async function getAttendanceByTeamMonth(teamId: number | undefined, month: number, year: number) {
   const db = await getDb();
   if (!db) return [];
-  const teamGPs = await db.select().from(gamePresenters).where(eq(gamePresenters.teamId, teamId)).orderBy(gamePresenters.name);
+  // One shared database — when no teamId is given, cover every GP.
+  const teamFilter = teamId != null ? eq(gamePresenters.teamId, teamId) : undefined;
+  const teamGPs = await (teamFilter
+    ? db.select().from(gamePresenters).where(teamFilter).orderBy(gamePresenters.name)
+    : db.select().from(gamePresenters).orderBy(gamePresenters.name));
   const attendanceData = await db.select({ attendance: gpMonthlyAttendance, gamePresenter: gamePresenters })
     .from(gpMonthlyAttendance)
     .innerJoin(gamePresenters, eq(gpMonthlyAttendance.gamePresenterId, gamePresenters.id))
-    .where(and(eq(gamePresenters.teamId, teamId), eq(gpMonthlyAttendance.month, month), eq(gpMonthlyAttendance.year, year)));
+    .where(and(eq(gpMonthlyAttendance.month, month), eq(gpMonthlyAttendance.year, year), ...(teamFilter ? [teamFilter] : [])));
   const statsData = await db.select({ stats: monthlyGpStats, gamePresenter: gamePresenters })
     .from(monthlyGpStats)
     .innerJoin(gamePresenters, eq(monthlyGpStats.gamePresenterId, gamePresenters.id))
-    .where(and(eq(gamePresenters.teamId, teamId), eq(monthlyGpStats.month, month), eq(monthlyGpStats.year, year)));
+    .where(and(eq(monthlyGpStats.month, month), eq(monthlyGpStats.year, year), ...(teamFilter ? [teamFilter] : [])));
   return teamGPs.map(gp => {
     const gpAttendance = attendanceData.find(a => a.gamePresenter.id === gp.id);
     const gpStats = statsData.find(s => s.gamePresenter.id === gp.id);
@@ -91,9 +95,10 @@ export async function getAttendanceByTeamMonth(teamId: number, month: number, ye
  * Get attendance trends for a team across multiple months
  * Returns aggregated monthly totals for the last N months
  */
-export async function getAttendanceTrends(teamId: number, months: number = 6) {
+export async function getAttendanceTrends(teamId: number | undefined, months: number = 6) {
   const db = await getDb();
   if (!db) return [];
+  const teamFilter = teamId != null ? eq(gamePresenters.teamId, teamId) : undefined;
 
   const now = new Date();
   const results: Array<{
@@ -112,15 +117,17 @@ export async function getAttendanceTrends(teamId: number, months: number = 6) {
     const month = date.getMonth() + 1;
     const year = date.getFullYear();
 
-    const teamGPs = await db.select().from(gamePresenters).where(eq(gamePresenters.teamId, teamId));
+    const teamGPs = await (teamFilter
+      ? db.select().from(gamePresenters).where(teamFilter)
+      : db.select().from(gamePresenters));
     const attendanceData = await db.select({ attendance: gpMonthlyAttendance })
       .from(gpMonthlyAttendance)
       .innerJoin(gamePresenters, eq(gpMonthlyAttendance.gamePresenterId, gamePresenters.id))
-      .where(and(eq(gamePresenters.teamId, teamId), eq(gpMonthlyAttendance.month, month), eq(gpMonthlyAttendance.year, year)));
+      .where(and(eq(gpMonthlyAttendance.month, month), eq(gpMonthlyAttendance.year, year), ...(teamFilter ? [teamFilter] : [])));
     const statsData = await db.select({ stats: monthlyGpStats })
       .from(monthlyGpStats)
       .innerJoin(gamePresenters, eq(monthlyGpStats.gamePresenterId, gamePresenters.id))
-      .where(and(eq(gamePresenters.teamId, teamId), eq(monthlyGpStats.month, month), eq(monthlyGpStats.year, year)));
+      .where(and(eq(monthlyGpStats.month, month), eq(monthlyGpStats.year, year), ...(teamFilter ? [teamFilter] : [])));
 
     const totals = {
       month,

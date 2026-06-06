@@ -41,10 +41,10 @@ export const attendanceRouter = router({
       return { success: true };
     }),
 
-  // Bulk update attendance for multiple GPs in a team
+  // Bulk update attendance for multiple GPs
   bulkUpdate: protectedProcedure
     .input(z.object({
-      teamId: z.number().positive(),
+      teamId: z.number().positive().optional(),
       month: z.number().min(1).max(12),
       year: z.number().min(2020).max(2100),
       updates: z.array(z.object({
@@ -57,14 +57,6 @@ export const attendanceRouter = router({
       })),
     }))
     .mutation(async ({ ctx, input }) => {
-      // Verify team ownership
-      if (ctx.user.role !== 'admin') {
-        const team = await db.getFmTeamById(input.teamId);
-        if (!team) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
-        }
-      }
-
       let updated = 0;
       for (const update of input.updates) {
         const attendance = await db.getOrCreateAttendance(update.gpId, input.month, input.year);
@@ -76,22 +68,15 @@ export const attendanceRouter = router({
       return { success: true, updated };
     }),
 
-  // Get attendance summary for a team in a specific month
+  // Get attendance summary in a specific month (whole company, or one
+  // legacy team if a teamId is still supplied).
   teamSummary: protectedProcedure
     .input(z.object({
-      teamId: z.number().positive(),
+      teamId: z.number().positive().optional(),
       month: z.number().min(1).max(12),
       year: z.number().min(2020).max(2100),
     }))
-    .query(async ({ ctx, input }) => {
-      // Verify team ownership
-      if (ctx.user.role !== 'admin') {
-        const team = await db.getFmTeamById(input.teamId);
-        if (!team) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
-        }
-      }
-
+    .query(async ({ input }) => {
       const data = await db.getAttendanceByTeamMonth(input.teamId, input.month, input.year);
 
       // Mistake count is whatever is in `monthlyGpStats.mistakes`, which
@@ -114,19 +99,13 @@ export const attendanceRouter = router({
       return { items, totals, gpCount: items.length };
     }),
 
-  // Get attendance trends for a team across multiple months
+  // Get company-wide attendance trends across multiple months.
   trends: protectedProcedure
     .input(z.object({
-      teamId: z.number().positive(),
+      teamId: z.number().positive().optional(),
       months: z.number().min(2).max(12).optional().default(6),
     }))
-    .query(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') {
-        const team = await db.getFmTeamById(input.teamId);
-        if (!team) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
-        }
-      }
+    .query(async ({ input }) => {
       return await db.getAttendanceTrends(input.teamId, input.months);
     }),
 });
