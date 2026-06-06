@@ -19,6 +19,7 @@ import { ensureRubricSchema } from "../db/rubricMigration";
 import { ensureEvaluationHistorySchema } from "../db/evaluationHistory";
 import { ensureAttitudeManualColumn } from "../db/attitude";
 import { ensureMistakesConsolidated } from "../db/attendance";
+import { ensureWorkedHoursColumn } from "../db/monthlyStats";
 import { ENV } from "./env";
 import * as db from "../db";
 
@@ -566,6 +567,11 @@ async function startServer() {
     // Consolidate mistakes onto monthly_gp_stats (Phase 5) — idempotent.
     ensureMistakesConsolidated().catch(err => {
       log.warn("mistakes consolidation boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Worked-hours input for the performance-bonus engine (Phase 6) —
+    // monthly_gp_stats.workedHours. Idempotent boot install.
+    ensureWorkedHoursColumn().catch(err => {
+      log.warn("workedHours column boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
     });
     // Automation credentials audit — surfaces missing RESEND_API_KEY /
     // PERSONA_* / STUDIOWORKS_* env vars in deploy logs so operators

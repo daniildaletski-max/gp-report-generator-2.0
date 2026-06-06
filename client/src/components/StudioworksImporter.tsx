@@ -296,6 +296,17 @@ function parsePartsToEval(parts: string[], idx: number): RawEval | null {
 // Component
 // ============================================
 
+// Attitude record parsed from the Studioworks "Attitude" sheet — POSITIVE
+// (+1) / NEGATIVE (-1) behaviour events that feed monthly attitude.
+type AttitudeEvent = {
+  externalId: string;
+  presenterName: string;
+  date: string;
+  type: "positive" | "negative" | "neutral";
+  score: number;
+  comment?: string;
+};
+
 export function StudioworksImporter({
   open,
   onOpenChange,
@@ -314,6 +325,8 @@ export function StudioworksImporter({
   // Hidden <input type=file> trigger for the Excel-upload tab.
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [excelFileName, setExcelFileName] = useState<string>("");
+  // Attitude records parsed alongside evaluations (Excel tab only).
+  const [attitudeEvents, setAttitudeEvents] = useState<AttitudeEvent[]>([]);
 
   // Pull GP list for the unmatched-resolver dropdown. Filtered by the
   // backend to GPs visible to the current user.
@@ -357,19 +370,27 @@ export function StudioworksImporter({
   // unchanged — and keep the per-criterion scores through a re-import.
   const parseExcelMutation = trpc.studioworksSync.parseExcel.useMutation({
     onSuccess: (res) => {
+      setAttitudeEvents((res.attitudeEvents ?? []) as AttitudeEvent[]);
       if (!res.rows || res.rows.length === 0) {
-        toast.error(
-          res.warnings?.[0] ?? "No evaluations found in that file.",
-          { description: res.rawHeaders?.length ? `Columns seen: ${res.rawHeaders.slice(0, 10).join(", ")}` : undefined },
-        );
+        const attN = res.attitudeEvents?.length ?? 0;
+        if (attN > 0) {
+          toast.success(`No evaluation rows, but found ${attN} attitude record${attN === 1 ? "" : "s"} — click Import to sync them.`);
+        } else {
+          toast.error(
+            res.warnings?.[0] ?? "No evaluations found in that file.",
+            { description: res.rawHeaders?.length ? `Columns seen: ${res.rawHeaders.slice(0, 10).join(", ")}` : undefined },
+          );
+        }
         setParsed([]);
         return;
       }
       setParsed(res.rows as RawEval[]);
       setSelected(new Set(res.rows.map(r => r.externalId)));
+      setAttitudeEvents((res.attitudeEvents ?? []) as AttitudeEvent[]);
       const niceCols = (res.detectedColumns ?? [])
         .filter(c => c !== "attendance" && c !== "workload" && c !== "bonus" && c !== "since");
-      toast.success(`Parsed ${res.rows.length} evaluation${res.rows.length === 1 ? "" : "s"} from "${res.sheetName}"`, {
+      const attN = res.attitudeEvents?.length ?? 0;
+      toast.success(`Parsed ${res.rows.length} evaluation${res.rows.length === 1 ? "" : "s"}${attN > 0 ? ` + ${attN} attitude record${attN === 1 ? "" : "s"}` : ""} from "${res.sheetName}"`, {
         description: res.warnings?.length
           ? res.warnings.join(" ")
           : `Mapped columns: ${niceCols.join(", ")}. Review below, then Import.`,
@@ -410,6 +431,18 @@ export function StudioworksImporter({
     onError: (err) => toast.error(`Resolve failed: ${err.message}`),
   });
 
+  // Attitude commit — runs alongside the evaluation import (Excel tab).
+  const attitudeMutation = trpc.studioworksSync.importAttitudeBatch.useMutation({
+    onSuccess: (res) => {
+      if (res.totalFound > 0) {
+        toast.success(`Attitude: ${res.inserted} new · ${res.skippedExisting} duplicate · ${res.unmatched} unmatched`);
+      }
+      setAttitudeEvents([]);
+      onImported?.();
+    },
+    onError: (err) => toast.error(`Attitude import failed: ${err.message}`),
+  });
+
   const onParse = useCallback(() => {
     const rows = parseBulkPaste(pasteText);
     if (rows.length === 0) {
@@ -423,12 +456,14 @@ export function StudioworksImporter({
 
   const onCommit = useCallback(() => {
     const toSend = parsed.filter(r => selected.has(r.externalId));
-    if (toSend.length === 0) {
-      toast.error("Select at least one evaluation");
+    if (toSend.length === 0 && attitudeEvents.length === 0) {
+      toast.error("Nothing to import — select at least one evaluation");
       return;
     }
-    importMutation.mutate({ evaluations: toSend });
-  }, [parsed, selected, importMutation]);
+    // Commit evaluations and attitude together (both idempotent server-side).
+    if (toSend.length > 0) importMutation.mutate({ evaluations: toSend });
+    if (attitudeEvents.length > 0) attitudeMutation.mutate({ events: attitudeEvents });
+  }, [parsed, selected, attitudeEvents, importMutation, attitudeMutation]);
 
   const onResolveUnmatched = useCallback(() => {
     if (Object.keys(nameMappings).length === 0) {
@@ -579,6 +614,12 @@ export function StudioworksImporter({
                     <Badge variant="outline" className="text-[10px]">{parseExcelMutation.data.sheetName || "—"}</Badge>
                     <span className="font-semibold text-slate-700 ml-2">Rows:</span>
                     <Badge variant="outline" className="text-[10px]">{parseExcelMutation.data.rows.length}</Badge>
+                    {(parseExcelMutation.data.attitudeEvents?.length ?? 0) > 0 && (
+                      <>
+                        <span className="font-semibold text-slate-700 ml-2">Attitude:</span>
+                        <Badge className="bg-violet-100 text-violet-700 border-violet-200 text-[10px]">{parseExcelMutation.data.attitudeEvents.length}</Badge>
+                      </>
+                    )}
                     {parseExcelMutation.data.skippedRows > 0 && (
                       <span className="text-muted-foreground">({parseExcelMutation.data.skippedRows} non-data rows skipped)</span>
                     )}
@@ -788,6 +829,55 @@ export function StudioworksImporter({
             </div>
           )}
 
+          {/* Attitude preview — behaviour records from the Attitude sheet.
+              Committed together with the evaluations on Import. */}
+          {attitudeEvents.length > 0 && (
+            <div className="border-t border-slate-200 pt-3 space-y-2">
+              <h4 className="text-sm font-semibold flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-violet-600" />
+                Attitude · {attitudeEvents.length} record{attitudeEvents.length === 1 ? "" : "s"} to sync
+              </h4>
+              <div className="max-h-[160px] overflow-y-auto rounded-lg border border-violet-100 divide-y divide-violet-50">
+                {attitudeEvents.slice(0, 50).map(ev => (
+                  <div key={ev.externalId} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+                    <Badge className={`text-[10px] shrink-0 ${ev.score >= 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"}`}>
+                      {ev.score > 0 ? `+${ev.score}` : ev.score}
+                    </Badge>
+                    <span className="font-semibold text-slate-700 shrink-0">{ev.presenterName}</span>
+                    <span className="text-muted-foreground shrink-0 tabular-nums">{ev.date}</span>
+                    {ev.comment && <span className="text-muted-foreground truncate">— {ev.comment}</span>}
+                  </div>
+                ))}
+              </div>
+              {attitudeEvents.length > 50 && (
+                <p className="text-[11px] text-muted-foreground">…and {attitudeEvents.length - 50} more.</p>
+              )}
+            </div>
+          )}
+
+          {/* Attitude result summary (after import) */}
+          {attitudeMutation.data && attitudeMutation.data.totalFound > 0 && (
+            <div className="border-t border-slate-200 pt-3 space-y-2">
+              <h4 className="text-sm font-semibold flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-violet-600" />
+                Attitude synced
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                <Badge className="bg-emerald-50 border-emerald-200 text-emerald-700 gap-1">
+                  <Check className="h-3 w-3" /> {attitudeMutation.data.inserted} new
+                </Badge>
+                <Badge className="bg-slate-100 border-slate-200 text-slate-700 gap-1">
+                  {attitudeMutation.data.skippedExisting} already had
+                </Badge>
+                {attitudeMutation.data.unmatched > 0 && (
+                  <Badge className="bg-amber-50 border-amber-200 text-amber-700 gap-1">
+                    <AlertTriangle className="h-3 w-3" /> {attitudeMutation.data.unmatched} unmatched
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Result summary (after import) */}
           {importMutation.data && (
             <div className="border-t border-slate-200 pt-3 space-y-2">
@@ -907,15 +997,18 @@ export function StudioworksImporter({
           </Button>
           <Button
             onClick={onCommit}
-            disabled={parsed.length === 0 || selected.size === 0 || importMutation.isPending}
+            disabled={(selected.size === 0 && attitudeEvents.length === 0) || importMutation.isPending || attitudeMutation.isPending}
             className="bg-gradient-to-r from-primary to-primary/80 text-white"
           >
-            {importMutation.isPending ? (
+            {importMutation.isPending || attitudeMutation.isPending ? (
               <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
             ) : (
               <Send className="h-4 w-4 mr-1.5" />
             )}
-            Import {selected.size > 0 ? `${selected.size} selected` : ""}
+            Import {[
+              selected.size > 0 ? `${selected.size} eval${selected.size === 1 ? "" : "s"}` : "",
+              attitudeEvents.length > 0 ? `${attitudeEvents.length} attitude` : "",
+            ].filter(Boolean).join(" + ")}
           </Button>
         </DialogFooter>
       </DialogContent>

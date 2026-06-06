@@ -396,6 +396,22 @@ interface SheetParseResult {
   looksAggregate: boolean;
 }
 
+/** One behaviour record from the Studioworks "Attitude" sheet. Maps 1:1
+ *  onto our `attitude_screenshots` model (each row is a +1/-1 event that
+ *  the attitude derivation sums into monthly_gp_stats.attitude). */
+interface AttitudeRawEvent {
+  externalId: string;
+  presenterName: string;
+  date: string;
+  type: "positive" | "negative" | "neutral";
+  score: number;
+  comment?: string;
+}
+
+/** Workbook-level result: the chosen evaluation sheet result PLUS the
+ *  attitude events parsed from the (separate) Attitude sheet. */
+type WorkbookParseResult = SheetParseResult & { attitudeEvents: AttitudeRawEvent[] };
+
 const SUBCRITERIA_MAX: Record<string, number> = {
   hair: 3, makeup: 3, outfit: 3, posture: 3, dealingStyle: 5, gamePerformance: 5,
 };
@@ -807,17 +823,75 @@ function parseStudioworksMultiEval(wb: any): SheetParseResult | null {
   };
 }
 
+/**
+ * Parse the "Attitude" sheet (wide format: 3 "Record N" slots per GP,
+ * each = Date / Type (POSITIVE|NEGATIVE) / Score (+1|-1) / Comment).
+ * Returns one event per non-empty record. Each maps onto an
+ * attitude_screenshots row downstream.
+ */
+function parseStudioworksAttitude(wb: any): AttitudeRawEvent[] {
+  const sheets: any[] = wb?.worksheets || [];
+  const sheet = sheets.find(s => /attitude/i.test(s?.name || ""));
+  if (!sheet) return [];
+  const layout = buildMultiSheetLayout(sheet); // row1 "Record N", row2 col names
+  if (!layout) return [];
+
+  const out: AttitudeRawEvent[] = [];
+  const slotKeys = Array.from(layout.slots.keys()).sort((a, b) => a - b);
+  const lastRow = sheet.rowCount || 0;
+  for (let r = 3; r <= lastRow; r++) {
+    const row = sheet.getRow(r);
+    const name = cellText(row.getCell(layout.nameCol));
+    if (!isLikelyName(name)) continue;
+    for (const slotIdx of slotKeys) {
+      const slot = layout.slots.get(slotIdx)!;
+      const dateCol = findSlotCol(slot, ["Date"]);
+      const date = dateCol ? cellDate(row.getCell(dateCol)) : null;
+      if (!date) continue; // empty record slot
+
+      const typeCol = findSlotCol(slot, ["Type"]);
+      const scoreCol = findSlotCol(slot, ["Score"]);
+      const commentCol = findSlotCol(slot, ["Comment"]);
+      const rawType = (typeCol ? cellText(row.getCell(typeCol)) : null)?.toLowerCase() ?? "";
+      let score = scoreCol ? cellNumber(row.getCell(scoreCol)) : null;
+
+      // Resolve type/score consistently — trust the Type label first,
+      // fall back to the sign of the score, default neutral.
+      let type: AttitudeRawEvent["type"] = "neutral";
+      if (/pos/.test(rawType)) type = "positive";
+      else if (/neg/.test(rawType)) type = "negative";
+      else if (score != null && score > 0) type = "positive";
+      else if (score != null && score < 0) type = "negative";
+
+      if (score == null) score = type === "positive" ? 1 : type === "negative" ? -1 : 0;
+      // Normalise the sign to match the type so a stray "1" on a NEGATIVE
+      // row can't flip the net attitude.
+      if (type === "positive") score = Math.abs(score);
+      else if (type === "negative") score = -Math.abs(score);
+      else score = 0;
+      if (score === 0 && type === "neutral") continue; // nothing scoreable
+
+      const comment = commentCol ? (cellText(row.getCell(commentCol)) ?? undefined) : undefined;
+      const externalId = `xlsx-att-${fnv1a(`${name}|${date}|${slotIdx}|${comment ?? ""}`)}`;
+      out.push({ externalId, presenterName: name!.trim(), date, type, score, comment });
+    }
+  }
+  return out;
+}
+
 /** Parse a whole workbook. Tries the layout-specific multi-eval parser
  *  (real Studioworks export) first; falls back to the generic
- *  per-sheet header-driven parser for any other shape. */
-export function parseStudioworksWorkbook(wb: any): SheetParseResult {
+ *  per-sheet header-driven parser for any other shape. Attitude events
+ *  are parsed independently from the Attitude sheet and attached. */
+export function parseStudioworksWorkbook(wb: any): WorkbookParseResult {
+  const attitudeEvents = parseStudioworksAttitude(wb);
   const sheets: any[] = wb?.worksheets || [];
   if (sheets.length === 0) {
-    return { rows: [], sheetName: "", headerRowNumber: 0, detectedColumns: [], rawHeaders: [], totalDataRows: 0, skippedRows: 0, warnings: ["The workbook has no sheets."], looksAggregate: false };
+    return { rows: [], sheetName: "", headerRowNumber: 0, detectedColumns: [], rawHeaders: [], totalDataRows: 0, skippedRows: 0, warnings: ["The workbook has no sheets."], looksAggregate: false, attitudeEvents };
   }
   // 1) Studioworks "Export report XLS" multi-eval layout — preferred.
   const multi = parseStudioworksMultiEval(wb);
-  if (multi && multi.rows.length > 0) return multi;
+  if (multi && multi.rows.length > 0) return { ...multi, attitudeEvents };
   // 2) Generic per-sheet header-driven parser (single-row-per-eval
   //    exports and any other reasonable shape).
   const results = sheets.map(parseSheet);
@@ -831,9 +905,9 @@ export function parseStudioworksWorkbook(wb: any): SheetParseResult {
     // If multi-eval detection ran but produced 0 rows, include its
     // warnings so the user sees actionable feedback.
     if (multi && multi.warnings.length) allWarnings.push(...multi.warnings);
-    return { ...best, warnings: allWarnings.length ? allWarnings : best.warnings };
+    return { ...best, warnings: allWarnings.length ? allWarnings : best.warnings, attitudeEvents };
   }
-  return best;
+  return { ...best, attitudeEvents };
 }
 
 export const studioworksSyncRouter = router({
@@ -886,9 +960,10 @@ export const studioworksSyncRouter = router({
         });
       }
       const parsed = parseStudioworksWorkbook(wb);
-      log.info(`Studioworks parseExcel (user=${ctx.user.id}): file="${input.filename ?? "?"}" sheet="${parsed.sheetName}" rows=${parsed.rows.length} skipped=${parsed.skippedRows} cols=[${parsed.detectedColumns.join(",")}]`);
+      log.info(`Studioworks parseExcel (user=${ctx.user.id}): file="${input.filename ?? "?"}" sheet="${parsed.sheetName}" rows=${parsed.rows.length} attitude=${parsed.attitudeEvents.length} skipped=${parsed.skippedRows} cols=[${parsed.detectedColumns.join(",")}]`);
       return {
         rows: parsed.rows,
+        attitudeEvents: parsed.attitudeEvents,
         sheetName: parsed.sheetName,
         headerRowNumber: parsed.headerRowNumber,
         detectedColumns: parsed.detectedColumns,
@@ -1074,5 +1149,135 @@ export const studioworksSyncRouter = router({
         errors,
         details,
       };
+    }),
+
+  /**
+   * Import attitude records parsed from the Studioworks "Attitude" sheet.
+   * Each record (POSITIVE +1 / NEGATIVE -1) becomes an
+   * `attitude_screenshots` row — the same model the screenshot-OCR path
+   * feeds — after which the GP's monthly attitude is recomputed (which
+   * respects any manual override via attitudeIsManual).
+   *
+   * Idempotent: a record is skipped when an attitude row already exists
+   * for the same GP / day / score / comment, so re-uploading the same
+   * export never double-counts. Same fuzzy-match + team-ownership rules
+   * as importBatch.
+   */
+  importAttitudeBatch: protectedProcedure
+    .input(z.object({
+      events: z.array(z.object({
+        externalId: z.string().min(1),
+        presenterName: z.string().min(1).max(255),
+        date: z.string().min(1),
+        type: z.enum(["positive", "negative", "neutral"]),
+        score: z.number().int().min(-10).max(10),
+        comment: z.string().max(2000).optional(),
+        forceGpId: z.number().int().positive().optional(),
+      })).min(1).max(2000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      interface AttitudeDetail {
+        externalId: string;
+        presenterName: string;
+        date: string;
+        type: string;
+        score: number;
+        matched: boolean;
+        gpId?: number;
+        gpName?: string;
+        skippedExisting?: boolean;
+        error?: string;
+      }
+      const details: AttitudeDetail[] = [];
+      const touched = new Map<string, { gpId: number; month: number; year: number }>();
+      // (gpId,month,year) → set of existing+staged record signatures, for
+      // both in-DB and in-batch dedup.
+      const sigCache = new Map<string, Set<string>>();
+      const norm = (s?: string | null) => (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+
+      for (const ev of input.events) {
+        const base: AttitudeDetail = {
+          externalId: ev.externalId, presenterName: ev.presenterName,
+          date: ev.date, type: ev.type, score: ev.score, matched: false,
+        };
+        try {
+          const d = parseStudioworksDate(ev.date);
+          if (!d) { details.push({ ...base, error: `unparseable date: "${ev.date}"` }); continue; }
+          const month = d.getMonth() + 1;
+          const year = d.getFullYear();
+
+          // GP resolution — explicit override (authorized) or fuzzy match.
+          let gpId: number; let gpName: string; let gpOwnerId: number | null = null;
+          if (ev.forceGpId) {
+            const gp = await db.getGamePresenterById(ev.forceGpId);
+            if (!gp) { details.push({ ...base, error: `forced GP id ${ev.forceGpId} not found` }); continue; }
+            if (ctx.user.role !== "admin" && gp.userId && gp.userId !== ctx.user.id) {
+              details.push({ ...base, error: "Cannot map to a GP outside your team" }); continue;
+            }
+            gpId = gp.id; gpName = gp.name; gpOwnerId = gp.userId ?? null;
+          } else {
+            const match = await db.findBestMatchingGP(ev.presenterName, 0.7);
+            if (!match) { details.push({ ...base, error: `no GP matched for "${ev.presenterName}"` }); continue; }
+            gpId = match.gamePresenter.id; gpName = match.gamePresenter.name; gpOwnerId = match.gamePresenter.userId ?? null;
+            if (ctx.user.role !== "admin" && gpOwnerId && gpOwnerId !== ctx.user.id) {
+              details.push({ ...base, matched: true, gpId, gpName, error: "Skipped: GP belongs to a different FM" }); continue;
+            }
+          }
+
+          // Idempotency: build (and cache) the signature set for this bucket.
+          const key = `${gpId}-${month}-${year}`;
+          let sigs = sigCache.get(key);
+          if (!sigs) {
+            sigs = new Set<string>();
+            const existing = await db.getAttitudeScreenshotsForGP(gpId, month, year);
+            for (const row of existing) {
+              const eff = row.evaluationDate ?? row.createdAt ?? new Date();
+              sigs.add(`${isoDay(new Date(eff))}|${row.attitudeScore ?? 0}|${norm(row.comment)}`);
+            }
+            sigCache.set(key, sigs);
+          }
+          const sig = `${isoDay(d)}|${ev.score}|${norm(ev.comment)}`;
+          if (sigs.has(sig)) { details.push({ ...base, matched: true, gpId, gpName, skippedExisting: true }); continue; }
+
+          await db.createAttitudeScreenshot({
+            gamePresenterId: gpId,
+            gpName: ev.presenterName,
+            evaluationDate: d,
+            attitudeType: ev.type,
+            attitudeScore: ev.score,
+            attitudeCategory: ev.type,
+            comment: ev.comment ?? null,
+            month,
+            year,
+            uploadedById: ctx.user.id,
+            rawExtractedData: { source: "studioworks", externalId: ev.externalId } as any,
+          });
+          sigs.add(sig);
+          touched.set(key, { gpId, month, year });
+          details.push({ ...base, matched: true, gpId, gpName });
+        } catch (e) {
+          details.push({ ...base, error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+
+      // Recompute monthly attitude for each touched bucket. Skips rows
+      // pinned as a manual override (attitudeIsManual = 1) internally.
+      for (const { gpId, month, year } of Array.from(touched.values())) {
+        try { await db.recomputeGPAttitudeFromScreenshots(gpId, month, year); }
+        catch (e) { log.warn(`attitude recompute failed gp=${gpId} ${month}/${year}: ${e instanceof Error ? e.message : String(e)}`); }
+      }
+
+      const inserted = details.filter(d => d.matched && !d.skippedExisting && !d.error).length;
+      const skippedExisting = details.filter(d => d.skippedExisting).length;
+      const unmatched = details.filter(d => !d.matched && !d.error?.includes("date")).length;
+      const errors = details.filter(d => d.error).length;
+      const status: StudioworksSyncSummary["status"] =
+        input.events.length === 0 ? "failed" : (unmatched > 0 || errors > 0 ? "partial" : "success");
+
+      log.info(`Studioworks attitude import (user=${ctx.user.id}): submitted=${input.events.length} inserted=${inserted} skipped=${skippedExisting} unmatched=${unmatched} errors=${errors} recomputed=${touched.size}`);
+
+      if (inserted > 0) publish({ type: "evaluations.changed", source: "studioworks-attitude", userId: ctx.user.id, count: inserted });
+
+      return { status, totalFound: input.events.length, inserted, skippedExisting, unmatched, errors, details };
     }),
 });

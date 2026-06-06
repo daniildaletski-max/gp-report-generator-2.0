@@ -6,6 +6,22 @@ import { eq, and, sql, gte } from "drizzle-orm";
 import { monthlyGpStats, InsertMonthlyGpStats, MonthlyGpStats, gamePresenters } from "../../drizzle/schema";
 import { getDb } from "./connection";
 import { getOrCreateAttendance, updateAttendance } from "./attendance";
+import { addColumnIfMissing } from "./_schemaUtils";
+
+/**
+ * Idempotent boot install of monthly_gp_stats.workedHours — the worked-
+ * hours input the performance-bonus engine multiplies by the level rate.
+ * Same "Manus doesn't run migrations" pattern as ensureAttitudeManualColumn.
+ */
+export async function ensureWorkedHoursColumn(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await addColumnIfMissing(
+    db,
+    "ALTER TABLE `monthly_gp_stats` ADD COLUMN `workedHours` int NULL",
+    "monthly_gp_stats.workedHours",
+  );
+}
 
 // ============================================
 // CRUD
@@ -25,7 +41,7 @@ export async function getOrCreateMonthlyGpStats(gpId: number, month: number, yea
 
 export async function updateMonthlyGpStats(
   gpId: number, month: number, year: number,
-  data: { attitude?: number | null; mistakes?: number; notes?: string | null; updatedById?: number; userId?: number }
+  data: { attitude?: number | null; mistakes?: number; totalGames?: number; workedHours?: number | null; notes?: string | null; updatedById?: number; userId?: number }
 ): Promise<MonthlyGpStats | null> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

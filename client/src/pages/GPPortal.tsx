@@ -11,7 +11,7 @@ import {
   PersonStanding, AlertCircle, TrendingUp, AlertTriangle, Trophy,
   Target, ThumbsUp, ThumbsDown, RefreshCw, ChevronDown, ChevronUp, BarChart3,
   Clock, TrendingDown, Flame, Crown, Medal, Gem, Heart, Shield,
-  MessageSquare, FileText, LayoutDashboard,
+  MessageSquare, FileText, LayoutDashboard, BadgeEuro,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
@@ -110,6 +110,13 @@ export default function GPPortal() {
     { enabled: !!token && !!data, refetchOnWindowFocus: false, staleTime: 5 * 60_000 },
   );
   const refreshCoach = () => coachInsights.refetch();
+
+  // Performance bonus for the selected month — shows the GP their own
+  // GGs / level / payout standing. Fails soft (renders nothing on error).
+  const bonus = trpc.bonus.forPortalToken.useQuery(
+    { token: token || "", month: detailMonth, year: detailYear },
+    { enabled: !!token && !!data, refetchOnWindowFocus: false, staleTime: 60_000 },
+  );
 
   useEffect(() => {
     if (data) setLastRefresh(new Date());
@@ -834,6 +841,44 @@ export default function GPPortal() {
           </TabsList>
 
           <TabsContent value="overview" className="mt-6 space-y-6">
+            {/* Performance bonus standing */}
+            {bonus.data && (
+              <Card className="overflow-hidden border-amber-200">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${bonus.data.level === "level2" ? "bg-amber-100 text-amber-700" : bonus.data.level === "level1" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                        <BadgeEuro className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">Performance Bonus</div>
+                        <div className="text-xs text-muted-foreground">
+                          {bonus.data.level === "level2" ? "Level 2 · €2.50/h" : bonus.data.level === "level1" ? "Level 1 · €1.50/h" : "Not eligible yet"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold tabular-nums text-slate-900">
+                        {bonus.data.amount > 0 ? `€${bonus.data.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                      </div>
+                      <div className="text-xs text-muted-foreground tabular-nums">{bonus.data.ggs.toLocaleString()} GGs</div>
+                    </div>
+                  </div>
+                  {bonus.data.disqualifyingFactors.length > 0 ? (
+                    <div className="mt-3 text-xs text-rose-600 flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5" /> {bonus.data.disqualifyingFactors.join("; ")}
+                    </div>
+                  ) : bonus.data.gapToNext ? (
+                    <div className="mt-3 text-xs text-amber-700 flex items-center gap-1.5">
+                      <TrendingUp className="h-3.5 w-3.5" />
+                      {bonus.data.gapToNext.gapGGs.toLocaleString()} more GGs to reach {bonus.data.gapToNext.target === "level2" ? "Level 2" : "Level 1"}.
+                    </div>
+                  ) : bonus.data.isEligible && bonus.data.amount === 0 ? (
+                    <div className="mt-3 text-xs text-amber-700">Worked hours not recorded yet — payout shows once your hours are in.</div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Quick Stats */}
               <div className="space-y-4">

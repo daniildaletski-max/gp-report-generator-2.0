@@ -79,6 +79,7 @@ export {
   bulkUpdateMonthlyGpStats, bulkSetAttitude, bulkResetMistakes,
   incrementGPMistakes,
   getGpMonthlyHistory, getTeamPeerAverages, syncErrorsFromGoogleSheets,
+  ensureWorkedHoursColumn,
 } from "./monthlyStats";
 
 // Attitude (hybrid: derived from screenshots + manual override)
