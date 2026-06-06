@@ -152,17 +152,8 @@ export {
 export type { ActionItemWithGp } from "./actionItems";
 
 // Persona Sync Logs
-export {
-  createSyncLog, updateSyncLog,
-  getLastSyncForTeam, getRecentSyncsForTeam, getAllRecentSyncs,
-} from "./personaSyncLogs";
-
-// Persona Name Aliases
-export {
-  findAliasForTeam, listAliasesForTeam, upsertAlias,
-  deleteAlias, getAliasById, loadAliasMapForTeam,
-} from "./personaAliases";
-export type { PersonaAliasWithGp } from "./personaAliases";
+// Persona sync removed — see commit history. Attendance is now manual /
+// imported from other sources only.
 
 // Rubric (versioned scoring)
 export {

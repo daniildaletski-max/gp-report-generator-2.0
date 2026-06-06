@@ -52,38 +52,23 @@ export default function AttendancePage() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
-  const [selectedTeamId, setSelectedTeamId] = useState<string>("");
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [expandedRemarks, setExpandedRemarks] = useState<Set<number>>(new Set());
   const [drawerGpId, setDrawerGpId] = useState<number | null>(null);
 
-  // When the user has unsaved edits and tries to switch team/month/year,
-  // queue the pending change and confirm first instead of silently
-  // overwriting their work via the data-refetch useEffect below.
+  // When the user has unsaved edits and tries to switch month/year, queue
+  // the pending change and confirm first instead of silently overwriting
+  // their work via the data-refetch useEffect below.
   const [pendingFilterChange, setPendingFilterChange] = useState<
-    | { kind: "team"; value: string }
     | { kind: "month"; value: number }
     | { kind: "year"; value: number }
     | null
   >(null);
 
-  // Fetch teams
-  const { data: teams, isLoading: teamsLoading } = trpc.fmTeam.list.useQuery();
-
-  // Auto-select first team
-  useEffect(() => {
-    if (teams && teams.length > 0 && !selectedTeamId) {
-      setSelectedTeamId(String(teams[0].id));
-    }
-  }, [teams, selectedTeamId]);
-
-  const teamId = selectedTeamId ? Number(selectedTeamId) : undefined;
-
-  // Fetch attendance data
+  // One shared database — attendance covers every GP company-wide.
   const { data: attendanceData, isLoading: attendanceLoading, refetch } = trpc.attendance.teamSummary.useQuery(
-    { teamId: teamId!, month: selectedMonth, year: selectedYear },
-    { enabled: !!teamId }
+    { month: selectedMonth, year: selectedYear },
   );
 
   // Bulk update mutation
@@ -98,32 +83,13 @@ export default function AttendancePage() {
     },
   });
 
-  // Pull HR attendance (sick / late / missed) straight from Persona for the
-  // selected team + month, so the grid auto-fills instead of manual entry.
-  const syncMutation = trpc.personaSync.syncTeam.useMutation({
-    onSuccess: (res) => {
-      const matched = (res as { matched?: number }).matched ?? 0;
-      const unmatched = (res as { unmatched?: number }).unmatched ?? 0;
-      toast.success(
-        `Persona sync complete — ${matched} matched${unmatched ? `, ${unmatched} unmatched` : ""}`,
-      );
-      refetch();
-    },
-    onError: (error) => toast.error(`Persona sync failed: ${error.message}`),
-  });
-  const isSyncing = syncMutation.isPending;
-  const handleSyncPersona = useCallback(() => {
-    if (!teamId) { toast.error("Select a team first"); return; }
-    syncMutation.mutate({ teamId, month: selectedMonth, year: selectedYear });
-  }, [teamId, selectedMonth, selectedYear, syncMutation]);
-
   // Avoid wiping user edits when the query just refetches in the background.
   // Only repopulate rows when the underlying scope (team/month/year) changes
   // or when we currently have nothing showing.
   const lastLoadedScopeRef = useRef<string>("");
   useEffect(() => {
     if (!attendanceData?.items) return;
-    const scope = `${teamId ?? "_"}:${selectedMonth}:${selectedYear}`;
+    const scope = `${selectedMonth}:${selectedYear}`;
     const isFirstLoadForScope = lastLoadedScopeRef.current !== scope;
     if (!isFirstLoadForScope && rows.some(r => r.isDirty)) return;
     lastLoadedScopeRef.current = scope;
@@ -143,7 +109,7 @@ export default function AttendancePage() {
   // rows is intentionally omitted — we only consider its dirty state via a
   // ref-equivalent at read time. Including it would re-enter on every keystroke.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attendanceData, teamId, selectedMonth, selectedYear]);
+  }, [attendanceData, selectedMonth, selectedYear]);
 
   // Update a single field
   const updateField = useCallback((gpId: number, field: keyof AttendanceRow, value: number | string) => {
@@ -164,7 +130,6 @@ export default function AttendancePage() {
 
   // Save all dirty rows
   const handleSave = useCallback(async () => {
-    if (!teamId) return;
     const dirtyRows = rows.filter(r => r.isDirty);
     if (dirtyRows.length === 0) {
       toast.info("No changes to save");
@@ -173,7 +138,6 @@ export default function AttendancePage() {
     setIsSaving(true);
     try {
       await bulkUpdateMutation.mutateAsync({
-        teamId,
         month: selectedMonth,
         year: selectedYear,
         updates: dirtyRows.map(r => ({
@@ -188,7 +152,7 @@ export default function AttendancePage() {
     } finally {
       setIsSaving(false);
     }
-  }, [teamId, rows, selectedMonth, selectedYear, bulkUpdateMutation]);
+  }, [rows, selectedMonth, selectedYear, bulkUpdateMutation]);
 
   // Reset changes
   const handleReset = useCallback(() => {
@@ -220,14 +184,12 @@ export default function AttendancePage() {
   }, [rows]);
 
   const hasDirtyRows = rows.some(r => r.isDirty);
-  const selectedTeam = teams?.find(t => t.id === teamId);
 
   // Block accidental tab close / refresh while there are unsaved edits.
   useUnsavedChangesGuard(hasDirtyRows);
 
   const applyFilterChange = useCallback((change: NonNullable<typeof pendingFilterChange>) => {
-    if (change.kind === "team") setSelectedTeamId(change.value);
-    else if (change.kind === "month") setSelectedMonth(change.value);
+    if (change.kind === "month") setSelectedMonth(change.value);
     else if (change.kind === "year") setSelectedYear(change.value);
   }, []);
 
@@ -263,21 +225,6 @@ export default function AttendancePage() {
         icon={CalendarCheck}
         actions={
           <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSyncPersona}
-              disabled={isSyncing || !teamId}
-              className="glass-button text-muted-foreground hover:text-foreground"
-              title="Pull sick / late / missed days from Persona for this team & month"
-            >
-              {isSyncing ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-1" />
-              )}
-              Sync from Persona
-            </Button>
             {hasDirtyRows && (
               <>
                 <Button
@@ -311,23 +258,6 @@ export default function AttendancePage() {
       {/* Filters Row */}
       <div className="glass-card p-4">
         <div className="flex flex-col sm:flex-row gap-3">
-          {/* Team Selector */}
-          <div className="flex-1 min-w-[200px]">
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Team</label>
-            <Select value={selectedTeamId} onValueChange={v => requestFilterChange({ kind: "team", value: v })}>
-              <SelectTrigger className="glass-input h-10">
-                <SelectValue placeholder="Select team..." />
-              </SelectTrigger>
-              <SelectContent>
-                {teams?.map(team => (
-                  <SelectItem key={team.id} value={String(team.id)}>
-                    {team.teamName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Month Selector */}
           <div className="flex-1 min-w-[160px]">
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Month</label>
@@ -399,7 +329,7 @@ export default function AttendancePage() {
       )}
 
       {/* Per-day calendar view (uses Persona breakdown JSON in remarks) */}
-      {teamId && attendanceData?.items && attendanceData.items.length > 0 && (
+      {attendanceData?.items && attendanceData.items.length > 0 && (
         <AttendanceCalendarView
           items={attendanceData.items as any[]}
           month={selectedMonth}
@@ -409,9 +339,7 @@ export default function AttendancePage() {
       )}
 
       {/* Attendance Trend Charts */}
-      {teamId && (
-        <AttendanceTrendCharts teamId={teamId} />
-      )}
+      <AttendanceTrendCharts />
 
       {/* Attendance Table */}
       <div className="glass-card overflow-hidden">
@@ -419,7 +347,7 @@ export default function AttendancePage() {
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-primary" />
             <h3 className="font-semibold text-foreground">
-              {selectedTeam?.teamName || "Team"} — {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+              All Game Presenters — {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
             </h3>
             {rows.length > 0 && (
               <Badge variant="outline" className="ml-2 text-xs border-primary/20 text-primary">
@@ -434,21 +362,16 @@ export default function AttendancePage() {
           )}
         </div>
 
-        {teamsLoading || attendanceLoading ? (
+        {attendanceLoading ? (
           <div className="p-6 space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-12 w-full rounded-lg" />
             ))}
           </div>
-        ) : !teamId ? (
-          <div className="p-12 text-center text-muted-foreground">
-            <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
-            <p>Select a team to view attendance</p>
-          </div>
         ) : rows.length === 0 ? (
           <div className="p-12 text-center text-muted-foreground">
             <CalendarCheck className="h-12 w-12 mx-auto mb-3 opacity-30" />
-            <p>No game presenters found in this team</p>
+            <p>No game presenters found</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -572,11 +495,9 @@ export default function AttendancePage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Discard {rows.filter(r => r.isDirty).length} unsaved changes?</AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingFilterChange?.kind === "team"
-                ? "Switching team will discard your current edits."
-                : pendingFilterChange?.kind === "month"
-                  ? "Switching month will discard your current edits."
-                  : "Switching year will discard your current edits."}
+              {pendingFilterChange?.kind === "month"
+                ? "Switching month will discard your current edits."
+                : "Switching year will discard your current edits."}
               {" "}Save first to keep them.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -836,11 +757,11 @@ function SummaryCard({
 // ============================================
 const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function AttendanceTrendCharts({ teamId }: { teamId: number }) {
+function AttendanceTrendCharts() {
   const [showCharts, setShowCharts] = useState(false);
   const { data: trends, isLoading } = trpc.attendance.trends.useQuery(
-    { teamId, months: 6 },
-    { enabled: !!teamId && showCharts }
+    { months: 6 },
+    { enabled: showCharts }
   );
 
   const chartData = useMemo(() => {

@@ -42,10 +42,12 @@ export async function createErrorFile(data: InsertErrorFile): Promise<ErrorFile>
 }
 
 export async function getErrorFileByMonthYearType(month: number, year: number, fileType: "playgon" | "mg", userId: number): Promise<ErrorFile | null> {
+  // One shared database — there is a single error file per month/year/type.
+  void userId;
   const db = await getDb();
   if (!db) return null;
   const result = await db.select().from(errorFiles)
-    .where(and(eq(errorFiles.month, month), eq(errorFiles.year, year), eq(errorFiles.fileType, fileType), eq(errorFiles.uploadedById, userId)))
+    .where(and(eq(errorFiles.month, month), eq(errorFiles.year, year), eq(errorFiles.fileType, fileType)))
     .orderBy(desc(errorFiles.createdAt)).limit(1);
   return result.length > 0 ? result[0] : null;
 }
@@ -68,9 +70,9 @@ export async function deleteErrorFile(id: number): Promise<void> {
 }
 
 export async function getErrorFilesByUser(userId: number): Promise<ErrorFile[]> {
-  const db = await getDb();
-  if (!db) return [];
-  return await db.select().from(errorFiles).where(eq(errorFiles.uploadedById, userId)).orderBy(desc(errorFiles.createdAt));
+  // One shared database — every user sees every error file.
+  void userId;
+  return getAllErrorFiles();
 }
 
 export async function deleteErrorFileByUser(id: number, userId: number): Promise<boolean> {
@@ -536,17 +538,21 @@ export async function getErrorScreenshotsForGP(gpId: number, month: number, year
 }
 
 export async function getErrorScreenshotsByUser(month: number, year: number, userId: number, gamePresenterId?: number): Promise<ErrorScreenshot[]> {
+  // One shared database — global error screenshots.
+  void userId;
   const db = await getDb();
   if (!db) return [];
-  const conditions: any[] = [errorScreenshotMonthFilter(month, year), eq(errorScreenshots.uploadedById, userId)];
+  const conditions: any[] = [errorScreenshotMonthFilter(month, year)];
   if (gamePresenterId) conditions.push(eq(errorScreenshots.gamePresenterId, gamePresenterId));
   return await db.select().from(errorScreenshots).where(and(...conditions)).orderBy(desc(errorScreenshots.createdAt));
 }
 
 export async function getErrorScreenshotStatsByUser(month: number, year: number, userId: number) {
+  // One shared database — global error-screenshot stats.
+  void userId;
   const db = await getDb();
   if (!db) return { byType: [], bySeverity: [], total: 0 };
-  const baseConditions = [errorScreenshotMonthFilter(month, year), eq(errorScreenshots.uploadedById, userId)];
+  const baseConditions = [errorScreenshotMonthFilter(month, year)];
   const byType = await db.select({ errorType: errorScreenshots.errorType, count: sql<number>`COUNT(*)` }).from(errorScreenshots).where(and(...baseConditions)).groupBy(errorScreenshots.errorType);
   const bySeverity = await db.select({ severity: errorScreenshots.severity, count: sql<number>`COUNT(*)` }).from(errorScreenshots).where(and(...baseConditions)).groupBy(errorScreenshots.severity);
   const totalResult = await db.select({ count: sql<number>`COUNT(*)` }).from(errorScreenshots).where(and(...baseConditions));

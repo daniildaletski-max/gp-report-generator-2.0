@@ -46,13 +46,9 @@ export async function getAllReports(): Promise<Report[]> {
 }
 
 export async function getAllReportsByUser(userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return await db.select({ report: reports, team: fmTeams })
-    .from(reports)
-    .leftJoin(fmTeams, eq(reports.teamId, fmTeams.id))
-    .where(eq(reports.userId, userId))
-    .orderBy(desc(reports.createdAt));
+  // One shared database — every user sees every report.
+  void userId;
+  return getReportsWithTeams();
 }
 
 export async function getReportsWithTeams() {
@@ -65,13 +61,9 @@ export async function getReportsWithTeams() {
 }
 
 export async function getReportsWithTeamsByUser(userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return await db.select({ report: reports, team: fmTeams })
-    .from(reports)
-    .leftJoin(fmTeams, eq(reports.teamId, fmTeams.id))
-    .where(eq(reports.userId, userId))
-    .orderBy(desc(reports.createdAt));
+  // One shared database — every user sees every report.
+  void userId;
+  return getReportsWithTeams();
 }
 
 export async function getReportsByTeam(teamId: number) {

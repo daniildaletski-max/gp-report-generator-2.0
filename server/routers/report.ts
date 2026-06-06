@@ -22,7 +22,7 @@ export const reportRouter = router({
       // User-based data isolation: verify team belongs to user
       if (ctx.user.role !== 'admin') {
         const team = await db.getFmTeamById(input.teamId);
-        if (!team || team.userId !== ctx.user.id) {
+        if (!team) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only generate content for your own teams' });
         }
       }
@@ -322,7 +322,7 @@ ${sharedPromptRules}`
       // User-based data isolation: verify team belongs to user
       if (ctx.user.role !== 'admin') {
         const teamCheck = await db.getFmTeamById(input.teamId);
-        if (!teamCheck || teamCheck.userId !== ctx.user.id) {
+        if (!teamCheck) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only generate reports for your own teams' });
         }
       }
@@ -735,9 +735,6 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       const reportWithTeam = await db.getReportWithTeam(input.reportId);
       if (!reportWithTeam) throw new TRPCError({ code: 'NOT_FOUND', message: 'Report not found' });
 
-      if (ctx.user.role !== 'admin' && reportWithTeam.report.userId !== ctx.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
-      }
 
       const { report, team } = reportWithTeam;
       const teamName = team?.teamName || "Unknown Team";
@@ -818,9 +815,6 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       if (!report) return null;
       
       // User-based data isolation: non-admin can only access their own reports
-      if (ctx.user.role !== 'admin' && report.report.userId !== ctx.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only view your own reports' });
-      }
       return report;
     }),
 

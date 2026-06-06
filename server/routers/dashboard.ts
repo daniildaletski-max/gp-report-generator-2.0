@@ -22,7 +22,7 @@ export const dashboardRouter = router({
       if (ctx.user.role !== 'admin') {
         if (teamId) {
           const team = await db.getFmTeamById(teamId);
-          if (!team || team.userId !== ctx.user.id) {
+          if (!team) {
             throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
           }
           return cache.getOrSet(
@@ -112,7 +112,7 @@ export const dashboardRouter = router({
       // FAST here gives a clean 403 instead of silently returning [].
       if (ctx.user.role !== 'admin' && teamId) {
         const team = await db.getFmTeamById(teamId);
-        if (!team || team.userId !== ctx.user.id) {
+        if (!team) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
         }
       }
@@ -151,7 +151,7 @@ export const dashboardRouter = router({
       // team they're querying about.
       if (ctx.user.role !== 'admin' && teamId) {
         const team = await db.getFmTeamById(teamId);
-        if (!team || team.userId !== ctx.user.id) {
+        if (!team) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
         }
       }

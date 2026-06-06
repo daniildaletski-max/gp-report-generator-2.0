@@ -37,9 +37,6 @@ export const gpAccessRouter = router({
       }
       
       // User-based data isolation
-      if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only generate tokens for your own Game Presenters' });
-      }
 
       // Deactivate any existing tokens for this GP
       const existingToken = await db.getGpAccessTokenByGpId(input.gpId);
@@ -116,18 +113,10 @@ export const gpAccessRouter = router({
   deactivate: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      // Get token to check ownership
+      // One shared database — any authenticated user can manage tokens.
       const token = await db.getGpAccessTokenById(input.id);
       if (!token) throw new TRPCError({ code: 'NOT_FOUND', message: 'Token not found' });
-      
-      // User-based data isolation: non-admin can only manage their own GP tokens
-      if (ctx.user.role !== 'admin') {
-        const gp = await db.getGamePresenterById(token.gamePresenterId);
-        if (gp && gp.userId !== ctx.user.id) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only manage your own GP tokens' });
-        }
-      }
-      
+
       await db.deactivateGpAccessToken(input.id);
       return { success: true };
     }),

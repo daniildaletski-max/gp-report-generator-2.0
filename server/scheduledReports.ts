@@ -423,38 +423,9 @@ async function runMonthlyReportGeneration(opts?: { isPrimaryRun?: boolean }) {
   log.info(`\n========== [ScheduledReports] Starting monthly report generation for ${monthName} ${reportYear} ==========`);
 
   try {
-    // Step 1: refresh Persona attendance for every team that has a
-    // personaProjectId configured. We do this before generating
-    // reports so the numbers in the report reflect the latest sick
-    // leaves / missed days. Failures here are non-fatal — the report
-    // generation runs anyway with whatever data was already in the DB.
-    const allTeamsForSync = await db.getAllFmTeams();
-    const teamsToSync = allTeamsForSync.filter(t => (t as any).personaProjectId);
-    if (teamsToSync.length > 0) {
-      log.info(`[ScheduledReports] Pre-sync: syncing Persona for ${teamsToSync.length} team(s)`);
-      const { runPersonaSyncForTeam } = await import("./routers/personaSync");
-      for (const team of teamsToSync) {
-        try {
-          const result = await runPersonaSyncForTeam({
-            teamId: team.id,
-            month: reportMonth,
-            year: reportYear,
-            triggeredById: null,
-            source: "scheduled",
-          });
-          log.info(`[ScheduledReports] Persona sync ${result.status} for team ${team.teamName}: matched=${result.matched}, unmatched=${result.unmatched}`);
-        } catch (e) {
-          log.error(
-            `[ScheduledReports] Persona sync failed for team ${team.teamName} — continuing with stale data`,
-            e instanceof Error ? e : new Error(String(e)),
-          );
-        }
-      }
-    } else {
-      log.info("[ScheduledReports] Pre-sync: no teams with personaProjectId, skipping");
-    }
-
-    // Step 2: generate reports per user/team
+    // Persona pre-sync was here; the Persona module was removed when the
+    // app moved to a single shared database. Reports now generate over
+    // whatever attendance/mistakes/etc. already live in the DB.
     const allUsers = await db.getAllUsers();
     let totalGenerated = 0;
     let totalSkipped = 0;
@@ -815,108 +786,6 @@ export function initAutoCoaching() {
   return task;
 }
 
-// ============================================
-// Persona auto-sync — pulls attendance every N hours instead of just
-// on the 1st of each month. Combined with the existing monthly run
-// (which is the authoritative pre-report sync), this keeps attendance
-// numbers fresh throughout the month so the Dashboard / coaching
-// view never shows two-week-old data.
-// ============================================
-
-let isPersonaAutoSyncRunning = false;
-
-async function runPersonaAutoSync() {
-  if (isPersonaAutoSyncRunning) {
-    log.warn("[PersonaAutoSync] Already running — skipping this tick");
-    return;
-  }
-  if (!process.env.PERSONA_USERNAME || !process.env.PERSONA_PASSWORD) {
-    log.info("[PersonaAutoSync] Credentials not configured — skipped");
-    return;
-  }
-  isPersonaAutoSyncRunning = true;
-  try {
-    const { runPersonaSyncForTeam } = await import("./routers/personaSync");
-    const { getAllFmTeams } = await import("./db");
-
-    const allTeams = await getAllFmTeams();
-    // Skip teams without a configured personaProjectId — same guard
-    // the monthly pre-sync path uses. Without this, syncPersonaAttendance
-    // is called with projectId=null which means "no filter" and ingests
-    // EVERY worker visible to the Persona account, then fuzzy-matches
-    // them against same-name GPs across all teams. That risks
-    // overwriting one team's attendance with another team's data, plus
-    // burns Persona scrape time every 12h on teams that aren't even
-    // wired up to it.
-    const teams = allTeams.filter(t => (t as any).personaProjectId);
-    if (teams.length === 0) {
-      log.info("[PersonaAutoSync] No teams with personaProjectId — skipped");
-      return;
-    }
-    // Compute month/year in Europe/Tallinn to match the cron timezone.
-    // Without this, on a UTC-server host the Tallinn-midnight tick on
-    // the 1st falls in the PREVIOUS UTC month — so Date.getMonth()
-    // returns the wrong month and the sync would query stale data.
-    const tallinn = new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Europe/Tallinn",
-      year: "numeric",
-      month: "numeric",
-    }).formatToParts(new Date());
-    const month = Number(tallinn.find(p => p.type === "month")?.value ?? new Date().getMonth() + 1);
-    const year = Number(tallinn.find(p => p.type === "year")?.value ?? new Date().getFullYear());
-
-    let total = { matched: 0, unmatched: 0, failed: 0 };
-    for (const team of teams) {
-      try {
-        const r = await runPersonaSyncForTeam({
-          teamId: team.id,
-          month,
-          year,
-          triggeredById: null,
-          source: "scheduled",
-        });
-        if (r.status === "failed") {
-          total.failed++;
-        } else {
-          total.matched += r.matched;
-          total.unmatched += r.unmatched;
-        }
-      } catch (e) {
-        total.failed++;
-        log.warn(`[PersonaAutoSync] team ${team.id}: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-    log.info(`[PersonaAutoSync] teams=${teams.length} matched=${total.matched} unmatched=${total.unmatched} failed=${total.failed}`);
-  } catch (err) {
-    log.error("[PersonaAutoSync] failed", err instanceof Error ? err : new Error(String(err)));
-  } finally {
-    isPersonaAutoSyncRunning = false;
-  }
-}
-
-/**
- * Persona attendance auto-sync — every 12h by default. Persona tends
- * to have updated attendance on a 1-2 day delay so polling more often
- * than 12h doesn't gain anything.
- *
- * Override via PERSONA_SYNC_CRON ("off" disables).
- */
-export function initPersonaAutoSync() {
-  const expr = process.env.PERSONA_SYNC_CRON ?? "0 */12 * * *";
-  if (expr.toLowerCase() === "off") {
-    log.info("[PersonaAutoSync] disabled via env");
-    return null;
-  }
-  const cronExpr = cron.validate(expr) ? expr : "0 */12 * * *";
-  const task = cron.schedule(cronExpr, () => {
-    log.info("[PersonaAutoSync] Cron tick");
-    runPersonaAutoSync().catch(err =>
-      log.error("[PersonaAutoSync] unhandled error", err instanceof Error ? err : new Error(String(err))),
-    );
-  }, { timezone: "Europe/Tallinn" });
-  log.info(`[PersonaAutoSync] scheduled with cron "${cronExpr}"`);
-  return task;
-}
 
 // Export for manual triggering (e.g., from admin panel)
-export { runMonthlyReportGeneration, runStudioworksAutoSync, runAutoCoachingFromInsights, runPersonaAutoSync };
+export { runMonthlyReportGeneration, runStudioworksAutoSync, runAutoCoachingFromInsights };

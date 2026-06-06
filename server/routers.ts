@@ -24,13 +24,13 @@ import { invitationRouter } from "./routers/invitation";
 import { errorScreenshotRouter } from "./routers/errorScreenshot";
 import { attitudeScreenshotRouter } from "./routers/attitudeScreenshot";
 import { attendanceRouter } from "./routers/attendance";
-import { personaSyncRouter } from "./routers/personaSync";
 import { studioworksSyncRouter } from "./routers/studioworksSync";
 import { actionItemsRouter } from "./routers/actionItems";
 import { searchRouter } from "./routers/search";
 import { rubricRouter } from "./routers/rubric";
 import { assistantRouter } from "./routers/assistant";
 import { bonusRouter } from "./routers/bonus";
+import { leaderboardRouter } from "./routers/leaderboard";
 
 export const appRouter = router({
   system: systemRouter,
@@ -48,13 +48,13 @@ export const appRouter = router({
   errorScreenshot: errorScreenshotRouter,
   attitudeScreenshot: attitudeScreenshotRouter,
   attendance: attendanceRouter,
-  personaSync: personaSyncRouter,
   studioworksSync: studioworksSyncRouter,
   actionItems: actionItemsRouter,
   search: searchRouter,
   rubric: rubricRouter,
   assistant: assistantRouter,
   bonus: bonusRouter,
+  leaderboard: leaderboardRouter,
 });
 
 export type AppRouter = typeof appRouter;

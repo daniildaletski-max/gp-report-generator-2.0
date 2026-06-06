@@ -171,48 +171,15 @@ export async function findAllMatchingGPs(name: string, threshold: number = 0.5):
 }
 
 export async function findAllMatchingGPsByUser(name: string, threshold: number = 0.5, userId: number): Promise<FuzzyMatchResult[]> {
-  const db = await getDb();
-  if (!db) return [];
-  const allGPs = await db.select().from(gamePresenters).where(eq(gamePresenters.userId, userId));
-  const normalizedInput = normalizeName(name);
-  const matches: FuzzyMatchResult[] = [];
-  for (const gp of allGPs) {
-    const normalizedGPName = normalizeName(gp.name);
-    const similarity = calculateSimilarity(normalizedInput, normalizedGPName);
-    const isExactMatch = normalizedInput === normalizedGPName;
-    if (similarity >= threshold || isExactMatch) {
-      matches.push({ gamePresenter: gp, similarity, isExactMatch });
-    }
-  }
-  return matches.sort((a, b) => b.similarity - a.similarity);
+  // One shared database — match against every GP, ignore ownership.
+  void userId;
+  return findAllMatchingGPs(name, threshold);
 }
 
 export async function findBestMatchingGPByUser(name: string, threshold: number = 0.7, userId: number): Promise<FuzzyMatchResult | null> {
-  const db = await getDb();
-  if (!db) return null;
-  const allGPs = await db.select().from(gamePresenters).where(eq(gamePresenters.userId, userId));
-  const normalizedInput = normalizeName(name);
-  let bestMatch: FuzzyMatchResult | null = null;
-  for (const gp of allGPs) {
-    // Same realName-then-name fallback as the global matcher, with the
-    // token-based scorer added for word-order-independence.
-    const candidates: string[] = [];
-    if (gp.realName && gp.realName.trim()) candidates.push(gp.realName);
-    candidates.push(gp.name);
-    for (const candidate of candidates) {
-      const normalizedCandidate = normalizeName(candidate);
-      const isExactMatch = normalizedInput === normalizedCandidate;
-      if (isExactMatch) return { gamePresenter: gp, similarity: 1.0, isExactMatch: true };
-      const fullStringSim = calculateSimilarity(normalizedInput, normalizedCandidate);
-      const tokenSim = tokenSimilarity(normalizedInput, normalizedCandidate);
-      const similarity = Math.max(fullStringSim, tokenSim);
-      if (tokenSim >= 0.99) return { gamePresenter: gp, similarity: 1, isExactMatch: true };
-      if (similarity >= threshold && (!bestMatch || similarity > bestMatch.similarity)) {
-        bestMatch = { gamePresenter: gp, similarity, isExactMatch: false };
-      }
-    }
-  }
-  return bestMatch;
+  // One shared database — match against every GP, ignore ownership.
+  void userId;
+  return findBestMatchingGP(name, threshold);
 }
 
 // ============================================
@@ -266,9 +233,11 @@ export async function getAllGamePresenters(): Promise<GamePresenter[]> {
 }
 
 export async function getAllGamePresentersByUser(userId: number): Promise<GamePresenter[]> {
-  const db = await getDb();
-  if (!db) return [];
-  return await db.select().from(gamePresenters).where(eq(gamePresenters.userId, userId)).orderBy(gamePresenters.name);
+  // One shared database: every authenticated user sees every GP. The
+  // userId parameter is retained for call-site compatibility but no
+  // longer scopes the result.
+  void userId;
+  return getAllGamePresenters();
 }
 
 export async function getGamePresentersByTeam(teamId: number): Promise<GamePresenter[]> {
@@ -300,36 +269,33 @@ export async function deleteGamePresenter(gpId: number): Promise<boolean> {
 }
 
 // ============================================
-// OWNERSHIP VERIFICATION
+// EXISTENCE VERIFICATION
+//
+// One shared database: there is no per-team / per-user ownership any more,
+// so these only verify that the referenced GPs exist (guards against
+// dangling ids) — they no longer gate access by owner.
 // ============================================
 
-export async function verifyGpOwnership(gpIds: number[], teamId: number): Promise<{ valid: boolean; invalidGpIds: number[] }> {
+async function verifyGpsExist(gpIds: number[]): Promise<{ valid: boolean; invalidGpIds: number[] }> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const gps = await db.select({ id: gamePresenters.id, teamId: gamePresenters.teamId }).from(gamePresenters).where(inArray(gamePresenters.id, gpIds));
-  const invalidGpIds = gps.filter(gp => gp.teamId !== teamId).map(gp => gp.id);
+  const gps = await db.select({ id: gamePresenters.id }).from(gamePresenters).where(inArray(gamePresenters.id, gpIds));
   const foundIds = gps.map(gp => gp.id);
   const notFoundIds = gpIds.filter(id => !foundIds.includes(id));
-  return { valid: invalidGpIds.length === 0 && notFoundIds.length === 0, invalidGpIds: [...invalidGpIds, ...notFoundIds] };
+  return { valid: notFoundIds.length === 0, invalidGpIds: notFoundIds };
+}
+
+export async function verifyGpOwnership(gpIds: number[], teamId: number): Promise<{ valid: boolean; invalidGpIds: number[] }> {
+  void teamId;
+  return verifyGpsExist(gpIds);
 }
 
 export async function verifyGpOwnershipByUser(gpIds: number[], userId: number): Promise<{ valid: boolean; invalidGpIds: number[] }> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const gps = await db.select({ id: gamePresenters.id, userId: gamePresenters.userId }).from(gamePresenters).where(inArray(gamePresenters.id, gpIds));
-  const invalidGpIds = gps.filter(gp => gp.userId !== userId).map(gp => gp.id);
-  const foundIds = gps.map(gp => gp.id);
-  const notFoundIds = gpIds.filter(id => !foundIds.includes(id));
-  return { valid: invalidGpIds.length === 0 && notFoundIds.length === 0, invalidGpIds: [...invalidGpIds, ...notFoundIds] };
+  void userId;
+  return verifyGpsExist(gpIds);
 }
 
 export async function verifyGpOwnershipByTeam(gpIds: number[], teamId: number | null): Promise<{ valid: boolean; invalidGpIds: number[] }> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  if (!teamId) return { valid: false, invalidGpIds: gpIds };
-  const gps = await db.select({ id: gamePresenters.id, teamId: gamePresenters.teamId }).from(gamePresenters).where(inArray(gamePresenters.id, gpIds));
-  const invalidGpIds = gps.filter(gp => gp.teamId !== teamId).map(gp => gp.id);
-  const foundIds = gps.map(gp => gp.id);
-  const notFoundIds = gpIds.filter(id => !foundIds.includes(id));
-  return { valid: invalidGpIds.length === 0 && notFoundIds.length === 0, invalidGpIds: [...invalidGpIds, ...notFoundIds] };
+  void teamId;
+  return verifyGpsExist(gpIds);
 }

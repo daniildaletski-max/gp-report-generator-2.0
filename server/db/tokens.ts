@@ -51,9 +51,9 @@ export async function getGpAccessTokensByTeam(teamId: number) {
 }
 
 export async function getGpAccessTokensByUser(userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return await db.select({ token: gpAccessTokens, gp: gamePresenters }).from(gpAccessTokens).leftJoin(gamePresenters, eq(gpAccessTokens.gamePresenterId, gamePresenters.id)).where(eq(gamePresenters.userId, userId)).orderBy(desc(gpAccessTokens.createdAt));
+  // One shared database — every user sees every access token.
+  void userId;
+  return getAllGpAccessTokens();
 }
 
 export async function deactivateGpAccessToken(id: number): Promise<boolean> {

@@ -20,7 +20,7 @@ export type AppEvent =
   | { type: "evaluations.changed"; source?: string; userId?: number; teamId?: number; gpId?: number; count?: number }
   | { type: "attendance.changed"; source?: string; userId?: number; teamId?: number }
   | { type: "report.changed"; userId?: number; teamId?: number }
-  | { type: "sync.completed"; source: "studioworks" | "persona"; inserted?: number; userId?: number; teamId?: number };
+  | { type: "sync.completed"; source: "studioworks"; inserted?: number; userId?: number; teamId?: number };
 
 export type EventEnvelope = AppEvent & { at: string; seq: number };
 

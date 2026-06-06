@@ -915,7 +915,7 @@ export const studioworksSyncRouter = router({
    * Diagnostic probe — runs login + page load + extraction discovery
    * but DOES NOT write to DB. Returns per-step status + a screenshot
    * of the page on failure so the admin can see what's actually going
-   * on. Same UX pattern as personaSync.testConnection.
+   * on.
    */
   testConnection: adminProcedure.mutation(async () => {
     return await testStudioworksConnection();
@@ -1081,11 +1081,11 @@ export const studioworksSyncRouter = router({
       for (const raw of input.evaluations) {
         try {
           const { forceGpId, ...rest } = raw;
-          // Authorize the override: FMs can only force-match into GPs
-          // they own. Admins can force into anything.
-          if (forceGpId && ctx.user.role !== "admin") {
+          // One shared database — a forced override just needs the GP to
+          // exist; there is no per-team ownership any more.
+          if (forceGpId) {
             const gp = await db.getGamePresenterById(forceGpId);
-            if (!gp || (gp.userId && gp.userId !== ctx.user.id)) {
+            if (!gp) {
               details.push({
                 externalId: raw.externalId,
                 presenterName: raw.presenterName,
@@ -1093,26 +1093,12 @@ export const studioworksSyncRouter = router({
                 date: raw.date,
                 game: raw.game,
                 matched: false,
-                error: "Cannot map to a GP outside your team",
+                error: `forced GP id ${forceGpId} not found`,
               });
               continue;
             }
           }
           const d = await importOne(rest as ExtractedEvaluation, ctx.user.id, forceGpId);
-          // For FMs, only allow imports that match a GP they own.
-          // If the matched GP belongs to another FM, refuse —
-          // otherwise an FM could silently inject evaluations into
-          // someone else's team.
-          if (ctx.user.role !== "admin" && d.matched && d.gpId) {
-            const gp = await db.getGamePresenterById(d.gpId);
-            if (gp && gp.userId && gp.userId !== ctx.user.id) {
-              details.push({
-                ...d,
-                error: "Skipped: GP belongs to a different FM",
-              });
-              continue;
-            }
-          }
           details.push(d);
         } catch (e) {
           details.push({
@@ -1206,22 +1192,17 @@ export const studioworksSyncRouter = router({
           const month = d.getMonth() + 1;
           const year = d.getFullYear();
 
-          // GP resolution — explicit override (authorized) or fuzzy match.
-          let gpId: number; let gpName: string; let gpOwnerId: number | null = null;
+          // GP resolution — explicit override or fuzzy match. One shared
+          // database: any existing GP is a valid target.
+          let gpId: number; let gpName: string;
           if (ev.forceGpId) {
             const gp = await db.getGamePresenterById(ev.forceGpId);
             if (!gp) { details.push({ ...base, error: `forced GP id ${ev.forceGpId} not found` }); continue; }
-            if (ctx.user.role !== "admin" && gp.userId && gp.userId !== ctx.user.id) {
-              details.push({ ...base, error: "Cannot map to a GP outside your team" }); continue;
-            }
-            gpId = gp.id; gpName = gp.name; gpOwnerId = gp.userId ?? null;
+            gpId = gp.id; gpName = gp.name;
           } else {
             const match = await db.findBestMatchingGP(ev.presenterName, 0.7);
             if (!match) { details.push({ ...base, error: `no GP matched for "${ev.presenterName}"` }); continue; }
-            gpId = match.gamePresenter.id; gpName = match.gamePresenter.name; gpOwnerId = match.gamePresenter.userId ?? null;
-            if (ctx.user.role !== "admin" && gpOwnerId && gpOwnerId !== ctx.user.id) {
-              details.push({ ...base, matched: true, gpId, gpName, error: "Skipped: GP belongs to a different FM" }); continue;
-            }
+            gpId = match.gamePresenter.id; gpName = match.gamePresenter.name;
           }
 
           // Idempotency: build (and cache) the signature set for this bucket.

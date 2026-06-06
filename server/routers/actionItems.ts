@@ -20,16 +20,11 @@ const priorityEnum = z.enum(["low", "medium", "high"]);
 async function ensureCanReadGp(ctx: { user: { id: number; role: string } }, gpId: number) {
   const gp = await db.getGamePresenterById(gpId);
   if (!gp) throw new TRPCError({ code: "NOT_FOUND", message: "GP not found" });
-  if (ctx.user.role !== "admin" && gp.userId !== ctx.user.id) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-  }
   return gp;
 }
 
-async function ensureCanModify(ctx: { user: { id: number; role: string } }, itemId: number) {
-  if (ctx.user.role === "admin") return;
-  const ok = await db.verifyActionItemOwnership(itemId, ctx.user.id);
-  if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+async function ensureCanModify(_ctx: { user: { id: number; role: string } }, _itemId: number) {
+  // One shared database — any authenticated user can modify any item.
 }
 
 export const actionItemsRouter = router({
@@ -52,7 +47,7 @@ export const actionItemsRouter = router({
       return db.listActionItems({
         gpId,
         teamId,
-        userId: ctx.user.role === "admin" ? undefined : ctx.user.id,
+        userId: undefined, // one shared database — global
         includeAllStatuses: input?.includeAllStatuses,
       });
     }),
@@ -66,7 +61,7 @@ export const actionItemsRouter = router({
       return db.getActionItemStats({
         gpId: input?.gpId ?? undefined,
         teamId: input?.teamId ?? undefined,
-        userId: ctx.user.role === "admin" ? undefined : ctx.user.id,
+        userId: undefined, // one shared database — global
       });
     }),
 

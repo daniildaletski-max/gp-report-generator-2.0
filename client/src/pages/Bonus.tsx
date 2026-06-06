@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,27 +42,21 @@ function LevelBadge({ level }: { level: BonusRow["level"] }) {
 }
 
 export default function BonusPage() {
-  const { user } = useAuth();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
-  const [teamId, setTeamId] = useState<string>("all");
   // Inline edits keyed by gpId — dirty until saved.
   const [edits, setEdits] = useState<Record<number, { totalGames?: number; workedHours?: number }>>({});
 
   const utils = trpc.useUtils();
   useLiveEvents();
 
-  const { data: teams } = trpc.fmTeam.list.useQuery();
-  const listInput = useMemo(
-    () => ({ month, year, ...(teamId !== "all" ? { teamId: Number(teamId) } : {}) }),
-    [month, year, teamId],
-  );
-  const { data, isLoading, refetch } = trpc.bonus.list.useQuery(listInput);
+  // One shared database — the bonus board covers every GP company-wide.
+  const { data, isLoading, refetch } = trpc.bonus.list.useQuery({ month, year });
   const rows = (data ?? []) as BonusRow[];
 
   // Reset pending edits when the filter changes (avoids stale saves).
-  useEffect(() => { setEdits({}); }, [month, year, teamId]);
+  useEffect(() => { setEdits({}); }, [month, year]);
 
   const updateStats = trpc.gamePresenter.updateStats.useMutation();
 
@@ -147,15 +140,6 @@ export default function BonusPage() {
         icon={BadgeEuro}
         actions={
           <>
-            {teams && teams.length > 0 && (
-              <Select value={teamId} onValueChange={setTeamId}>
-                <SelectTrigger className="h-9 w-[160px]"><SelectValue placeholder="All teams" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{user?.role === "admin" ? "All teams" : "My teams"}</SelectItem>
-                  {teams.map(t => <SelectItem key={t.id} value={String(t.id)}>{t.teamName}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            )}
             {monthSel}
             {yearSel}
             <Button onClick={onSave} disabled={dirtyIds.length === 0 || saving} className="gap-1.5">
