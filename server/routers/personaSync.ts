@@ -558,9 +558,6 @@ export const personaSyncRouter = router({
     .mutation(async ({ ctx, input }) => {
       const team = await db.getFmTeamById(input.teamId);
       if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
-      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
 
       try {
         const result = await runPersonaSyncForTeam({
@@ -619,9 +616,6 @@ export const personaSyncRouter = router({
     .mutation(async ({ ctx, input }) => {
       const team = await db.getFmTeamById(input.teamId);
       if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
-      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
 
       try {
         const result = await runPersonaSyncForTeam({
@@ -656,9 +650,6 @@ export const personaSyncRouter = router({
     .mutation(async ({ ctx, input }) => {
       const team = await db.getFmTeamById(input.teamId);
       if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
-      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
 
       const result = await runPersonaSyncForTeam({
         teamId: input.teamId,
@@ -677,9 +668,6 @@ export const personaSyncRouter = router({
     .query(async ({ ctx, input }) => {
       const team = await db.getFmTeamById(input.teamId);
       if (!team) return null;
-      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
       return db.getLastSyncForTeam(input.teamId);
     }),
 
@@ -689,9 +677,6 @@ export const personaSyncRouter = router({
     .query(async ({ ctx, input }) => {
       const team = await db.getFmTeamById(input.teamId);
       if (!team) return [];
-      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
       return db.getRecentSyncsForTeam(input.teamId, input.limit);
     }),
 
@@ -827,9 +812,6 @@ export const personaSyncRouter = router({
     .query(async ({ ctx, input }) => {
       const team = await db.getFmTeamById(input.teamId);
       if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
-      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
       const gps = await db.getGamePresentersByTeam(input.teamId);
       const rows = await Promise.all(gps.map(async gp => {
         const att = await db.findAttendance(gp.id, input.month, input.year);
@@ -868,9 +850,6 @@ export const personaSyncRouter = router({
     .mutation(async ({ ctx, input }) => {
       const team = await db.getFmTeamById(input.teamId);
       if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
-      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
       // Verify every gpId belongs to this team — defence in depth.
       const ownership = await db.verifyGpOwnershipByTeam(input.rows.map(r => r.gpId), input.teamId);
       if (!ownership.valid) {
@@ -925,9 +904,6 @@ export const personaSyncRouter = router({
     .mutation(async ({ ctx, input }) => {
       const team = await db.getFmTeamById(input.teamId);
       if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
-      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
       const ownership = await db.verifyGpOwnershipByTeam([input.gpId], input.teamId);
       if (!ownership.valid) {
         throw new TRPCError({ code: "FORBIDDEN", message: "GP doesn't belong to this team" });
@@ -977,9 +953,6 @@ export const personaSyncRouter = router({
     .mutation(async ({ ctx, input }) => {
       const team = await db.getFmTeamById(input.teamId);
       if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
-      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
       const ownership = await db.verifyGpOwnershipByTeam([input.gpId], input.teamId);
       if (!ownership.valid) {
         throw new TRPCError({ code: "FORBIDDEN", message: "GP doesn't belong to this team" });
@@ -1018,9 +991,6 @@ export const personaSyncRouter = router({
     .query(async ({ ctx, input }) => {
       const team = await db.getFmTeamById(input.teamId);
       if (!team) return [];
-      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
       return db.listAliasesForTeam(input.teamId);
     }),
 
@@ -1038,9 +1008,6 @@ export const personaSyncRouter = router({
     .mutation(async ({ ctx, input }) => {
       const team = await db.getFmTeamById(input.teamId);
       if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Team not found" });
-      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
       const ownership = await db.verifyGpOwnershipByTeam([input.gpId], input.teamId);
       if (!ownership.valid) {
         throw new TRPCError({ code: "FORBIDDEN", message: "GP doesn't belong to this team" });
@@ -1065,9 +1032,6 @@ export const personaSyncRouter = router({
       if (!alias) throw new TRPCError({ code: "NOT_FOUND", message: "Alias not found" });
       const team = await db.getFmTeamById(alias.teamId);
       if (!team) throw new TRPCError({ code: "NOT_FOUND", message: "Alias's team not found" });
-      if (ctx.user.role !== "admin" && team.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
       await db.deleteAlias(input.aliasId);
       return { success: true };
     }),

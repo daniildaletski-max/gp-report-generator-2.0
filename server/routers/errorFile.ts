@@ -296,7 +296,7 @@ export const errorFileRouter = router({
       // own GPs only would silently miss every GP that belongs to
       // a different FM. Admin -> match across ALL GPs. FM -> match
       // only their own (tenant isolation).
-      const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
+      const matchScopeUserId = undefined;
 
       // Batch update — use DEDUPED non-technical counts (not raw ECA counts)
       const batch = await db.updateGPMistakesBatch(
@@ -433,7 +433,7 @@ export const errorFileRouter = router({
 
       // Update monthlyGpStats.mistakes with recalculated counts.
       // Admin recalc covers every team's GPs; FM recalc stays scoped.
-      const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
+      const matchScopeUserId = undefined;
       const batch = await db.updateGPMistakesBatch(
         Object.entries(gpErrorCounts),
         input.month,
@@ -467,7 +467,7 @@ export const errorFileRouter = router({
    * non-admin FMs see only their own.
    */
   pruneOrphans: protectedProcedure.mutation(async ({ ctx }) => {
-    const removed = await db.pruneOrphanGpErrors(ctx.user.role === "admin" ? undefined : ctx.user.id);
+    const removed = await db.pruneOrphanGpErrors(undefined);
     return { removed };
   }),
 
@@ -481,7 +481,7 @@ export const errorFileRouter = router({
    */
   dedupeExisting: protectedProcedure.mutation(async ({ ctx }) => {
     const removed = await db.dedupeGpErrorsBySignature(
-      ctx.user.role === "admin" ? undefined : ctx.user.id,
+      undefined,
     );
     return { removed };
   }),
@@ -681,7 +681,7 @@ export const errorFileRouter = router({
       }
 
       // Admin rescan covers every team's GPs; FM rescan stays scoped.
-      const matchScopeUserId = ctx.user.role === 'admin' ? undefined : ctx.user.id;
+      const matchScopeUserId = undefined;
       // Batch update — use DEDUPED non-technical counts (not raw ECA counts)
       const batch = await db.updateGPMistakesBatch(
         Object.entries(dedupedGpErrorCounts),

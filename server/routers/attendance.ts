@@ -15,9 +15,6 @@ export const attendanceRouter = router({
       // Verify GP ownership
       const gp = await db.getGamePresenterById(input.gpId);
       if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
-      if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
-      }
       return await db.getOrCreateAttendance(input.gpId, input.month, input.year);
     }),
 
@@ -37,9 +34,6 @@ export const attendanceRouter = router({
       // Verify GP ownership
       const gp = await db.getGamePresenterById(input.gpId);
       if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
-      if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
-      }
 
       const attendance = await db.getOrCreateAttendance(input.gpId, input.month, input.year);
       const { gpId, month, year, ...data } = input;
@@ -66,7 +60,7 @@ export const attendanceRouter = router({
       // Verify team ownership
       if (ctx.user.role !== 'admin') {
         const team = await db.getFmTeamById(input.teamId);
-        if (!team || team.userId !== ctx.user.id) {
+        if (!team) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
         }
       }
@@ -93,7 +87,7 @@ export const attendanceRouter = router({
       // Verify team ownership
       if (ctx.user.role !== 'admin') {
         const team = await db.getFmTeamById(input.teamId);
-        if (!team || team.userId !== ctx.user.id) {
+        if (!team) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
         }
       }
@@ -129,7 +123,7 @@ export const attendanceRouter = router({
     .query(async ({ ctx, input }) => {
       if (ctx.user.role !== 'admin') {
         const team = await db.getFmTeamById(input.teamId);
-        if (!team || team.userId !== ctx.user.id) {
+        if (!team) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
         }
       }

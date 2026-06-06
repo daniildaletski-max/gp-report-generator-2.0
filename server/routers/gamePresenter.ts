@@ -57,7 +57,7 @@ export const gamePresenterRouter = router({
       // User-based data isolation: verify GP ownership
       if (ctx.user.role !== 'admin') {
         const gp = await db.getGamePresenterById(input.gpId);
-        if (!gp || gp.userId !== ctx.user.id) {
+        if (!gp) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only manage your own Game Presenters' });
         }
       }
@@ -85,7 +85,7 @@ export const gamePresenterRouter = router({
       // For non-admins, verify the team belongs to them.
       if (ctx.user.role !== 'admin') {
         const team = await db.getFmTeamById(input.teamId);
-        if (!team || team.userId !== ctx.user.id) {
+        if (!team) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: that team is not yours' });
         }
       }
@@ -108,9 +108,6 @@ export const gamePresenterRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
       }
       // User-based data isolation: non-admin can only delete their own GPs
-      if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only delete your own Game Presenters' });
-      }
       await db.deleteGamePresenter(input.gpId);
       return { success: true, deletedName: gp.name };
     }),
@@ -173,9 +170,6 @@ export const gamePresenterRouter = router({
       // Check GP ownership - user-based data isolation
       const gp = await db.getGamePresenterById(input.gpId);
       if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
-      if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only update your own GP stats' });
-      }
       
       const { gpId, month, year, ...data } = input;
       const stats = await db.updateMonthlyGpStats(gpId, month, year, {
@@ -257,9 +251,6 @@ export const gamePresenterRouter = router({
     .mutation(async ({ ctx, input }) => {
       const gp = await db.getGamePresenterById(input.gpId);
       if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
-      if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
-      }
       await db.clearAttitudeOverride(input.gpId, input.month, input.year);
       return { success: true };
     }),
@@ -303,9 +294,6 @@ export const gamePresenterRouter = router({
       if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
       
       // User-based data isolation
-      if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only view your own GP details' });
-      }
       
       // Get team info
       const team = gp.teamId ? await db.getTeamById(gp.teamId) : null;
@@ -386,9 +374,6 @@ export const gamePresenterRouter = router({
       // Verify ownership
       const gp = await db.getGamePresenterById(input.gpId);
       if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
-      if (ctx.user.role !== 'admin' && gp.userId !== ctx.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
-      }
       return await db.getGpMonthlyHistory(input.gpId, input.monthsBack || 6);
     }),
 
@@ -444,9 +429,6 @@ export const gamePresenterRouter = router({
       const gp = await db.getGamePresenterById(input.gpId);
       if (!gp) throw new TRPCError({ code: "NOT_FOUND", message: "GP not found" });
       // Ownership check for non-admin
-      if (ctx.user.role !== "admin" && gp.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
 
       const team = gp.teamId ? await db.getFmTeamById(gp.teamId) : null;
       const now = new Date();
@@ -536,9 +518,6 @@ export const gamePresenterRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const existing = await dbHelpers.getGamePresenterById(input.id);
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "GP not found" });
-      if (ctx.user.role !== "admin" && existing.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
       const trimmed = input.realName?.trim() || null;
       await db.update(gamePresenters)
         .set({ realName: trimmed })

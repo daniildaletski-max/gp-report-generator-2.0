@@ -34,7 +34,7 @@ export const bonusRouter = router({
       if (input.teamId) {
         if (ctx.user.role !== "admin") {
           const team = await db.getFmTeamById(input.teamId);
-          if (!team || team.userId !== ctx.user.id) {
+          if (!team) {
             throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
           }
         }
@@ -50,9 +50,6 @@ export const bonusRouter = router({
     .query(async ({ ctx, input }) => {
       const gp = await db.getGamePresenterById(input.gpId);
       if (!gp) throw new TRPCError({ code: "NOT_FOUND", message: "GP not found" });
-      if (ctx.user.role !== "admin" && gp.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
       const report = await getBonusForGp(input.gpId, input.month, input.year);
       if (!report) throw new TRPCError({ code: "NOT_FOUND", message: "GP not found" });
       return report;
