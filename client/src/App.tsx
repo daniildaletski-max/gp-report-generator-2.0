@@ -68,7 +68,7 @@ const baseSidebarItems = [
 const adminSidebarItem = { href: "/admin", label: "Admin", icon: Shield };
 
 // FM-only item (Team Management)
-const fmSidebarItem = { href: "/admin", label: "Team", icon: Settings };
+const fmSidebarItem = { href: "/admin", label: "Settings", icon: Settings };
 
 // Admin-only rubric manager
 const rubricSidebarItem = { href: "/rubric", label: "Rubric", icon: SlidersHorizontal };
