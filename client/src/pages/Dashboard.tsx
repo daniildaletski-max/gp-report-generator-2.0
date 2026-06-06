@@ -255,21 +255,6 @@ export default function Dashboard() {
         icon={BarChart3}
         actions={
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          <Select
-            value={selectedTeamId?.toString() || "all"}
-            onValueChange={(val) => setSelectedTeamId(val === "all" ? undefined : Number(val))}
-          >
-            <SelectTrigger className="w-[140px] sm:w-[180px] bg-card border-border hover:border-primary/30 rounded-xl">
-              <Users className="h-4 w-4 mr-1.5 sm:mr-2 text-primary/70" />
-              <SelectValue placeholder="All Teams" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Teams</SelectItem>
-              {teams?.map(team => (
-                <SelectItem key={team.id} value={team.id.toString()}>{team.teamName}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(Number(v))}>
             <SelectTrigger className="w-[120px] sm:w-40 bg-card border-border hover:border-primary/30 rounded-xl">
               <Calendar className="h-4 w-4 mr-1.5 sm:mr-2 text-primary/70" />
@@ -922,20 +907,15 @@ function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { i
 // GP Month-over-Month Comparison Component
 // ======================================
 function GPMonthlyComparisonSection({ isMobile }: { isMobile: boolean }) {
-  const [selectedTeamId, setSelectedTeamId] = useState<number | undefined>(undefined);
   const [selectedGpId, setSelectedGpId] = useState<number | undefined>(undefined);
-  const { data: teams } = trpc.fmTeam.list.useQuery();
   const { data: gpList } = trpc.gamePresenter.list.useQuery();
   const { data: gpHistory, isLoading: isLoadingHistory } = trpc.gamePresenter.monthlyHistory.useQuery(
     { gpId: selectedGpId!, monthsBack: 6 },
     { enabled: !!selectedGpId }
   );
 
-  const filteredGPs = useMemo(() => {
-    if (!gpList) return [];
-    if (selectedTeamId) return gpList.filter(gp => gp.teamId === selectedTeamId);
-    return gpList;
-  }, [gpList, selectedTeamId]);
+  // One shared database — every GP is selectable, no team filter.
+  const filteredGPs = useMemo(() => gpList ?? [], [gpList]);
 
   return (
     <div className="space-y-4">
@@ -948,20 +928,6 @@ function GPMonthlyComparisonSection({ isMobile }: { isMobile: boolean }) {
           <p className="text-muted-foreground text-xs mt-0.5">Track individual GP performance across months</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Select
-            value={selectedTeamId?.toString() || "all"}
-            onValueChange={(val) => { setSelectedTeamId(val === "all" ? undefined : Number(val)); setSelectedGpId(undefined); }}
-          >
-            <SelectTrigger className="w-[160px] h-9 text-sm bg-card border-border rounded-xl">
-              <SelectValue placeholder="All Teams" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Teams</SelectItem>
-              {teams?.map(team => (
-                <SelectItem key={team.id} value={team.id.toString()}>{team.teamName}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select
             value={selectedGpId?.toString() || "none"}
             onValueChange={(val) => setSelectedGpId(val === "none" ? undefined : Number(val))}
