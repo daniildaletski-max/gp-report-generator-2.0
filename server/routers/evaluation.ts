@@ -6,6 +6,7 @@ import { storagePut } from "../storage";
 import { nanoid } from "nanoid";
 import { generateExcelAndEmail, extractEvaluationFromImage, parseEvaluationDate, EvaluationDataSchema } from "./_shared";
 import { SCORE_CONFIG } from "@shared/const";
+import { publish } from "../_core/events";
 
 export const evaluationRouter = router({
   uploadAndExtract: protectedProcedure
@@ -55,6 +56,9 @@ export const evaluationRouter = router({
         uploadedById: ctx.user.id,
         userId: ctx.user.id, // For data isolation - user sees their own uploads
       });
+
+      // Realtime: live-update this user's open screens.
+      publish({ type: "evaluations.changed", source: "upload", userId: ctx.user.id, gpId: gp.id });
 
       return {
         success: true,
@@ -150,6 +154,8 @@ export const evaluationRouter = router({
         uploadedById: ctx.user.id,
         userId: ctx.user.id,
       });
+
+      publish({ type: "evaluations.changed", source: "manual", userId: ctx.user.id, gpId: evaluation.gamePresenterId });
 
       return { success: true, evaluation };
     }),

@@ -10,18 +10,21 @@ export type TrpcContext = {
   user: User | null;
 };
 
-export async function createContext(
-  opts: CreateExpressContextOptions
-): Promise<TrpcContext> {
+/**
+ * Resolve the authenticated user from a raw Express request, applying the
+ * same DB re-fetch + env admin-override rules tRPC uses. Shared by
+ * `createContext` and the SSE endpoint so realtime auth and API auth never
+ * diverge. Returns null for unauthenticated / failed auth.
+ */
+export async function authenticateUser(
+  req: CreateExpressContextOptions["req"]
+): Promise<User | null> {
   let user: User | null = null;
-
   try {
-    user = await sdk.authenticateRequest(opts.req);
+    user = await sdk.authenticateRequest(req);
     // Re-fetch the user from the DB so role/email changes (e.g. an
     // admin promoting another user) take effect immediately instead
-    // of waiting for the auth-SDK token cache to expire. Without
-    // this a freshly-promoted admin keeps hitting "Access denied"
-    // until they sign out and sign back in.
+    // of waiting for the auth-SDK token cache to expire.
     if (user?.id) {
       try {
         const fresh = await getUserById(user.id);
@@ -30,14 +33,8 @@ export async function createContext(
         // Best-effort — fall back to the SDK-cached user on DB error.
       }
     }
-    // Env-based admin override — any user whose openId matches
-    // OWNER_OPEN_ID, or whose email is listed in ADMIN_EMAILS, is
-    // treated as admin without touching the DB. Lets the system
-    // creator keep admin access across DB resets and bootstrap a
-    // brand-new install before any DB-level admin exists. The
-    // existing ownerOpenId path on user-upsert only fires on the
-    // FIRST sign-in, so without this an owner whose row was created
-    // before OWNER_OPEN_ID was wired up stays role='user' forever.
+    // Env-based admin override — OWNER_OPEN_ID / ADMIN_EMAILS treated as
+    // admin without touching the DB (bootstrap + survives DB resets).
     if (user) {
       const isOwnerByOpenId = ENV.ownerOpenId && user.openId === ENV.ownerOpenId;
       const isAdminByEmail = !!user.email && ENV.adminEmails.includes(user.email.trim().toLowerCase());
@@ -45,11 +42,17 @@ export async function createContext(
         user = { ...user, role: "admin" };
       }
     }
-  } catch (error) {
+  } catch {
     // Authentication is optional for public procedures.
     user = null;
   }
+  return user;
+}
 
+export async function createContext(
+  opts: CreateExpressContextOptions
+): Promise<TrpcContext> {
+  const user = await authenticateUser(opts.req);
   return {
     req: opts.req,
     res: opts.res,
