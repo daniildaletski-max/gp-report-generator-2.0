@@ -6,6 +6,7 @@ import { storagePut } from "../storage";
 import { nanoid } from "nanoid";
 import { generateExcelAndEmail, extractEvaluationFromImage, parseEvaluationDate, EvaluationDataSchema } from "./_shared";
 import { SCORE_CONFIG } from "@shared/const";
+import { assessEvaluationQuality, DEFAULT_RUBRIC_V1 } from "@shared/scoring";
 
 export const evaluationRouter = router({
   uploadAndExtract: protectedProcedure
@@ -62,6 +63,221 @@ export const evaluationRouter = router({
         extractedData,
         gamePresenter: gp,
       };
+    }),
+
+  /**
+   * Bulk extract — phase 1 of the bulk-AI-evaluation flow. Accepts up to
+   * 10 screenshots at once, uploads each to storage, runs the existing
+   * vision-LLM extractor in parallel (concurrency-capped) and fuzzy-finds
+   * a candidate GP WITHOUT creating one. Returns preview rows that the
+   * client renders in a review grid — nothing is written to the
+   * `evaluations` table here. Phase 2 (`bulkSave`) commits the confirmed
+   * rows. Splitting the heavy single-shot `uploadAndExtract` into
+   * extract → review → save is what turns 5-evals/min into 40+.
+   */
+  bulkExtract: protectedProcedure
+    .input(z.object({
+      files: z.array(z.object({
+        clientId: z.string().min(1).max(64), // FM-side row id, echoed back so the grid can re-anchor
+        filename: z.string().max(255).regex(/^[\w\-. ]+$/),
+        mimeType: z.string().refine(m => ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'].includes(m), {
+          message: 'Invalid image type. Allowed: PNG, JPEG, WebP',
+        }),
+        imageBase64: z.string().max(10 * 1024 * 1024),
+      })).min(1).max(10),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const CONCURRENCY = 4; // Forge / gemini-2.5-flash handles ~5 concurrent calls comfortably
+      const results: Array<{
+        clientId: string;
+        ok: boolean;
+        error?: string;
+        preview?: {
+          screenshotUrl: string;
+          screenshotKey: string;
+          extracted: z.infer<typeof EvaluationDataSchema>;
+          parsedDate: Date | null;
+          suggestedGp: { id: number; name: string; similarity: number; isExactMatch: boolean } | null;
+          quality: { needsReview: boolean; reason: string | null };
+        };
+      }> = [];
+
+      const processOne = async (file: typeof input.files[number]) => {
+        try {
+          const fileKey = `evaluations/${ctx.user.id}/${nanoid()}-${db.sanitizeString(file.filename, 100)}`;
+          const buffer = Buffer.from(file.imageBase64, "base64");
+          const { url: imageUrl } = await storagePut(fileKey, buffer, file.mimeType);
+          const extracted = await extractEvaluationFromImage(imageUrl);
+          const parsedDate = parseEvaluationDate(extracted.date);
+
+          // Fuzzy-find a GP candidate but DO NOT create one — confirmation
+          // happens in the review grid, so a typo in the screenshot doesn't
+          // spawn a stray "Aleeexandra" record.
+          const match = await db.findBestMatchingGPByUser(extracted.presenterName, 0.5, ctx.user.id);
+          const suggestedGp = match ? {
+            id: match.gamePresenter.id,
+            name: match.gamePresenter.name,
+            similarity: match.similarity,
+            isExactMatch: match.isExactMatch,
+          } : null;
+
+          // Pre-compute the same review flag createEvaluation would set, so
+          // the FM sees the warning in the grid (not just later in /review).
+          const quality = assessEvaluationQuality(
+            {
+              hair: extracted.hair?.score,
+              makeup: extracted.makeup?.score,
+              outfit: extracted.outfit?.score,
+              posture: extracted.posture?.score,
+              dealingStyle: extracted.dealingStyle?.score,
+              gamePerformance: extracted.gamePerformance?.score,
+            },
+            DEFAULT_RUBRIC_V1,
+            { providedTotal: extracted.totalScore },
+          );
+
+          results.push({
+            clientId: file.clientId,
+            ok: true,
+            preview: {
+              screenshotUrl: imageUrl,
+              screenshotKey: fileKey,
+              extracted,
+              parsedDate,
+              suggestedGp,
+              quality: {
+                needsReview: quality.needsReview,
+                reason: quality.reasons.join(" ") || null,
+              },
+            },
+          });
+        } catch (err) {
+          results.push({
+            clientId: file.clientId,
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      };
+
+      // Concurrency-capped fan-out
+      for (let i = 0; i < input.files.length; i += CONCURRENCY) {
+        const chunk = input.files.slice(i, i + CONCURRENCY);
+        await Promise.all(chunk.map(processOne));
+      }
+
+      return { results };
+    }),
+
+  /**
+   * Bulk save — phase 2. Takes the confirmed (and possibly edited) preview
+   * rows and writes real evaluation rows via the shared createEvaluation
+   * (which derives totals, tags the rubric version and re-runs the quality
+   * check). Each row carries its own resolved GP: either an existing GP id
+   * (chosen in the grid) or `createGpName` to spawn a new one. Per-row
+   * errors are collected so one bad row doesn't sink the whole batch.
+   */
+  bulkSave: protectedProcedure
+    .input(z.object({
+      rows: z.array(z.object({
+        clientId: z.string().min(1).max(64),
+        // GP resolution: either an existing id, or a name to create.
+        gpId: z.number().positive().optional(),
+        createGpName: z.string().min(1).max(255).optional(),
+        evaluatorName: z.string().max(255).optional(),
+        evaluationDate: z.coerce.date(),
+        game: z.string().max(100).optional(),
+        hairScore: z.number().min(0).max(SCORE_CONFIG.hair.max).optional(),
+        hairComment: z.string().max(1000).optional(),
+        makeupScore: z.number().min(0).max(SCORE_CONFIG.makeup.max).optional(),
+        makeupComment: z.string().max(1000).optional(),
+        outfitScore: z.number().min(0).max(SCORE_CONFIG.outfit.max).optional(),
+        outfitComment: z.string().max(1000).optional(),
+        postureScore: z.number().min(0).max(SCORE_CONFIG.posture.max).optional(),
+        postureComment: z.string().max(1000).optional(),
+        dealingStyleScore: z.number().min(0).max(SCORE_CONFIG.dealingStyle.max).optional(),
+        dealingStyleComment: z.string().max(1000).optional(),
+        gamePerformanceScore: z.number().min(0).max(SCORE_CONFIG.gamePerformance.max).optional(),
+        gamePerformanceComment: z.string().max(1000).optional(),
+        totalScore: z.number().min(0).max(100).optional(),
+        screenshotUrl: z.string().max(2048).optional(),
+        screenshotKey: z.string().max(512).optional(),
+      })).min(1).max(50),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const created: Array<{ clientId: string; evaluationId: number; gpId: number; needsReview: boolean }> = [];
+      const failed: Array<{ clientId: string; error: string }> = [];
+
+      for (const row of input.rows) {
+        try {
+          if (!row.gpId && !row.createGpName) {
+            throw new Error("Either gpId or createGpName is required");
+          }
+          // Resolve GP. Existing id is verified for ownership; otherwise
+          // fall through to findOrCreate (idempotent — won't double up if
+          // another row already created the same name in this batch).
+          let gpId = row.gpId;
+          if (gpId) {
+            const gp = await db.getGamePresenterById(gpId);
+            if (!gp) throw new Error("GP not found");
+            if (ctx.user.role !== "admin" && gp.userId !== ctx.user.id) {
+              throw new Error("Access denied to this GP");
+            }
+          } else {
+            const gp = await db.findOrCreateGamePresenter(
+              db.sanitizeString(row.createGpName!, 255),
+              undefined,
+              ctx.user.id,
+            );
+            gpId = gp.id;
+          }
+
+          const evaluation = await db.createEvaluation({
+            gamePresenterId: gpId!,
+            evaluatorName: row.evaluatorName ? db.sanitizeString(row.evaluatorName, 255) : null,
+            evaluationDate: row.evaluationDate,
+            game: row.game ? db.sanitizeString(row.game, 100) : null,
+            totalScore: row.totalScore ?? null,
+            hairScore: row.hairScore ?? null,
+            hairMaxScore: SCORE_CONFIG.hair.max,
+            hairComment: row.hairComment ? db.sanitizeString(row.hairComment, 1000) : null,
+            makeupScore: row.makeupScore ?? null,
+            makeupMaxScore: SCORE_CONFIG.makeup.max,
+            makeupComment: row.makeupComment ? db.sanitizeString(row.makeupComment, 1000) : null,
+            outfitScore: row.outfitScore ?? null,
+            outfitMaxScore: SCORE_CONFIG.outfit.max,
+            outfitComment: row.outfitComment ? db.sanitizeString(row.outfitComment, 1000) : null,
+            postureScore: row.postureScore ?? null,
+            postureMaxScore: SCORE_CONFIG.posture.max,
+            postureComment: row.postureComment ? db.sanitizeString(row.postureComment, 1000) : null,
+            dealingStyleScore: row.dealingStyleScore ?? null,
+            dealingStyleMaxScore: SCORE_CONFIG.dealingStyle.max,
+            dealingStyleComment: row.dealingStyleComment ? db.sanitizeString(row.dealingStyleComment, 1000) : null,
+            gamePerformanceScore: row.gamePerformanceScore ?? null,
+            gamePerformanceMaxScore: SCORE_CONFIG.gamePerformance.max,
+            gamePerformanceComment: row.gamePerformanceComment ? db.sanitizeString(row.gamePerformanceComment, 1000) : null,
+            screenshotUrl: row.screenshotUrl ?? null,
+            screenshotKey: row.screenshotKey ?? null,
+            rawExtractedData: { source: "bulk_ai" } as any,
+            uploadedById: ctx.user.id,
+            userId: ctx.user.id,
+          });
+
+          created.push({
+            clientId: row.clientId,
+            evaluationId: evaluation.id,
+            gpId: gpId!,
+            needsReview: (evaluation.needsReview ?? 0) === 1,
+          });
+        } catch (err) {
+          failed.push({
+            clientId: row.clientId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      return { created, failed };
     }),
 
   /**
