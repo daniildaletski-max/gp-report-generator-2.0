@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, ShieldAlert, CalendarCheck, Zap, SlidersHorizontal, Sun, Sparkles, ScanLine } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, ShieldAlert, CalendarCheck, Zap, SlidersHorizontal, Sun, Sparkles, ScanLine, BadgeEuro } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -29,6 +29,7 @@ const Rubric = lazy(() => import("./pages/Rubric"));
 const Today = lazy(() => import("./pages/Today"));
 const Assistant = lazy(() => import("./pages/Assistant"));
 const UploadBulk = lazy(() => import("./pages/UploadBulk"));
+const Bonus = lazy(() => import("./pages/Bonus"));
 
 function PageLoader() {
   return (
@@ -53,6 +54,7 @@ const baseSidebarItems = [
   { href: "/evaluations", label: "Evaluations", icon: FileCheck },
   { href: "/reports", label: "Reports", icon: FileSpreadsheet },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck },
+  { href: "/bonus", label: "Bonus", icon: BadgeEuro },
   // Placed after the first five so the mobile bottom nav (slice 0..5)
   // is unchanged; these live in the desktop sidebar.
   { href: "/upload-bulk", label: "Bulk AI", icon: ScanLine },
@@ -145,6 +147,11 @@ function DashboardRoutes() {
                 <Attendance />
               </RouteErrorBoundary>
             </Route>
+            <Route path="/bonus">
+              <RouteErrorBoundary fallbackTitle="Bonus failed to load">
+                <Bonus />
+              </RouteErrorBoundary>
+            </Route>
             <Route path="/workspace">
               <RouteErrorBoundary fallbackTitle="Workspace failed to load">
                 <Workspace />
@@ -203,6 +210,7 @@ function Router() {
       <Route path="/reports" component={DashboardRoutes} />
       <Route path="/admin" component={DashboardRoutes} />
       <Route path="/attendance" component={DashboardRoutes} />
+      <Route path="/bonus" component={DashboardRoutes} />
       <Route path="/workspace" component={DashboardRoutes} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

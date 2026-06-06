@@ -30,6 +30,7 @@ import { actionItemsRouter } from "./routers/actionItems";
 import { searchRouter } from "./routers/search";
 import { rubricRouter } from "./routers/rubric";
 import { assistantRouter } from "./routers/assistant";
+import { bonusRouter } from "./routers/bonus";
 
 export const appRouter = router({
   system: systemRouter,
@@ -53,6 +54,7 @@ export const appRouter = router({
   search: searchRouter,
   rubric: rubricRouter,
   assistant: assistantRouter,
+  bonus: bonusRouter,
 });
 
 export type AppRouter = typeof appRouter;

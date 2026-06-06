@@ -360,6 +360,12 @@ export const monthlyGpStats = mysqlTable("monthly_gp_stats", {
   attitudeIsManual: int("attitudeIsManual").default(0),
   mistakes: int("mistakes").default(0), // Count of mistakes
   totalGames: int("totalGames").default(0), // Total games played for bonus calculation
+  /**
+   * Worked hours in the month — the multiplier in the performance bonus
+   * (bonus = rate × worked hours). NULL = not recorded; the bonus engine
+   * then derives an estimate from attendance (base month ± shift deltas).
+   */
+  workedHours: int("workedHours"),
   notes: text("notes"), // Optional notes
   updatedById: int("updatedById"),
   userId: int("userId"), // Owner of this stats record - for user data isolation
