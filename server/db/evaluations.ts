@@ -198,11 +198,9 @@ export async function getEvaluationsByMonth(year: number, month: number): Promis
 }
 
 export async function getEvaluationsByMonthAndUser(year: number, month: number, userId: number): Promise<Evaluation[]> {
-  const db = await getDb();
-  if (!db) return [];
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0, 23, 59, 59);
-  return await db.select().from(evaluations).where(and(gte(evaluations.evaluationDate, startDate), lte(evaluations.evaluationDate, endDate), or(eq(evaluations.uploadedById, userId), eq(evaluations.userId, userId)))).orderBy(evaluations.evaluationDate);
+  // One shared database — month scope only, no per-user filter.
+  void userId;
+  return getEvaluationsByMonth(year, month);
 }
 
 export async function getAllEvaluations(): Promise<Evaluation[]> {
@@ -212,9 +210,9 @@ export async function getAllEvaluations(): Promise<Evaluation[]> {
 }
 
 export async function getAllEvaluationsByUser(userId: number): Promise<Evaluation[]> {
-  const db = await getDb();
-  if (!db) return [];
-  return await db.select().from(evaluations).where(eq(evaluations.userId, userId)).orderBy(desc(evaluations.createdAt));
+  // One shared database — every user sees every evaluation.
+  void userId;
+  return getAllEvaluations();
 }
 
 export async function getEvaluationWithGP(evaluationId: number) {
@@ -238,13 +236,9 @@ export async function getEvaluationsWithGP() {
 }
 
 export async function getEvaluationsWithGPByUser(userId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return await db.select({ evaluation: evaluations, gamePresenter: gamePresenters })
-    .from(evaluations)
-    .leftJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
-    .where(or(eq(evaluations.uploadedById, userId), eq(evaluations.userId, userId)))
-    .orderBy(desc(evaluations.createdAt));
+  // One shared database — every user sees every evaluation.
+  void userId;
+  return getEvaluationsWithGP();
 }
 
 export async function getEvaluationsByTeam(teamId: number) {
@@ -338,15 +332,14 @@ export async function getGpEvaluationsForPortal(gpId: number) {
  * `userId` is given (non-admin), unscoped for admins.
  */
 export async function getEvaluationsNeedingReview(userId?: number) {
+  // One shared database — the review queue is global.
+  void userId;
   const db = await getDb();
   if (!db) return [];
-  const cond = userId == null
-    ? eq(evaluations.needsReview, 1)
-    : and(eq(evaluations.needsReview, 1), or(eq(evaluations.userId, userId), eq(evaluations.uploadedById, userId)));
   return await db.select({ evaluation: evaluations, gamePresenter: gamePresenters })
     .from(evaluations)
     .leftJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
-    .where(cond)
+    .where(eq(evaluations.needsReview, 1))
     .orderBy(desc(evaluations.createdAt));
 }
 

@@ -89,22 +89,15 @@ export async function getAllAttitudeScreenshots(month?: number, year?: number, g
 }
 
 export async function getAttitudeScreenshotsByUser(month: number, year: number, userId: number, gamePresenterId?: number): Promise<AttitudeScreenshot[]> {
-  const db = await getDb();
-  if (!db) return [];
-  const conditions: any[] = [attitudeMonthFilter(month, year), eq(attitudeScreenshots.uploadedById, userId)];
-  if (gamePresenterId) conditions.push(eq(attitudeScreenshots.gamePresenterId, gamePresenterId));
-  return await db.select().from(attitudeScreenshots).where(and(...conditions)).orderBy(desc(attitudeScreenshots.createdAt));
+  // One shared database — every user sees every attitude entry.
+  void userId;
+  return getAttitudeScreenshots(month, year, gamePresenterId);
 }
 
 export async function getAllAttitudeScreenshotsByUser(userId: number, month?: number, year?: number, gamePresenterId?: number): Promise<AttitudeScreenshot[]> {
-  const db = await getDb();
-  if (!db) return [];
-  try {
-    const conditions: any[] = [eq(attitudeScreenshots.uploadedById, userId)];
-    if (month && year) conditions.push(attitudeMonthFilter(month, year));
-    if (gamePresenterId) conditions.push(eq(attitudeScreenshots.gamePresenterId, gamePresenterId));
-    return await db.select().from(attitudeScreenshots).where(and(...conditions)).orderBy(desc(attitudeScreenshots.createdAt));
-  } catch (error) { log.error("Error getting attitude screenshots by user", error instanceof Error ? error : undefined); return []; }
+  // One shared database — every user sees every attitude entry.
+  void userId;
+  return getAllAttitudeScreenshots(month, year, gamePresenterId);
 }
 
 export async function deleteAttitudeScreenshotByUser(id: number, userId: number): Promise<boolean> {

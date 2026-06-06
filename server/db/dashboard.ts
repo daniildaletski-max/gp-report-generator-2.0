@@ -93,36 +93,9 @@ export async function getDashboardStatsByTeam(month?: number, year?: number, tea
 }
 
 export async function getDashboardStatsByUser(month?: number, year?: number, userId?: number) {
-  const db = await getDb();
-  if (!db) return EMPTY_DASHBOARD;
-
-  const gpCountQuery = userId
-    ? await db.select({ count: sql<number>`COUNT(*)` }).from(gamePresenters).where(eq(gamePresenters.userId, userId))
-    : await db.select({ count: sql<number>`COUNT(*)` }).from(gamePresenters);
-  const evalCountQuery = userId
-    ? await db.select({ count: sql<number>`COUNT(*)` }).from(evaluations).where(eq(evaluations.userId, userId))
-    : await db.select({ count: sql<number>`COUNT(*)` }).from(evaluations);
-  const reportCountQuery = userId
-    ? await db.select({ count: sql<number>`COUNT(*)` }).from(reports).where(eq(reports.userId, userId))
-    : await db.select({ count: sql<number>`COUNT(*)` }).from(reports);
-
-  const targetMonth = month || new Date().getMonth() + 1;
-  const targetYear = year || new Date().getFullYear();
-
-  const thisMonthConditions: any[] = [sql`MONTH(${evaluations.evaluationDate}) = ${targetMonth}`, sql`YEAR(${evaluations.evaluationDate}) = ${targetYear}`];
-  if (userId) thisMonthConditions.push(eq(evaluations.userId, userId));
-  const thisMonthGPsResult = await db.select({ count: sql<number>`COUNT(DISTINCT ${evaluations.gamePresenterId})` }).from(evaluations).where(and(...thisMonthConditions));
-
-  const gpStatsConditions: any[] = [sql`MONTH(${evaluations.evaluationDate}) = ${targetMonth}`, sql`YEAR(${evaluations.evaluationDate}) = ${targetYear}`];
-  if (userId) gpStatsConditions.push(eq(evaluations.userId, userId));
-  const gpStatsRaw = await getGpStatsQuery(db, gpStatsConditions);
-
-  return {
-    totalGPs: gpCountQuery[0].count, totalEvaluations: evalCountQuery[0].count, totalReports: reportCountQuery[0].count,
-    thisMonthGPs: thisMonthGPsResult[0]?.count || 0,
-    gpStats: formatGpStats(gpStatsRaw), recentEvaluations: [],
-    selectedMonth: targetMonth, selectedYear: targetYear,
-  };
+  // One shared database — dashboard stats are global, no per-user scope.
+  void userId;
+  return getDashboardStats(month, year);
 }
 
 // ============================================
@@ -162,22 +135,13 @@ export async function getMonthlyTrendData(months: number = 6, teamId?: number, u
     monthList.push({ month: d.getMonth() + 1, year: d.getFullYear() });
   }
 
-  let teamIds: number[] | undefined;
-  if (userId && !teamId) {
-    const userTeams = await db.select({ id: fmTeams.id }).from(fmTeams).where(eq(fmTeams.userId, userId));
-    teamIds = userTeams.map(t => t.id);
-    if (teamIds.length === 0) return monthList.map(m => ({
-      month: m.month, year: m.year,
-      label: `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m.month - 1]} ${m.year}`,
-      totalEvaluations: 0, uniqueGPs: 0, avgTotalScore: 0, avgAppearanceScore: 0, avgPerformanceScore: 0, topScore: 0, lowScore: 0,
-    }));
-  }
+  // One shared database — trends are global; the userId param is ignored.
+  void userId;
 
   const results = [];
   for (const m of monthList) {
     const conditions: any[] = [sql`MONTH(${evaluations.evaluationDate}) = ${m.month}`, sql`YEAR(${evaluations.evaluationDate}) = ${m.year}`];
     if (teamId) conditions.push(eq(gamePresenters.teamId, teamId));
-    else if (teamIds && teamIds.length > 0) conditions.push(inArray(gamePresenters.teamId, teamIds));
 
     const statsRaw = await db.select({
       totalEvaluations: sql<number>`COUNT(*)`, uniqueGPs: sql<number>`COUNT(DISTINCT ${evaluations.gamePresenterId})`,
@@ -202,14 +166,16 @@ export async function getMonthlyTrendData(months: number = 6, teamId?: number, u
 }
 
 export async function getTeamComparisonData(userId: number, teamIds?: number[]) {
+  // One shared database — compare across every team; userId no longer scopes.
+  void userId;
   const db = await getDb();
   if (!db) return [];
-  const teams = await db.select().from(fmTeams).where(eq(fmTeams.userId, userId));
+  const teams = await db.select().from(fmTeams);
   if (teams.length === 0) return [];
   const selectedTeams = teamIds && teamIds.length > 0 ? teams.filter(t => teamIds.includes(t.id)) : teams;
   const results = [];
   for (const team of selectedTeams) {
-    const gps = await db.select().from(gamePresenters).where(and(eq(gamePresenters.teamId, team.id), eq(gamePresenters.userId, userId)));
+    const gps = await db.select().from(gamePresenters).where(eq(gamePresenters.teamId, team.id));
     if (gps.length === 0) {
       results.push({ teamId: team.id, teamName: team.teamName, floorManager: team.floorManagerName, gpCount: 0, avgTotalScore: 0, avgAppearanceScore: 0, avgPerformanceScore: 0, totalEvaluations: 0, topScore: 0, lowScore: 0, gps: [] });
       continue;
@@ -219,13 +185,13 @@ export async function getTeamComparisonData(userId: number, teamIds?: number[]) 
       avgTotal: sql<number>`AVG(${evaluations.totalScore})`, avgAppearance: sql<number>`AVG(${evaluations.appearanceScore})`,
       avgPerformance: sql<number>`AVG(${evaluations.gamePerformanceTotalScore})`, totalEvals: sql<number>`COUNT(*)`,
       topScore: sql<number>`MAX(${evaluations.totalScore})`, lowScore: sql<number>`MIN(${evaluations.totalScore})`,
-    }).from(evaluations).where(and(inArray(evaluations.gamePresenterId, gpIds), eq(evaluations.userId, userId)));
+    }).from(evaluations).where(inArray(evaluations.gamePresenterId, gpIds));
     const stats = teamStats[0];
     const gpStats = await db.select({
       gpId: evaluations.gamePresenterId, avgTotal: sql<number>`AVG(${evaluations.totalScore})`,
       avgAppearance: sql<number>`AVG(${evaluations.appearanceScore})`, avgPerformance: sql<number>`AVG(${evaluations.gamePerformanceTotalScore})`,
       evalCount: sql<number>`COUNT(*)`,
-    }).from(evaluations).where(and(inArray(evaluations.gamePresenterId, gpIds), eq(evaluations.userId, userId))).groupBy(evaluations.gamePresenterId);
+    }).from(evaluations).where(inArray(evaluations.gamePresenterId, gpIds)).groupBy(evaluations.gamePresenterId);
     const gpData = gpStats.map(gs => {
       const gp = gps.find(g => g.id === gs.gpId);
       return {
@@ -330,20 +296,15 @@ export async function computeDashboardInsights(opts: {
   // caller), every branch ALSO filters by that userId so a crafted teamId
   // can't pull another tenant's data — defense in depth on top of the
   // router-level ownership check.
+  // One shared database — insights are global. We still group by team
+  // internally (the team rows remain as a coarse grouping), but the
+  // caller's userId no longer scopes which teams are considered.
+  void opts.userId;
   let teamRows: { id: number; teamName: string }[];
   try {
-    if (opts.teamId && opts.userId) {
-      teamRows = await db.select({ id: fmTeams.id, teamName: fmTeams.teamName })
-        .from(fmTeams)
-        .where(and(eq(fmTeams.id, opts.teamId), eq(fmTeams.userId, opts.userId)))
-        .limit(1);
-    } else if (opts.teamId) {
-      // Admin path — no userId scoping needed.
+    if (opts.teamId) {
       teamRows = await db.select({ id: fmTeams.id, teamName: fmTeams.teamName })
         .from(fmTeams).where(eq(fmTeams.id, opts.teamId)).limit(1);
-    } else if (opts.userId) {
-      teamRows = await db.select({ id: fmTeams.id, teamName: fmTeams.teamName })
-        .from(fmTeams).where(eq(fmTeams.userId, opts.userId));
     } else {
       teamRows = await db.select({ id: fmTeams.id, teamName: fmTeams.teamName }).from(fmTeams);
     }
@@ -649,34 +610,11 @@ export async function getDashboardActivityFeed(opts: {
   const syncHref: string | undefined = isAdmin ? "/admin?tab=persona" : undefined;
   const errorFileHref: string | undefined = isAdmin ? "/admin?tab=errors" : undefined;
 
-  // Resolve which teamIds bound the query. Three cases:
-  //   - explicit teamId given → use just that one (after ownership check)
-  //   - non-admin (userId set) → all teams owned by that user
-  //   - admin / no scope → no filter
-  let teamIds: number[] | undefined;
-  try {
-    if (opts.teamId) {
-      if (opts.userId) {
-        // Defense-in-depth: confirm the team belongs to the user before
-        // including it. Router-level check already does this; double-up
-        // here so any future internal caller still gets isolation.
-        const owned = await db.select({ id: fmTeams.id })
-          .from(fmTeams)
-          .where(and(eq(fmTeams.id, opts.teamId), eq(fmTeams.userId, opts.userId)))
-          .limit(1);
-        teamIds = owned.map(t => t.id);
-        if (teamIds.length === 0) return [];
-      } else {
-        teamIds = [opts.teamId];
-      }
-    } else if (opts.userId) {
-      const userTeams = await db.select({ id: fmTeams.id }).from(fmTeams).where(eq(fmTeams.userId, opts.userId));
-      teamIds = userTeams.map(t => t.id);
-      if (teamIds.length === 0) return [];
-    }
-  } catch {
-    return [];
-  }
+  // One shared database — the activity feed is global. An explicit
+  // teamId still narrows it (legacy filter), but the caller's userId no
+  // longer scopes which teams are visible.
+  void opts.userId;
+  const teamIds: number[] | undefined = opts.teamId ? [opts.teamId] : undefined;
 
   const perSource = Math.max(5, Math.ceil(opts.limit / 2));
   const items: ActivityItem[] = [];
