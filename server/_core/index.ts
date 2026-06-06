@@ -10,7 +10,7 @@ import { appRouter } from "../routers";
 import { createContext, authenticateUser } from "./context";
 import { subscribe, subscriberCount } from "./events";
 import { serveStatic, setupVite } from "./vite";
-import { initScheduledReports, initStudioworksSync, initAutoCoaching, initPersonaAutoSync } from "../scheduledReports";
+import { initScheduledReports, initStudioworksSync, initAutoCoaching } from "../scheduledReports";
 import { createLogger } from "../services/logger";
 import { requestTracingMiddleware, requestValidation } from "../services/requestTracing";
 import { cache } from "../services/cache";
@@ -274,38 +274,7 @@ async function validateAutomationCredentials(): Promise<void> {
     }
   }
 
-  // 2. Persona credentials — only required when at least one team has
-  // a personaProjectId configured AND the auto-sync cron isn't
-  // explicitly disabled. Mirrors the same `PERSONA_SYNC_CRON=off`
-  // guard `initPersonaAutoSync` itself uses, so an operator who
-  // intentionally turned the integration off doesn't see a false
-  // actionable error in their deploy logs.
-  const personaCronEnabled = (process.env.PERSONA_SYNC_CRON ?? "").toLowerCase() !== "off";
-  const hasPersonaUser = !!process.env.PERSONA_USERNAME;
-  const hasPersonaPass = !!process.env.PERSONA_PASSWORD;
-  if (personaCronEnabled && (!hasPersonaUser || !hasPersonaPass)) {
-    try {
-      const allTeams = await db.getAllFmTeams();
-      const teamsExpectingPersona = allTeams.filter(t => (t as any).personaProjectId);
-      if (teamsExpectingPersona.length > 0) {
-        const names = teamsExpectingPersona.map(t => t.teamName).join(", ");
-        log.error(
-          `[BootAudit] PERSONA_USERNAME/PERSONA_PASSWORD missing but ${teamsExpectingPersona.length} team(s) have personaProjectId configured: ${names}. ` +
-          `Persona auto-sync will skip every run; attendance data will go stale. Set both env vars and restart, or set PERSONA_SYNC_CRON=off to silence.`,
-          new Error("PERSONA_* credentials missing"),
-        );
-        issues.push("PERSONA_*");
-      }
-    } catch (e) {
-      // DB not reachable yet — Persona check is informational, don't
-      // block the audit on it.
-      log.warn("[BootAudit] Could not check teams for personaProjectId (DB not ready)", {
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
-  }
-
-  // 3. Studioworks — warn rather than error since the integration is
+  // 2. Studioworks — warn rather than error since the integration is
   // optional and many deploys don't use it. Only flag when the cron
   // is actively enabled.
   const studioCronEnabled = (process.env.STUDIOWORKS_SYNC_CRON ?? "").toLowerCase() !== "off";
@@ -376,7 +345,6 @@ async function startServer() {
     "http://127.0.0.1:3000",
   ]);
   const importCorsRoutes = [
-    "/api/trpc/personaSync.importBatchForTeam",
     "/api/trpc/studioworksSync.importBatch",
   ];
   for (const route of importCorsRoutes) {
@@ -530,11 +498,8 @@ async function startServer() {
     // into action items so the FM doesn't have to manually create
     // a coaching plan for every GP that dropped points.
     initAutoCoaching();
-    // Persona attendance auto-sync — every 12h. Keeps attendance
-    // numbers fresh throughout the month instead of only on the
-    // 1st. Anomaly detection inside personaSync flags sudden absence
-    // spikes as high-priority action items.
-    initPersonaAutoSync();
+    // (Persona attendance auto-sync removed with the one-shared-DB
+    // refactor — attendance now ingested from other sources only.)
     // Idempotent schema repair for `game_presenters.realName`.
     // Manus's deploy doesn't run drizzle migrations automatically, so
     // when PR #38 added the column to schema.ts but the prod DB still

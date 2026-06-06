@@ -1886,7 +1886,7 @@ function SparkStat({ label, value, tone }: { label: string; value: string; tone:
  */
 function DashboardQuickActions({ onNavigate }: { onNavigate: (path: string) => void }) {
   const actions: { label: string; description: string; icon: React.ComponentType<{ className?: string }>; path: string; tone: "amber" | "violet" | "blue" | "emerald" }[] = [
-    { label: "Sync Persona", description: "Pull attendance now", icon: RefreshCw, path: "/admin?tab=persona", tone: "amber" },
+    { label: "Sync Persona", description: "Pull attendance now", icon: RefreshCw, path: "/admin", tone: "amber" },
     { label: "Generate report", description: "Monthly Excel + email", icon: FileSpreadsheet, path: "/reports", tone: "violet" },
     { label: "Upload screenshots", description: "Evaluations + attitude", icon: Upload, path: "/upload", tone: "blue" },
     { label: "Review attendance", description: "Sick / late / extra", icon: Calendar, path: "/attendance", tone: "emerald" },

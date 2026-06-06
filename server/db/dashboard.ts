@@ -3,7 +3,7 @@
  * Handles dashboard stats, monthly trends, team comparison, and admin stats
  */
 import { eq, and, or, inArray, sql, desc } from "drizzle-orm";
-import { evaluations, gamePresenters, reports, users, fmTeams, personaSyncLogs, errorFiles } from "../../drizzle/schema";
+import { evaluations, gamePresenters, reports, users, fmTeams, errorFiles } from "../../drizzle/schema";
 import { getDb } from "./connection";
 
 // ============================================
@@ -266,15 +266,15 @@ export async function computeDashboardInsights(opts: {
   userRole?: string;
 }): Promise<DashboardInsight[]> {
   const isAdmin = opts.userRole === "admin";
-  // FMs can't open /admin?tab=persona (admin-only tab). For stale-sync
+  // FMs can't open /admin (admin-only tab). For stale-sync
   // insights they need either no action button (the insight is still
   // useful as a heads-up) or a different target. We hide the action
   // for non-admins — they should ping their admin to fix it.
   const personaSyncAction = isAdmin
-    ? { label: "Sync now", href: "/admin?tab=persona" }
+    ? { label: "Sync now", href: "/admin" }
     : undefined;
   const personaConfigureAction = isAdmin
-    ? { label: "Configure", href: "/admin?tab=persona" }
+    ? { label: "Configure", href: "/admin" }
     : undefined;
   const db = await getDb();
   if (!db) return [];
@@ -317,60 +317,7 @@ export async function computeDashboardInsights(opts: {
 
   const insights: DashboardInsight[] = [];
 
-  // ----------------------------------------------------------
-  // Insight 1: stale Persona sync — last sync >14 days ago, OR never
-  // ----------------------------------------------------------
-  try {
-    const lastSyncs = await db
-      .select({
-        teamId: personaSyncLogs.teamId,
-        lastSync: sql<Date>`MAX(${personaSyncLogs.startedAt})`,
-      })
-      .from(personaSyncLogs)
-      .where(inArray(personaSyncLogs.teamId, teamIds))
-      .groupBy(personaSyncLogs.teamId);
-
-    const teamsWithSync = new Set(lastSyncs.map(s => s.teamId));
-    const staleThreshold = new Date(now.getTime() - STALE_SYNC_DAYS * 24 * 60 * 60 * 1000);
-
-    for (const sync of lastSyncs) {
-      if (!sync.lastSync) continue;
-      const lastDate = new Date(sync.lastSync);
-      const daysAgo = Math.floor((now.getTime() - lastDate.getTime()) / (24 * 60 * 60 * 1000));
-      if (lastDate < staleThreshold) {
-        const teamName = teamNameById.get(sync.teamId) ?? `Team ${sync.teamId}`;
-        insights.push({
-          id: `stale-sync-${sync.teamId}`,
-          kind: "stale_sync",
-          severity: "warning",
-          title: `${teamName} hasn't synced for ${daysAgo} days`,
-          description: isAdmin
-            ? `Last Persona sync was ${daysAgo} days ago. Attendance numbers may be out of date.`
-            : `Last Persona sync was ${daysAgo} days ago. Ask your admin to run a sync — attendance numbers may be out of date.`,
-          action: personaSyncAction,
-          timestamp: lastDate,
-          metadata: { teamId: sync.teamId, teamName },
-        });
-      }
-    }
-    // Teams that have NEVER synced
-    for (const t of teamRows) {
-      if (!teamsWithSync.has(t.id)) {
-        insights.push({
-          id: `never-synced-${t.id}`,
-          kind: "stale_sync",
-          severity: "warning",
-          title: `${t.teamName} has never been synced`,
-          description: isAdmin
-            ? "No Persona sync has ever run for this team. Set the Project ID in admin and run a sync."
-            : "No Persona sync has ever run for this team. Ask your admin to set the Project ID.",
-          action: personaConfigureAction,
-          timestamp: new Date(0),
-          metadata: { teamId: t.id, teamName: t.teamName },
-        });
-      }
-    }
-  } catch { /* skip on error */ }
+  // Persona sync insights removed with the module.
 
   // ----------------------------------------------------------
   // Insight 2: missing report for last calendar month
@@ -607,7 +554,7 @@ export async function getDashboardActivityFeed(opts: {
   // still surface the row — useful as a "this happened" notice — but
   // omit the href so clicking does nothing (the row is rendered as a
   // disabled button). Same logic for error_file → admin Errors tab.
-  const syncHref: string | undefined = isAdmin ? "/admin?tab=persona" : undefined;
+  const syncHref: string | undefined = isAdmin ? "/admin" : undefined;
   const errorFileHref: string | undefined = isAdmin ? "/admin?tab=errors" : undefined;
 
   // One shared database — the activity feed is global. An explicit
@@ -619,36 +566,7 @@ export async function getDashboardActivityFeed(opts: {
   const perSource = Math.max(5, Math.ceil(opts.limit / 2));
   const items: ActivityItem[] = [];
 
-  // Persona syncs
-  try {
-    const conds = teamIds && teamIds.length > 0 ? [inArray(personaSyncLogs.teamId, teamIds)] : [];
-    const rows = await db
-      .select({
-        id: personaSyncLogs.id,
-        teamId: personaSyncLogs.teamId,
-        startedAt: personaSyncLogs.startedAt,
-        status: personaSyncLogs.status,
-        matched: personaSyncLogs.matched,
-        unmatched: personaSyncLogs.unmatched,
-        teamName: fmTeams.teamName,
-      })
-      .from(personaSyncLogs)
-      .innerJoin(fmTeams, eq(personaSyncLogs.teamId, fmTeams.id))
-      .where(conds.length > 0 ? and(...conds) : undefined)
-      .orderBy(desc(personaSyncLogs.startedAt))
-      .limit(perSource);
-    for (const r of rows) {
-      items.push({
-        id: `sync-${r.id}`,
-        kind: "sync",
-        timestamp: r.startedAt,
-        title: `${r.teamName} — Persona sync ${r.status}`,
-        detail: r.status === "failed" ? "see admin log" : `${r.matched} matched, ${r.unmatched} unmatched`,
-        href: syncHref,
-        status: r.status,
-      });
-    }
-  } catch { /* skip */ }
+  // (Persona sync activity removed with the module.)
 
   // Recent reports
   try {
@@ -785,16 +703,8 @@ export async function getOnboardingStatus(opts: {
   const gpCond = ownerScope != null ? eq(gamePresenters.userId, ownerScope) : undefined;
   const evalCond = ownerScope != null ? eq(evaluations.userId, ownerScope) : undefined;
   const reportCond = ownerScope != null ? eq(reports.userId, ownerScope) : undefined;
-  // For persona syncs we don't have a userId column; instead we
-  // intersect via the team's userId. For admins we just look at any
-  // sync row.
-  const personaSyncQuery = ownerScope != null
-    ? db.select({ id: personaSyncLogs.id })
-        .from(personaSyncLogs)
-        .innerJoin(fmTeams, eq(fmTeams.id, personaSyncLogs.teamId))
-        .where(eq(fmTeams.userId, ownerScope))
-        .limit(1)
-    : db.select({ id: personaSyncLogs.id }).from(personaSyncLogs).limit(1);
+  // Persona module was removed; the onboarding step is permanently
+  // satisfied so it stops nagging.
   // Studioworks-source check uses a JSON path predicate on the
   // rawExtractedData column (MySQL JSON_EXTRACT).
   const studioCond = sql`JSON_EXTRACT(${evaluations.rawExtractedData}, '$.source') = 'studioworks'`;
@@ -807,7 +717,7 @@ export async function getOnboardingStatus(opts: {
 
   const [
     hasTeam, hasGp, hasAssignedGp, hasEvaluation, hasReport,
-    hasPersonaSync, hasStudioworksImport,
+    hasStudioworksImport,
   ] = await Promise.all([
     exists(db.select({ id: fmTeams.id }).from(fmTeams).where(teamCond as any).limit(1)),
     exists(db.select({ id: gamePresenters.id }).from(gamePresenters).where(gpCond as any).limit(1)),
@@ -818,12 +728,11 @@ export async function getOnboardingStatus(opts: {
     ).limit(1)),
     exists(db.select({ id: evaluations.id }).from(evaluations).where(evalCond as any).limit(1)),
     exists(db.select({ id: reports.id }).from(reports).where(reportCond as any).limit(1)),
-    exists(personaSyncQuery as any),
     exists(studioQuery as any),
   ]);
 
   return {
     hasTeam, hasGp, hasAssignedGp, hasEvaluation, hasReport,
-    hasPersonaSync, hasStudioworksImport,
+    hasPersonaSync: true, hasStudioworksImport,
   };
 }

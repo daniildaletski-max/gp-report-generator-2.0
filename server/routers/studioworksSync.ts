@@ -915,7 +915,7 @@ export const studioworksSyncRouter = router({
    * Diagnostic probe — runs login + page load + extraction discovery
    * but DOES NOT write to DB. Returns per-step status + a screenshot
    * of the page on failure so the admin can see what's actually going
-   * on. Same UX pattern as personaSync.testConnection.
+   * on.
    */
   testConnection: adminProcedure.mutation(async () => {
     return await testStudioworksConnection();

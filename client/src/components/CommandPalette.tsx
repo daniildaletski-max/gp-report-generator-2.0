@@ -31,7 +31,7 @@ const ADMIN_QUICK_TABS = [
   { label: "Coaching plans", path: "/admin?tab=action-items", icon: Target },
   { label: "GP stats", path: "/admin?tab=stats", icon: BarChart3 },
   { label: "Errors", path: "/admin?tab=errors", icon: AlertTriangle },
-  { label: "Persona sync", path: "/admin?tab=persona", icon: RefreshCw },
+  { label: "Persona sync", path: "/admin", icon: RefreshCw },
 ];
 
 interface CommandPaletteProps {

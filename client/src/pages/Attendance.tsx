@@ -83,22 +83,6 @@ export default function AttendancePage() {
     },
   });
 
-  // Pull HR attendance (sick / late / missed) straight from Persona for
-  // every team's project, so the grid auto-fills instead of manual entry.
-  const syncMutation = trpc.personaSync.syncAllTeams.useMutation({
-    onSuccess: (res) => {
-      const matched = Array.isArray(res) ? res.reduce((s, r) => s + (r.matched ?? 0), 0) : 0;
-      const unmatched = Array.isArray(res) ? res.reduce((s, r) => s + (r.unmatched ?? 0), 0) : 0;
-      toast.success(`Persona sync complete — ${matched} matched${unmatched ? `, ${unmatched} unmatched` : ""}`);
-      refetch();
-    },
-    onError: (error) => toast.error(`Persona sync failed: ${error.message}`),
-  });
-  const isSyncing = syncMutation.isPending;
-  const handleSyncPersona = useCallback(() => {
-    syncMutation.mutate({ month: selectedMonth, year: selectedYear });
-  }, [selectedMonth, selectedYear, syncMutation]);
-
   // Avoid wiping user edits when the query just refetches in the background.
   // Only repopulate rows when the underlying scope (team/month/year) changes
   // or when we currently have nothing showing.
@@ -241,21 +225,6 @@ export default function AttendancePage() {
         icon={CalendarCheck}
         actions={
           <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSyncPersona}
-              disabled={isSyncing}
-              className="glass-button text-muted-foreground hover:text-foreground"
-              title="Pull sick / late / missed days from Persona for this month"
-            >
-              {isSyncing ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-1" />
-              )}
-              Sync from Persona
-            </Button>
             {hasDirtyRows && (
               <>
                 <Button
