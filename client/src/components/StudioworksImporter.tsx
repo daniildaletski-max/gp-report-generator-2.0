@@ -23,7 +23,7 @@
  * the FM can deselect rows / fix names before committing.
  */
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -38,7 +38,7 @@ import { toast } from "sonner";
 import {
   Download, Bookmark, Terminal, ClipboardPaste, Check, X, AlertTriangle,
   Loader2, Send, ExternalLink, Copy, ChevronRight, Search, Sparkles,
-  Link2, RefreshCw, UserCheck,
+  Link2, RefreshCw, UserCheck, FileSpreadsheet, UploadCloud,
 } from "lucide-react";
 
 // ============================================
@@ -311,6 +311,9 @@ export function StudioworksImporter({
   const [autoRefreshMin, setAutoRefreshMin] = useState<number>(0);
   // For unmatched-resolver: maps unmatched presenter name -> chosen GP id.
   const [nameMappings, setNameMappings] = useState<Record<string, number>>({});
+  // Hidden <input type=file> trigger for the Excel-upload tab.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [excelFileName, setExcelFileName] = useState<string>("");
 
   // Pull GP list for the unmatched-resolver dropdown. Filtered by the
   // backend to GPs visible to the current user.
@@ -347,6 +350,55 @@ export function StudioworksImporter({
     }
     return out;
   }, [importMutation.data]);
+
+  // Excel-export parser. Parses server-side (reusing the same exceljs as
+  // the error-file importer) and drops the result straight into the
+  // shared `parsed` preview state, so commit + unmatched-resolver work
+  // unchanged — and keep the per-criterion scores through a re-import.
+  const parseExcelMutation = trpc.studioworksSync.parseExcel.useMutation({
+    onSuccess: (res) => {
+      if (!res.rows || res.rows.length === 0) {
+        toast.error(
+          res.warnings?.[0] ?? "No evaluations found in that file.",
+          { description: res.rawHeaders?.length ? `Columns seen: ${res.rawHeaders.slice(0, 10).join(", ")}` : undefined },
+        );
+        setParsed([]);
+        return;
+      }
+      setParsed(res.rows as RawEval[]);
+      setSelected(new Set(res.rows.map(r => r.externalId)));
+      const niceCols = (res.detectedColumns ?? [])
+        .filter(c => c !== "attendance" && c !== "workload" && c !== "bonus" && c !== "since");
+      toast.success(`Parsed ${res.rows.length} evaluation${res.rows.length === 1 ? "" : "s"} from "${res.sheetName}"`, {
+        description: res.warnings?.length
+          ? res.warnings.join(" ")
+          : `Mapped columns: ${niceCols.join(", ")}. Review below, then Import.`,
+      });
+    },
+    onError: (err) => toast.error(`Couldn't read file: ${err.message}`),
+  });
+
+  const onPickExcelFile = useCallback(() => fileInputRef.current?.click(), []);
+
+  const onExcelFileChosen = useCallback(async (file: File | undefined) => {
+    if (!file) return;
+    setExcelFileName(file.name);
+    try {
+      const buf = await file.arrayBuffer();
+      // Base64-encode in chunks to avoid call-stack overflow on big files.
+      const bytes = new Uint8Array(buf);
+      let binary = "";
+      const CHUNK = 0x8000;
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        // .apply (not spread) keeps this off the downlevel-iteration path.
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK) as unknown as number[]);
+      }
+      const base64 = btoa(binary);
+      parseExcelMutation.mutate({ fileBase64: base64, filename: file.name });
+    } catch (e) {
+      toast.error(`Couldn't read the file: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [parseExcelMutation]);
 
   const resolveMutation = trpc.studioworksSync.importBatch.useMutation({
     onSuccess: (res) => {
@@ -454,12 +506,15 @@ export function StudioworksImporter({
             Import from Studioworks
           </DialogTitle>
           <DialogDescription>
-            Move evaluations from team.studioworks.ee into here without retyping them. Three options below — pick whatever's easiest.
+            Move evaluations from team.studioworks.ee into here without retyping them. The easiest way is <strong>Export report XLS</strong> from Studioworks and upload it on the Excel tab — the other tabs are fallbacks.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="bookmarklet" className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid grid-cols-3 w-full">
+        <Tabs defaultValue="excel" className="flex-1 overflow-hidden flex flex-col">
+          <TabsList className="grid grid-cols-4 w-full">
+            <TabsTrigger value="excel" className="gap-1.5">
+              <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
+            </TabsTrigger>
             <TabsTrigger value="bookmarklet" className="gap-1.5">
               <Bookmark className="h-3.5 w-3.5" /> Bookmarklet
             </TabsTrigger>
@@ -472,6 +527,91 @@ export function StudioworksImporter({
           </TabsList>
 
           <div className="flex-1 overflow-y-auto pt-3">
+            {/* Excel export — the recommended, most-robust path */}
+            <TabsContent value="excel" className="space-y-3">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-emerald-800 flex items-start gap-2">
+                <Check className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span><strong>Recommended.</strong> No browser tricks, no console, nothing to install — just upload the file Studioworks gives you.</span>
+              </div>
+              <ol className="space-y-2 text-sm text-slate-700 list-decimal list-inside">
+                <li>Open <a href="https://team.studioworks.ee/evaluations" target="_blank" rel="noreferrer" className="text-primary underline inline-flex items-center gap-0.5">team.studioworks.ee/evaluations <ExternalLink className="h-3 w-3" /></a> (or the People page).</li>
+                <li>Click <strong>Export report XLS</strong> and save the file.</li>
+                <li>Upload it below — we read the columns automatically and show a preview before anything is saved.</li>
+              </ol>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                className="hidden"
+                onChange={(e) => { onExcelFileChosen(e.target.files?.[0]); e.target.value = ""; }}
+              />
+
+              <button
+                type="button"
+                onClick={onPickExcelFile}
+                disabled={parseExcelMutation.isPending}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); onExcelFileChosen(e.dataTransfer.files?.[0]); }}
+                className="w-full rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 hover:border-primary/40 transition-colors p-6 flex flex-col items-center justify-center gap-2 text-center disabled:opacity-60 disabled:cursor-wait"
+              >
+                {parseExcelMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-7 w-7 text-primary animate-spin" />
+                    <span className="text-sm font-medium text-slate-700">Reading {excelFileName || "file"}…</span>
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="h-7 w-7 text-primary" />
+                    <span className="text-sm font-medium text-slate-700">
+                      {excelFileName ? `Choose a different file (${excelFileName})` : "Click to choose the exported .xlsx"}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">or drag &amp; drop a Studioworks export here</span>
+                  </>
+                )}
+              </button>
+              {/* Detected-columns diagnostics — shown after a parse so an
+                  unexpected export layout is obvious (and fixable) */}
+              {parseExcelMutation.data && (
+                <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-slate-700">Sheet:</span>
+                    <Badge variant="outline" className="text-[10px]">{parseExcelMutation.data.sheetName || "—"}</Badge>
+                    <span className="font-semibold text-slate-700 ml-2">Rows:</span>
+                    <Badge variant="outline" className="text-[10px]">{parseExcelMutation.data.rows.length}</Badge>
+                    {parseExcelMutation.data.skippedRows > 0 && (
+                      <span className="text-muted-foreground">({parseExcelMutation.data.skippedRows} non-data rows skipped)</span>
+                    )}
+                  </div>
+                  {parseExcelMutation.data.detectedColumns.length > 0 && (
+                    <div className="flex items-start gap-1.5 flex-wrap">
+                      <span className="font-semibold text-slate-700">Mapped:</span>
+                      {parseExcelMutation.data.detectedColumns.map(c => (
+                        <Badge key={c} className="bg-primary/10 text-primary border-primary/20 text-[10px]">{c}</Badge>
+                      ))}
+                    </div>
+                  )}
+                  {parseExcelMutation.data.warnings.length > 0 && (
+                    <div className="flex items-start gap-2 text-amber-700 pt-1">
+                      <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      <span>{parseExcelMutation.data.warnings.join(" ")}</span>
+                    </div>
+                  )}
+                  {parseExcelMutation.data.rawHeaders.length > 0 && (
+                    <details className="text-muted-foreground pt-0.5">
+                      <summary className="cursor-pointer hover:text-slate-700">Raw headers from the file</summary>
+                      <p className="mt-1 font-mono text-[10px] break-words">{parseExcelMutation.data.rawHeaders.join(" · ")}</p>
+                    </details>
+                  )}
+                </div>
+              )}
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
+                <FileSpreadsheet className="h-3.5 w-3.5 mt-0.5 shrink-0 text-slate-400" />
+                <span>Tip: the <strong>Evaluations</strong> export has one row per evaluation (with scores) — that&apos;s the one to use. The <strong>People</strong> export only has per-person totals; we&apos;ll warn you if you upload that one by mistake.</span>
+              </div>
+            </TabsContent>
+
             {/* Bookmarklet */}
             <TabsContent value="bookmarklet" className="space-y-3">
               <ol className="space-y-2 text-sm text-slate-700 list-decimal list-inside">
