@@ -9,7 +9,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { MONTH_NAMES } from "@shared/const";
+import { MONTH_NAMES, COMPANY_NAME, COMPANY_REPORT_LABEL } from "@shared/const";
 import * as db from "../db";
 import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
@@ -105,8 +105,11 @@ export async function generateExcelAndEmail(
   // "Access denied" toasts even for admins.
 
   const { report, team } = reportWithTeam;
-  const teamName = team?.teamName || "Unknown Team";
-  const fmName = team?.floorManagerName || "Unknown FM";
+  // Company report (teamId NULL) → label as the whole studio; legacy
+  // per-team reports keep their team / FM name.
+  const isCompany = report.teamId == null;
+  const teamName = isCompany ? COMPANY_REPORT_LABEL : (team?.teamName || "Unknown Team");
+  const fmName = isCompany ? COMPANY_NAME : (team?.floorManagerName || "Unknown FM");
   const monthName = MONTH_NAMES[report.reportMonth - 1];
 
   const freshAttendance = await db.getAttendanceByTeamMonth(report.teamId, report.reportMonth, report.reportYear);

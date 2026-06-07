@@ -38,6 +38,15 @@ export const MONTH_NAMES_SHORT = [
 ] as const;
 
 // ============================
+// Company / Branding
+// ============================
+/** Display name for the studio in company-wide monthly reports. */
+export const COMPANY_NAME = "Studioworks";
+/** Label shown where a per-team report used to show a team name —
+ *  a company-wide report covers every team. */
+export const COMPANY_REPORT_LABEL = "All Teams";
+
+// ============================
 // Performance Thresholds
 // ============================
 export const PERFORMANCE_THRESHOLDS = {
