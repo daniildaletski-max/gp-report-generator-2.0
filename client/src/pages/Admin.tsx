@@ -65,11 +65,8 @@ function FMRestrictedView() {
     v => (v === "stats" ? null : v),
   );
 
-  const { data: teams } = trpc.fmTeam.list.useQuery();
   const { data: gamePresenters, isLoading: gpsLoading, refetch: refetchGPs } = trpc.gamePresenter.list.useQuery();
   const { data: accessTokens, isLoading: tokensLoading, refetch: refetchTokens } = trpc.gpAccess.list.useQuery();
-
-  const team = teams?.[0]; // FM only sees their team
 
   return (
     <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
@@ -79,8 +76,8 @@ function FMRestrictedView() {
             <Users className="h-6 w-6 text-amber-700" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Team Management</h1>
-            <p className="text-sm text-slate-500">Manage your team: {team?.teamName || "Loading..."}</p>
+            <h1 className="text-2xl font-bold text-slate-900">Management</h1>
+            <p className="text-sm text-slate-500">Company-wide stats, plans and access links</p>
           </div>
         </div>
         <Badge className="bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-800 border border-amber-300 rounded-xl px-4 py-2 font-semibold shadow-sm">
@@ -106,25 +103,21 @@ function FMRestrictedView() {
         </TabsList>
 
         {/* GP Stats Tab */}
-        {team && (
-          <GPStatsTab
-            teams={[team]}
-            selectedMonth={selectedMonth}
-            selectedYear={selectedYear}
-            setSelectedMonth={setSelectedMonth}
-            setSelectedYear={setSelectedYear}
-            isFMView={true}
-          />
-        )}
+        <GPStatsTab
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+          setSelectedMonth={setSelectedMonth}
+          setSelectedYear={setSelectedYear}
+          isFMView={true}
+        />
 
-        {/* Action Items board — also fixed to FM's team */}
-        {team && <ActionItemsBoardTab teams={[team]} fixedTeamId={team.id} />}
+        {/* Action Items board — company-wide */}
+        <ActionItemsBoardTab />
 
         {/* GP Access Links Tab */}
         <GPAccessLinksTab 
           gamePresenters={gamePresenters || []}
           accessTokens={accessTokens || []}
-          teams={teams || []}
           refetchTokens={refetchTokens}
           refetchGPs={refetchGPs}
           isLoading={gpsLoading || tokensLoading}
@@ -145,12 +138,11 @@ function FullAdminPanel() {
     v => (v === "overview" ? null : v),
   );
 
-  const { data: teams, isLoading: teamsLoading, refetch: refetchTeams } = trpc.fmTeam.list.useQuery();
   const { data: errorFiles, isLoading: filesLoading, refetch: refetchFiles } = trpc.errorFile.list.useQuery();
   const { data: gamePresenters, isLoading: gpsLoading, refetch: refetchGPs } = trpc.gamePresenter.list.useQuery();
   const { data: accessTokens, isLoading: tokensLoading, refetch: refetchTokens } = trpc.gpAccess.list.useQuery();
 
-  if (teamsLoading || filesLoading || gpsLoading || tokensLoading) {
+  if (filesLoading || gpsLoading || tokensLoading) {
     return (
       <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
         <div className="page-header">
@@ -233,14 +225,13 @@ function FullAdminPanel() {
         <AdminOverviewTab onTabChange={setActiveTab} />
 
         {/* Invitations Tab */}
-        <InvitationsTab teams={teams || []} />
+        <InvitationsTab />
 
         {/* User Management Tab */}
-        <UserManagementTab teams={teams || []} />
+        <UserManagementTab />
 
         {/* GP Stats Tab */}
         <GPStatsTab
-          teams={teams || []}
           selectedMonth={selectedMonth}
           selectedYear={selectedYear}
           setSelectedMonth={setSelectedMonth}
@@ -249,13 +240,12 @@ function FullAdminPanel() {
         />
 
         {/* Action Items board */}
-        <ActionItemsBoardTab teams={teams || []} />
+        <ActionItemsBoardTab />
 
         {/* GP Access Links Tab */}
         <GPAccessLinksTab 
           gamePresenters={gamePresenters || []}
           accessTokens={accessTokens || []}
-          teams={teams || []}
           refetchTokens={refetchTokens}
           refetchGPs={refetchGPs}
           isLoading={false}
@@ -431,7 +421,7 @@ function AdminOverviewTab({ onTabChange }: { onTabChange: (tab: AdminTab) => voi
 }
 
 // User Management Tab Component
-function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[] }) {
+function UserManagementTab() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState<string>("all");
   
@@ -443,16 +433,6 @@ function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[
     },
     onError: (error) => {
       toast.error(error.message || "Failed to update role");
-    },
-  });
-
-  const assignTeam = trpc.user.assignToTeam.useMutation({
-    onSuccess: () => {
-      toast.success("Team assigned");
-      refetch();
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to assign team");
     },
   });
 
@@ -545,7 +525,6 @@ function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[
                   <TableRow>
                     <TableHead>User</TableHead>
                     <TableHead>Role</TableHead>
-                    <TableHead>Team</TableHead>
                     <TableHead>Joined</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
@@ -589,27 +568,6 @@ function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[
                                 User
                               </div>
                             </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={user.teamId ? String(user.teamId) : "none"}
-                          onValueChange={(teamId) => assignTeam.mutate({ 
-                            userId: user.id, 
-                            teamId: teamId === "none" ? null : Number(teamId) 
-                          })}
-                        >
-                          <SelectTrigger className="w-[150px]">
-                            <SelectValue placeholder="No team" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">No team</SelectItem>
-                            {teams.map((team) => (
-                              <SelectItem key={team.id} value={String(team.id)}>
-                                {team.teamName}
-                              </SelectItem>
-                            ))}
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -702,14 +660,12 @@ function RealNameInput({ gpId, initialValue }: { gpId: number; initialValue: str
 function GPAccessLinksTab({
   gamePresenters,
   accessTokens,
-  teams,
   refetchTokens,
   refetchGPs,
   isLoading
 }: {
   gamePresenters: any[];
   accessTokens: any[];
-  teams: any[];
   refetchTokens: () => void;
   refetchGPs: () => void;
   isLoading: boolean;
@@ -717,17 +673,6 @@ function GPAccessLinksTab({
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [generatingForGp, setGeneratingForGp] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [assigningTeamForGp, setAssigningTeamForGp] = useState<number | null>(null);
-
-  const assignToTeam = trpc.gamePresenter.assignToTeam.useMutation({
-    onSuccess: () => {
-      toast.success("GP assigned to team");
-      refetchGPs();
-    },
-    onError: (error) => {
-      toast.error(error.message || "Failed to assign team");
-    },
-  });
 
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [isExportingCSV, setIsExportingCSV] = useState(false);
@@ -738,20 +683,18 @@ function GPAccessLinksTab({
     try {
       // Prepare CSV data
       const csvRows: string[] = [];
-      csvRows.push('GP Name,Team,Access Link,Status,Last Accessed');
-      
+      csvRows.push('GP Name,Access Link,Status,Last Accessed');
+
       gamePresenters.forEach(gp => {
         const tokenData = accessTokens.find(t => t.token?.gamePresenterId === gp.id && t.token?.isActive === 1);
         const token = tokenData?.token;
-        const team = teams.find(t => t.id === gp.teamId);
-        
+
         const gpName = gp.name.replace(/,/g, ' ');
-        const teamName = team?.teamName?.replace(/,/g, ' ') || 'Unassigned';
         const accessLink = token ? `${window.location.origin}/gp-portal/${token.token}` : '';
         const status = token ? 'Active' : 'No Link';
         const lastAccessed = token?.lastAccessedAt ? new Date(token.lastAccessedAt).toLocaleDateString() : '-';
-        
-        csvRows.push(`${gpName},${teamName},${accessLink},${status},${lastAccessed}`);
+
+        csvRows.push(`${gpName},${accessLink},${status},${lastAccessed}`);
       });
       
       // Create and download CSV file
@@ -836,17 +779,6 @@ function GPAccessLinksTab({
     return gamePresenters.filter(gp => gp.name.toLowerCase().includes(query));
   }, [gamePresenters, searchQuery]);
 
-  // Group GPs by team
-  const gpsByTeam = useMemo(() => {
-    const grouped: Record<number, any[]> = {};
-    filteredGPs.forEach(gp => {
-      const teamId = gp.teamId || 0;
-      if (!grouped[teamId]) grouped[teamId] = [];
-      grouped[teamId].push(gp);
-    });
-    return grouped;
-  }, [filteredGPs]);
-
   return (
     <TabsContent value="access" className="space-y-4">
       <div className="unified-card">
@@ -905,29 +837,19 @@ function GPAccessLinksTab({
               ))}
             </div>
           ) : filteredGPs.length > 0 ? (
-            <div className="space-y-6">
-              {Object.entries(gpsByTeam).map(([teamId, gps]) => {
-                const team = teams.find(t => t.id === Number(teamId));
-                return (
-                  <div key={teamId} className="space-y-2">
-                    <h3 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
-                      <Building2 className="h-4 w-4" />
-                      {team?.teamName || "Unassigned"}
-                    </h3>
-                    <div className="table-enhanced">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Real name <span className="text-[10px] font-normal text-muted-foreground">(for Persona)</span></TableHead>
-                            <TableHead>Team</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Access Link</TableHead>
-                            <TableHead className="w-[150px]">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {gps.map((gp) => {
+            <div className="table-enhanced">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Real name <span className="text-[10px] font-normal text-muted-foreground">(for Persona)</span></TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Access Link</TableHead>
+                    <TableHead className="w-[150px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                          {filteredGPs.map((gp) => {
                             // accessTokens returns {token: {...}, gp: {...}} structure
                             const tokenData = accessTokens.find(t => t.token?.gamePresenterId === gp.id && t.token?.isActive === 1);
                             const token = tokenData ? { ...tokenData.token, gpId: tokenData.token?.gamePresenterId } : null;
@@ -936,38 +858,6 @@ function GPAccessLinksTab({
                                 <TableCell className="font-medium">{gp.name}</TableCell>
                                 <TableCell>
                                   <RealNameInput gpId={gp.id} initialValue={(gp as any).realName ?? ""} />
-                                </TableCell>
-                                <TableCell>
-                                  <Select
-                                    value={gp.teamId?.toString() || "0"}
-                                    onValueChange={(value) => {
-                                      const newTeamId = parseInt(value);
-                                      if (newTeamId !== gp.teamId) {
-                                        setAssigningTeamForGp(gp.id);
-                                        assignToTeam.mutate(
-                                          { gpId: gp.id, teamId: newTeamId },
-                                          { onSettled: () => setAssigningTeamForGp(null) }
-                                        );
-                                      }
-                                    }}
-                                    disabled={assigningTeamForGp === gp.id}
-                                  >
-                                    <SelectTrigger className="w-[140px] h-8">
-                                      {assigningTeamForGp === gp.id ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <SelectValue placeholder="Select team" />
-                                      )}
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="0">Unassigned</SelectItem>
-                                      {teams.map((t) => (
-                                        <SelectItem key={t.id} value={t.id.toString()}>
-                                          {t.teamName}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
                                 </TableCell>
                                 <TableCell>
                                   {token ? (
@@ -1060,12 +950,8 @@ function GPAccessLinksTab({
                               </TableRow>
                             );
                           })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                );
-              })}
+                </TableBody>
+              </Table>
             </div>
           ) : (
             <div className="empty-state">
@@ -1431,12 +1317,11 @@ function ErrorFilesTab({
 }
 
 // Invitations Tab Component - Modern UI for invite-only registration
-function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floorManagerName: string }[] }) {
+function InvitationsTab() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [bulkEmails, setBulkEmails] = useState("");
-  const [selectedTeamId, setSelectedTeamId] = useState<string>("none");
   const [selectedRole, setSelectedRole] = useState<"user" | "admin">("user");
   const [expiresInDays, setExpiresInDays] = useState(7);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
@@ -1451,7 +1336,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
       toast.success("Invitation created successfully");
       setIsCreateOpen(false);
       setEmail("");
-      setSelectedTeamId("");
       setSelectedRole("user");
       refetch();
       // Auto-copy link
@@ -1507,7 +1391,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
     }
     createMutation.mutate({
       email,
-      teamId: selectedTeamId && selectedTeamId !== 'none' ? Number(selectedTeamId) : undefined,
       role: selectedRole,
       expiresInDays,
     });
@@ -1526,7 +1409,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
 
     bulkCreateMutation.mutate({
       emails,
-      teamId: selectedTeamId && selectedTeamId !== 'none' ? Number(selectedTeamId) : undefined,
       role: selectedRole,
       expiresInDays,
     });
@@ -1560,9 +1442,8 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
     
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(inv => 
-        inv.email.toLowerCase().includes(query) ||
-        inv.team?.teamName?.toLowerCase().includes(query)
+      filtered = filtered.filter(inv =>
+        inv.email.toLowerCase().includes(query)
       );
     }
     
@@ -1670,22 +1551,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Assign to Team</Label>
-                        <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select team (optional)" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">No team</SelectItem>
-                            {teams.map(team => (
-                              <SelectItem key={team.id} value={String(team.id)}>
-                                {team.teamName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
                         <Label>Role</Label>
                         <Select value={selectedRole} onValueChange={(v: "user" | "admin") => setSelectedRole(v)}>
                           <SelectTrigger>
@@ -1755,22 +1620,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Assign to Team</Label>
-                        <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select team" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">No team</SelectItem>
-                            {teams.map(team => (
-                              <SelectItem key={team.id} value={String(team.id)}>
-                                {team.teamName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
                       <div className="space-y-2">
                         <Label>Role</Label>
                         <Select value={selectedRole} onValueChange={(v: "user" | "admin") => setSelectedRole(v)}>
@@ -1855,7 +1704,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                 <TableHeader>
                   <TableRow>
                     <TableHead>Email</TableHead>
-                    <TableHead>Team</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Expires</TableHead>
@@ -1874,16 +1722,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                             <Mail className="h-4 w-4 text-muted-foreground" />
                             {inv.email}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          {inv.team ? (
-                            <Badge variant="outline">
-                              <Building2 className="h-3 w-3 mr-1" />
-                              {inv.team.teamName}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant={inv.role === "admin" ? "default" : "secondary"}>
@@ -2037,22 +1875,21 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
 }
 
 // GP Stats Tab Component
-function GPStatsTab({ 
-  teams, 
-  selectedMonth, 
-  selectedYear, 
-  setSelectedMonth, 
+function GPStatsTab({
+  selectedMonth,
+  selectedYear,
+  setSelectedMonth,
   setSelectedYear,
   isFMView = false
-}: { 
-  teams: { id: number; teamName: string; floorManagerName: string }[];
+}: {
   selectedMonth: number;
   selectedYear: number;
   setSelectedMonth: (m: number) => void;
   setSelectedYear: (y: number) => void;
   isFMView?: boolean;
 }) {
-  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(isFMView && teams.length > 0 ? teams[0].id : null);
+  // One shared database — stats always cover every GP.
+  const [selectedTeamId] = useState<number | null>(null);
   const [editingGpId, setEditingGpId] = useState<number | null>(null);
   const [editAttitude, setEditAttitude] = useState<number | null>(null);
   const [editMistakes, setEditMistakes] = useState<number>(0);
@@ -2276,25 +2113,6 @@ function GPStatsTab({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {!isFMView && (
-            <Select 
-              value={selectedTeamId ? String(selectedTeamId) : "all"} 
-              onValueChange={(v) => setSelectedTeamId(v === "all" ? null : Number(v))}
-            >
-              <SelectTrigger className="w-[160px] filter-select">
-                <Building2 className="h-4 w-4 mr-2 text-primary" />
-                <SelectValue placeholder="All teams" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All teams</SelectItem>
-                {teams.map((team) => (
-                  <SelectItem key={team.id} value={String(team.id)}>
-                    {team.teamName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
           <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
             <SelectTrigger className="w-[140px] filter-select">
               <Calendar className="h-4 w-4 mr-2 text-primary" />
@@ -2536,7 +2354,7 @@ function GPStatsTab({
                   <GPStatsCard
                     key={gp.id}
                     gp={gp}
-                    teamName={teams.find(t => t.id === gp.teamId)?.teamName || 'Unassigned'}
+                    teamName={(gp as { teamName?: string }).teamName || 'Unassigned'}
                     isSelected={selectedGpIds.includes(gp.id)}
                     selectedMonth={selectedMonth}
                     selectedYear={selectedYear}

@@ -17,11 +17,6 @@ import { GPDetailDrawer } from "@/components/GPDetailDrawer";
 
 type Item = inferRouterOutputs<AppRouter>["actionItems"]["list"][number];
 
-interface ActionItemsBoardTabProps {
-  teams: { id: number; teamName: string }[];
-  fixedTeamId?: number;
-}
-
 const CATEGORY_TONE: Record<string, string> = {
   appearance: "bg-emerald-50 text-emerald-700 border-emerald-200",
   performance: "bg-primary/5 text-primary border-primary/20",
@@ -37,16 +32,14 @@ const PRIORITY_TONE: Record<string, string> = {
   low: "bg-slate-100 text-slate-700 border-slate-300",
 };
 
-export function ActionItemsBoardTab({ teams, fixedTeamId }: ActionItemsBoardTabProps) {
-  const [filterTeam, setFilterTeam] = useState<number | undefined>(fixedTeamId);
+export function ActionItemsBoardTab() {
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [drawerGpId, setDrawerGpId] = useState<number | null>(null);
 
-  const teamId = fixedTeamId ?? filterTeam;
+  // One shared database — every action item across all GPs.
   const { data: items, isLoading } = trpc.actionItems.list.useQuery({
-    teamId,
     includeAllStatuses: true,
   });
 
@@ -87,22 +80,6 @@ export function ActionItemsBoardTab({ teams, fixedTeamId }: ActionItemsBoardTabP
               className="pl-9"
             />
           </div>
-          {!fixedTeamId && (
-            <div className="min-w-[160px]">
-              <Select
-                value={filterTeam ? String(filterTeam) : "all"}
-                onValueChange={(v) => setFilterTeam(v === "all" ? undefined : Number(v))}
-              >
-                <SelectTrigger><SelectValue placeholder="All teams" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All teams</SelectItem>
-                  {teams.map(t => (
-                    <SelectItem key={t.id} value={String(t.id)}>{t.teamName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <div className="min-w-[140px]">
             <Select value={filterCategory} onValueChange={setFilterCategory}>
               <SelectTrigger><SelectValue /></SelectTrigger>
