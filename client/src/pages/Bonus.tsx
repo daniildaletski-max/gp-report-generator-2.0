@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
+import { QueryError } from "@/components/QueryError";
 import { toast } from "sonner";
 import { useLiveEvents } from "@/hooks/useLiveEvents";
 import { MONTH_NAMES } from "@shared/const";
@@ -52,7 +53,7 @@ export default function BonusPage() {
   useLiveEvents();
 
   // One shared database — the bonus board covers every GP company-wide.
-  const { data, isLoading, refetch } = trpc.bonus.list.useQuery({ month, year });
+  const { data, isLoading, isError, refetch } = trpc.bonus.list.useQuery({ month, year });
   const rows = (data ?? []) as BonusRow[];
 
   // Reset pending edits when the filter changes (avoids stale saves).
@@ -186,6 +187,8 @@ export default function BonusPage() {
             <div className="p-4 space-y-2">
               {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
+          ) : isError ? (
+            <QueryError title="Couldn't load bonus data" onRetry={() => refetch()} />
           ) : rows.length === 0 ? (
             <div className="p-10 text-center text-muted-foreground text-sm">No GPs for this scope / month.</div>
           ) : (

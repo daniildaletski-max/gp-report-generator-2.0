@@ -14,6 +14,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { PageHeader } from "@/components/PageHeader";
+import { QueryError } from "@/components/QueryError";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -88,9 +89,9 @@ export default function CommandCenterPage() {
   const [gpSearch, setGpSearch] = useState("");
 
   const utils = trpc.useUtils();
-  const { data: briefing, isLoading: briefingLoading, isFetching: briefingFetching, refetch: refetchBriefing } =
+  const { data: briefing, isLoading: briefingLoading, isError: briefingError, isFetching: briefingFetching, refetch: refetchBriefing } =
     trpc.commandCenter.briefing.useQuery(undefined, { staleTime: 1000 * 60 * 30 });
-  const { data: insights, isLoading: insightsLoading } = trpc.dashboard.insights.useQuery({});
+  const { data: insights, isLoading: insightsLoading, isError: insightsError, refetch: refetchInsights } = trpc.dashboard.insights.useQuery({});
   const { data: activity } = trpc.dashboard.activityFeed.useQuery({ limit: 12 });
   const { data: gps } = trpc.gamePresenter.list.useQuery();
 
@@ -216,6 +217,13 @@ export default function CommandCenterPage() {
               <Skeleton className="h-4 w-[92%]" />
               <Skeleton className="h-4 w-[78%]" />
             </div>
+          ) : briefingError ? (
+            <QueryError
+              size="compact"
+              title="Couldn't generate the briefing"
+              description="The AI summary failed to load — likely a brief hiccup. Try again."
+              onRetry={() => refetchBriefing()}
+            />
           ) : briefing?.briefing ? (
             <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">{briefing.briefing}</p>
           ) : (
@@ -244,6 +252,8 @@ export default function CommandCenterPage() {
             <div className="space-y-2">
               {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
             </div>
+          ) : insightsError ? (
+            <Card><CardContent className="p-0"><QueryError size="compact" title="Couldn't load signals" onRetry={() => refetchInsights()} /></CardContent></Card>
           ) : (insights && insights.length > 0) ? (
             <div className="space-y-2">
               {insights.map(insight => {
