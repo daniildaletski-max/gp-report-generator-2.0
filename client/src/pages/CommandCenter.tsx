@@ -12,6 +12,7 @@
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { PageHeader } from "@/components/PageHeader";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -24,7 +25,7 @@ import { toast } from "sonner";
 import {
   Radar, Search, Sparkles, RefreshCw, Loader2, Wand2, ArrowRight, Users,
   TrendingDown, TrendingUp, Award, ScanLine, FileSpreadsheet, Clock,
-  CalendarX, AlertTriangle, Activity, FileCheck, ChevronRight, Zap, ChevronsDown,
+  CalendarX, AlertTriangle, Activity, FileCheck, ChevronRight, Zap, ChevronsDown, Mail,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -80,6 +81,8 @@ function relativeTime(ts: string | Date): string {
 
 export default function CommandCenterPage() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [selectedGpIds, setSelectedGpIds] = useState<number[]>([]);
   const [gpSearch, setGpSearch] = useState("");
@@ -90,6 +93,11 @@ export default function CommandCenterPage() {
   const { data: insights, isLoading: insightsLoading } = trpc.dashboard.insights.useQuery({});
   const { data: activity } = trpc.dashboard.activityFeed.useQuery({ limit: 12 });
   const { data: gps } = trpc.gamePresenter.list.useQuery();
+
+  const digest = trpc.scheduledReports.triggerWeeklyDigest.useMutation({
+    onSuccess: (d) => toast.success(d.message),
+    onError: (e) => toast.error(e.message || "Could not send the digest"),
+  });
 
   const bulkCoach = trpc.commandCenter.bulkCoach.useMutation({
     onSuccess: (data) => {
@@ -148,11 +156,25 @@ export default function CommandCenterPage() {
         subtitle="Your operations cockpit — the studio's state, signals, and one-click actions"
         icon={Radar}
         actions={
-          <Button variant="outline" onClick={() => setPaletteOpen(true)} className="gap-2">
-            <Search className="h-4 w-4" />
-            <span>Search…</span>
-            <kbd className="ml-1 hidden sm:inline-flex items-center rounded border border-border bg-muted px-1.5 text-[10px] text-muted-foreground">⌘K</kbd>
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button
+                variant="outline"
+                onClick={() => digest.mutate()}
+                disabled={digest.isPending}
+                className="gap-2"
+                title="Email this week's coaching digest to the admins now"
+              >
+                {digest.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                <span className="hidden sm:inline">Email digest</span>
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setPaletteOpen(true)} className="gap-2">
+              <Search className="h-4 w-4" />
+              <span>Search…</span>
+              <kbd className="ml-1 hidden sm:inline-flex items-center rounded border border-border bg-muted px-1.5 text-[10px] text-muted-foreground">⌘K</kbd>
+            </Button>
+          </div>
         }
       />
 
