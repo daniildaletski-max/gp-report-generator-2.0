@@ -33,7 +33,6 @@ export function useLiveEvents(): { connected: boolean; lastEventAt: number | nul
       const u = utilsRef.current;
       u.evaluation.coverage.invalidate();
       u.evaluation.list.invalidate();
-      u.evaluation.needsReview.invalidate();
       u.dashboard.insights.invalidate();
       u.dashboard.activityFeed.invalidate();
       u.actionItems.stats.invalidate();

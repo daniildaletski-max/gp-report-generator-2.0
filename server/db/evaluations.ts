@@ -328,30 +328,3 @@ export async function getGpEvaluationsForPortal(gpId: number) {
   }).from(evaluations).where(eq(evaluations.gamePresenterId, gpId)).orderBy(desc(evaluations.evaluationDate));
 }
 
-// ============================================
-// REVIEW QUEUE (quality flag)
-// ============================================
-
-/**
- * Evaluations flagged for human review (out-of-range scores or an
- * AI total that disagreed with the sub-scores). Scoped to a user when
- * `userId` is given (non-admin), unscoped for admins.
- */
-export async function getEvaluationsNeedingReview(userId?: number) {
-  // One shared database — the review queue is global.
-  void userId;
-  const db = await getDb();
-  if (!db) return [];
-  return await db.select({ evaluation: evaluations, gamePresenter: gamePresenters })
-    .from(evaluations)
-    .leftJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
-    .where(eq(evaluations.needsReview, 1))
-    .orderBy(desc(evaluations.createdAt));
-}
-
-/** Dismiss the review flag once a human has checked the evaluation. */
-export async function clearEvaluationReviewFlag(id: number): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(evaluations).set({ needsReview: 0, reviewReason: null }).where(eq(evaluations.id, id));
-}

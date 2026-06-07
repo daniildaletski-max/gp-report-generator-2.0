@@ -52,7 +52,6 @@ export {
   getEvaluationWithGP, getEvaluationsWithGP, getEvaluationsWithGPByUser,
   getEvaluationsByTeam,
   getGPMonthlyStats, getGPEvaluationsForDataSheet, getGpEvaluationsForPortal,
-  getEvaluationsNeedingReview, clearEvaluationReviewFlag,
 } from "./evaluations";
 
 // Attendance
