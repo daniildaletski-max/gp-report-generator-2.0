@@ -241,15 +241,6 @@ export async function getEvaluationsWithGPByUser(userId: number) {
   return getEvaluationsWithGP();
 }
 
-export async function getEvaluationsByTeam(teamId: number) {
-  const db = await getDb();
-  if (!db) return [];
-  return await db.select({ evaluation: evaluations, gamePresenter: gamePresenters })
-    .from(evaluations)
-    .leftJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
-    .where(eq(gamePresenters.teamId, teamId))
-    .orderBy(desc(evaluations.createdAt));
-}
 
 // ============================================
 // AGGREGATION & DATA SHEET

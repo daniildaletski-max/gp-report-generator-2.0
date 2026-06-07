@@ -133,7 +133,7 @@ export function TopBar({
           onChange={handleSearchInput}
           onKeyDown={handleSearchKeyDown}
           onFocus={() => onOpenSearch(searchValue || undefined)}
-          placeholder="Search GPs, teams, reports…"
+          placeholder="Search GPs, reports, plans…"
           className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none border-none min-w-0"
           aria-label="Search"
         />

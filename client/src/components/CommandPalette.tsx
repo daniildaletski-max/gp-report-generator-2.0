@@ -31,7 +31,7 @@ const ADMIN_QUICK_TABS = [
   { label: "Coaching plans", path: "/admin?tab=action-items", icon: Target },
   { label: "GP stats", path: "/admin?tab=stats", icon: BarChart3 },
   { label: "Errors", path: "/admin?tab=errors", icon: AlertTriangle },
-  { label: "Persona sync", path: "/admin", icon: RefreshCw },
+  { label: "Studioworks sync", path: "/admin?tab=studioworks", icon: RefreshCw },
 ];
 
 interface CommandPaletteProps {
@@ -45,7 +45,6 @@ interface CommandPaletteProps {
  * Global Cmd+K palette. Shows:
  *   - quick navigation (pages + admin tabs)
  *   - GPs (clicking opens the GP Detail Drawer in-place)
- *   - teams (jumps to dashboard filtered by team)
  *   - recent reports
  *   - open action items (jump to that GP's coaching plan)
  *
@@ -119,10 +118,10 @@ export function CommandPalette({ open, onOpenChange, initialQuery }: CommandPale
         open={open}
         onOpenChange={onOpenChange}
         title="Quick navigation"
-        description="Search GPs, teams, reports, plans, or jump to any page."
+        description="Search GPs, reports, plans, or jump to any page."
       >
         <CommandInput
-          placeholder="Search GPs, teams, reports, plans…"
+          placeholder="Search GPs, reports, plans…"
           value={inputValue}
           onValueChange={setInputValue}
         />
@@ -137,9 +136,9 @@ export function CommandPalette({ open, onOpenChange, initialQuery }: CommandPale
                 <span className="text-muted-foreground text-xs ml-auto">{item.hint}</span>
               </CommandItem>
             ))}
-            <CommandItem onSelect={() => go(isAdmin ? "/admin" : "/admin")} value="admin team management">
+            <CommandItem onSelect={() => go("/admin")} value="admin settings management">
               <Shield className="h-4 w-4" />
-              <span>{isAdmin ? "Admin panel" : "Team management"}</span>
+              <span>{isAdmin ? "Admin panel" : "Settings"}</span>
               <CommandShortcut>{isAdmin ? "Admin" : "FM"}</CommandShortcut>
             </CommandItem>
           </CommandGroup>
@@ -227,7 +226,7 @@ export function CommandPalette({ open, onOpenChange, initialQuery }: CommandPale
             <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted text-foreground text-[10px]">Esc</kbd>
             <span>close</span>
             <Sparkles className="h-3 w-3 text-primary ml-2" />
-            <span>Type any GP, team or item title</span>
+            <span>Type any GP, report or plan title</span>
           </div>
         </CommandList>
       </CommandDialog>

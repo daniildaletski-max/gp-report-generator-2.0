@@ -50,7 +50,6 @@ export {
   getEvaluationsByMonth, getEvaluationsByMonthAndUser,
   getAllEvaluations, getAllEvaluationsByUser,
   getEvaluationWithGP, getEvaluationsWithGP, getEvaluationsWithGPByUser,
-  getEvaluationsByTeam,
   getGPMonthlyStats, getGPEvaluationsForDataSheet, getGpEvaluationsForPortal,
 } from "./evaluations";
 

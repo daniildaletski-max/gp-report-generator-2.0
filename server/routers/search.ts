@@ -31,7 +31,7 @@ export const searchRouter = router({
     // Limit reports to the 20 most-recent — nothing past that is jumped-to often.
     const reports = reportsRaw.slice(0, 20).map(r => ({
       id: r.report.id,
-      teamName: r.team?.teamName ?? "Unknown",
+      teamName: r.team?.teamName ?? "All Teams",
       month: r.report.reportMonth,
       year: r.report.reportYear,
       status: r.report.status,
