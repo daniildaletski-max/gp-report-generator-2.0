@@ -19,9 +19,8 @@ export const searchRouter = router({
   paletteIndex: protectedProcedure.query(async ({ ctx }) => {
     const isAdmin = ctx.user.role === "admin";
 
-    const [gps, teams, reportsRaw, openActionItems] = await Promise.all([
+    const [gps, reportsRaw, openActionItems] = await Promise.all([
       isAdmin ? db.getAllGamePresenters() : db.getAllGamePresentersByUser(ctx.user.id),
-      isAdmin ? db.getAllFmTeams() : db.getFmTeamsByUser(ctx.user.id),
       isAdmin ? db.getAllReportsWithTeam() : db.getReportsWithTeamsByUser(ctx.user.id),
       db.listActionItems({
         userId: isAdmin ? undefined : ctx.user.id,
@@ -40,7 +39,6 @@ export const searchRouter = router({
 
     return {
       gps: gps.map(g => ({ id: g.id, name: g.name, teamId: g.teamId })),
-      teams: teams.map(t => ({ id: t.id, teamName: t.teamName, floorManagerName: t.floorManagerName })),
       reports,
       actionItems: openActionItems.slice(0, 20).map(a => ({
         id: a.id,

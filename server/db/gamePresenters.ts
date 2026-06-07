@@ -240,9 +240,11 @@ export async function getAllGamePresentersByUser(userId: number): Promise<GamePr
   return getAllGamePresenters();
 }
 
-export async function getGamePresentersByTeam(teamId: number): Promise<GamePresenter[]> {
+export async function getGamePresentersByTeam(teamId: number | null): Promise<GamePresenter[]> {
   const db = await getDb();
   if (!db) return [];
+  // One shared database — a null teamId returns every GP company-wide.
+  if (teamId == null) return await db.select().from(gamePresenters).orderBy(gamePresenters.name);
   return await db.select().from(gamePresenters).where(eq(gamePresenters.teamId, teamId)).orderBy(gamePresenters.name);
 }
 

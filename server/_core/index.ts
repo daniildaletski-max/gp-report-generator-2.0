@@ -20,6 +20,7 @@ import { ensureEvaluationHistorySchema } from "../db/evaluationHistory";
 import { ensureAttitudeManualColumn } from "../db/attitude";
 import { ensureMistakesConsolidated } from "../db/attendance";
 import { ensureWorkedHoursColumn } from "../db/monthlyStats";
+import { ensureReportsTeamNullable } from "../db/reports";
 import { ENV } from "./env";
 import * as db from "../db";
 
@@ -537,6 +538,12 @@ async function startServer() {
     // monthly_gp_stats.workedHours. Idempotent boot install.
     ensureWorkedHoursColumn().catch(err => {
       log.warn("workedHours column boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Company-wide reports (Phase 7) — relax reports.teamId to NULL so a
+    // single monthly report can cover every GP. Idempotent boot install;
+    // same "deploy pipeline doesn't run drizzle migrations" reason.
+    ensureReportsTeamNullable().catch(err => {
+      log.warn("reports.teamId nullable boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
     });
     // Automation credentials audit — surfaces missing RESEND_API_KEY /
     // PERSONA_* / STUDIOWORKS_* env vars in deploy logs so operators

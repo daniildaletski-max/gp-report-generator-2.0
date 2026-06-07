@@ -90,7 +90,7 @@ export async function completeActionItem(id: number, note?: string): Promise<Act
 
 interface ListFilter {
   gpId?: number;
-  teamId?: number;
+  teamId?: number | null;
   userId?: number;          // tenant scope for non-admin
   statuses?: ActionItem["status"][];
   includeAllStatuses?: boolean;

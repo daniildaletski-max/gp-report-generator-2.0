@@ -1,583 +1,168 @@
-import { router, publicProcedure, protectedProcedure, adminProcedure } from "../_core/trpc";
+import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import * as db from "../db";
-import { MONTH_NAMES } from "@shared/const";
-import { invokeLLM } from "../_core/llm";
+import { COMPANY_NAME, COMPANY_REPORT_LABEL } from "@shared/const";
 import { notifyOwner } from "../_core/notification";
 import { exportToGoogleSheets, isGoogleSheetsAvailable } from "../services/googleSheetsService";
-import { generateExcelAndEmail, resolveReportRecipient, extractEvaluationFromImage, parseEvaluationDate, EvaluationDataSchema } from "./_shared";
+import {
+  generateExcelAndEmail,
+  resolveReportRecipient,
+  buildCompanyReportContext,
+  genManagementSummary,
+  genGoals,
+  genOverview,
+} from "./_shared";
 import { createLogger } from "../services/logger";
 const log = createLogger("Router");
 
+/**
+ * Company-wide monthly reporting.
+ *
+ * One shared database → one report per (month, year), covering every GP
+ * across all teams (reports.teamId = NULL). This replaced the old
+ * per-team report model: there is no team selector and no per-FM email
+ * routing — the report goes to whoever generates it.
+ *
+ * The data aggregation + AI narrative generators live in `./_shared`
+ * (buildCompanyReportContext / genManagementSummary / genGoals /
+ * genOverview) so the on-demand path here and the monthly cron share a
+ * single source of truth.
+ */
 export const reportRouter = router({
-  // Auto-fill text fields based on evaluation data using LLM
+  /**
+   * Preview the AI-written narrative fields for the company report
+   * without persisting anything. The Reports page calls this to fill
+   * the Management Summary / Goals / Overview textareas before the
+   * operator reviews and generates.
+   */
   autoFillFields: protectedProcedure
     .input(z.object({
-      teamId: z.number().positive(),
       reportMonth: z.number().min(1).max(12),
       reportYear: z.number().min(2020).max(2100),
     }))
-    .mutation(async ({ ctx, input }) => {
-      // User-based data isolation: verify team belongs to user
-      if (ctx.user.role !== 'admin') {
-        const team = await db.getFmTeamById(input.teamId);
-        if (!team) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only generate content for your own teams' });
-        }
-      }
-      
-      const team = await db.getFmTeamById(input.teamId);
-      if (!team) throw new TRPCError({ code: 'NOT_FOUND', message: 'Team not found' });
-
-      const monthName = MONTH_NAMES[input.reportMonth - 1];
-      const stats = await db.getGPMonthlyStats(input.teamId, input.reportYear, input.reportMonth);
-      const attendance = await db.getAttendanceByTeamMonth(input.teamId, input.reportMonth, input.reportYear);
-      
-      // Get error counts for each GP (user-scoped)
-      const errorCounts = await db.getErrorCountByGP(input.reportMonth, input.reportYear, ctx.user.id);
-      
-      // Get attitude data for each GP in the team
-      const teamGPs = await db.getGamePresentersByTeam(input.teamId);
-      const attitudeData: { gpName: string; positive: number; negative: number; total: number }[] = [];
-      
-      for (const gp of teamGPs) {
-        const attitudes = await db.getAttitudeScreenshotsForGP(gp.id, input.reportMonth, input.reportYear);
-        const positive = attitudes.filter(a => a.attitudeType === 'positive').length;
-        const negative = attitudes.filter(a => a.attitudeType === 'negative').length;
-        if (positive > 0 || negative > 0) {
-          attitudeData.push({ gpName: gp.name, positive, negative, total: positive - negative });
-        }
+    .mutation(async ({ input }) => {
+      const context = await buildCompanyReportContext(input.reportMonth, input.reportYear);
+      if (context.stats.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No evaluation data available for this month" });
       }
 
-      if (stats.length === 0) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'No evaluation data available for this month' });
-      }
-
-      // Prepare data summary for LLM
-      const avgTotal = stats.reduce((sum, gp) => sum + Number(gp.avgTotalScore || 0), 0) / stats.length;
-      const avgAppearance = stats.reduce((sum, gp) => sum + Number(gp.avgAppearanceScore || 0), 0) / stats.length;
-      const avgGamePerf = stats.reduce((sum, gp) => sum + Number(gp.avgGamePerfScore || 0), 0) / stats.length;
-      
-      const topPerformers = [...stats]
-        .sort((a, b) => Number(b.avgTotalScore || 0) - Number(a.avgTotalScore || 0))
-        .slice(0, 3);
-      
-      const needsImprovement = stats.filter(gp => Number(gp.avgTotalScore || 0) < 18);
-      
-      // Calculate attendance stats
-      const totalMistakes = attendance.reduce((sum, a) => sum + (a.monthlyStats?.mistakes || a.attendance?.mistakes || 0), 0);
-      const totalExtraShifts = attendance.reduce((sum, a) => sum + (a.attendance?.extraShifts || 0), 0);
-      const totalLate = attendance.reduce((sum, a) => sum + (a.attendance?.lateToWork || 0), 0);
-      const totalMissed = attendance.reduce((sum, a) => sum + (a.attendance?.missedDays || 0), 0);
-      const totalSick = attendance.reduce((sum, a) => sum + (a.attendance?.sickLeaves || 0), 0);
-      
-      // Build detailed GP performance data
-      const gpDetailedData = stats.map(gp => {
-        const gpErrors = errorCounts.find(e => e.gpName === gp.gpName);
-        const gpAttitude = attitudeData.find(a => a.gpName === gp.gpName);
-        const gpAttendance = attendance.find(a => a.gamePresenter.name === gp.gpName);
-        
-        return {
-          name: gp.gpName,
-          avgScore: Number(gp.avgTotalScore || 0).toFixed(1),
-          appearanceScore: Number(gp.avgAppearanceScore || 0).toFixed(1),
-          gamePerformanceScore: Number(gp.avgGamePerfScore || 0).toFixed(1),
-          evaluationCount: gp.evaluationCount,
-          errorCount: gpErrors?.errorCount || 0,
-          attitudePositive: gpAttitude?.positive || 0,
-          attitudeNegative: gpAttitude?.negative || 0,
-          attitudeTotal: gpAttitude?.total || 0,
-          lateArrivals: gpAttendance?.attendance?.lateToWork || 0,
-          missedDays: gpAttendance?.attendance?.missedDays || 0,
-        };
-      });
-      
-      // Identify GPs with most errors
-      const gpsWithErrors = gpDetailedData.filter(gp => gp.errorCount > 0)
-        .sort((a, b) => b.errorCount - a.errorCount);
-      
-      // Identify GPs with negative attitude
-      const gpsWithNegativeAttitude = gpDetailedData.filter(gp => gp.attitudeNegative > 0)
-        .sort((a, b) => b.attitudeNegative - a.attitudeNegative);
-      
-      // Identify GPs with positive attitude
-      const gpsWithPositiveAttitude = gpDetailedData.filter(gp => gp.attitudePositive > 0)
-        .sort((a, b) => b.attitudePositive - a.attitudePositive);
-
-      const totalErrors = gpsWithErrors.reduce((sum, gp) => sum + gp.errorCount, 0);
-      const totalPositiveAttitude = attitudeData.reduce((sum, a) => sum + a.positive, 0);
-      const totalNegativeAttitude = attitudeData.reduce((sum, a) => sum + a.negative, 0);
-
-      const formatGpLine = (gp: (typeof gpDetailedData)[number]) => (
-        `${gp.name} | Score ${gp.avgScore}/22 | Appearance ${gp.appearanceScore}/12 | Game ${gp.gamePerformanceScore}/10 | ` +
-        `Evals ${gp.evaluationCount} | Errors ${gp.errorCount} | Attitude +${gp.attitudePositive}/-${gp.attitudeNegative} | ` +
-        `Late ${gp.lateArrivals} | Missed ${gp.missedDays}`
-      );
-
-      // Build comprehensive context for LLM
-      const dataContext = `
-Team: ${team.teamName}
-Floor Manager: ${team.floorManagerName}
-Period: ${monthName} ${input.reportYear}
-
-=== EVALUATION STATISTICS ===
-- Total GPs Evaluated: ${stats.length}
-- Average Total Score: ${avgTotal.toFixed(1)}/22 (${avgTotal >= 20 ? "Excellent" : avgTotal >= 18 ? "Good" : avgTotal >= 16 ? "Needs Improvement" : "Critical"})
-- Average Appearance Score: ${avgAppearance.toFixed(1)}/12
-- Average Game Performance Score: ${avgGamePerf.toFixed(1)}/10
-
-=== TOP PERFORMERS (by evaluation score) ===
-${topPerformers.map((gp, i) => {
-const detail = gpDetailedData.find(d => d.name === gp.gpName);
-return `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/22 (${detail?.evaluationCount || 0} evaluations, ${detail?.errorCount || 0} errors, attitude: +${detail?.attitudePositive || 0}/-${detail?.attitudeNegative || 0})`;
-}).join("\n")}
-
-${needsImprovement.length > 0 ? `=== GPs NEEDING IMPROVEMENT (score < 18) ===
-${needsImprovement.map(gp => {
-const detail = gpDetailedData.find(d => d.name === gp.gpName);
-return `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/22 (Appearance: ${detail?.appearanceScore}/12, Game Perf: ${detail?.gamePerformanceScore}/10)`;
-}).join("\n")}` : "=== All GPs are performing well (score >= 18) ==="}
-
-=== ERROR ANALYSIS ===
-- Total Team Errors: ${totalErrors}
-${gpsWithErrors.length > 0 ? `GPs with errors:
-${gpsWithErrors.slice(0, 5).map(gp => `- ${gp.name}: ${gp.errorCount} errors`).join("\n")}` : "No errors recorded this month"}
-
-=== ATTITUDE ANALYSIS ===
-- Total Positive Feedback: ${totalPositiveAttitude}
-- Total Negative Feedback: ${totalNegativeAttitude}
-${gpsWithPositiveAttitude.length > 0 ? `GPs with positive attitude feedback:
-${gpsWithPositiveAttitude.slice(0, 3).map(gp => `- ${gp.name}: +${gp.attitudePositive}`).join("\n")}` : "No positive attitude feedback recorded"}
-${gpsWithNegativeAttitude.length > 0 ? `GPs with negative attitude feedback:
-${gpsWithNegativeAttitude.slice(0, 3).map(gp => `- ${gp.name}: -${gp.attitudeNegative}`).join("\n")}` : "No negative attitude feedback recorded"}
-
-=== ATTENDANCE SUMMARY ===
-- Total Mistakes/Errors: ${totalMistakes}
-- Extra Shifts Worked: ${totalExtraShifts}
-- Late Arrivals: ${totalLate}
-- Missed Days: ${totalMissed}
-- Sick Leaves: ${totalSick}
-
-=== INDIVIDUAL GP BREAKDOWN ===
-${gpDetailedData.map(formatGpLine).join("\n")}
-`;
-
-      const sharedPromptRules = `Rules:
-- Use only facts present in the data context.
-- Do NOT invent names, numbers, or events.
-- If data is missing, state it is not available rather than guessing.
-- Keep the tone professional and concise.`;
-
-      // Generate FM Performance text
-      const fmPerformanceResponse = await invokeLLM({
-        messages: [
-          {
-            role: "system",
-            content: `You are an experienced Floor Manager writing a self-evaluation for a monthly casino operations report.
-
-Guidelines:
-- Write in first person, professionally and concisely
-- Focus on: team management achievements, studio operations improvements, handling of challenges
-- Reference specific metrics from the data (scores, error reduction, attitude improvements)
-- Keep it to 3-4 sentences
-- Do NOT use bullet points
-- Be specific about what was accomplished this month
-
-${sharedPromptRules}`
-          },
-          {
-            role: "user",
-            content: `Based on this comprehensive team data, write a brief FM self-evaluation that highlights your management achievements:\n${dataContext}`
-          }
-        ]
-      });
-
-      // Generate Goals text with enhanced prompt
-      const goalsResponse = await invokeLLM({
-        messages: [
-          {
-            role: "system",
-            content: `You are an experienced Floor Manager creating SMART goals for a monthly casino operations report.
-
-Guidelines for writing optimal Team Goals:
-1. Analyze the data to identify the TOP 3 priority areas:
- - GPs with low evaluation scores (< 18/22) need improvement plans
- - GPs with high error counts need error reduction targets
- - GPs with negative attitude feedback need behavior coaching
- - Attendance issues (late arrivals, missed days) need addressing
-
-2. For each goal, be SPECIFIC:
- - Name the GPs who need improvement (if applicable)
- - Set measurable targets (e.g., "reduce errors by 50%", "improve score to 19+")
- - Focus on actionable improvements
-
-3. Balance the goals:
- - 1 goal for maintaining/rewarding top performers
- - 1-2 goals for addressing weaknesses (errors, scores, attitude)
- - Consider team-wide improvements if no individual issues
-
-4. Format: Write 3-4 concise sentences. Do NOT use bullet points.
-
-IMPORTANT: Be specific with names and numbers from the data. Generic goals are not acceptable.
-
-${sharedPromptRules}`
-          },
-          {
-            role: "user",
-            content: `Based on this comprehensive team performance data, create specific, actionable Team Goals for next month:\n${dataContext}`
-          }
-        ]
-      });
-
-      // Generate Team Overview text with enhanced prompt
-      const teamOverviewResponse = await invokeLLM({
-        messages: [
-          {
-            role: "system",
-            content: `You are an experienced Floor Manager writing a comprehensive Team Overview for a monthly casino operations report.
-
-Guidelines for writing an optimal Team Overview:
-1. Start with overall team performance assessment:
- - Team average score and what it indicates (Excellent/Good/Needs Work)
- - Compare appearance vs game performance scores
-
-2. Highlight achievements:
- - Name top 2-3 performers with their scores
- - Mention any GPs with positive attitude feedback
- - Note extra shifts or exceptional dedication
-
-3. Address concerns honestly:
- - Name GPs with scores below 18 and their specific issues
- - Mention error counts for GPs with multiple errors
- - Note any negative attitude feedback recipients
- - Address attendance issues (late arrivals, missed days)
-
-4. Provide balanced perspective:
- - Acknowledge both strengths and areas for improvement
- - Be factual and data-driven
-
-5. Format: Write 4-5 concise sentences. Do NOT use bullet points.
-
-IMPORTANT: Use specific names and numbers from the data. A good overview is honest, specific, and actionable.
-
-${sharedPromptRules}`
-          },
-          {
-            role: "user",
-            content: `Based on this comprehensive team performance data, write a detailed Team Overview that accurately reflects the team's performance this month:\n${dataContext}`
-          }
-        ]
-      });
-
-      const fmPerformanceContent = fmPerformanceResponse.choices[0]?.message?.content;
-      const goalsContent = goalsResponse.choices[0]?.message?.content;
-      const teamOverviewContent = teamOverviewResponse.choices[0]?.message?.content;
-      
-      // Ensure we extract string content from LLM response
-      const fmPerformance = typeof fmPerformanceContent === 'string' ? fmPerformanceContent : '';
-      const goalsThisMonth = typeof goalsContent === 'string' ? goalsContent : '';
-      const teamOverview = typeof teamOverviewContent === 'string' ? teamOverviewContent : '';
+      // Run the three narrative generations concurrently — independent
+      // LLM calls, ~3x faster than the old sequential path.
+      const [fmPerformance, goalsThisMonth, teamOverview] = await Promise.all([
+        genManagementSummary(context.dataContext),
+        genGoals(context.dataContext),
+        genOverview(context.dataContext),
+      ]);
 
       return {
         fmPerformance,
         goalsThisMonth,
         teamOverview,
         stats: {
-          totalGPs: stats.length,
-          avgTotal: avgTotal.toFixed(1),
-          avgAppearance: avgAppearance.toFixed(1),
-          avgGamePerf: avgGamePerf.toFixed(1),
-          topPerformers: topPerformers.map(gp => ({
+          totalGPs: context.stats.length,
+          avgTotal: context.avgTotal.toFixed(1),
+          avgAppearance: context.avgAppearance.toFixed(1),
+          avgGamePerf: context.avgGamePerf.toFixed(1),
+          topPerformers: context.topPerformers.map(gp => ({
             name: gp.gpName,
-            score: Number(gp.avgTotalScore || 0).toFixed(1)
+            score: Number(gp.avgTotalScore || 0).toFixed(1),
           })),
-          needsImprovement: needsImprovement.map(gp => ({
+          needsImprovement: context.needsImprovement.map(gp => ({
             name: gp.gpName,
-            score: Number(gp.avgTotalScore || 0).toFixed(1)
+            score: Number(gp.avgTotalScore || 0).toFixed(1),
           })),
           attendance: {
-            totalMistakes,
-            totalExtraShifts,
-            totalLate,
-            totalMissed,
-            totalSick
-          }
-        }
+            totalMistakes: context.totals.totalMistakes,
+            totalExtraShifts: context.totals.totalExtraShifts,
+            totalLate: context.totals.totalLate,
+            totalMissed: context.totals.totalMissed,
+            totalSick: context.totals.totalSick,
+          },
+        },
       };
     }),
 
+  /**
+   * Generate (or regenerate) the company-wide report for a month.
+   *
+   * Upsert by (month, year): there is exactly one company report per
+   * month, so a regenerate updates the existing row in place instead of
+   * piling up duplicates. Empty narrative fields are auto-filled by the
+   * LLM when `autoFill` is on (the default), then the report is built
+   * into an Excel workbook + emailed to the caller.
+   */
   generate: protectedProcedure
     .input(z.object({
-      teamId: z.number(),
       reportMonth: z.number().min(1).max(12),
-      reportYear: z.number(),
+      reportYear: z.number().min(2020).max(2100),
       fmPerformance: z.string().optional(),
       goalsThisMonth: z.string().optional(),
       teamOverview: z.string().optional(),
       additionalComments: z.string().optional(),
-      autoFill: z.boolean().optional().default(true), // Auto-fill empty fields by default
+      autoFill: z.boolean().optional().default(true),
     }))
     .mutation(async ({ ctx, input }) => {
-      // User-based data isolation: verify team belongs to user
-      if (ctx.user.role !== 'admin') {
-        const teamCheck = await db.getFmTeamById(input.teamId);
-        if (!teamCheck) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: You can only generate reports for your own teams' });
-        }
-      }
-      
-      const team = await db.getFmTeamById(input.teamId);
-      if (!team) throw new TRPCError({ code: 'NOT_FOUND', message: 'Team not found' });
+      const context = await buildCompanyReportContext(input.reportMonth, input.reportYear);
 
-      const stats = await db.getGPMonthlyStats(input.teamId, input.reportYear, input.reportMonth);
-      const attendance = await db.getAttendanceByTeamMonth(input.teamId, input.reportMonth, input.reportYear);
-      const monthName = MONTH_NAMES[input.reportMonth - 1];
-      
-      // Get error counts for each GP (user-scoped)
-      const errorCounts = await db.getErrorCountByGP(input.reportMonth, input.reportYear, ctx.user.id);
-      
-      // Get attitude data for each GP in the team
-      const teamGPs = await db.getGamePresentersByTeam(input.teamId);
-      const attitudeData: { gpName: string; positive: number; negative: number; total: number }[] = [];
-      
-      for (const gp of teamGPs) {
-        const attitudes = await db.getAttitudeScreenshotsForGP(gp.id, input.reportMonth, input.reportYear);
-        const positive = attitudes.filter(a => a.attitudeType === 'positive').length;
-        const negative = attitudes.filter(a => a.attitudeType === 'negative').length;
-        if (positive > 0 || negative > 0) {
-          attitudeData.push({ gpName: gp.name, positive, negative, total: positive - negative });
-        }
-      }
-
-      // Auto-generate content if fields are empty and autoFill is enabled
       let fmPerformance = input.fmPerformance || null;
       let goalsThisMonth = input.goalsThisMonth || null;
       let teamOverview = input.teamOverview || null;
 
-      if (input.autoFill && stats.length > 0) {
-        // Calculate team statistics for auto-generation
-        const avgTotal = stats.reduce((sum, gp) => sum + Number(gp.avgTotalScore || 0), 0) / stats.length;
-        const avgAppearance = stats.reduce((sum, gp) => sum + Number(gp.avgAppearanceScore || 0), 0) / stats.length;
-        const avgGamePerf = stats.reduce((sum, gp) => sum + Number(gp.avgGamePerfScore || 0), 0) / stats.length;
-        
-        const topPerformers = [...stats]
-          .sort((a, b) => Number(b.avgTotalScore || 0) - Number(a.avgTotalScore || 0))
-          .slice(0, 3);
-        
-        const needsImprovement = stats.filter(gp => Number(gp.avgTotalScore || 0) < 18);
-        
-        // Calculate attendance stats
-        const totalMistakes = attendance.reduce((sum, a) => sum + (a.monthlyStats?.mistakes || a.attendance?.mistakes || 0), 0);
-        const totalExtraShifts = attendance.reduce((sum, a) => sum + (a.attendance?.extraShifts || 0), 0);
-        const totalLate = attendance.reduce((sum, a) => sum + (a.attendance?.lateToWork || 0), 0);
-        const totalMissed = attendance.reduce((sum, a) => sum + (a.attendance?.missedDays || 0), 0);
-        const totalSick = attendance.reduce((sum, a) => sum + (a.attendance?.sickLeaves || 0), 0);
-        
-        // Build detailed GP performance data
-        const gpDetailedData = stats.map(gp => {
-          const gpErrors = errorCounts.find(e => e.gpName === gp.gpName);
-          const gpAttitude = attitudeData.find(a => a.gpName === gp.gpName);
-          const gpAttendance = attendance.find(a => a.gamePresenter.name === gp.gpName);
-          
-          return {
-            name: gp.gpName,
-            avgScore: Number(gp.avgTotalScore || 0).toFixed(1),
-            appearanceScore: Number(gp.avgAppearanceScore || 0).toFixed(1),
-            gamePerformanceScore: Number(gp.avgGamePerfScore || 0).toFixed(1),
-            evaluationCount: gp.evaluationCount,
-            errorCount: gpErrors?.errorCount || 0,
-            attitudePositive: gpAttitude?.positive || 0,
-            attitudeNegative: gpAttitude?.negative || 0,
-            attitudeTotal: gpAttitude?.total || 0,
-            lateArrivals: gpAttendance?.attendance?.lateToWork || 0,
-            missedDays: gpAttendance?.attendance?.missedDays || 0,
-          };
-        });
-        
-        // Identify GPs with most errors
-        const gpsWithErrors = gpDetailedData.filter(gp => gp.errorCount > 0)
-          .sort((a, b) => b.errorCount - a.errorCount);
-        
-        // Identify GPs with negative attitude
-        const gpsWithNegativeAttitude = gpDetailedData.filter(gp => gp.attitudeNegative > 0)
-          .sort((a, b) => b.attitudeNegative - a.attitudeNegative);
-        
-        // Identify GPs with positive attitude
-        const gpsWithPositiveAttitude = gpDetailedData.filter(gp => gp.attitudePositive > 0)
-          .sort((a, b) => b.attitudePositive - a.attitudePositive);
-
-        // Build comprehensive context for LLM
-        const dataContext = `
-Team: ${team.teamName}
-Floor Manager: ${team.floorManagerName}
-Period: ${monthName} ${input.reportYear}
-
-=== EVALUATION STATISTICS ===
-- Total GPs Evaluated: ${stats.length}
-- Average Total Score: ${avgTotal.toFixed(1)}/22 (${avgTotal >= 20 ? 'Excellent' : avgTotal >= 18 ? 'Good' : avgTotal >= 16 ? 'Needs Improvement' : 'Critical'})
-- Average Appearance Score: ${avgAppearance.toFixed(1)}/12
-- Average Game Performance Score: ${avgGamePerf.toFixed(1)}/10
-
-=== TOP PERFORMERS (by evaluation score) ===
-${topPerformers.map((gp, i) => {
-const detail = gpDetailedData.find(d => d.name === gp.gpName);
-return `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/22 (${detail?.evaluationCount || 0} evaluations, ${detail?.errorCount || 0} errors, attitude: +${detail?.attitudePositive || 0}/-${detail?.attitudeNegative || 0})`;
-}).join('\n')}
-
-${needsImprovement.length > 0 ? `=== GPs NEEDING IMPROVEMENT (score < 18) ===
-${needsImprovement.map(gp => {
-const detail = gpDetailedData.find(d => d.name === gp.gpName);
-return `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/22 (Appearance: ${detail?.appearanceScore}/12, Game Perf: ${detail?.gamePerformanceScore}/10)`;
-}).join('\n')}` : '=== All GPs are performing well (score >= 18) ==='}
-
-=== ERROR ANALYSIS ===
-- Total Team Errors: ${gpsWithErrors.reduce((sum, gp) => sum + gp.errorCount, 0)}
-${gpsWithErrors.length > 0 ? `GPs with errors:
-${gpsWithErrors.slice(0, 5).map(gp => `- ${gp.name}: ${gp.errorCount} errors`).join('\n')}` : 'No errors recorded this month'}
-
-=== ATTITUDE ANALYSIS ===
-- Total Positive Feedback: ${attitudeData.reduce((sum, a) => sum + a.positive, 0)}
-- Total Negative Feedback: ${attitudeData.reduce((sum, a) => sum + a.negative, 0)}
-${gpsWithPositiveAttitude.length > 0 ? `GPs with positive attitude feedback:
-${gpsWithPositiveAttitude.slice(0, 3).map(gp => `- ${gp.name}: +${gp.attitudePositive}`).join('\n')}` : ''}
-${gpsWithNegativeAttitude.length > 0 ? `GPs with negative attitude feedback:
-${gpsWithNegativeAttitude.slice(0, 3).map(gp => `- ${gp.name}: -${gp.attitudeNegative}`).join('\n')}` : ''}
-
-=== ATTENDANCE SUMMARY ===
-- Total Mistakes/Errors: ${totalMistakes}
-- Extra Shifts Worked: ${totalExtraShifts}
-- Late Arrivals: ${totalLate}
-- Missed Days: ${totalMissed}
-- Sick Leaves: ${totalSick}
-
-=== INDIVIDUAL GP BREAKDOWN ===
-${gpDetailedData.map(gp => 
-`${gp.name}: Score ${gp.avgScore}/22, Errors: ${gp.errorCount}, Attitude: +${gp.attitudePositive}/-${gp.attitudeNegative}, Late: ${gp.lateArrivals}`
-).join('\n')}
-`;
-
-        // Auto-generate Team Overview if empty
-        if (!teamOverview) {
-          try {
-            const teamOverviewResponse = await invokeLLM({
-              messages: [
-                {
-                  role: "system",
-                  content: `You are an experienced Floor Manager writing a comprehensive Team Overview for a monthly casino operations report.
-
-Guidelines for writing an optimal Team Overview:
-1. Start with overall team performance assessment:
- - Team average score and what it indicates (Excellent/Good/Needs Work)
- - Compare appearance vs game performance scores
-
-2. Highlight achievements:
- - Name top 2-3 performers with their scores
- - Mention any GPs with positive attitude feedback
- - Note extra shifts or exceptional dedication
-
-3. Address concerns honestly:
- - Name GPs with scores below 18 and their specific issues
- - Mention error counts for GPs with multiple errors
- - Note any negative attitude feedback recipients
- - Address attendance issues (late arrivals, missed days)
-
-4. Provide balanced perspective:
- - Acknowledge both strengths and areas for improvement
- - Be factual and data-driven
-
-5. Format: Write 4-5 concise sentences. Do NOT use bullet points.
-
-IMPORTANT: Use specific names and numbers from the data. A good overview is honest, specific, and actionable.`
-                },
-                {
-                  role: "user",
-                  content: `Based on this comprehensive team performance data, write a detailed Team Overview that accurately reflects the team's performance this month:\n${dataContext}`
-                }
-              ]
-            });
-            const content = teamOverviewResponse.choices[0]?.message?.content;
-            teamOverview = typeof content === 'string' ? content : null;
-          } catch (e) {
-            log.error('Failed to auto-generate teamOverview', e instanceof Error ? e : new Error(String(e)));
-          }
-        }
-
-        // Auto-generate Goals if empty
-        if (!goalsThisMonth) {
-          try {
-            const goalsResponse = await invokeLLM({
-              messages: [
-                {
-                  role: "system",
-                  content: `You are an experienced Floor Manager creating SMART goals for a monthly casino operations report.
-
-Guidelines for writing optimal Team Goals:
-1. Analyze the data to identify the TOP 3 priority areas:
- - GPs with low evaluation scores (< 18/22) need improvement plans
- - GPs with high error counts need error reduction targets
- - GPs with negative attitude feedback need behavior coaching
- - Attendance issues (late arrivals, missed days) need addressing
-
-2. For each goal, be SPECIFIC:
- - Name the GPs who need improvement (if applicable)
- - Set measurable targets (e.g., "reduce errors by 50%", "improve score to 19+")
- - Focus on actionable improvements
-
-3. Balance the goals:
- - 1 goal for maintaining/rewarding top performers
- - 1-2 goals for addressing weaknesses (errors, scores, attitude)
- - Consider team-wide improvements if no individual issues
-
-4. Format: Write 3-4 concise sentences. Do NOT use bullet points.
-
-IMPORTANT: Be specific with names and numbers from the data. Generic goals are not acceptable.`
-                },
-                {
-                  role: "user",
-                  content: `Based on this comprehensive team performance data, create specific, actionable Team Goals for next month:\n${dataContext}`
-                }
-              ]
-            });
-            const content = goalsResponse.choices[0]?.message?.content;
-            goalsThisMonth = typeof content === 'string' ? content : null;
-          } catch (e) {
-            log.error('Failed to auto-generate goalsThisMonth', e instanceof Error ? e : new Error(String(e)));
-          }
-        }
+      if (input.autoFill && context.stats.length > 0) {
+        // Only generate the fields the caller left blank; run them
+        // concurrently. Best-effort — a failed generation leaves the
+        // field null rather than aborting the whole report.
+        const [a, b, c] = await Promise.all([
+          fmPerformance ? Promise.resolve(fmPerformance) : genManagementSummary(context.dataContext).catch(e => {
+            log.error("Failed to auto-generate fmPerformance", e instanceof Error ? e : new Error(String(e)));
+            return null;
+          }),
+          goalsThisMonth ? Promise.resolve(goalsThisMonth) : genGoals(context.dataContext).catch(e => {
+            log.error("Failed to auto-generate goalsThisMonth", e instanceof Error ? e : new Error(String(e)));
+            return null;
+          }),
+          teamOverview ? Promise.resolve(teamOverview) : genOverview(context.dataContext).catch(e => {
+            log.error("Failed to auto-generate teamOverview", e instanceof Error ? e : new Error(String(e)));
+            return null;
+          }),
+        ]);
+        fmPerformance = a;
+        goalsThisMonth = b;
+        teamOverview = c;
       }
 
-      const report = await db.createReport({
-        teamId: input.teamId,
+      const payload = {
+        teamId: null,
         reportMonth: input.reportMonth,
         reportYear: input.reportYear,
-        fmPerformance: fmPerformance,
-        goalsThisMonth: goalsThisMonth,
-        teamOverview: teamOverview,
+        fmPerformance,
+        goalsThisMonth,
+        teamOverview,
         additionalComments: input.additionalComments || null,
-        reportData: { stats, attendance },
-        status: "generated",
+        reportData: { stats: context.stats, attendance: context.attendance },
+        status: "generated" as const,
         generatedById: ctx.user.id,
-        // Pin the report to the team's owner so the team's FM can
-        // re-export it later, mirroring `generateAllForMonth`. Without
-        // this `report.userId` stays null and the access check in
-        // `exportToExcel` blocks even the FM who owns the team — which
-        // surfaced as "Access denied: You can only export your own
-        // reports" when admins clicked Regenerate on a non-admin team.
-        userId: team.userId ?? ctx.user.id,
-      });
+        userId: ctx.user.id,
+      };
+
+      // One company report per (month, year): update in place if it
+      // already exists, otherwise create.
+      const existing = await db.getCompanyReportByMonthYear(input.reportMonth, input.reportYear);
+      const report = existing
+        ? await db.updateReport(existing.id, payload)
+        : await db.createReport(payload);
+      if (!report) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to persist report" });
+      }
 
       await notifyOwner({
-        title: "New Report Generated",
-        content: `A new Team Monthly Overview report has been generated for ${team.teamName} - ${MONTH_NAMES[input.reportMonth - 1]} ${input.reportYear}`,
+        title: "Company report generated",
+        content: `The company-wide monthly report for ${context.monthName} ${input.reportYear} has been generated.`,
       });
 
-      // Route the email to the team's Floor Manager so each manager
-      // receives their own team's report on their own inbox — even
-      // when an admin triggered the generation. Falls back to the
-      // caller only when the team has no FM linked or the linked FM
-      // has no email on file.
-      const recipient = await resolveReportRecipient(ctx, team);
+      // No per-team FM anymore — the company report goes to the caller.
+      const recipient = await resolveReportRecipient(ctx, { userId: null });
       const result = await generateExcelAndEmail(recipient, report.id);
 
       return {
@@ -588,135 +173,17 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       };
     }),
 
-  /**
-   * "Generate reports for ALL my teams in one click."
-   *
-   * Loops every team the caller can see, runs a baseline report
-   * generation per team (auto-fill enabled, no manual text supplied),
-   * and pipes each through `generateExcelAndEmail` so every team's FM
-   * gets their report on email automatically. Returns a per-team
-   * outcome so the UI can display "5 succeeded, 1 failed".
-   *
-   * Sequential rather than parallel: each `generateExcelAndEmail` is
-   * IO-heavy (Excel build + S3 upload + Sheets export + email send),
-   * and running them in parallel against rate-limited services
-   * (Google Sheets / Resend) is asking for partial failures.
-   *
-   * Saves the FM ~30 minutes/month at small team counts and scales
-   * linearly from there.
-   */
-  generateAllForMonth: protectedProcedure
-    .input(z.object({
-      reportMonth: z.number().min(1).max(12),
-      reportYear: z.number().min(2020).max(2100),
-    }))
-    .mutation(async ({ ctx, input }) => {
-      const allTeams = await db.getAllFmTeams();
-      const teams = ctx.user.role === "admin"
-        ? allTeams
-        : allTeams.filter(t => t.userId === ctx.user.id);
-
-      const results: Array<{
-        teamId: number;
-        teamName: string;
-        status: "success" | "failed";
-        reportId?: number;
-        emailSent?: boolean;
-        /** The address the email was actually sent to (or attempted). */
-        recipientEmail?: string | null;
-        /** True when the recipient was the caller (admin) instead of
-         *  the team's FM — usually because the FM has no email or no
-         *  user link. The toast warns about these so the operator can
-         *  fix the team→user / user.email configuration. */
-        fallbackToCaller?: boolean;
-        error?: string;
-      }> = [];
-
-      for (const team of teams) {
-        try {
-          const report = await db.createReport({
-            teamId: team.id,
-            reportMonth: input.reportMonth,
-            reportYear: input.reportYear,
-            fmPerformance: null,
-            goalsThisMonth: null,
-            teamOverview: null,
-            additionalComments: null,
-            reportData: {},
-            status: "generated",
-            // Mark the report as owned by the team's FM so per-user
-            // listing shows it under the right account. The admin who
-            // triggered this is captured separately in `generatedById`
-            // when admins are doing bulk runs.
-            generatedById: ctx.user.id,
-            userId: team.userId ?? ctx.user.id,
-          });
-          // Each report belongs to a different FM, so route the
-          // email to the team owner via the shared resolver. Falls
-          // back to the caller (admin) only when the team has no
-          // owner or the owner has no email — surfaced via
-          // `fallbackToCaller` so the toast can warn the operator.
-          const recipient = await resolveReportRecipient(ctx, team);
-          const result = await generateExcelAndEmail(recipient, report.id);
-          results.push({
-            teamId: team.id,
-            teamName: team.teamName,
-            status: "success",
-            reportId: report.id,
-            emailSent: result.emailSent,
-            recipientEmail: recipient.user.email ?? null,
-            fallbackToCaller: recipient.fallbackToCaller,
-          });
-        } catch (e) {
-          log.error(`Bulk generate failed for team ${team.id}`, e instanceof Error ? e : new Error(String(e)));
-          results.push({
-            teamId: team.id,
-            teamName: team.teamName,
-            status: "failed",
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
-      }
-
-      const succeeded = results.filter(r => r.status === "success").length;
-      const failed = results.filter(r => r.status === "failed").length;
-      const emailsSent = results.filter(r => r.emailSent).length;
-      const fellBackToCaller = results.filter(r => r.fallbackToCaller).length;
-
-      // One owner notification for the whole batch — better than spamming
-      // per-team in `generate`.
-      try {
-        await notifyOwner({
-          title: "Bulk monthly reports generated",
-          content: `Generated ${succeeded} of ${results.length} reports for ${MONTH_NAMES[input.reportMonth - 1]} ${input.reportYear}${failed > 0 ? ` (${failed} failed)` : ""}.`,
-        });
-      } catch {
-        /* notifications are best-effort */
-      }
-
-      return {
-        results,
-        totals: { teams: results.length, succeeded, failed, emailsSent, fellBackToCaller },
-        month: input.reportMonth,
-        year: input.reportYear,
-      };
-    }),
-
   exportToExcel: protectedProcedure
     .input(z.object({
       reportId: z.number().positive(),
     }))
     .mutation(async ({ ctx, input }) => {
       // Manual re-export — the operator intends to re-send the email
-      // (typically after editing FM Performance / Goals / Team
-      // Overview text in the Reports UI). Opt out of the Resend
-      // idempotency key so the second send actually goes through
-      // instead of being silently dedup'd against the original.
-      //
-      // Route to the team's FM so a re-export from an admin still
-      // lands in the manager's inbox, matching the `generate` path.
+      // (typically after editing the narrative text in the Reports UI).
+      // Opt out of the Resend idempotency key so the second send
+      // actually goes through instead of being silently dedup'd.
       const reportWithTeam = await db.getReportWithTeam(input.reportId);
-      if (!reportWithTeam) throw new TRPCError({ code: 'NOT_FOUND', message: 'Report not found' });
+      if (!reportWithTeam) throw new TRPCError({ code: "NOT_FOUND", message: "Report not found" });
       const recipient = await resolveReportRecipient(ctx, reportWithTeam.team ?? { userId: null });
       return generateExcelAndEmail(recipient, input.reportId, { idempotent: false });
     }),
@@ -729,16 +196,18 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
       log.info("exportToGoogleSheets START", { reportId: input.reportId });
 
       if (!isGoogleSheetsAvailable()) {
-        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Google Sheets export is not configured. Please add Google service account credentials.' });
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Google Sheets export is not configured. Please add Google service account credentials." });
       }
 
       const reportWithTeam = await db.getReportWithTeam(input.reportId);
-      if (!reportWithTeam) throw new TRPCError({ code: 'NOT_FOUND', message: 'Report not found' });
-
+      if (!reportWithTeam) throw new TRPCError({ code: "NOT_FOUND", message: "Report not found" });
 
       const { report, team } = reportWithTeam;
-      const teamName = team?.teamName || "Unknown Team";
-      const fmName = team?.floorManagerName || "Unknown FM";
+      // Company report (teamId NULL) → label as the whole studio; legacy
+      // per-team reports keep their team name.
+      const isCompany = report.teamId == null;
+      const teamName = isCompany ? COMPANY_REPORT_LABEL : (team?.teamName || "Unknown Team");
+      const fmName = isCompany ? COMPANY_NAME : (team?.floorManagerName || "Unknown FM");
 
       const freshAttendance = await db.getAttendanceByTeamMonth(report.teamId, report.reportMonth, report.reportYear);
 
@@ -750,8 +219,8 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
           const negative = gpAttitudeEntries.filter(e => (e.attitudeScore || 0) < 0).length;
           const entries = gpAttitudeEntries.map(e => ({
             date: e.evaluationDate ? new Date(e.evaluationDate).toLocaleDateString() : new Date(e.createdAt).toLocaleDateString(),
-            type: (e.attitudeScore || 0) > 0 ? 'POSITIVE' : 'NEGATIVE',
-            comment: e.comment || '',
+            type: (e.attitudeScore || 0) > 0 ? "POSITIVE" : "NEGATIVE",
+            comment: e.comment || "",
             score: e.attitudeScore || 0,
           }));
           attitudeByGp[item.gamePresenter.id] = { positive, negative, entries };
@@ -782,7 +251,6 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
         prevMonthEvaluations,
       }, ctx.user.email);
 
-      // Update report with Google Sheets URL
       await db.updateReport(report.id, {
         googleSheetsUrl: result.spreadsheetUrl,
       });
@@ -799,23 +267,15 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
     return { available: isGoogleSheetsAvailable() };
   }),
 
-  list: protectedProcedure.query(async ({ ctx }) => {
-    // User-based data isolation: each user sees only their own reports
-    if (ctx.user.role !== 'admin') {
-      return await db.getReportsWithTeamsByUser(ctx.user.id);
-    }
-    // Admin sees all
+  // One shared database — everyone sees every report.
+  list: protectedProcedure.query(async () => {
     return await db.getReportsWithTeams();
   }),
 
   get: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ ctx, input }) => {
-      const report = await db.getReportWithTeam(input.id);
-      if (!report) return null;
-      
-      // User-based data isolation: non-admin can only access their own reports
-      return report;
+    .query(async ({ input }) => {
+      return await db.getReportWithTeam(input.id);
     }),
 
   // Admin: list all reports with team info
@@ -823,119 +283,28 @@ IMPORTANT: Be specific with names and numbers from the data. Generic goals are n
     return await db.getAllReportsWithTeam();
   }),
 
-  // Delete report with ownership check - user-based data isolation
   delete: protectedProcedure
     .input(z.object({ id: z.number().positive() }))
     .mutation(async ({ ctx, input }) => {
-      const isAdmin = ctx.user.role === 'admin';
-
-      const success = await db.deleteReportWithCheckByUser(
-        input.id,
-        ctx.user.id,
-        isAdmin
-      );
+      const isAdmin = ctx.user.role === "admin";
+      const success = await db.deleteReportWithCheckByUser(input.id, ctx.user.id, isAdmin);
       if (!success) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Report not found or access denied' });
+        throw new TRPCError({ code: "NOT_FOUND", message: "Report not found or access denied" });
       }
-
       return { success: true };
     }),
 
   /**
-   * Delivery-readiness check — answers "if I generate reports right
-   * now, where do the emails actually go?" without firing any sends.
-   *
-   * For each team the caller can see, resolves the recipient via the
-   * same logic the cron and `generateAllForMonth` use:
-   *   1. team.userId → users[that id].email   (the FM)
-   *   2. fallback to caller's own email        (admin behind the wheel)
-   *
-   * Returns one of three statuses per team so the Reports page can
-   * show "✓ Will send to fm-a@..." / "⚠ No FM assigned, will fall
-   * back to your inbox" / "⚠ FM has no email on file" — so an
-   * operator who's wondering "why am I getting all the emails?" sees
-   * the answer at the top of the page instead of having to dig
-   * through audit logs.
+   * Where will the report email go? With company-wide reports there is
+   * no per-team FM routing — the report is emailed to whoever generates
+   * it. The Reports page shows this so an operator knows the email lands
+   * in their own inbox (and warns if they have no email on file).
    */
-  deliveryReadiness: protectedProcedure.query(async ({ ctx }) => {
-    const allTeams = ctx.user.role === "admin"
-      ? await db.getAllFmTeams()
-      : await db.getFmTeamsByUser(ctx.user.id);
-
-    const callerEmail = ctx.user.email ?? null;
-    type Status = "ok" | "no-fm" | "fm-missing-email";
-    const rows: Array<{
-      teamId: number;
-      teamName: string;
-      fmName: string;
-      recipientEmail: string | null;
-      recipientName: string | null;
-      status: Status;
-      /** True when the resolved recipient is the caller's own email
-       *  rather than the team's FM. The Reports UI uses this to
-       *  highlight rows that look "your inbox is acting as a
-       *  fallback". */
-      fallbackToCaller: boolean;
-    }> = [];
-
-    for (const team of allTeams) {
-      let owner = null as Awaited<ReturnType<typeof db.getUserById>> | null;
-      if (team.userId) {
-        try {
-          owner = await db.getUserById(team.userId);
-        } catch { owner = null; }
-      }
-
-      let status: Status;
-      let recipientEmail: string | null;
-      let recipientName: string | null;
-      let fallbackToCaller = false;
-
-      // Mirrors `resolveReportRecipient` — managerEmail wins, then
-      // user link, then fallback to caller.
-      if (team.managerEmail) {
-        status = "ok";
-        recipientEmail = team.managerEmail;
-        recipientName = team.floorManagerName ?? null;
-      } else if (!team.userId || !owner) {
-        // No FM linked at all — falls back to the caller.
-        status = "no-fm";
-        recipientEmail = callerEmail;
-        recipientName = ctx.user.name ?? null;
-        fallbackToCaller = true;
-      } else if (!owner.email) {
-        // FM exists but has no email on file. The cron's per-user
-        // path skips them entirely (writes a no-recipient sentinel);
-        // the admin bulk path falls back to the caller.
-        status = "fm-missing-email";
-        recipientEmail = callerEmail;
-        recipientName = ctx.user.name ?? null;
-        fallbackToCaller = true;
-      } else {
-        status = "ok";
-        recipientEmail = owner.email;
-        recipientName = owner.name ?? null;
-      }
-
-      rows.push({
-        teamId: team.id,
-        teamName: team.teamName,
-        fmName: team.floorManagerName,
-        recipientEmail,
-        recipientName,
-        status,
-        fallbackToCaller,
-      });
-    }
-
+  deliveryReadiness: protectedProcedure.query(({ ctx }) => {
     return {
-      rows: rows.sort((a, b) => a.teamName.localeCompare(b.teamName)),
-      callerEmail,
-      summary: {
-        total: rows.length,
-        ok: rows.filter(r => r.status === "ok").length,
-        fallback: rows.filter(r => r.fallbackToCaller).length,
-      },
+      recipientEmail: ctx.user.email ?? null,
+      recipientName: ctx.user.name ?? null,
+      hasEmail: !!ctx.user.email,
     };
   }),
 });

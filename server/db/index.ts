@@ -29,16 +29,6 @@ export {
   updateUserRole, deleteUser, updateUserFromInvitation,
 } from "./users";
 
-// FM Teams
-export {
-  getAllFmTeams, getFmTeamById, createFmTeam, initializeDefaultTeams,
-  updateFmTeam, deleteFmTeam, getTeamById, getTeamWithUsers,
-  getAllTeamsWithStats, getFmTeamsByUser,
-  getGPsByTeam, assignGPsToTeam, removeGPsFromTeam, getUnassignedGPs,
-  getTeamWithGPs, updateTeamWithGPs, getAllTeamsWithGPs,
-  getTeamsWithGPsByUser, getUnassignedGPsByUser,
-} from "./teams";
-
 // Game Presenters
 export {
   findBestMatchingGP, findAllMatchingGPs,
@@ -116,6 +106,7 @@ export {
   getReportsWithTeamsByUser, getReportsByTeam, getReportByTeamMonthYear,
   getAllReportsWithTeam, deleteReport,
   deleteReportWithCheck, deleteReportWithCheckByUser, deleteReportWithCheckByTeam,
+  ensureReportsTeamNullable, getCompanyReportByMonthYear,
 } from "./reports";
 
 // Dashboard & Analytics

@@ -9,7 +9,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { MONTH_NAMES } from "@shared/const";
+import { MONTH_NAMES, COMPANY_NAME, COMPANY_REPORT_LABEL } from "@shared/const";
 import * as db from "../db";
 import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
@@ -19,6 +19,256 @@ import { exportToGoogleSheets, isGoogleSheetsAvailable } from "../services/googl
 import { createLogger } from "../services/logger";
 
 const log = createLogger("Router");
+
+// ============================================================
+// Company-wide report context + AI narratives.
+//
+// Single source of truth shared by the on-demand report router
+// (report.generate / autoFillFields) and the monthly cron. Aggregates a
+// month's evaluation / error / attitude / attendance data across EVERY
+// GP (one shared database — no team scoping) into a numeric summary and
+// a text block the LLM narrative generators consume.
+// ============================================================
+
+export type GpDetail = {
+  name: string;
+  avgScore: string;
+  appearanceScore: string;
+  gamePerformanceScore: string;
+  evaluationCount: number;
+  errorCount: number;
+  attitudePositive: number;
+  attitudeNegative: number;
+  attitudeTotal: number;
+  lateArrivals: number;
+  missedDays: number;
+};
+
+const scoreBand = (v: number) =>
+  v >= 20 ? "Excellent" : v >= 18 ? "Good" : v >= 16 ? "Needs Improvement" : "Critical";
+
+export async function buildCompanyReportContext(month: number, year: number) {
+  const monthName = MONTH_NAMES[month - 1];
+
+  // Company-wide aggregates — a null teamId covers every GP.
+  const stats = await db.getGPMonthlyStats(null, year, month);
+  const attendance = await db.getAttendanceByTeamMonth(null, month, year);
+  const errorCounts = await db.getErrorCountByGP(month, year);
+  const allGPs = await db.getGamePresentersByTeam(null);
+
+  const attitudeData: { gpName: string; positive: number; negative: number; total: number }[] = [];
+  for (const gp of allGPs) {
+    const attitudes = await db.getAttitudeScreenshotsForGP(gp.id, month, year);
+    const positive = attitudes.filter(a => a.attitudeType === "positive").length;
+    const negative = attitudes.filter(a => a.attitudeType === "negative").length;
+    if (positive > 0 || negative > 0) {
+      attitudeData.push({ gpName: gp.name, positive, negative, total: positive - negative });
+    }
+  }
+
+  const n = stats.length || 1;
+  const avgTotal = stats.reduce((s, gp) => s + Number(gp.avgTotalScore || 0), 0) / n;
+  const avgAppearance = stats.reduce((s, gp) => s + Number(gp.avgAppearanceScore || 0), 0) / n;
+  const avgGamePerf = stats.reduce((s, gp) => s + Number(gp.avgGamePerfScore || 0), 0) / n;
+
+  const topPerformers = [...stats]
+    .sort((a, b) => Number(b.avgTotalScore || 0) - Number(a.avgTotalScore || 0))
+    .slice(0, 3);
+  const needsImprovement = stats.filter(gp => Number(gp.avgTotalScore || 0) < 18);
+
+  const totalMistakes = attendance.reduce((s, a) => s + (a.monthlyStats?.mistakes || a.attendance?.mistakes || 0), 0);
+  const totalExtraShifts = attendance.reduce((s, a) => s + (a.attendance?.extraShifts || 0), 0);
+  const totalLate = attendance.reduce((s, a) => s + (a.attendance?.lateToWork || 0), 0);
+  const totalMissed = attendance.reduce((s, a) => s + (a.attendance?.missedDays || 0), 0);
+  const totalSick = attendance.reduce((s, a) => s + (a.attendance?.sickLeaves || 0), 0);
+
+  const gpDetailedData: GpDetail[] = stats.map(gp => {
+    const gpErrors = errorCounts.find(e => e.gpName === gp.gpName);
+    const gpAttitude = attitudeData.find(a => a.gpName === gp.gpName);
+    const gpAttendance = attendance.find(a => a.gamePresenter.name === gp.gpName);
+    return {
+      name: gp.gpName,
+      avgScore: Number(gp.avgTotalScore || 0).toFixed(1),
+      appearanceScore: Number(gp.avgAppearanceScore || 0).toFixed(1),
+      gamePerformanceScore: Number(gp.avgGamePerfScore || 0).toFixed(1),
+      evaluationCount: gp.evaluationCount,
+      errorCount: gpErrors?.errorCount || 0,
+      attitudePositive: gpAttitude?.positive || 0,
+      attitudeNegative: gpAttitude?.negative || 0,
+      attitudeTotal: gpAttitude?.total || 0,
+      lateArrivals: gpAttendance?.attendance?.lateToWork || 0,
+      missedDays: gpAttendance?.attendance?.missedDays || 0,
+    };
+  });
+
+  const gpsWithErrors = gpDetailedData.filter(g => g.errorCount > 0).sort((a, b) => b.errorCount - a.errorCount);
+  const gpsWithNegativeAttitude = gpDetailedData.filter(g => g.attitudeNegative > 0).sort((a, b) => b.attitudeNegative - a.attitudeNegative);
+  const gpsWithPositiveAttitude = gpDetailedData.filter(g => g.attitudePositive > 0).sort((a, b) => b.attitudePositive - a.attitudePositive);
+
+  const totalErrors = gpsWithErrors.reduce((s, g) => s + g.errorCount, 0);
+  const totalPositiveAttitude = attitudeData.reduce((s, a) => s + a.positive, 0);
+  const totalNegativeAttitude = attitudeData.reduce((s, a) => s + a.negative, 0);
+
+  const formatGpLine = (g: GpDetail) =>
+    `${g.name} | Score ${g.avgScore}/22 | Appearance ${g.appearanceScore}/12 | Game ${g.gamePerformanceScore}/10 | ` +
+    `Evals ${g.evaluationCount} | Errors ${g.errorCount} | Attitude +${g.attitudePositive}/-${g.attitudeNegative} | ` +
+    `Late ${g.lateArrivals} | Missed ${g.missedDays}`;
+
+  const dataContext = `
+Company: ${COMPANY_NAME} (${COMPANY_REPORT_LABEL})
+Period: ${monthName} ${year}
+
+=== EVALUATION STATISTICS ===
+- Total GPs Evaluated: ${stats.length}
+- Average Total Score: ${avgTotal.toFixed(1)}/22 (${scoreBand(avgTotal)})
+- Average Appearance Score: ${avgAppearance.toFixed(1)}/12
+- Average Game Performance Score: ${avgGamePerf.toFixed(1)}/10
+
+=== TOP PERFORMERS (by evaluation score) ===
+${topPerformers.map((gp, i) => {
+  const d = gpDetailedData.find(x => x.name === gp.gpName);
+  return `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/22 (${d?.evaluationCount || 0} evaluations, ${d?.errorCount || 0} errors, attitude: +${d?.attitudePositive || 0}/-${d?.attitudeNegative || 0})`;
+}).join("\n")}
+
+${needsImprovement.length > 0 ? `=== GPs NEEDING IMPROVEMENT (score < 18) ===
+${needsImprovement.map(gp => {
+  const d = gpDetailedData.find(x => x.name === gp.gpName);
+  return `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/22 (Appearance: ${d?.appearanceScore}/12, Game Perf: ${d?.gamePerformanceScore}/10)`;
+}).join("\n")}` : "=== All GPs are performing well (score >= 18) ==="}
+
+=== ERROR ANALYSIS ===
+- Total Errors (company-wide): ${totalErrors}
+${gpsWithErrors.length > 0 ? `GPs with errors:
+${gpsWithErrors.slice(0, 5).map(g => `- ${g.name}: ${g.errorCount} errors`).join("\n")}` : "No errors recorded this month"}
+
+=== ATTITUDE ANALYSIS ===
+- Total Positive Feedback: ${totalPositiveAttitude}
+- Total Negative Feedback: ${totalNegativeAttitude}
+${gpsWithPositiveAttitude.length > 0 ? `GPs with positive attitude feedback:
+${gpsWithPositiveAttitude.slice(0, 3).map(g => `- ${g.name}: +${g.attitudePositive}`).join("\n")}` : "No positive attitude feedback recorded"}
+${gpsWithNegativeAttitude.length > 0 ? `GPs with negative attitude feedback:
+${gpsWithNegativeAttitude.slice(0, 3).map(g => `- ${g.name}: -${g.attitudeNegative}`).join("\n")}` : "No negative attitude feedback recorded"}
+
+=== ATTENDANCE SUMMARY ===
+- Total Mistakes/Errors: ${totalMistakes}
+- Extra Shifts Worked: ${totalExtraShifts}
+- Late Arrivals: ${totalLate}
+- Missed Days: ${totalMissed}
+- Sick Leaves: ${totalSick}
+
+=== INDIVIDUAL GP BREAKDOWN ===
+${gpDetailedData.map(formatGpLine).join("\n")}
+`;
+
+  return {
+    monthName,
+    stats,
+    attendance,
+    gpDetailedData,
+    avgTotal,
+    avgAppearance,
+    avgGamePerf,
+    topPerformers,
+    needsImprovement,
+    totals: {
+      totalMistakes, totalExtraShifts, totalLate, totalMissed, totalSick,
+      totalErrors, totalPositiveAttitude, totalNegativeAttitude,
+    },
+    dataContext,
+  };
+}
+
+const SHARED_PROMPT_RULES = `Rules:
+- Use only facts present in the data context.
+- Do NOT invent names, numbers, or events.
+- If data is missing, state it is not available rather than guessing.
+- Keep the tone professional and concise.`;
+
+async function llmText(systemPrompt: string, userPrompt: string): Promise<string> {
+  const res = await invokeLLM({
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+  });
+  const content = res.choices[0]?.message?.content;
+  return typeof content === "string" ? content : "";
+}
+
+export const genManagementSummary = (dataContext: string) =>
+  llmText(
+    `You are the management team writing a brief summary for a company-wide monthly casino operations report covering all teams.
+
+Guidelines:
+- Write professionally and concisely, in 3-4 sentences
+- Focus on company-wide management achievements, studio operations improvements, and how challenges were handled
+- Reference specific metrics from the data (scores, error reduction, attitude improvements)
+- Do NOT use bullet points
+
+${SHARED_PROMPT_RULES}`,
+    `Based on this company-wide data, write a brief management summary highlighting achievements across all teams:\n${dataContext}`,
+  );
+
+export const genGoals = (dataContext: string) =>
+  llmText(
+    `You are the management team creating SMART goals for a company-wide monthly casino operations report covering all teams.
+
+Guidelines for writing optimal Goals:
+1. Analyze the data to identify the TOP 3 priority areas:
+ - GPs with low evaluation scores (< 18/22) need improvement plans
+ - GPs with high error counts need error reduction targets
+ - GPs with negative attitude feedback need behavior coaching
+ - Attendance issues (late arrivals, missed days) need addressing
+
+2. For each goal, be SPECIFIC:
+ - Name the GPs who need improvement (if applicable)
+ - Set measurable targets (e.g., "reduce errors by 50%", "improve score to 19+")
+ - Focus on actionable improvements
+
+3. Balance the goals:
+ - 1 goal for maintaining/rewarding top performers
+ - 1-2 goals for addressing weaknesses (errors, scores, attitude)
+ - Consider company-wide improvements if no individual issues
+
+4. Format: Write 3-4 concise sentences. Do NOT use bullet points.
+
+IMPORTANT: Be specific with names and numbers from the data. Generic goals are not acceptable.
+
+${SHARED_PROMPT_RULES}`,
+    `Based on this company-wide performance data, create specific, actionable Goals for next month:\n${dataContext}`,
+  );
+
+export const genOverview = (dataContext: string) =>
+  llmText(
+    `You are the management team writing a comprehensive Company Overview for a monthly casino operations report covering all teams.
+
+Guidelines for writing an optimal Overview:
+1. Start with overall company performance assessment:
+ - Company average score and what it indicates (Excellent/Good/Needs Work)
+ - Compare appearance vs game performance scores
+
+2. Highlight achievements:
+ - Name top 2-3 performers with their scores
+ - Mention any GPs with positive attitude feedback
+ - Note extra shifts or exceptional dedication
+
+3. Address concerns honestly:
+ - Name GPs with scores below 18 and their specific issues
+ - Mention error counts for GPs with multiple errors
+ - Note any negative attitude feedback recipients
+ - Address attendance issues (late arrivals, missed days)
+
+4. Provide balanced perspective:
+ - Acknowledge both strengths and areas for improvement
+ - Be factual and data-driven
+
+5. Format: Write 4-5 concise sentences. Do NOT use bullet points.
+
+IMPORTANT: Use specific names and numbers from the data. A good overview is honest, specific, and actionable.
+
+${SHARED_PROMPT_RULES}`,
+    `Based on this company-wide performance data, write a detailed Company Overview that accurately reflects performance across all teams this month:\n${dataContext}`,
+  );
 
 type ReportRecipient = {
   user: { id: number; role: string; email?: string | null; name?: string | null };
@@ -105,8 +355,11 @@ export async function generateExcelAndEmail(
   // "Access denied" toasts even for admins.
 
   const { report, team } = reportWithTeam;
-  const teamName = team?.teamName || "Unknown Team";
-  const fmName = team?.floorManagerName || "Unknown FM";
+  // Company report (teamId NULL) → label as the whole studio; legacy
+  // per-team reports keep their team / FM name.
+  const isCompany = report.teamId == null;
+  const teamName = isCompany ? COMPANY_REPORT_LABEL : (team?.teamName || "Unknown Team");
+  const fmName = isCompany ? COMPANY_NAME : (team?.floorManagerName || "Unknown FM");
   const monthName = MONTH_NAMES[report.reportMonth - 1];
 
   const freshAttendance = await db.getAttendanceByTeamMonth(report.teamId, report.reportMonth, report.reportYear);

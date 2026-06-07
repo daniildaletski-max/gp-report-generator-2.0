@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
 import { ActionItemsBoardTab } from "@/components/admin/ActionItemsBoardTab";
 import { StudioworksImportButton } from "@/components/StudioworksImporter";
-const ADMIN_TABS = ["overview", "invitations", "users", "teams", "stats", "action-items", "access", "errors", "studioworks"] as const;
+const ADMIN_TABS = ["overview", "invitations", "users", "stats", "action-items", "access", "errors", "studioworks"] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
 const FM_TABS = ["stats", "action-items", "access"] as const;
@@ -65,11 +65,8 @@ function FMRestrictedView() {
     v => (v === "stats" ? null : v),
   );
 
-  const { data: teams } = trpc.fmTeam.list.useQuery();
   const { data: gamePresenters, isLoading: gpsLoading, refetch: refetchGPs } = trpc.gamePresenter.list.useQuery();
   const { data: accessTokens, isLoading: tokensLoading, refetch: refetchTokens } = trpc.gpAccess.list.useQuery();
-
-  const team = teams?.[0]; // FM only sees their team
 
   return (
     <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
@@ -79,8 +76,8 @@ function FMRestrictedView() {
             <Users className="h-6 w-6 text-amber-700" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Team Management</h1>
-            <p className="text-sm text-slate-500">Manage your team: {team?.teamName || "Loading..."}</p>
+            <h1 className="text-2xl font-bold text-slate-900">Management</h1>
+            <p className="text-sm text-slate-500">Company-wide stats, plans and access links</p>
           </div>
         </div>
         <Badge className="bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-800 border border-amber-300 rounded-xl px-4 py-2 font-semibold shadow-sm">
@@ -106,25 +103,21 @@ function FMRestrictedView() {
         </TabsList>
 
         {/* GP Stats Tab */}
-        {team && (
-          <GPStatsTab
-            teams={[team]}
-            selectedMonth={selectedMonth}
-            selectedYear={selectedYear}
-            setSelectedMonth={setSelectedMonth}
-            setSelectedYear={setSelectedYear}
-            isFMView={true}
-          />
-        )}
+        <GPStatsTab
+          selectedMonth={selectedMonth}
+          selectedYear={selectedYear}
+          setSelectedMonth={setSelectedMonth}
+          setSelectedYear={setSelectedYear}
+          isFMView={true}
+        />
 
-        {/* Action Items board — also fixed to FM's team */}
-        {team && <ActionItemsBoardTab teams={[team]} fixedTeamId={team.id} />}
+        {/* Action Items board — company-wide */}
+        <ActionItemsBoardTab />
 
         {/* GP Access Links Tab */}
         <GPAccessLinksTab 
           gamePresenters={gamePresenters || []}
           accessTokens={accessTokens || []}
-          teams={teams || []}
           refetchTokens={refetchTokens}
           refetchGPs={refetchGPs}
           isLoading={gpsLoading || tokensLoading}
@@ -145,12 +138,11 @@ function FullAdminPanel() {
     v => (v === "overview" ? null : v),
   );
 
-  const { data: teams, isLoading: teamsLoading, refetch: refetchTeams } = trpc.fmTeam.list.useQuery();
   const { data: errorFiles, isLoading: filesLoading, refetch: refetchFiles } = trpc.errorFile.list.useQuery();
   const { data: gamePresenters, isLoading: gpsLoading, refetch: refetchGPs } = trpc.gamePresenter.list.useQuery();
   const { data: accessTokens, isLoading: tokensLoading, refetch: refetchTokens } = trpc.gpAccess.list.useQuery();
 
-  if (teamsLoading || filesLoading || gpsLoading || tokensLoading) {
+  if (filesLoading || gpsLoading || tokensLoading) {
     return (
       <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
         <div className="page-header">
@@ -206,10 +198,6 @@ function FullAdminPanel() {
             <UserCog className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline text-xs font-medium">Users</span>
           </TabsTrigger>
-          <TabsTrigger value="teams" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
-            <Building2 className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline text-xs font-medium">Teams</span>
-          </TabsTrigger>
           <TabsTrigger value="stats" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
             <Star className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline text-xs font-medium">GP Stats</span>
@@ -237,17 +225,13 @@ function FullAdminPanel() {
         <AdminOverviewTab onTabChange={setActiveTab} />
 
         {/* Invitations Tab */}
-        <InvitationsTab teams={teams || []} />
+        <InvitationsTab />
 
         {/* User Management Tab */}
-        <UserManagementTab teams={teams || []} />
-
-        {/* Teams Management Tab */}
-        <TeamsManagementTab refetchTeams={refetchTeams} />
+        <UserManagementTab />
 
         {/* GP Stats Tab */}
         <GPStatsTab
-          teams={teams || []}
           selectedMonth={selectedMonth}
           selectedYear={selectedYear}
           setSelectedMonth={setSelectedMonth}
@@ -256,13 +240,12 @@ function FullAdminPanel() {
         />
 
         {/* Action Items board */}
-        <ActionItemsBoardTab teams={teams || []} />
+        <ActionItemsBoardTab />
 
         {/* GP Access Links Tab */}
         <GPAccessLinksTab 
           gamePresenters={gamePresenters || []}
           accessTokens={accessTokens || []}
-          teams={teams || []}
           refetchTokens={refetchTokens}
           refetchGPs={refetchGPs}
           isLoading={false}
@@ -318,7 +301,6 @@ function AdminOverviewTab({ onTabChange }: { onTabChange: (tab: AdminTab) => voi
     target: { kind: "tab"; tab: AdminTab } | { kind: "url"; url: string };
   }> = [
     { title: "Total Users", value: adminStats?.totalUsers || 0, icon: Users, tone: "amber", target: { kind: "tab", tab: "users" } },
-    { title: "Teams", value: adminStats?.totalTeams || 0, icon: Building2, tone: "indigo", target: { kind: "tab", tab: "teams" } },
     { title: "Game Presenters", value: adminStats?.totalGPs || 0, icon: Star, tone: "emerald", target: { kind: "tab", tab: "stats" } },
     { title: "Evaluations", value: adminStats?.totalEvaluations || 0, icon: Target, tone: "sky", target: { kind: "url", url: "/evaluations" } },
     { title: "Reports", value: adminStats?.totalReports || 0, icon: FileSpreadsheet, tone: "violet", target: { kind: "url", url: "/reports" } },
@@ -337,7 +319,6 @@ function AdminOverviewTab({ onTabChange }: { onTabChange: (tab: AdminTab) => voi
 
   const quickActions = [
     { label: "Manage Users", icon: UserCog, tone: "amber" as const, count: adminStats?.totalUsers, target: "users" },
-    { label: "Manage Teams", icon: Building2, tone: "indigo" as const, count: adminStats?.totalTeams, target: "teams" },
     { label: "View GP Stats", icon: Star, tone: "emerald" as const, count: adminStats?.totalGPs, target: "stats" },
     { label: "Check Errors", icon: AlertTriangle, tone: "rose" as const, count: undefined, target: "errors" },
   ];
@@ -440,7 +421,7 @@ function AdminOverviewTab({ onTabChange }: { onTabChange: (tab: AdminTab) => voi
 }
 
 // User Management Tab Component
-function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[] }) {
+function UserManagementTab() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState<string>("all");
   
@@ -452,16 +433,6 @@ function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[
     },
     onError: (error) => {
       toast.error(error.message || "Failed to update role");
-    },
-  });
-
-  const assignTeam = trpc.user.assignToTeam.useMutation({
-    onSuccess: () => {
-      toast.success("Team assigned");
-      refetch();
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to assign team");
     },
   });
 
@@ -554,7 +525,6 @@ function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[
                   <TableRow>
                     <TableHead>User</TableHead>
                     <TableHead>Role</TableHead>
-                    <TableHead>Team</TableHead>
                     <TableHead>Joined</TableHead>
                     <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
@@ -598,27 +568,6 @@ function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[
                                 User
                               </div>
                             </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={user.teamId ? String(user.teamId) : "none"}
-                          onValueChange={(teamId) => assignTeam.mutate({ 
-                            userId: user.id, 
-                            teamId: teamId === "none" ? null : Number(teamId) 
-                          })}
-                        >
-                          <SelectTrigger className="w-[150px]">
-                            <SelectValue placeholder="No team" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">No team</SelectItem>
-                            {teams.map((team) => (
-                              <SelectItem key={team.id} value={String(team.id)}>
-                                {team.teamName}
-                              </SelectItem>
-                            ))}
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -678,696 +627,6 @@ function UserManagementTab({ teams }: { teams: { id: number; teamName: string }[
   );
 }
 
-// Teams Management Tab Component
-function TeamsManagementTab({ refetchTeams }: { refetchTeams: () => void }) {
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [newTeamName, setNewTeamName] = useState("");
-  const [newFMName, setNewFMName] = useState("");
-  const [newManagerEmail, setNewManagerEmail] = useState("");
-  const [editingTeam, setEditingTeam] = useState<any>(null);
-  const [selectedGPs, setSelectedGPs] = useState<number[]>([]);
-  const [gpSearchTerm, setGpSearchTerm] = useState("");
-  // Inline email edit state
-  const [inlineEditTeamId, setInlineEditTeamId] = useState<number | null>(null);
-  const [inlineEmailValue, setInlineEmailValue] = useState("");
-
-  const { data: teamsWithGPs, isLoading, refetch } = trpc.fmTeam.listWithGPs.useQuery();
-  const { data: allGPs } = trpc.gamePresenter.list.useQuery();
-  const { data: unassignedGPs, refetch: refetchUnassigned } = trpc.fmTeam.getUnassignedGPs.useQuery();
-
-  const createTeam = trpc.fmTeam.create.useMutation({
-    onSuccess: () => {
-      toast.success("Team created successfully");
-      setIsCreateOpen(false);
-      setNewTeamName("");
-      setNewFMName("");
-      setNewManagerEmail("");
-      refetch();
-      refetchTeams();
-      refetchUnassigned();
-    },
-    onError: (error) => {
-      toast.error(error.message || "Failed to create team");
-    },
-  });
-
-  const updateTeam = trpc.fmTeam.update.useMutation({
-    onSuccess: () => {
-      toast.success("Team updated successfully");
-      setEditingTeam(null);
-      setSelectedGPs([]);
-      setGpSearchTerm("");
-      refetch();
-      refetchTeams();
-      refetchUnassigned();
-    },
-    onError: (error) => {
-      toast.error(error.message || "Failed to update team");
-    },
-  });
-
-  // Lightweight mutation for inline email edits (no GP reassignment)
-  const updateEmailInline = trpc.fmTeam.update.useMutation({
-    onSuccess: () => {
-      toast.success("Manager email updated");
-      setInlineEditTeamId(null);
-      setInlineEmailValue("");
-      refetch();
-    },
-    onError: (error) => {
-      toast.error(error.message || "Failed to update email");
-    },
-  });
-
-  const deleteTeam = trpc.fmTeam.delete.useMutation({
-    onSuccess: () => {
-      toast.success("Team deleted");
-      refetch();
-      refetchTeams();
-      refetchUnassigned();
-    },
-    onError: (error) => {
-      toast.error(error.message || "Failed to delete team");
-    },
-  });
-
-  // When editing team opens, set selected GPs
-  const handleEditTeam = (team: any) => {
-    setEditingTeam(team);
-    setSelectedGPs(team.gamePresenters?.map((gp: any) => gp.id) || []);
-    setGpSearchTerm("");
-  };
-
-  // Get available GPs for selection (unassigned + currently assigned to this team)
-  const getAvailableGPs = () => {
-    if (!allGPs) return [];
-    return allGPs.filter((gp: any) => {
-      // Include if unassigned or assigned to current editing team
-      return !gp.teamId || gp.teamId === editingTeam?.id;
-    });
-  };
-
-  const availableGPs = getAvailableGPs();
-  const filteredGPs = availableGPs.filter((gp: any) =>
-    gp.name.toLowerCase().includes(gpSearchTerm.toLowerCase())
-  );
-
-  const toggleGP = (gpId: number) => {
-    setSelectedGPs(prev =>
-      prev.includes(gpId)
-        ? prev.filter(id => id !== gpId)
-        : [...prev, gpId]
-    );
-  };
-
-  const selectAllFilteredGPs = () => {
-    const filteredIds = filteredGPs.map((gp: any) => gp.id);
-    setSelectedGPs(prev => {
-      const newSet = new Set([...prev, ...filteredIds]);
-      return Array.from(newSet);
-    });
-  };
-
-  const deselectAllGPs = () => {
-    setSelectedGPs([]);
-  };
-
-  return (
-    <TabsContent value="teams" className="space-y-4">
-      {/* Hero header — replaces the plain text + button row with a
-          proper card-style hero: gradient bg, big icon, title /
-          subtitle, summary chips (teams · GPs · reports), primary
-          Create Team CTA on the right. */}
-      <div className="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50 via-yellow-50/60 to-white shadow-sm">
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-400" aria-hidden />
-        <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3 min-w-0 flex-1">
-            <div className="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-amber-100 to-yellow-100 border border-amber-200 flex items-center justify-center">
-              <Building2 className="h-5 w-5 text-amber-700" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-lg font-bold text-slate-900">Teams</h2>
-              <p className="text-xs text-slate-600">Create FM teams and assign Game Presenters.</p>
-              {teamsWithGPs && teamsWithGPs.length > 0 && (() => {
-                const totals = teamsWithGPs.reduce((a: any, t: any) => ({
-                  gp: a.gp + Number(t.gpCount || 0),
-                  rep: a.rep + Number(t.reportCount || 0),
-                  user: a.user + Number(t.assignedUsers?.length || 0),
-                }), { gp: 0, rep: 0, user: 0 });
-                return (
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <SummaryChip dotCls="bg-amber-400" label={`${teamsWithGPs.length} teams`} />
-                    <SummaryChip dotCls="bg-emerald-400" label={`${totals.gp} GPs`} />
-                    <SummaryChip dotCls="bg-sky-400" label={`${totals.rep} reports`} />
-                    <SummaryChip dotCls="bg-violet-400" label={`${totals.user} users`} />
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-          <div className="flex items-center">
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Team
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Team</DialogTitle>
-                  <DialogDescription>
-                    Add a new FM team. You can assign GPs after creating the team.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="teamName">Team Name</Label>
-                    <Input
-                      id="teamName"
-                      placeholder="e.g., Team Alpha"
-                      value={newTeamName}
-                      onChange={(e) => setNewTeamName(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="fmName">Floor Manager Name</Label>
-                    <Input
-                      id="fmName"
-                      placeholder="e.g., John Smith"
-                      value={newFMName}
-                      onChange={(e) => setNewFMName(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="managerEmail">Manager Email <span className="text-muted-foreground text-xs font-normal">(reports go here)</span></Label>
-                    <Input
-                      id="managerEmail"
-                      type="email"
-                      placeholder="e.g., john.smith@example.com"
-                      value={newManagerEmail}
-                      onChange={(e) => setNewManagerEmail(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={() => createTeam.mutate({
-                      teamName: newTeamName,
-                      floorManagerName: newFMName,
-                      managerEmail: newManagerEmail || undefined,
-                    })}
-                    disabled={!newTeamName || !newFMName || createTeam.isPending}
-                  >
-                    {createTeam.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    Create
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-      </div>
-
-      {/* Teams grid — moved out of the previous unified-card wrapper */}
-      <div className="space-y-4">
-          {isLoading ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="skeleton-enhanced h-48 w-full rounded-xl" />
-              ))}
-            </div>
-          ) : teamsWithGPs && teamsWithGPs.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {teamsWithGPs.map((team: any) => {
-                // Health rating: green when team has both GPs and recent
-                // reports; amber when half-set; rose when starved.
-                const gpC = Number(team.gpCount || 0);
-                const repC = Number(team.reportCount || 0);
-                const userC = Number(team.assignedUsers?.length || 0);
-                const score = (gpC > 0 ? 1 : 0) + (repC > 0 ? 1 : 0) + (userC > 0 ? 1 : 0);
-                const health = score === 3 ? "healthy" : score === 2 ? "ok" : "low";
-                const healthMeta = health === "healthy"
-                  ? { label: "Healthy", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", barCls: "from-emerald-400 to-emerald-500" }
-                  : health === "ok"
-                    ? { label: "OK", cls: "bg-amber-50 text-amber-700 border-amber-200", barCls: "from-amber-400 to-orange-400" }
-                    : { label: "Needs setup", cls: "bg-rose-50 text-rose-700 border-rose-200", barCls: "from-rose-400 to-pink-400" };
-                // Per-team gradient accent stripe — derived from team id
-                // so each team keeps a stable colour across reloads.
-                const accents = [
-                  "from-amber-400 via-orange-400 to-amber-500",
-                  "from-sky-400 via-cyan-400 to-sky-500",
-                  "from-violet-400 via-purple-400 to-violet-500",
-                  "from-emerald-400 via-teal-400 to-emerald-500",
-                  "from-rose-400 via-pink-400 to-rose-500",
-                  "from-indigo-400 via-blue-400 to-indigo-500",
-                ];
-                const accentCls = accents[Number(team.id) % accents.length];
-                return (
-                <Card key={team.id} className="relative overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                  <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${accentCls}`} />
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <CardTitle className="text-lg truncate">{team.teamName}</CardTitle>
-                        <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border ${healthMeta.cls} shrink-0`}>
-                          {healthMeta.label}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Dialog open={editingTeam?.id === team.id} onOpenChange={(open) => {
-                          if (!open) {
-                            setEditingTeam(null);
-                            setSelectedGPs([]);
-                            setGpSearchTerm("");
-                          }
-                        }}>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleEditTeam(team)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                            <DialogHeader>
-                              <DialogTitle>Edit Team: {team.teamName}</DialogTitle>
-                              <DialogDescription>
-                                Update team details and assign Game Presenters.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-6 py-4">
-                              {/* Team Details */}
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <Label>Team Name</Label>
-                                  <Input
-                                    value={editingTeam?.teamName || ""}
-                                    onChange={(e) => setEditingTeam({ ...editingTeam, teamName: e.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label>Floor Manager Name</Label>
-                                  <Input
-                                    value={editingTeam?.floorManagerName || ""}
-                                    onChange={(e) => setEditingTeam({ ...editingTeam, floorManagerName: e.target.value })}
-                                  />
-                                </div>
-                                <div className="space-y-2 col-span-2">
-                                  <Label>Manager Email <span className="text-muted-foreground text-xs font-normal">(Team Monthly Overview reports go here)</span></Label>
-                                  <Input
-                                    type="email"
-                                    placeholder="e.g., john.smith@example.com"
-                                    value={editingTeam?.managerEmail || ""}
-                                    onChange={(e) => setEditingTeam({ ...editingTeam, managerEmail: e.target.value })}
-                                  />
-                                </div>
-                              </div>
-
-                              {/* GP Selection */}
-                              <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <Label className="text-base font-semibold">Assign Game Presenters</Label>
-                                  <Badge variant="secondary">
-                                    {selectedGPs.length} selected
-                                  </Badge>
-                                </div>
-
-                                {/* Search and Actions */}
-                                <div className="flex gap-2">
-                                  <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                      placeholder="Search GPs..."
-                                      value={gpSearchTerm}
-                                      onChange={(e) => setGpSearchTerm(e.target.value)}
-                                      className="pl-9"
-                                    />
-                                  </div>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={selectAllFilteredGPs}
-                                    disabled={filteredGPs.length === 0}
-                                  >
-                                    <CheckSquare className="h-4 w-4 mr-1" />
-                                    All
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={deselectAllGPs}
-                                    disabled={selectedGPs.length === 0}
-                                  >
-                                    <Square className="h-4 w-4 mr-1" />
-                                    None
-                                  </Button>
-                                </div>
-
-                                {/* GP List */}
-                                <div className="border rounded-lg max-h-64 overflow-y-auto">
-                                  {filteredGPs.length > 0 ? (
-                                    <div className="divide-y">
-                                      {filteredGPs.map((gp: any) => (
-                                        <label
-                                          key={gp.id}
-                                          className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer transition-colors"
-                                        >
-                                          <Checkbox
-                                            checked={selectedGPs.includes(gp.id)}
-                                            onCheckedChange={() => toggleGP(gp.id)}
-                                          />
-                                          <div className="flex-1 min-w-0">
-                                            <div className="font-medium truncate">{gp.name}</div>
-                                            {gp.teamId && gp.teamId !== editingTeam?.id && (
-                                              <div className="text-xs text-muted-foreground">
-                                                Currently in another team
-                                              </div>
-                                            )}
-                                          </div>
-                                          <Star className="h-4 w-4 text-yellow-500 shrink-0" />
-                                        </label>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <div className="p-8 text-center text-muted-foreground">
-                                      <Star className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                                      <p>No GPs found</p>
-                                      {gpSearchTerm && (
-                                        <p className="text-sm">Try a different search term</p>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Selected GPs Preview */}
-                                {selectedGPs.length > 0 && (
-                                  <div className="bg-muted/50 rounded-lg p-3">
-                                    <div className="text-sm font-medium mb-2">Selected GPs:</div>
-                                    <div className="flex flex-wrap gap-1">
-                                      {selectedGPs.slice(0, 10).map(gpId => {
-                                        const gp = availableGPs.find((g: any) => g.id === gpId);
-                                        return gp ? (
-                                          <Badge
-                                            key={gpId}
-                                            variant="secondary"
-                                            className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground transition-colors"
-                                            onClick={() => toggleGP(gpId)}
-                                          >
-                                            {gp.name}
-                                            <X className="h-3 w-3 ml-1" />
-                                          </Badge>
-                                        ) : null;
-                                      })}
-                                      {selectedGPs.length > 10 && (
-                                        <Badge variant="outline">
-                                          +{selectedGPs.length - 10} more
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <DialogFooter>
-                              <Button variant="outline" onClick={() => {
-                                setEditingTeam(null);
-                                setSelectedGPs([]);
-                                setGpSearchTerm("");
-                              }}>
-                                Cancel
-                              </Button>
-                              <Button
-                                onClick={() => updateTeam.mutate({
-                                  teamId: editingTeam.id,
-                                  teamName: editingTeam.teamName,
-                                  floorManagerName: editingTeam.floorManagerName,
-                                  managerEmail: editingTeam.managerEmail ?? "",
-                                  gpIds: selectedGPs,
-                                })}
-                                disabled={updateTeam.isPending}
-                              >
-                                {updateTeam.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                                Save Changes
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Team</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to delete "{team.teamName}"? All users and GPs will be unassigned from this team.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deleteTeam.mutate({ teamId: team.id })}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </div>
-                    <CardDescription className="flex items-center gap-1.5">
-                      <UserCog className="h-3 w-3 text-slate-400" />
-                      {team.floorManagerName}
-                    </CardDescription>
-                    {/* Inline manager email edit */}
-                    <div className="mt-2">
-                      {inlineEditTeamId === team.id ? (
-                        <form
-                          className="flex items-center gap-1.5"
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            updateEmailInline.mutate({
-                              teamId: team.id,
-                              managerEmail: inlineEmailValue,
-                            });
-                          }}
-                        >
-                          <Mail className="h-3 w-3 text-amber-500 shrink-0" />
-                          <Input
-                            type="email"
-                            placeholder="manager@example.com"
-                            value={inlineEmailValue}
-                            onChange={(e) => setInlineEmailValue(e.target.value)}
-                            className="h-7 text-xs flex-1"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Escape') {
-                                setInlineEditTeamId(null);
-                                setInlineEmailValue("");
-                              }
-                            }}
-                          />
-                          <Button
-                            type="submit"
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 text-emerald-600 hover:text-emerald-700"
-                            disabled={updateEmailInline.isPending}
-                          >
-                            {updateEmailInline.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 text-slate-400 hover:text-slate-600"
-                            onClick={() => { setInlineEditTeamId(null); setInlineEmailValue(""); }}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </form>
-                      ) : (
-                        <button
-                          type="button"
-                          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-amber-700 transition-colors group w-full text-left"
-                          onClick={() => {
-                            setInlineEditTeamId(team.id);
-                            setInlineEmailValue(team.managerEmail || "");
-                          }}
-                          title="Click to edit manager email"
-                        >
-                          <Mail className="h-3 w-3 text-slate-400 group-hover:text-amber-500" />
-                          {team.managerEmail ? (
-                            <span className="truncate">{team.managerEmail}</span>
-                          ) : (
-                            <span className="italic text-slate-400">Add email for reports</span>
-                          )}
-                          <Edit className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                        </button>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Stat trio with semantic colours + tabular nums */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="rounded-lg bg-emerald-50/60 border border-emerald-200/50 px-2 py-2 text-center">
-                        <div className="text-xl font-bold text-emerald-700 tabular-nums leading-none">{gpC}</div>
-                        <div className="text-[10px] text-emerald-700/80 mt-1 uppercase tracking-wider">GPs</div>
-                      </div>
-                      <div className="rounded-lg bg-sky-50/60 border border-sky-200/50 px-2 py-2 text-center">
-                        <div className="text-xl font-bold text-sky-700 tabular-nums leading-none">{repC}</div>
-                        <div className="text-[10px] text-sky-700/80 mt-1 uppercase tracking-wider">Reports</div>
-                      </div>
-                      <div className="rounded-lg bg-violet-50/60 border border-violet-200/50 px-2 py-2 text-center">
-                        <div className="text-xl font-bold text-violet-700 tabular-nums leading-none">{userC}</div>
-                        <div className="text-[10px] text-violet-700/80 mt-1 uppercase tracking-wider">Users</div>
-                      </div>
-                    </div>
-
-                    {/* Health progress bar — visualises the 3-point score */}
-                    <div>
-                      <div className="flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-1">
-                        <span>Team health</span>
-                        <span className="tabular-nums">{score}/3</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full bg-gradient-to-r ${healthMeta.barCls} transition-all duration-500`}
-                          style={{ width: `${(score / 3) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Assigned GPs as avatar-initial chips */}
-                    {team.gamePresenters?.length > 0 && (
-                      <div>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                          <Star className="h-3 w-3" /> Presenters
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {team.gamePresenters.slice(0, 6).map((gp: any) => {
-                            const initials = String(gp.name || "?")
-                              .split(/\s+/).filter(Boolean).slice(0, 2)
-                              .map((p: string) => p[0]).join("").toUpperCase() || "?";
-                            return (
-                              <span
-                                key={gp.id}
-                                title={gp.name}
-                                className="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-full bg-white border border-slate-200 text-[11px] text-slate-700"
-                              >
-                                <span className="h-4 w-4 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-600">
-                                  {initials}
-                                </span>
-                                <span className="truncate max-w-[80px]">{gp.name.split(" ")[0]}</span>
-                              </span>
-                            );
-                          })}
-                          {team.gamePresenters.length > 6 && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] text-slate-600 tabular-nums">
-                              +{team.gamePresenters.length - 6}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Assigned users as avatar circles */}
-                    {team.assignedUsers?.length > 0 && (
-                      <div>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                          <Users className="h-3 w-3" /> Assigned
-                        </div>
-                        <div className="flex items-center -space-x-1">
-                          {team.assignedUsers.slice(0, 4).map((u: any, idx: number) => {
-                            const label = u.name || u.email || "?";
-                            const initials = String(label).split(/[\s@]+/).filter(Boolean).slice(0, 2).map((p: string) => p[0]).join("").toUpperCase() || "?";
-                            return (
-                              <span
-                                key={idx}
-                                title={label}
-                                className="h-7 w-7 rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 border-2 border-white text-[10px] font-bold text-violet-700 flex items-center justify-center"
-                              >
-                                {initials}
-                              </span>
-                            );
-                          })}
-                          {team.assignedUsers.length > 4 && (
-                            <span className="h-7 w-7 rounded-full bg-slate-100 border-2 border-white text-[10px] font-bold text-slate-600 flex items-center justify-center tabular-nums">
-                              +{team.assignedUsers.length - 4}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <div className="empty-state-icon">
-                <Building2 className="h-8 w-8" />
-              </div>
-              <h3 className="empty-state-title">No teams yet</h3>
-              <p className="empty-state-description">Create your first team to get started</p>
-              <Button onClick={() => setIsCreateOpen(true)} className="mt-4">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Team
-              </Button>
-            </div>
-          )}
-      </div>
-
-      {/* Unassigned GPs Section */}
-      {unassignedGPs && unassignedGPs.length > 0 && (
-        <div className="unified-card">
-          <div className="unified-card-header">
-            <div className="section-header" style={{ paddingLeft: 0 }}>
-              <h3 className="section-title flex items-center gap-2">
-                <Star className="h-5 w-5 text-yellow-500" />
-                Unassigned Game Presenters
-                <Badge variant="secondary">{unassignedGPs.length}</Badge>
-              </h3>
-              <p className="section-subtitle">
-                These GPs are not assigned to any team. Edit a team above to assign them.
-              </p>
-            </div>
-          </div>
-          <div className="unified-card-body">
-            <div className="flex flex-wrap gap-2">
-              {unassignedGPs.slice(0, 20).map((gp: any) => (
-                <Badge key={gp.id} variant="outline" className="py-1">
-                  {gp.name}
-                </Badge>
-              ))}
-              {unassignedGPs.length > 20 && (
-                <Badge variant="secondary">
-                  +{unassignedGPs.length - 20} more
-                </Badge>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </TabsContent>
-  );
-}
-
 // GP Access Links Tab Component
 /**
  * Inline editor for a GP's real (legal) name — used by the Persona
@@ -1401,14 +660,12 @@ function RealNameInput({ gpId, initialValue }: { gpId: number; initialValue: str
 function GPAccessLinksTab({
   gamePresenters,
   accessTokens,
-  teams,
   refetchTokens,
   refetchGPs,
   isLoading
 }: {
   gamePresenters: any[];
   accessTokens: any[];
-  teams: any[];
   refetchTokens: () => void;
   refetchGPs: () => void;
   isLoading: boolean;
@@ -1416,17 +673,6 @@ function GPAccessLinksTab({
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [generatingForGp, setGeneratingForGp] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [assigningTeamForGp, setAssigningTeamForGp] = useState<number | null>(null);
-
-  const assignToTeam = trpc.gamePresenter.assignToTeam.useMutation({
-    onSuccess: () => {
-      toast.success("GP assigned to team");
-      refetchGPs();
-    },
-    onError: (error) => {
-      toast.error(error.message || "Failed to assign team");
-    },
-  });
 
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [isExportingCSV, setIsExportingCSV] = useState(false);
@@ -1437,20 +683,18 @@ function GPAccessLinksTab({
     try {
       // Prepare CSV data
       const csvRows: string[] = [];
-      csvRows.push('GP Name,Team,Access Link,Status,Last Accessed');
-      
+      csvRows.push('GP Name,Access Link,Status,Last Accessed');
+
       gamePresenters.forEach(gp => {
         const tokenData = accessTokens.find(t => t.token?.gamePresenterId === gp.id && t.token?.isActive === 1);
         const token = tokenData?.token;
-        const team = teams.find(t => t.id === gp.teamId);
-        
+
         const gpName = gp.name.replace(/,/g, ' ');
-        const teamName = team?.teamName?.replace(/,/g, ' ') || 'Unassigned';
         const accessLink = token ? `${window.location.origin}/gp-portal/${token.token}` : '';
         const status = token ? 'Active' : 'No Link';
         const lastAccessed = token?.lastAccessedAt ? new Date(token.lastAccessedAt).toLocaleDateString() : '-';
-        
-        csvRows.push(`${gpName},${teamName},${accessLink},${status},${lastAccessed}`);
+
+        csvRows.push(`${gpName},${accessLink},${status},${lastAccessed}`);
       });
       
       // Create and download CSV file
@@ -1535,17 +779,6 @@ function GPAccessLinksTab({
     return gamePresenters.filter(gp => gp.name.toLowerCase().includes(query));
   }, [gamePresenters, searchQuery]);
 
-  // Group GPs by team
-  const gpsByTeam = useMemo(() => {
-    const grouped: Record<number, any[]> = {};
-    filteredGPs.forEach(gp => {
-      const teamId = gp.teamId || 0;
-      if (!grouped[teamId]) grouped[teamId] = [];
-      grouped[teamId].push(gp);
-    });
-    return grouped;
-  }, [filteredGPs]);
-
   return (
     <TabsContent value="access" className="space-y-4">
       <div className="unified-card">
@@ -1604,29 +837,19 @@ function GPAccessLinksTab({
               ))}
             </div>
           ) : filteredGPs.length > 0 ? (
-            <div className="space-y-6">
-              {Object.entries(gpsByTeam).map(([teamId, gps]) => {
-                const team = teams.find(t => t.id === Number(teamId));
-                return (
-                  <div key={teamId} className="space-y-2">
-                    <h3 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
-                      <Building2 className="h-4 w-4" />
-                      {team?.teamName || "Unassigned"}
-                    </h3>
-                    <div className="table-enhanced">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Real name <span className="text-[10px] font-normal text-muted-foreground">(for Persona)</span></TableHead>
-                            <TableHead>Team</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Access Link</TableHead>
-                            <TableHead className="w-[150px]">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {gps.map((gp) => {
+            <div className="table-enhanced">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Real name <span className="text-[10px] font-normal text-muted-foreground">(for Persona)</span></TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Access Link</TableHead>
+                    <TableHead className="w-[150px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                          {filteredGPs.map((gp) => {
                             // accessTokens returns {token: {...}, gp: {...}} structure
                             const tokenData = accessTokens.find(t => t.token?.gamePresenterId === gp.id && t.token?.isActive === 1);
                             const token = tokenData ? { ...tokenData.token, gpId: tokenData.token?.gamePresenterId } : null;
@@ -1635,38 +858,6 @@ function GPAccessLinksTab({
                                 <TableCell className="font-medium">{gp.name}</TableCell>
                                 <TableCell>
                                   <RealNameInput gpId={gp.id} initialValue={(gp as any).realName ?? ""} />
-                                </TableCell>
-                                <TableCell>
-                                  <Select
-                                    value={gp.teamId?.toString() || "0"}
-                                    onValueChange={(value) => {
-                                      const newTeamId = parseInt(value);
-                                      if (newTeamId !== gp.teamId) {
-                                        setAssigningTeamForGp(gp.id);
-                                        assignToTeam.mutate(
-                                          { gpId: gp.id, teamId: newTeamId },
-                                          { onSettled: () => setAssigningTeamForGp(null) }
-                                        );
-                                      }
-                                    }}
-                                    disabled={assigningTeamForGp === gp.id}
-                                  >
-                                    <SelectTrigger className="w-[140px] h-8">
-                                      {assigningTeamForGp === gp.id ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <SelectValue placeholder="Select team" />
-                                      )}
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="0">Unassigned</SelectItem>
-                                      {teams.map((t) => (
-                                        <SelectItem key={t.id} value={t.id.toString()}>
-                                          {t.teamName}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
                                 </TableCell>
                                 <TableCell>
                                   {token ? (
@@ -1759,12 +950,8 @@ function GPAccessLinksTab({
                               </TableRow>
                             );
                           })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                );
-              })}
+                </TableBody>
+              </Table>
             </div>
           ) : (
             <div className="empty-state">
@@ -2130,12 +1317,11 @@ function ErrorFilesTab({
 }
 
 // Invitations Tab Component - Modern UI for invite-only registration
-function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floorManagerName: string }[] }) {
+function InvitationsTab() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [bulkEmails, setBulkEmails] = useState("");
-  const [selectedTeamId, setSelectedTeamId] = useState<string>("none");
   const [selectedRole, setSelectedRole] = useState<"user" | "admin">("user");
   const [expiresInDays, setExpiresInDays] = useState(7);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
@@ -2150,7 +1336,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
       toast.success("Invitation created successfully");
       setIsCreateOpen(false);
       setEmail("");
-      setSelectedTeamId("");
       setSelectedRole("user");
       refetch();
       // Auto-copy link
@@ -2206,7 +1391,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
     }
     createMutation.mutate({
       email,
-      teamId: selectedTeamId && selectedTeamId !== 'none' ? Number(selectedTeamId) : undefined,
       role: selectedRole,
       expiresInDays,
     });
@@ -2225,7 +1409,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
 
     bulkCreateMutation.mutate({
       emails,
-      teamId: selectedTeamId && selectedTeamId !== 'none' ? Number(selectedTeamId) : undefined,
       role: selectedRole,
       expiresInDays,
     });
@@ -2259,9 +1442,8 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
     
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(inv => 
-        inv.email.toLowerCase().includes(query) ||
-        inv.team?.teamName?.toLowerCase().includes(query)
+      filtered = filtered.filter(inv =>
+        inv.email.toLowerCase().includes(query)
       );
     }
     
@@ -2369,22 +1551,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Assign to Team</Label>
-                        <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select team (optional)" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">No team</SelectItem>
-                            {teams.map(team => (
-                              <SelectItem key={team.id} value={String(team.id)}>
-                                {team.teamName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
                         <Label>Role</Label>
                         <Select value={selectedRole} onValueChange={(v: "user" | "admin") => setSelectedRole(v)}>
                           <SelectTrigger>
@@ -2454,22 +1620,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Assign to Team</Label>
-                        <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select team" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">No team</SelectItem>
-                            {teams.map(team => (
-                              <SelectItem key={team.id} value={String(team.id)}>
-                                {team.teamName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
                       <div className="space-y-2">
                         <Label>Role</Label>
                         <Select value={selectedRole} onValueChange={(v: "user" | "admin") => setSelectedRole(v)}>
@@ -2554,7 +1704,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                 <TableHeader>
                   <TableRow>
                     <TableHead>Email</TableHead>
-                    <TableHead>Team</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Expires</TableHead>
@@ -2573,16 +1722,6 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
                             <Mail className="h-4 w-4 text-muted-foreground" />
                             {inv.email}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          {inv.team ? (
-                            <Badge variant="outline">
-                              <Building2 className="h-3 w-3 mr-1" />
-                              {inv.team.teamName}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant={inv.role === "admin" ? "default" : "secondary"}>
@@ -2736,22 +1875,21 @@ function InvitationsTab({ teams }: { teams: { id: number; teamName: string; floo
 }
 
 // GP Stats Tab Component
-function GPStatsTab({ 
-  teams, 
-  selectedMonth, 
-  selectedYear, 
-  setSelectedMonth, 
+function GPStatsTab({
+  selectedMonth,
+  selectedYear,
+  setSelectedMonth,
   setSelectedYear,
   isFMView = false
-}: { 
-  teams: { id: number; teamName: string; floorManagerName: string }[];
+}: {
   selectedMonth: number;
   selectedYear: number;
   setSelectedMonth: (m: number) => void;
   setSelectedYear: (y: number) => void;
   isFMView?: boolean;
 }) {
-  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(isFMView && teams.length > 0 ? teams[0].id : null);
+  // One shared database — stats always cover every GP.
+  const [selectedTeamId] = useState<number | null>(null);
   const [editingGpId, setEditingGpId] = useState<number | null>(null);
   const [editAttitude, setEditAttitude] = useState<number | null>(null);
   const [editMistakes, setEditMistakes] = useState<number>(0);
@@ -2975,25 +2113,6 @@ function GPStatsTab({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {!isFMView && (
-            <Select 
-              value={selectedTeamId ? String(selectedTeamId) : "all"} 
-              onValueChange={(v) => setSelectedTeamId(v === "all" ? null : Number(v))}
-            >
-              <SelectTrigger className="w-[160px] filter-select">
-                <Building2 className="h-4 w-4 mr-2 text-primary" />
-                <SelectValue placeholder="All teams" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All teams</SelectItem>
-                {teams.map((team) => (
-                  <SelectItem key={team.id} value={String(team.id)}>
-                    {team.teamName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
           <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
             <SelectTrigger className="w-[140px] filter-select">
               <Calendar className="h-4 w-4 mr-2 text-primary" />
@@ -3235,7 +2354,7 @@ function GPStatsTab({
                   <GPStatsCard
                     key={gp.id}
                     gp={gp}
-                    teamName={teams.find(t => t.id === gp.teamId)?.teamName || 'Unassigned'}
+                    teamName={(gp as { teamName?: string }).teamName || 'Unassigned'}
                     isSelected={selectedGpIds.includes(gp.id)}
                     selectedMonth={selectedMonth}
                     selectedYear={selectedYear}

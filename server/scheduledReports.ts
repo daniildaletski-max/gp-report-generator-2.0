@@ -7,390 +7,162 @@
  */
 import cron from "node-cron";
 import * as db from "./db";
-import { invokeLLM } from "./_core/llm";
 import { createLogger } from "./services/logger";
 
 const log = createLogger("ScheduledReports");
 import { notifyOwner } from "./_core/notification";
 import { MONTH_NAMES } from "@shared/const";
+import {
+  buildCompanyReportContext,
+  genManagementSummary,
+  genGoals,
+  genOverview,
+  generateExcelAndEmail,
+} from "./routers/_shared";
 
 let isMonthlyGenerationRunning = false;
 
 /**
- * Core logic: generate a report for a specific team/user/month.
- * Mirrors the report.generate procedure logic but runs without a request context.
+ * Pick the recipient for the automated company report.
+ *
+ * With company-wide reports there is no per-team FM to route to, so the
+ * report is emailed to an operator — the first admin with an email on
+ * file, falling back to any user with an email. Returns null when nobody
+ * has an email; the workbook is still built, the email is just skipped
+ * (generateExcelAndEmail records a "no-recipient" delivery marker).
  */
-async function generateReportForTeam(
-  user: { id: number; role: string; email?: string | null; name?: string | null },
-  teamId: number,
+async function resolveCompanyReportRecipient(): Promise<
+  { id: number; role: string; email?: string | null; name?: string | null } | null
+> {
+  const rows = await db.getAllUsers();
+  const users = rows
+    .map(r => r.user)
+    .filter((u): u is NonNullable<typeof u> => !!u);
+  return (
+    users.find(u => u.role === "admin" && u.email) ??
+    users.find(u => !!u.email) ??
+    null
+  );
+}
+
+/**
+ * Core logic: generate the single company-wide report for a month.
+ * Mirrors report.generate but runs without a request context.
+ *
+ * Retry-aware so the 5-10 cron window can recover from partial / failed
+ * prior runs:
+ *   row absent                                  → fresh generate
+ *   row present, no excelFileUrl                → partial; delete + redo
+ *   row present + excelFileUrl, email unconfirmed → re-send (idempotent)
+ *   row present + excelFileUrl + delivery ok / no-recipient → skip
+ */
+async function generateCompanyReport(
   reportMonth: number,
   reportYear: number,
-): Promise<{ reportId: number; teamName: string } | null> {
+): Promise<{ reportId: number } | null> {
+  const monthName = MONTH_NAMES[reportMonth - 1];
   try {
-    const team = await db.getFmTeamById(teamId);
-    if (!team) {
-      log.info(`[ScheduledReports] Team ${teamId} not found, skipping`);
-      return null;
-    }
-
-    // Existing-row state machine — retry-aware so the new 5-10 cron
-    // window can recover from partial / failed prior runs.
-    //
-    //   row absent                                  → fresh generate
-    //   row present, no excelFileUrl                → workbook never
-    //                                                 finished (DB blip,
-    //                                                 storage outage,
-    //                                                 LLM timeout). Drop
-    //                                                 the partial row +
-    //                                                 regenerate fresh.
-    //   row present, excelFileUrl set, no email
-    //   delivery confirmation in reportData         → workbook is fine
-    //                                                 but the email was
-    //                                                 never confirmed
-    //                                                 (Resend down on
-    //                                                 day 5). Re-run
-    //                                                 generateExcelAndEmail
-    //                                                 against the same
-    //                                                 row id — idempotent.
-    //   row present + excelFileUrl + delivery=true  → truly done, skip.
-    const existing = await db.getReportByTeamMonthYear(teamId, reportMonth, reportYear);
+    const existing = await db.getCompanyReportByMonthYear(reportMonth, reportYear);
     const existingDelivery = ((existing?.reportData as any)?.emailDelivery ?? null) as
       | { success?: boolean; reason?: string }
       | null;
-    // "Terminal" rows the retry should leave alone:
-    //   - email landed (success === true), OR
-    //   - team owner has no email at all (reason === "no-recipient");
-    //     the workbook is built and uploaded, there's nothing more to
-    //     do until an admin sets the user's email.
+
+    // Terminal rows the retry should leave alone: email landed, or no
+    // recipient is configured (nothing more to do until one is).
     const isTerminal = !!(existing && existing.excelFileUrl && (
       existingDelivery?.success === true
       || existingDelivery?.reason === "no-recipient"
     ));
     if (isTerminal) {
-      log.info(`[ScheduledReports] Report already complete for team ${team.teamName} - ${MONTH_NAMES[reportMonth - 1]} ${reportYear}, skipping`);
+      log.info(`[ScheduledReports] Company report already complete for ${monthName} ${reportYear}, skipping`);
       return null;
     }
 
-    // Legacy backfill — rows generated before this code shipped have
-    // `excelFileUrl` set but ZERO `emailDelivery` marker. The new
-    // code path writes the marker on every email attempt (success
-    // OR failure), so its absence is now the definitive signal that
-    // the row predates this PR.
-    //
-    // We previously combined "no marker" with an `updatedAt > 36h`
-    // age heuristic; that was unsound (a day-5 failure followed by a
-    // day-6 scheduler outage would falsely classify the row as
-    // legacy on day 7 and lose the email forever — Codex P2 #6).
-    // Now: the marker's presence/absence is the era signal directly.
-    //
-    // Lazy + idempotent: stamp the sentinel + skip. The standard
-    // terminal check above catches stamped rows on every subsequent
-    // run, so this branch only fires once per legacy row.
-    if (existing && existing.excelFileUrl && !existingDelivery) {
-      log.info(`[ScheduledReports] Legacy row #${existing.id} for ${team.teamName} (no delivery marker, predates retry code) — backfilling sentinel + skipping`);
+    // The operator the report (and any email) is attributed to. Always
+    // build a ctx — generateExcelAndEmail still produces + uploads the
+    // workbook when the email address is null.
+    const recipient = await resolveCompanyReportRecipient();
+    const recipientCtx = {
+      user: recipient ?? { id: 0, role: "admin", email: null, name: null },
+    };
+
+    // Workbook uploaded but email never confirmed → re-send against the
+    // same row. Only count success when emailSent comes back true.
+    if (existing && existing.excelFileUrl && existingDelivery
+        && (existingDelivery.success === false || existingDelivery.reason === "in-progress")) {
+      log.info(`[ScheduledReports] Re-attempting email for company report #${existing.id} (${monthName} ${reportYear})`);
       try {
-        await db.updateReport(existing.id, {
-          reportData: { ...((existing.reportData as any) ?? {}), emailDelivery: { sentAt: null, success: true, reason: "legacy-backfill" } },
-        });
+        const result = await generateExcelAndEmail(recipientCtx, existing.id);
+        if (result?.emailSent) return { reportId: existing.id };
+        log.info(`[ScheduledReports] Email retry returned emailSent=false; leaving row for next retry day`);
+        return null;
       } catch (e) {
-        log.warn("Legacy-backfill stamp failed (non-fatal — will be retried next run)", { error: e instanceof Error ? e.message : String(e) });
+        log.warn(`Email retry failed; leaving row as-is for next retry day`, { error: e instanceof Error ? e.message : String(e) });
+        return null;
       }
-      return null;
     }
+
+    // Partial row (workbook never produced) → drop it and rebuild. Bail
+    // if the delete fails so we don't end up with two rows for the month.
     if (existing && !existing.excelFileUrl) {
-      // Partial row — workbook never produced. Clear it so the rest
-      // of the function can build a clean replacement.
-      //
-      // Bail-on-delete-failure: there is no unique constraint on
-      // (teamId, reportMonth, reportYear). If `deleteReport` fails
-      // transiently and we still call `createReport`, we'd leave the
-      // old partial row PLUS a fresh finalized row for the same
-      // (team, month, year). `getReportByTeamMonthYear(...).limit(1)`
-      // could then keep returning the stale partial on subsequent
-      // runs, duplicating work indefinitely. Safer to skip this team
-      // for this cron tick and let tomorrow's retry-day try again.
-      log.info(`[ScheduledReports] Found partial row #${existing.id} for ${team.teamName} (no excelFileUrl), regenerating`);
+      log.info(`[ScheduledReports] Found partial company report #${existing.id} (${monthName} ${reportYear}), regenerating`);
       try {
         await db.deleteReport(existing.id);
       } catch (e) {
-        log.warn(`Failed to delete partial row #${existing.id} for ${team.teamName} — skipping team for this run, will retry tomorrow`, {
+        log.warn(`Failed to delete partial company report #${existing.id} — skipping this run, will retry tomorrow`, {
           error: e instanceof Error ? e.message : String(e),
         });
         return null;
       }
-    } else if (existing && existing.excelFileUrl && existingDelivery
-               && (existingDelivery.success === false || existingDelivery.reason === "in-progress")) {
-      // Workbook is uploaded but email never confirmed. Re-run the
-      // shared helper against this row id — it'll re-upload (cheap)
-      // and re-send. Idempotent on the row; skips ahead of the LLM
-      // generation block below.
-      //
-      // Critically: only count this team as "generated" when the
-      // helper's own `emailSent` flag comes back true. `sendEmail`
-      // catches Resend / network failures and returns false, so a
-      // bare success return from generateExcelAndEmail does NOT mean
-      // the message landed. If it didn't, return null so the run
-      // counter stays accurate, the owner notification doesn't lie
-      // about a recovered failure, and tomorrow's retry-day picks
-      // the row up again.
-      log.info(`[ScheduledReports] Re-attempting email for team ${team.teamName} (row #${existing.id}, excelFileUrl set, no delivery confirmation)`);
-      const { generateExcelAndEmail } = await import("./routers/_shared");
-      try {
-        const result = await generateExcelAndEmail(
-          { user: { id: user.id, role: user.role, email: user.email, name: user.name } },
-          existing.id,
-        );
-        if (result?.emailSent) {
-          return { reportId: existing.id, teamName: team.teamName };
-        }
-        log.info(`[ScheduledReports] Email retry for ${team.teamName} returned emailSent=false; leaving row for next retry day`);
-        return null;
-      } catch (e) {
-        log.warn(`Email retry failed for ${team.teamName}; will leave row as-is for next retry day`, { error: e instanceof Error ? e.message : String(e) });
-        return null;
-      }
     }
 
-    // Get evaluation stats for the month
-    const stats = await db.getGPMonthlyStats(teamId, reportYear, reportMonth);
-    if (stats.length === 0) {
-      log.info(`[ScheduledReports] No evaluation data for team ${team.teamName} - ${MONTH_NAMES[reportMonth - 1]} ${reportYear}, skipping`);
+    // Aggregate company-wide data + draft the AI narratives, reusing the
+    // exact same helpers the on-demand report.generate path uses.
+    const context = await buildCompanyReportContext(reportMonth, reportYear);
+    if (context.stats.length === 0) {
+      log.info(`[ScheduledReports] No evaluation data for ${monthName} ${reportYear}, skipping`);
       return null;
     }
 
-    const attendance = await db.getAttendanceByTeamMonth(teamId, reportMonth, reportYear);
-    const monthName = MONTH_NAMES[reportMonth - 1];
+    const [fmPerformance, goalsThisMonth, teamOverview] = await Promise.all([
+      genManagementSummary(context.dataContext).catch(e => {
+        log.error("Failed to auto-generate fmPerformance", e instanceof Error ? e : new Error(String(e)));
+        return null;
+      }),
+      genGoals(context.dataContext).catch(e => {
+        log.error("Failed to auto-generate goalsThisMonth", e instanceof Error ? e : new Error(String(e)));
+        return null;
+      }),
+      genOverview(context.dataContext).catch(e => {
+        log.error("Failed to auto-generate teamOverview", e instanceof Error ? e : new Error(String(e)));
+        return null;
+      }),
+    ]);
 
-    // Get error counts for each GP (user-scoped)
-    const errorCounts = await db.getErrorCountByGP(reportMonth, reportYear, user.id);
-
-    // Get attitude data for each GP in the team
-    const teamGPs = await db.getGamePresentersByTeam(teamId);
-    const attitudeData: { gpName: string; positive: number; negative: number; total: number }[] = [];
-
-    for (const gp of teamGPs) {
-      const attitudes = await db.getAttitudeScreenshotsForGP(gp.id, reportMonth, reportYear);
-      const positive = attitudes.filter(a => a.attitudeType === "positive").length;
-      const negative = attitudes.filter(a => a.attitudeType === "negative").length;
-      if (positive > 0 || negative > 0) {
-        attitudeData.push({ gpName: gp.name, positive, negative, total: positive - negative });
-      }
-    }
-
-    // Calculate team statistics for auto-generation
-    const avgTotal = stats.reduce((sum, gp) => sum + Number(gp.avgTotalScore || 0), 0) / stats.length;
-    const avgAppearance = stats.reduce((sum, gp) => sum + Number(gp.avgAppearanceScore || 0), 0) / stats.length;
-    const avgGamePerf = stats.reduce((sum, gp) => sum + Number(gp.avgGamePerfScore || 0), 0) / stats.length;
-
-    const topPerformers = [...stats]
-      .sort((a, b) => Number(b.avgTotalScore || 0) - Number(a.avgTotalScore || 0))
-      .slice(0, 3);
-
-    const needsImprovement = stats.filter(gp => Number(gp.avgTotalScore || 0) < 18);
-
-    const totalMistakes = attendance.reduce((sum, a) => sum + (a.monthlyStats?.mistakes || a.attendance?.mistakes || 0), 0);
-    const totalExtraShifts = attendance.reduce((sum, a) => sum + (a.attendance?.extraShifts || 0), 0);
-    const totalLate = attendance.reduce((sum, a) => sum + (a.attendance?.lateToWork || 0), 0);
-    const totalMissed = attendance.reduce((sum, a) => sum + (a.attendance?.missedDays || 0), 0);
-    const totalSick = attendance.reduce((sum, a) => sum + (a.attendance?.sickLeaves || 0), 0);
-
-    // Build detailed GP performance data
-    const gpDetailedData = stats.map(gp => {
-      const gpErrors = errorCounts.find(e => e.gpName === gp.gpName);
-      const gpAttitude = attitudeData.find(a => a.gpName === gp.gpName);
-      const gpAttendance = attendance.find(a => a.gamePresenter.name === gp.gpName);
-
-      return {
-        name: gp.gpName,
-        avgScore: Number(gp.avgTotalScore || 0).toFixed(1),
-        appearanceScore: Number(gp.avgAppearanceScore || 0).toFixed(1),
-        gamePerformanceScore: Number(gp.avgGamePerfScore || 0).toFixed(1),
-        evaluationCount: gp.evaluationCount,
-        errorCount: gpErrors?.errorCount || 0,
-        attitudePositive: gpAttitude?.positive || 0,
-        attitudeNegative: gpAttitude?.negative || 0,
-        attitudeTotal: gpAttitude?.total || 0,
-        lateArrivals: gpAttendance?.attendance?.lateToWork || 0,
-        missedDays: gpAttendance?.attendance?.missedDays || 0,
-      };
-    });
-
-    const gpsWithErrors = gpDetailedData.filter(gp => gp.errorCount > 0)
-      .sort((a, b) => b.errorCount - a.errorCount);
-
-    const gpsWithNegativeAttitude = gpDetailedData.filter(gp => gp.attitudeNegative > 0)
-      .sort((a, b) => b.attitudeNegative - a.attitudeNegative);
-
-    const gpsWithPositiveAttitude = gpDetailedData.filter(gp => gp.attitudePositive > 0)
-      .sort((a, b) => b.attitudePositive - a.attitudePositive);
-
-    // Build comprehensive context for LLM
-    const dataContext = `
-Team: ${team.teamName}
-Floor Manager: ${team.floorManagerName}
-Period: ${monthName} ${reportYear}
-
-=== EVALUATION STATISTICS ===
-- Total GPs Evaluated: ${stats.length}
-- Average Total Score: ${avgTotal.toFixed(1)}/24 (${avgTotal >= 20 ? "Excellent" : avgTotal >= 18 ? "Good" : avgTotal >= 16 ? "Needs Improvement" : "Critical"})
-- Average Appearance Score: ${avgAppearance.toFixed(1)}/12
-- Average Game Performance Score: ${avgGamePerf.toFixed(1)}/10
-
-=== TOP PERFORMERS (by evaluation score) ===
-${topPerformers.map((gp, i) => {
-  const detail = gpDetailedData.find(d => d.name === gp.gpName);
-  return `${i + 1}. ${gp.gpName} - ${Number(gp.avgTotalScore || 0).toFixed(1)}/24 (${detail?.evaluationCount || 0} evaluations, ${detail?.errorCount || 0} errors, attitude: +${detail?.attitudePositive || 0}/-${detail?.attitudeNegative || 0})`;
-}).join("\n")}
-
-${needsImprovement.length > 0 ? `=== GPs NEEDING IMPROVEMENT (score < 18) ===
-${needsImprovement.map(gp => {
-  const detail = gpDetailedData.find(d => d.name === gp.gpName);
-  return `- ${gp.gpName}: ${Number(gp.avgTotalScore || 0).toFixed(1)}/24 (Appearance: ${detail?.appearanceScore}/12, Game Perf: ${detail?.gamePerformanceScore}/10)`;
-}).join("\n")}` : "=== All GPs are performing well (score >= 18) ==="}
-
-=== ERROR ANALYSIS ===
-- Total Team Errors: ${gpsWithErrors.reduce((sum, gp) => sum + gp.errorCount, 0)}
-${gpsWithErrors.length > 0 ? `GPs with errors:
-${gpsWithErrors.slice(0, 5).map(gp => `- ${gp.name}: ${gp.errorCount} errors`).join("\n")}` : "No errors recorded this month"}
-
-=== ATTITUDE ANALYSIS ===
-- Total Positive Feedback: ${attitudeData.reduce((sum, a) => sum + a.positive, 0)}
-- Total Negative Feedback: ${attitudeData.reduce((sum, a) => sum + a.negative, 0)}
-${gpsWithPositiveAttitude.length > 0 ? `GPs with positive attitude feedback:
-${gpsWithPositiveAttitude.slice(0, 3).map(gp => `- ${gp.name}: +${gp.attitudePositive}`).join("\n")}` : ""}
-${gpsWithNegativeAttitude.length > 0 ? `GPs with negative attitude feedback:
-${gpsWithNegativeAttitude.slice(0, 3).map(gp => `- ${gp.name}: -${gp.attitudeNegative}`).join("\n")}` : ""}
-
-=== ATTENDANCE SUMMARY ===
-- Total Mistakes/Errors: ${totalMistakes}
-- Extra Shifts Worked: ${totalExtraShifts}
-- Late Arrivals: ${totalLate}
-- Missed Days: ${totalMissed}
-- Sick Leaves: ${totalSick}
-
-=== INDIVIDUAL GP BREAKDOWN ===
-${gpDetailedData.map(gp =>
-  `${gp.name}: Score ${gp.avgScore}/24, Errors: ${gp.errorCount}, Attitude: +${gp.attitudePositive}/-${gp.attitudeNegative}, Late: ${gp.lateArrivals}`
-).join("\n")}
-`;
-
-    // Auto-generate Team Overview
-    let teamOverview: string | null = null;
-    try {
-      const teamOverviewResponse = await invokeLLM({
-        messages: [
-          {
-            role: "system",
-            content: `You are an experienced Floor Manager writing a comprehensive Team Overview for a monthly casino operations report.
-
-Guidelines for writing an optimal Team Overview:
-1. Start with overall team performance assessment
-2. Highlight achievements - name top performers with scores
-3. Address concerns honestly - name GPs with issues
-4. Provide balanced perspective
-5. Format: Write 4-5 concise sentences. Do NOT use bullet points.
-
-IMPORTANT: Use specific names and numbers from the data.`,
-          },
-          {
-            role: "user",
-            content: `Based on this comprehensive team performance data, write a detailed Team Overview:\n${dataContext}`,
-          },
-        ],
-      });
-      const content = teamOverviewResponse.choices[0]?.message?.content;
-      teamOverview = typeof content === "string" ? content : null;
-    } catch (e) {
-      log.error("Failed to auto-generate teamOverview", e instanceof Error ? e : new Error(String(e)));
-    }
-
-    // Auto-generate Goals
-    let goalsThisMonth: string | null = null;
-    try {
-      const goalsResponse = await invokeLLM({
-        messages: [
-          {
-            role: "system",
-            content: `You are an experienced Floor Manager creating SMART goals for a monthly casino operations report.
-
-Guidelines:
-1. Analyze the data to identify the TOP 3 priority areas
-2. Be SPECIFIC - name GPs, set measurable targets
-3. Balance goals between rewarding top performers and addressing weaknesses
-4. Format: Write 3-4 concise sentences. Do NOT use bullet points.
-
-IMPORTANT: Be specific with names and numbers from the data.`,
-          },
-          {
-            role: "user",
-            content: `Based on this comprehensive team performance data, create specific, actionable Team Goals for next month:\n${dataContext}`,
-          },
-        ],
-      });
-      const content = goalsResponse.choices[0]?.message?.content;
-      goalsThisMonth = typeof content === "string" ? content : null;
-    } catch (e) {
-      log.error("Failed to auto-generate goalsThisMonth", e instanceof Error ? e : new Error(String(e)));
-    }
-
-    // Auto-generate FM Performance — assesses how the FM led the team
-    // this month (was a separate manual field; now LLM-drafted).
-    let fmPerformance: string | null = null;
-    try {
-      const fmPerfResponse = await invokeLLM({
-        messages: [
-          {
-            role: "system",
-            content: `You are writing the "Floor Manager Performance" paragraph for a monthly casino operations report. The FM is reading this about themselves — be honest but constructive.
-
-Focus on:
-1. Whether the FM kept the team's overall scores stable / rising / falling vs. the previous period (use the data)
-2. How well attendance issues were addressed
-3. Whether errors / negative attitude trends got worse or better
-4. Specific GPs who improved or regressed under their watch
-
-Write 3-4 concise sentences. Cite specific numbers. No bullet points. No fluff.`,
-          },
-          {
-            role: "user",
-            content: `Team performance data for ${monthName} ${reportYear}:\n${dataContext}`,
-          },
-        ],
-      });
-      const fmContent = fmPerfResponse.choices[0]?.message?.content;
-      fmPerformance = typeof fmContent === "string" ? fmContent : null;
-    } catch (e) {
-      log.error("Failed to auto-generate fmPerformance", e instanceof Error ? e : new Error(String(e)));
-    }
-
-    // Create the report
+    const ownerId = recipient?.id ?? null;
     const report = await db.createReport({
-      teamId,
+      teamId: null,
       reportMonth,
       reportYear,
       fmPerformance,
       goalsThisMonth,
       teamOverview,
       additionalComments: "Auto-generated monthly report",
-      reportData: { stats, attendance },
+      reportData: { stats: context.stats, attendance: context.attendance },
       status: "generated",
-      generatedById: user.id,
-      userId: user.id,
+      generatedById: ownerId,
+      userId: ownerId,
     });
 
-    // Generate Excel and send email — share the rich workbook builder
-    // with the on-demand path so scheduled reports also get the
-    // Coaching Plans + Bonus Summary sheets.
-    const { generateExcelAndEmail } = await import("./routers/_shared");
-    await generateExcelAndEmail(
-      { user: { id: user.id, role: user.role, email: user.email, name: user.name } },
-      report.id,
-    );
+    // Build the rich workbook + email it. Shared with the on-demand path
+    // so scheduled reports also get the Coaching Plans + Bonus Summary
+    // sheets. With a null email this still builds + uploads the workbook.
+    await generateExcelAndEmail(recipientCtx, report.id);
 
-    log.info(`[ScheduledReports] Successfully generated report for ${team.teamName} - ${monthName} ${reportYear}`);
-    return { reportId: report.id, teamName: team.teamName };
+    log.info(`[ScheduledReports] Successfully generated company report for ${monthName} ${reportYear}`);
+    return { reportId: report.id };
   } catch (error) {
-    log.error(`Error generating report for team ${teamId}`, error instanceof Error ? error : new Error(String(error)));
+    log.error(`Error generating company report for ${monthName} ${reportYear}`, error instanceof Error ? error : new Error(String(error)));
     return null;
   }
 }
@@ -426,65 +198,31 @@ async function runMonthlyReportGeneration(opts?: { isPrimaryRun?: boolean }) {
     // Persona pre-sync was here; the Persona module was removed when the
     // app moved to a single shared database. Reports now generate over
     // whatever attendance/mistakes/etc. already live in the DB.
-    const allUsers = await db.getAllUsers();
-    let totalGenerated = 0;
-    let totalSkipped = 0;
-    const results: { userName: string; teamName: string; reportId: number }[] = [];
+    // One shared database → a single company-wide report per month.
+    const result = await generateCompanyReport(reportMonth, reportYear);
 
-    for (const { user } of allUsers) {
-      if (!user) continue;
-
-      // Get teams owned by this user
-      const userTeams = await db.getFmTeamsByUser(user.id);
-      if (userTeams.length === 0) continue;
-
-      for (const team of userTeams) {
-        const result = await generateReportForTeam(
-          { id: user.id, role: user.role, email: user.email, name: user.name },
-          team.id,
-          reportMonth,
-          reportYear,
-        );
-
-        if (result) {
-          totalGenerated++;
-          results.push({
-            userName: user.name || "Unknown",
-            teamName: result.teamName,
-            reportId: result.reportId,
-          });
-        } else {
-          totalSkipped++;
-        }
-      }
-    }
-
-    log.info(`[ScheduledReports] Completed: ${totalGenerated} reports generated, ${totalSkipped} skipped`);
+    log.info(`[ScheduledReports] Completed: ${result ? `company report #${result.reportId} generated` : "no new report"} for ${monthName} ${reportYear}`);
 
     // Notify the project owner about the scheduled run.
     //
-    // - `totalGenerated > 0` always notifies — that's worth surfacing
-    //   regardless of which day fired (a retry-day run that succeeds
-    //   is itself useful information about a recovered failure).
-    // - `totalGenerated === 0` only notifies on the primary day-5 run.
-    //   On retry days (6-10) every team is normally already reported,
-    //   so a "No Reports Generated" owner email would just be noise.
-    if (totalGenerated > 0) {
-      const reportSummary = results
-        .map(r => `- ${r.userName}: ${r.teamName} (Report #${r.reportId})`)
-        .join("\n");
-
+    // - a generated report always notifies — worth surfacing regardless
+    //   of which day fired (a retry-day success is itself useful: a
+    //   recovered failure).
+    // - "nothing generated" only notifies on the primary day-5 run. On
+    //   retry days (6-10) the report normally already exists, so a "No
+    //   Report Generated" owner email would just be noise.
+    if (result) {
       await notifyOwner({
-        title: `Monthly Reports Generated: ${monthName} ${reportYear}`,
-        content: `Automated monthly report generation completed.\n\nGenerated: ${totalGenerated} reports\nSkipped: ${totalSkipped} (no data or already exists)\n\nReports:\n${reportSummary}`,
+        title: `Monthly Report Generated: ${monthName} ${reportYear}`,
+        content: `The automated company-wide monthly report for ${monthName} ${reportYear} has been generated (Report #${result.reportId}).`,
       });
     } else if (isPrimaryRun) {
       await notifyOwner({
-        title: `Monthly Reports: No Reports Generated for ${monthName} ${reportYear}`,
-        content: `Automated monthly report generation ran but no new reports were generated. Either all teams already have reports for this month, or no evaluation data was found.`,
+        title: `Monthly Report: None Generated for ${monthName} ${reportYear}`,
+        content: `Automated monthly report generation ran but produced no new report. Either the company report for this month already exists, or no evaluation data was found.`,
       });
     } else {
-      log.info(`[ScheduledReports] Retry-day run produced no new reports — staying silent (steady state)`);
+      log.info(`[ScheduledReports] Retry-day run produced no new report — staying silent (steady state)`);
     }
   } catch (error) {
     log.error("Fatal error during scheduled generation", error instanceof Error ? error : new Error(String(error)));

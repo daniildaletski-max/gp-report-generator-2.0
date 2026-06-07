@@ -82,13 +82,6 @@ export const gamePresenterRouter = router({
       teamId: z.number().positive(),
     }))
     .mutation(async ({ ctx, input }) => {
-      // For non-admins, verify the team belongs to them.
-      if (ctx.user.role !== 'admin') {
-        const team = await db.getFmTeamById(input.teamId);
-        if (!team) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied: that team is not yours' });
-        }
-      }
       const dbi = await getDbDirect();
       if (!dbi) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
       const result = await dbi.insert(gamePresenters).values({
@@ -293,11 +286,8 @@ export const gamePresenterRouter = router({
       const gp = await db.getGamePresenterById(input.gpId);
       if (!gp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Game Presenter not found' });
       
-      // User-based data isolation
-      
-      // Get team info
-      const team = gp.teamId ? await db.getTeamById(gp.teamId) : null;
-      
+      // One shared database — GPs are no longer team-scoped.
+
       // Get monthly stats
       const stats = await db.getMonthlyGpStats(input.gpId, input.month, input.year);
       
@@ -318,7 +308,7 @@ export const gamePresenterRouter = router({
           id: gp.id,
           name: gp.name,
           teamId: gp.teamId,
-          teamName: team?.teamName || 'Unassigned',
+          teamName: 'Unassigned',
           createdAt: gp.createdAt,
         },
         stats: stats || {
@@ -428,9 +418,6 @@ export const gamePresenterRouter = router({
     .query(async ({ ctx, input }) => {
       const gp = await db.getGamePresenterById(input.gpId);
       if (!gp) throw new TRPCError({ code: "NOT_FOUND", message: "GP not found" });
-      // Ownership check for non-admin
-
-      const team = gp.teamId ? await db.getFmTeamById(gp.teamId) : null;
       const now = new Date();
       const currentMonth = now.getMonth() + 1;
       const currentYear = now.getFullYear();
@@ -474,8 +461,8 @@ export const gamePresenterRouter = router({
           id: gp.id,
           name: gp.name,
           teamId: gp.teamId,
-          teamName: team?.teamName ?? null,
-          floorManagerName: team?.floorManagerName ?? null,
+          teamName: null,
+          floorManagerName: null,
           createdAt: gp.createdAt,
         },
         currentMonth: {

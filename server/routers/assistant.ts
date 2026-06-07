@@ -26,11 +26,6 @@ async function buildSnapshot(user: { id: number; name: string | null; role: stri
   };
 
   try {
-    const teams = isAdmin ? await db.getAllFmTeams() : await db.getFmTeamsByUser(user.id);
-    snap.teams = teams.map((t) => ({ id: t.id, name: t.teamName, floorManager: t.floorManagerName }));
-  } catch { /* omit on failure — partial context is fine */ }
-
-  try {
     const insights = await db.computeDashboardInsights({ userId: scope, userRole: user.role });
     snap.insights = insights.map((i) => ({
       severity: i.severity,

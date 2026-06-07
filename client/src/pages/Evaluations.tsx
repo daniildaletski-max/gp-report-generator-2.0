@@ -29,7 +29,6 @@ const MONTHS = [
 export default function EvaluationsPage() {
   const utils = trpc.useUtils();
   const { data: evaluations, isLoading } = trpc.evaluation.list.useQuery();
-  const { data: teams } = trpc.fmTeam.list.useQuery();
   
   // Attitude entries query
   const { data: attitudeEntries, isLoading: isLoadingAttitude } = trpc.attitudeScreenshot.listAll.useQuery({});
@@ -164,12 +163,6 @@ export default function EvaluationsPage() {
     urlString.parse,
     v => (v === "all" ? null : v),
   );
-  const [filterTeam, setFilterTeam] = useUrlState(
-    "team",
-    "all",
-    urlString.parse,
-    v => (v === "all" ? null : v),
-  );
   const [sortBy, setSortBy] = useState<"date" | "score" | "name">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
@@ -193,18 +186,17 @@ export default function EvaluationsPage() {
   const [attitudeFilterType, setAttitudeFilterType] = useState<string>("all");
   const [attitudeSearchQuery, setAttitudeSearchQuery] = useState("");
 
-  // Get unique GPs for filter (filtered by team if selected)
+  // Get unique GPs for filter
   const uniqueGPs = useMemo(() => {
     if (!evaluations) return [];
     const gps = new Map<number, string>();
     evaluations.forEach(({ gamePresenter }) => {
       if (gamePresenter?.id && gamePresenter?.name) {
-        if (filterTeam !== "all" && gamePresenter.teamId !== Number(filterTeam)) return;
         gps.set(gamePresenter.id, gamePresenter.name);
       }
     });
     return Array.from(gps.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [evaluations, filterTeam]);
+  }, [evaluations]);
 
   // Attitude statistics
   const attitudeStats = useMemo(() => {
@@ -295,11 +287,6 @@ export default function EvaluationsPage() {
         }
       }
       
-      // Team filter
-      if (filterTeam && filterTeam !== "all" && gamePresenter?.teamId !== Number(filterTeam)) {
-        return false;
-      }
-      
       // GP filter
       if (filterGP && filterGP !== "all" && gamePresenter?.id !== Number(filterGP)) {
         return false;
@@ -339,17 +326,16 @@ export default function EvaluationsPage() {
     });
     
     return filtered;
-  }, [evaluations, searchQuery, filterMonth, filterYear, filterGP, filterTeam, sortBy, sortOrder]);
+  }, [evaluations, searchQuery, filterMonth, filterYear, filterGP, sortBy, sortOrder]);
 
   const clearFilters = () => {
     setSearchQuery("");
     setFilterMonth(null);
     setFilterYear(null);
     setFilterGP("all");
-    setFilterTeam("all");
   };
 
-  const hasActiveFilters = searchQuery || filterMonth !== null || filterYear !== null || (filterGP && filterGP !== "all") || (filterTeam && filterTeam !== "all");
+  const hasActiveFilters = searchQuery || filterMonth !== null || filterYear !== null || (filterGP && filterGP !== "all");
   
   // Bulk selection handlers
   const toggleSelectAll = () => {
@@ -687,18 +673,6 @@ export default function EvaluationsPage() {
               />
             </div>
             
-            <Select value={filterTeam} onValueChange={(v) => { setFilterTeam(v); setFilterGP("all"); }}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="All Teams" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Teams</SelectItem>
-                {teams?.map((team) => (
-                  <SelectItem key={team.id} value={String(team.id)}>{team.teamName}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
             <Select value={filterGP} onValueChange={setFilterGP}>
               <SelectTrigger className="w-[180px]">
                 <User className="h-4 w-4 mr-2" />
@@ -783,13 +757,6 @@ export default function EvaluationsPage() {
                 ...(filterYear !== null ? [{ key: "year", label: `Year: ${filterYear}`, onRemove: () => setFilterYear(null) }] : []),
                 ...(filterGP && filterGP !== "all"
                   ? [{ key: "gp", label: `GP: ${uniqueGPs.find(g => String(g.id) === filterGP)?.name ?? filterGP}`, onRemove: () => setFilterGP("all") }]
-                  : []),
-                ...(filterTeam && filterTeam !== "all"
-                  ? [{
-                      key: "team",
-                      label: `Team: ${teams?.find(t => t.id === Number(filterTeam))?.teamName ?? filterTeam}`,
-                      onRemove: () => setFilterTeam("all"),
-                    }]
                   : []),
               ]}
               onClearAll={clearFilters}

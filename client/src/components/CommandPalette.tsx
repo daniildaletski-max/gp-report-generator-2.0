@@ -176,24 +176,6 @@ export function CommandPalette({ open, onOpenChange, initialQuery }: CommandPale
             </>
           )}
 
-          {index && index.teams.length > 0 && (
-            <>
-              <CommandSeparator />
-              <CommandGroup heading="Teams">
-                {index.teams.map(team => (
-                  <CommandItem
-                    key={`team-${team.id}`}
-                    onSelect={() => go(`/dashboard?team=${team.id}`)}
-                    value={`team ${team.teamName} ${team.floorManagerName}`}
-                  >
-                    <Users className="h-4 w-4" />
-                    <span>{team.teamName}</span>
-                    <span className="text-muted-foreground text-xs ml-auto">{team.floorManagerName}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </>
-          )}
 
           {index && index.actionItems.length > 0 && (
             <>

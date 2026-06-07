@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2, Trash2, Eye, Calendar, Users, TrendingUp, Search, Filter, X, Copy, CheckCircle, ExternalLink, Sheet } from "lucide-react";
+import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2, Trash2, Eye, Calendar, Search, X, Copy, CheckCircle, ExternalLink, Sheet } from "lucide-react";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -59,12 +59,6 @@ export default function ReportsPage() {
     urlString.parse,
     v => (v === "all" ? null : v),
   );
-  const [filterTeam, setFilterTeam] = useUrlState(
-    "team",
-    "all",
-    urlString.parse,
-    v => (v === "all" ? null : v),
-  );
 
   // Search input ref so `/` can focus it from anywhere on the page.
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -82,7 +76,6 @@ export default function ReportsPage() {
   }, []);
   
   const [formData, setFormData] = useState(() => ({
-    teamId: 0,
     reportMonth: 0,
     reportYear: new Date().getFullYear(),
     fmPerformance: "",
@@ -93,54 +86,12 @@ export default function ReportsPage() {
 
   const utils = trpc.useUtils();
   const { data: reports, isLoading, refetch } = trpc.report.list.useQuery();
-  const { data: teams } = trpc.fmTeam.list.useQuery();
-  // Email-delivery preview — answers "where would the emails go right
-  // now?" before any reports are generated. The diagnostic panel
-  // below renders this; the data is also implicitly the answer to
-  // "why are my FMs not getting emails?" when an admin sees their
-  // own address resolved for someone else's team.
+  // Email-delivery preview — with company-wide reports the email goes to
+  // whoever generates it, so this just confirms the caller has an email
+  // on file (and warns if not).
   const { data: deliveryReadiness } = trpc.report.deliveryReadiness.useQuery();
   const generateMutation = trpc.report.generate.useMutation();
   const exportMutation = trpc.report.exportToExcel.useMutation();
-  // Bulk-generate for every team the user can see — one click ships
-  // every monthly report + email instead of looping per team manually.
-  const generateAllMutation = trpc.report.generateAllForMonth.useMutation({
-    onSuccess: (data) => {
-      const failedNames = data.results.filter(r => r.status === "failed").map(r => r.teamName);
-      const fallbackNames = data.results.filter(r => r.fallbackToCaller).map(r => r.teamName);
-      const fellBack = data.totals.fellBackToCaller ?? 0;
-
-      if (data.totals.failed === 0 && fellBack === 0) {
-        toast.success(`All ${data.totals.succeeded} reports generated · ${data.totals.emailsSent} email${data.totals.emailsSent === 1 ? '' : 's'} sent`);
-      } else if (data.totals.failed === 0 && fellBack > 0) {
-        // Reports went out but the recipient was the admin (the
-        // FMs aren't configured). Surface this prominently — it's
-        // the "why am I getting all the emails?" signal.
-        toast.warning(
-          `${data.totals.succeeded} reports generated, but ${fellBack} email${fellBack === 1 ? '' : 's'} ended up in YOUR inbox`,
-          {
-            description: `Teams without an FM email on file: ${fallbackNames.join(', ')}. Open the "Email delivery" panel below to fix.`,
-            duration: 15000,
-          },
-        );
-      } else {
-        toast.warning(`${data.totals.succeeded} succeeded, ${data.totals.failed} failed${fellBack > 0 ? `, ${fellBack} fell back to your inbox` : ''}`, {
-          description: [
-            failedNames.length > 0 ? `Failed: ${failedNames.join(', ')}` : null,
-            fallbackNames.length > 0 ? `Fell back to your inbox: ${fallbackNames.join(', ')}` : null,
-          ].filter(Boolean).join(' · '),
-          duration: 15000,
-        });
-      }
-      utils.report.list.invalidate();
-      // Refresh the delivery-readiness panel so configuration fixes
-      // become visible immediately.
-      utils.report.deliveryReadiness.invalidate();
-    },
-    onError: (err) => {
-      toast.error(`Bulk generate failed: ${err.message}`);
-    },
-  });
   const googleSheetsExportMutation = trpc.report.exportToGoogleSheets.useMutation();
   const { data: googleSheetsStatus } = trpc.report.googleSheetsAvailable.useQuery();
   const [isExportingSheets, setIsExportingSheets] = useState<number | null>(null);
@@ -156,11 +107,6 @@ export default function ReportsPage() {
   });
 
   const [deletingReportId, setDeletingReportId] = useState<number | null>(null);
-  // Confirmation dialog state for the bulk "Generate ALL teams" action.
-  // Replaces a `window.confirm()` call so the prompt matches the rest
-  // of the design system (and so the user can scan / cancel without a
-  // browser-native blocking dialog).
-  const [showGenerateAllConfirm, setShowGenerateAllConfirm] = useState(false);
 
   // Statistics
   const stats = useMemo(() => {
@@ -177,30 +123,29 @@ export default function ReportsPage() {
     };
   }, [reports]);
 
-  // Filtered reports
+  // Filtered reports — company-wide reports are identified by period, so
+  // search matches the month name / year / status text.
   const filteredReports = useMemo(() => {
     if (!reports) return [];
     return reports.filter(item => {
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
-        const teamName = item.team?.teamName?.toLowerCase() || "";
-        const fmName = item.team?.floorManagerName?.toLowerCase() || "";
-        if (!teamName.includes(query) && !fmName.includes(query)) return false;
+        const period = `${MONTHS[item.report.reportMonth - 1]} ${item.report.reportYear}`.toLowerCase();
+        const status = (item.report.status || "").toLowerCase();
+        if (!period.includes(query) && !status.includes(query)) return false;
       }
-      if (filterTeam && filterTeam !== "all" && item.report.teamId !== Number(filterTeam)) return false;
       if (filterYear && item.report.reportYear !== filterYear) return false;
       if (filterStatus && filterStatus !== "all" && item.report.status !== filterStatus) return false;
       return true;
     });
-  }, [reports, searchQuery, filterYear, filterStatus, filterTeam]);
+  }, [reports, searchQuery, filterYear, filterStatus]);
 
-  const hasActiveFilters = searchQuery || filterYear || (filterStatus && filterStatus !== "all") || (filterTeam && filterTeam !== "all");
+  const hasActiveFilters = searchQuery || filterYear || (filterStatus && filterStatus !== "all");
 
   const clearFilters = () => {
     setSearchQuery("");
     setFilterYear(null);
     setFilterStatus("all");
-    setFilterTeam("all");
   };
 
   const handleDeleteReport = async (reportId: number) => {
@@ -212,27 +157,26 @@ export default function ReportsPage() {
     }
   };
   
-  // Query for auto-fill data (simple stats)
-  const { data: teamStats, refetch: refetchStats } = trpc.dashboard.stats.useQuery({
+  // Query for auto-fill data (simple stats) — company-wide.
+  const { data: teamStats } = trpc.dashboard.stats.useQuery({
     month: formData.reportMonth || new Date().getMonth() + 1,
     year: formData.reportYear,
   }, {
-    enabled: formData.teamId > 0 && formData.reportMonth > 0,
+    enabled: formData.reportMonth > 0,
   });
 
   const [isAutoFilling, setIsAutoFilling] = useState(false);
 
   // Auto-generate all text fields using LLM
   const handleAutoFillAll = async () => {
-    if (!formData.teamId || !formData.reportMonth) {
-      toast.error("Please select team and month first");
+    if (!formData.reportMonth) {
+      toast.error("Please select a month first");
       return;
     }
 
     setIsAutoFilling(true);
     try {
       const result = await autoFillMutation.mutateAsync({
-        teamId: formData.teamId,
         reportMonth: formData.reportMonth,
         reportYear: formData.reportYear,
       });
@@ -267,9 +211,9 @@ export default function ReportsPage() {
     const topPerformers = [...stats].sort((a: GPStat, b: GPStat) => Number(b.avgTotal) - Number(a.avgTotal)).slice(0, 3);
     const needsImprovement = stats.filter((gp: GPStat) => Number(gp.avgTotal) < 18);
     
-    let overview = `Team Performance Summary for ${MONTHS[formData.reportMonth - 1]} ${formData.reportYear}:\n\n`;
+    let overview = `Company Performance Summary for ${MONTHS[formData.reportMonth - 1]} ${formData.reportYear}:\n\n`;
     overview += `• Total GPs Evaluated: ${stats.length}\n`;
-    overview += `• Average Team Score: ${avgTotal.toFixed(1)}/22\n\n`;
+    overview += `• Average Company Score: ${avgTotal.toFixed(1)}/22\n\n`;
     
     overview += `Top Performers:\n`;
     topPerformers.forEach((gp, i) => {
@@ -288,8 +232,8 @@ export default function ReportsPage() {
   };
 
   const handleGenerate = async () => {
-    if (!formData.teamId || !formData.reportMonth) {
-      toast.error("Please select team and month");
+    if (!formData.reportMonth) {
+      toast.error("Please select a month");
       return;
     }
 
@@ -353,7 +297,6 @@ export default function ReportsPage() {
 
       setShowNewReport(false);
       setFormData({
-        teamId: 0,
         reportMonth: 0,
         reportYear: new Date().getFullYear(),
         fmPerformance: "",
@@ -492,25 +435,13 @@ export default function ReportsPage() {
     <div className="space-y-6 p-4 md:p-6 min-h-screen animate-fade-in">
       <PageHeader
         title="Reports"
-        subtitle="Generate and manage Team Monthly Overview reports"
+        subtitle="Generate and manage the company-wide monthly report"
         icon={FileSpreadsheet}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              onClick={() => setShowGenerateAllConfirm(true)}
-              disabled={generateAllMutation.isPending}
-              title="Generate + email reports for every team in one click"
-            >
-              {generateAllMutation.isPending ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating all…</>
-              ) : (
-                <><Sparkles className="mr-2 h-4 w-4" /> Generate ALL teams</>
-              )}
-            </Button>
             <Button onClick={() => setShowNewReport(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              New Report
+              New report
             </Button>
           </div>
         }
@@ -528,33 +459,15 @@ export default function ReportsPage() {
       <Dialog open={showNewReport} onOpenChange={setShowNewReport}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Generate Team Monthly Overview</DialogTitle>
+              <DialogTitle>Generate Company Monthly Report</DialogTitle>
               <DialogDescription>
-                Create a new monthly report for your team
+                One report covering every GP across all teams. Regenerating a
+                month updates the existing report in place.
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-6 py-4">
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Team *</label>
-                  <Select
-                    value={formData.teamId ? String(formData.teamId) : ""}
-                    onValueChange={(v) => setFormData({ ...formData, teamId: Number(v) })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select team" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teams?.map((team) => (
-                        <SelectItem key={team.id} value={String(team.id)}>
-                          {team.teamName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Month *</label>
                   <Select
@@ -600,7 +513,7 @@ export default function ReportsPage() {
                   type="button"
                   variant="outline"
                   onClick={handleAutoFillAll}
-                  disabled={isAutoFilling || !formData.teamId || !formData.reportMonth}
+                  disabled={isAutoFilling || !formData.reportMonth}
                   className="w-full max-w-md"
                 >
                   {isAutoFilling ? (
@@ -618,9 +531,9 @@ export default function ReportsPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">FM Performance (Self Evaluation)</label>
+                <label className="text-sm font-medium">Management Summary</label>
                 <Textarea
-                  placeholder="Describe your performance this month..."
+                  placeholder="Summary of management performance this month..."
                   value={formData.fmPerformance}
                   onChange={(e) => setFormData({ ...formData, fmPerformance: e.target.value })}
                   rows={4}
@@ -639,13 +552,13 @@ export default function ReportsPage() {
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">Team Overview</label>
+                    <label className="text-sm font-medium">Company Overview</label>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       onClick={handleAutoFillOverview}
-                      disabled={isAutoFilling || !formData.teamId || !formData.reportMonth}
+                      disabled={isAutoFilling || !formData.reportMonth}
                       className="text-xs"
                     >
                       <Sparkles className="h-3 w-3 mr-1" />
@@ -682,7 +595,7 @@ export default function ReportsPage() {
                     {[
                       { step: 1, label: 'Generating report with AI analysis' },
                       { step: 2, label: 'Building Excel workbook with charts' },
-                      { step: 3, label: 'Sending email to floor manager' },
+                      { step: 3, label: 'Sending email' },
                     ].map(({ step, label }) => (
                       <div key={step} className="flex items-center gap-2.5 text-sm">
                         {generationStep > step ? (
@@ -711,7 +624,7 @@ export default function ReportsPage() {
                 <Button variant="outline" onClick={() => setShowNewReport(false)} disabled={isGenerating}>
                   Cancel
                 </Button>
-                <Button onClick={handleGenerate} disabled={isGenerating || !formData.teamId || !formData.reportMonth} className="btn-pulse bg-gradient-to-r from-primary to-primary/80 text-white hover:from-primary/90 hover:to-primary">
+                <Button onClick={handleGenerate} disabled={isGenerating || !formData.reportMonth} className="btn-pulse bg-gradient-to-r from-primary to-primary/80 text-white hover:from-primary/90 hover:to-primary">
                   {isGenerating ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -739,17 +652,14 @@ export default function ReportsPage() {
         <ReportKpi icon={Download} label="Exported" value={stats.exported} tone="amber" />
       </div>
 
-      {/* Coverage Matrix — at-a-glance month × team grid showing report
-          status. Replaces the need to scroll the long All Reports table
-          to answer "did Team X get a March report yet?". Click any cell
-          to view (filled) or generate (empty) that team's report for
-          that month. */}
-      <CoverageMatrix
+      {/* Report timeline — at-a-glance strip of recent months showing
+          whether the company report exists (finalized / draft / missing).
+          Click a month to open it (filled) or generate it (empty). */}
+      <ReportTimeline
         reports={reports}
-        teams={teams}
         onOpenReport={(report) => setViewingReport(report)}
-        onCreateForCell={(teamId, month, year) => {
-          setFormData(prev => ({ ...prev, teamId, reportMonth: month, reportYear: year }));
+        onCreateForMonth={(month, year) => {
+          setFormData(prev => ({ ...prev, reportMonth: month, reportYear: year }));
           setShowNewReport(true);
         }}
       />
@@ -773,25 +683,13 @@ export default function ReportsPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 ref={searchInputRef}
-                placeholder="Search by team or FM name… (press / to focus)"
+                placeholder="Search by month or status… (press / to focus)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
               />
             </div>
-            
-            <Select value={filterTeam} onValueChange={setFilterTeam}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="All Teams" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Teams</SelectItem>
-                {teams?.map((team) => (
-                  <SelectItem key={team.id} value={String(team.id)}>{team.teamName}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
+
               <Select value={filterYear ? String(filterYear) : "all"} onValueChange={(v) => setFilterYear(v === "all" ? null : Number(v))}>
               <SelectTrigger className="w-[120px]">
                 <SelectValue placeholder="All years" />
@@ -831,13 +729,6 @@ export default function ReportsPage() {
                 ...(searchQuery ? [{ key: "q", label: `"${searchQuery}"`, onRemove: () => setSearchQuery("") }] : []),
                 ...(filterYear ? [{ key: "year", label: `Year: ${filterYear}`, onRemove: () => setFilterYear(null) }] : []),
                 ...(filterStatus && filterStatus !== "all" ? [{ key: "status", label: `Status: ${filterStatus}`, onRemove: () => setFilterStatus("all") }] : []),
-                ...(filterTeam && filterTeam !== "all"
-                  ? [{
-                      key: "team",
-                      label: `Team: ${teams?.find(t => t.id === Number(filterTeam))?.teamName ?? filterTeam}`,
-                      onRemove: () => setFilterTeam("all"),
-                    }]
-                  : []),
               ]}
               onClearAll={clearFilters}
             />
@@ -851,8 +742,8 @@ export default function ReportsPage() {
                 <div key={item.report.id} className="card-interactive rounded-xl border border-border bg-card p-3">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-foreground truncate">{item.team?.teamName || "Unknown"}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{item.team?.floorManagerName || "—"}</p>
+                      <p className="font-semibold text-foreground truncate">{item.team?.teamName || "All Teams"}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{item.team?.floorManagerName || "Company-wide report"}</p>
                     </div>
                     {getStatusBadge(item.report.status)}
                   </div>
@@ -917,9 +808,8 @@ export default function ReportsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Team</TableHead>
+                    <TableHead>Scope</TableHead>
                     <TableHead>Period</TableHead>
-                    <TableHead>Floor Manager</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -928,13 +818,12 @@ export default function ReportsPage() {
                 <TableBody>
                   {filteredReports.map((item) => (
                     <TableRow key={item.report.id} className="table-row-enhanced">
-                      <TableCell className="font-medium">{item.team?.teamName || "Unknown"}</TableCell>
+                      <TableCell className="font-medium">{item.team?.teamName || "All Teams"}</TableCell>
                       <TableCell>
                         <Badge variant="outline">
                           {MONTHS[item.report.reportMonth - 1]} {item.report.reportYear}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{item.team?.floorManagerName || "-"}</TableCell>
                       <TableCell>{getStatusBadge(item.report.status)}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {format(new Date(item.report.createdAt), "dd MMM yyyy")}
@@ -1055,7 +944,7 @@ export default function ReportsPage() {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>Delete Report</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Are you sure you want to delete the report for {item.team?.teamName} - {MONTHS[item.report.reportMonth - 1]} {item.report.reportYear}? This action cannot be undone.
+                                  Are you sure you want to delete the {item.team?.teamName || "company"} report for {MONTHS[item.report.reportMonth - 1]} {item.report.reportYear}? This action cannot be undone.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
@@ -1108,7 +997,7 @@ export default function ReportsPage() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {viewingReport?.team?.teamName} - {viewingReport && MONTHS[viewingReport.report.reportMonth - 1]} {viewingReport?.report.reportYear}
+              {viewingReport?.team?.teamName || "All Teams"} — {viewingReport && MONTHS[viewingReport.report.reportMonth - 1]} {viewingReport?.report.reportYear}
             </DialogTitle>
             <DialogDescription>
               Created on {viewingReport && format(new Date(viewingReport.report.createdAt), "dd MMMM yyyy")}
@@ -1130,12 +1019,12 @@ export default function ReportsPage() {
               {viewingReport.report.fmPerformance && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">FM Performance</label>
+                    <label className="text-sm font-medium">Management Summary</label>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => copyToClipboard(viewingReport.report.fmPerformance, "FM Performance")}
-                      aria-label="Copy FM Performance to clipboard"
+                      onClick={() => copyToClipboard(viewingReport.report.fmPerformance, "Management Summary")}
+                      aria-label="Copy Management Summary to clipboard"
                       title="Copy to clipboard"
                     >
                       <Copy className="h-3 w-3" />
@@ -1170,12 +1059,12 @@ export default function ReportsPage() {
               {viewingReport.report.teamOverview && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">Team Overview</label>
+                    <label className="text-sm font-medium">Company Overview</label>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => copyToClipboard(viewingReport.report.teamOverview, "Team Overview")}
-                      aria-label="Copy Team Overview to clipboard"
+                      onClick={() => copyToClipboard(viewingReport.report.teamOverview, "Company Overview")}
+                      aria-label="Copy Company Overview to clipboard"
                       title="Copy to clipboard"
                     >
                       <Copy className="h-3 w-3" />
@@ -1242,43 +1131,13 @@ export default function ReportsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Bulk-generate confirmation — replaces a window.confirm() with
-          a design-system-consistent AlertDialog. */}
-      <AlertDialog open={showGenerateAllConfirm} onOpenChange={setShowGenerateAllConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Generate reports for ALL teams?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Creates a Team Monthly Overview for every team for{" "}
-              <strong>{new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}</strong>.
-              Each team's report will be generated and emailed to its FM. Existing reports for this period are skipped.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                const now = new Date();
-                generateAllMutation.mutate({
-                  reportMonth: now.getMonth() + 1,
-                  reportYear: now.getFullYear(),
-                });
-              }}
-            >
-              Generate all
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
 
 // ============================================
-// Coverage Matrix — month × team grid that gives the FM an at-a-glance
-// answer to "which teams still need a report this month?". Replaces the
-// scrolling-the-list-and-counting workflow that used to be the only way
-// to see coverage.
+// Shared shape for a report row as returned by report.list (report +
+// optional legacy team). A company report has team === null.
 // ============================================
 
 type ReportListItem = {
@@ -1287,56 +1146,34 @@ type ReportListItem = {
 };
 
 // ============================================
-// DeliveryReadinessPanel — surfaces "where do the monthly emails
-// actually go right now?" before any reports are generated.
-//
-// This is the answer to the most common ops complaint: "letters only
-// reach me, not the other FMs." Without this panel, the operator has
-// no way to tell from the UI whether:
-//   • the FMs aren't linked to teams (team.userId is null)
-//   • the FMs are linked but have no email on file (users.email null)
-//   • everything's wired up and Resend is rejecting (domain unverified)
-//
-// All three failure modes look the same from the outside ("only I get
-// the emails"). The panel distinguishes the first two and points to
-// the fix; the third is logged at send time with a remediation hint.
+// DeliveryReadinessPanel — with company-wide reports the email goes to
+// whoever generates it. This panel confirms the caller has an email on
+// file (a quiet green one-liner) or warns that no email will be sent.
 // ============================================
 type DeliveryReadiness = {
-  rows: Array<{
-    teamId: number;
-    teamName: string;
-    fmName: string;
-    recipientEmail: string | null;
-    recipientName: string | null;
-    status: "ok" | "no-fm" | "fm-missing-email";
-    fallbackToCaller: boolean;
-  }>;
-  callerEmail: string | null;
-  summary: { total: number; ok: number; fallback: number };
+  recipientEmail: string | null;
+  recipientName: string | null;
+  hasEmail: boolean;
 };
 
 function DeliveryReadinessPanel({ data }: { data: DeliveryReadiness | undefined }) {
-  if (!data || data.rows.length === 0) return null;
-  const hasIssues = data.summary.fallback > 0;
-  // When everything is wired up, render a quiet one-liner so the
-  // operator gets passive confirmation; collapse the per-team list
-  // unless they expand it.
-  if (!hasIssues) {
+  if (!data) return null;
+
+  // Happy path — caller has an email; the report will be emailed to them.
+  if (data.hasEmail) {
     return (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 px-4 py-2.5 text-[13px] text-emerald-800 flex items-center gap-2">
         <CheckCircle className="h-4 w-4 shrink-0" />
         <span>
           <strong>Email delivery: ready.</strong>{" "}
-          All {data.summary.ok} team{data.summary.ok === 1 ? "" : "s"} have an FM email on file —
-          monthly reports will go to each FM directly.
+          The company report will be emailed to <strong>{data.recipientEmail}</strong> when you generate it.
         </span>
       </div>
     );
   }
 
-  // There are misconfigured teams — render the actionable list.
-  const fallbackRows = data.rows.filter(r => r.fallbackToCaller);
-  const okRows = data.rows.filter(r => !r.fallbackToCaller);
+  // No email on file — the report is still created + downloadable, but
+  // nothing gets sent. Point at the fix.
   return (
     <Card className="border-amber-200 bg-amber-50/30">
       <CardHeader className="pb-3">
@@ -1344,66 +1181,33 @@ function DeliveryReadinessPanel({ data }: { data: DeliveryReadiness | undefined 
           <div className="p-1.5 rounded-lg bg-amber-100 border border-amber-200">
             <FileSpreadsheet className="h-3.5 w-3.5 text-amber-700" />
           </div>
-          Email delivery: {data.summary.fallback} team{data.summary.fallback === 1 ? "" : "s"} would land in your inbox
+          Email delivery: no email on file for your account
         </CardTitle>
         <CardDescription>
-          {data.callerEmail
-            ? <>Reports for these teams will be emailed to <strong>{data.callerEmail}</strong> instead of the FM, because the FM isn't fully configured.</>
-            : <>Reports for these teams have no recipient because no FM is configured AND your account has no email on file.</>}
+          The company report is emailed to whoever generates it, but your
+          account has no email address on file — the report will still be
+          created and downloadable, but no email will be sent. Log in via
+          OAuth once (or set your email in <strong>/admin</strong>) to enable delivery.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-2">
-        <div className="rounded-lg border border-amber-200 bg-white divide-y divide-amber-100 overflow-hidden">
-          {fallbackRows.map(row => (
-            <div key={row.teamId} className="px-3 py-2 flex items-center justify-between gap-3 text-sm">
-              <div className="min-w-0">
-                <div className="font-medium text-slate-800 truncate">{row.teamName}</div>
-                <div className="text-[12px] text-slate-500 truncate">FM: {row.fmName}</div>
-              </div>
-              <div className="text-right">
-                {row.status === "no-fm" ? (
-                  <Badge variant="warning">No FM linked to team</Badge>
-                ) : (
-                  <Badge variant="warning">FM has no email on file</Badge>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="text-[12px] text-slate-600 leading-relaxed">
-          <strong>Fix it:</strong>{" "}
-          <ul className="list-disc list-inside mt-1 space-y-0.5">
-            <li><em>No FM linked to team</em> — assign the team to its FM in the Team management page.</li>
-            <li><em>FM has no email on file</em> — the FM needs to log in once via OAuth so their email is captured (or update via /admin user settings).</li>
-          </ul>
-          {okRows.length > 0 && (
-            <p className="mt-2 text-emerald-700">
-              <CheckCircle className="inline h-3 w-3 mr-1" />
-              {okRows.length} other team{okRows.length === 1 ? "" : "s"} {okRows.length === 1 ? "is" : "are"} configured correctly and will email their FM directly.
-            </p>
-          )}
-        </div>
-      </CardContent>
     </Card>
   );
 }
 
-function CoverageMatrix({
+function ReportTimeline({
   reports,
-  teams,
   onOpenReport,
-  onCreateForCell,
+  onCreateForMonth,
 }: {
   reports?: ReportListItem[];
-  teams?: { id: number; teamName: string; floorManagerName: string }[];
   onOpenReport: (report: ReportListItem) => void;
-  onCreateForCell: (teamId: number, month: number, year: number) => void;
+  onCreateForMonth: (month: number, year: number) => void;
 }) {
-  // 6-month window: 5 prior months + current, oldest-left to newest-right
+  // 12-month window, oldest-left to newest-right.
   const months = useMemo(() => {
     const now = new Date();
     const out: { month: number; year: number; label: string }[] = [];
-    for (let i = 5; i >= 0; i--) {
+    for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       out.push({
         month: d.getMonth() + 1,
@@ -1414,39 +1218,22 @@ function CoverageMatrix({
     return out;
   }, []);
 
-  // Index: `${teamId}-${year}-${month}` → report.
-  // Keep the FIRST report seen for any (team, year, month) tuple. The
-  // list comes back from the server ordered newest-first, so the first
-  // iteration is the newest report — and we want the matrix to reflect
-  // the newest state (status/color and click-through target should point
-  // at the most recent regeneration, not stale older copies).
+  // Index company reports (teamId NULL) by `${year}-${month}`. The list
+  // is newest-first, so first-seen wins — the timeline reflects the most
+  // recent regeneration for each month.
   const reportIndex = useMemo(() => {
     const idx = new Map<string, ReportListItem>();
     for (const r of reports ?? []) {
-      if (r.report.teamId == null) continue;
-      const key = `${r.report.teamId}-${r.report.reportYear}-${r.report.reportMonth}`;
+      if (r.report.teamId != null) continue; // company reports only
+      const key = `${r.report.reportYear}-${r.report.reportMonth}`;
       if (!idx.has(key)) idx.set(key, r);
     }
     return idx;
   }, [reports]);
 
-  const sortedTeams = useMemo(
-    () => (teams ? [...teams].sort((a, b) => a.teamName.localeCompare(b.teamName)) : []),
-    [teams],
-  );
-
-  // Coverage stats for the current month — tells the FM at the top of
-  // the page how many teams still need a report THIS month.
-  const currentMonth = months[months.length - 1];
-  const currentMonthCount = sortedTeams.reduce((n, t) => {
-    return reportIndex.has(`${t.id}-${currentMonth.year}-${currentMonth.month}`) ? n + 1 : n;
-  }, 0);
-  const totalTeams = sortedTeams.length;
-  const missingCount = totalTeams - currentMonthCount;
-
-  if (sortedTeams.length === 0) {
-    return null;
-  }
+  const current = months[months.length - 1];
+  const currentReport = reportIndex.get(`${current.year}-${current.month}`);
+  const coveredCount = months.reduce((n, m) => (reportIndex.has(`${m.year}-${m.month}`) ? n + 1 : n), 0);
 
   return (
     <Card className="border border-amber-200/50 shadow-sm overflow-hidden">
@@ -1459,15 +1246,15 @@ function CoverageMatrix({
               <div className="p-1.5 rounded-lg bg-amber-100 border border-amber-200">
                 <Calendar className="h-3.5 w-3.5 text-amber-700" />
               </div>
-              Coverage matrix
+              Report timeline
             </CardTitle>
             <CardDescription className="mt-1">
-              {missingCount === 0 ? (
-                <span className="text-emerald-600 font-medium">✓ All {totalTeams} teams covered for {MONTHS[currentMonth.month - 1]}</span>
+              {currentReport ? (
+                <span className="text-emerald-600 font-medium">✓ {MONTHS[current.month - 1]} {current.year} report generated</span>
               ) : (
                 <span>
-                  <span className="font-semibold text-slate-700">{currentMonthCount}/{totalTeams}</span> teams covered for {MONTHS[currentMonth.month - 1]}
-                  {" — "}<span className="text-amber-600 font-medium">{missingCount} missing</span>
+                  {MONTHS[current.month - 1]} {current.year} <span className="text-amber-600 font-medium">not generated yet</span>
+                  {" — "}<span className="text-slate-500">{coveredCount} of last 12 months covered</span>
                 </span>
               )}
             </CardDescription>
@@ -1485,108 +1272,49 @@ function CoverageMatrix({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="overflow-x-auto p-0">
-        <div className="inline-grid min-w-full" style={{ gridTemplateColumns: `minmax(160px, 1.5fr) repeat(${months.length}, minmax(72px, 1fr))` }}>
-          {/* Header row */}
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 py-2.5 px-3 sticky left-0 bg-amber-50/60 border-b border-amber-200/50">
-            Team
-          </div>
-          {months.map((m, i) => (
-            <div
-              key={`h-${i}`}
-              className={`text-[11px] font-semibold uppercase tracking-wider text-center py-2.5 border-b ${
-                i === months.length - 1
-                  ? "text-amber-700 bg-amber-50/60 border-amber-200/50"
-                  : "text-slate-400 bg-slate-50/40 border-slate-200/50"
-              }`}
-            >
-              {m.label}
-            </div>
-          ))}
-
-          {/* Data rows */}
-          {sortedTeams.map((team) => (
-            <CoverageRow
-              key={team.id}
-              team={team}
-              months={months}
-              reportIndex={reportIndex}
-              onOpenReport={onOpenReport}
-              onCreateForCell={onCreateForCell}
-            />
-          ))}
+      <CardContent className="overflow-x-auto p-3">
+        <div className="flex gap-2 min-w-full">
+          {months.map((m, i) => {
+            const r = reportIndex.get(`${m.year}-${m.month}`);
+            const status = r?.report.status;
+            const isFinalized = status === "finalized";
+            const isDraft = !!r && !isFinalized;
+            const isCurrentMonth = i === months.length - 1;
+            const tooltip = r
+              ? `${MONTHS[m.month - 1]} ${m.year} — ${isFinalized ? "Finalized" : "Draft"} (click to open)`
+              : `${MONTHS[m.month - 1]} ${m.year} — no report yet (click to generate)`;
+            return (
+              <button
+                key={`${m.year}-${m.month}`}
+                type="button"
+                title={tooltip}
+                onClick={() => (r ? onOpenReport(r) : onCreateForMonth(m.month, m.year))}
+                className={`flex-1 min-w-[64px] rounded-lg border flex flex-col items-center justify-center gap-1.5 py-3 transition-all duration-200 group ${
+                  isFinalized
+                    ? "bg-emerald-50/80 hover:bg-emerald-100 border-emerald-200/60"
+                    : isDraft
+                      ? "bg-amber-50/80 hover:bg-amber-100 border-amber-200/60"
+                      : isCurrentMonth
+                        ? "bg-amber-50/30 hover:bg-amber-50 border-amber-200/50 border-dashed"
+                        : "bg-white hover:bg-slate-50 border-slate-200/60 border-dashed"
+                }`}
+              >
+                {isFinalized ? (
+                  <CheckCircle className="h-4 w-4 text-emerald-600 group-hover:scale-110 transition-transform" />
+                ) : isDraft ? (
+                  <FileSpreadsheet className="h-4 w-4 text-amber-600 group-hover:scale-110 transition-transform" />
+                ) : (
+                  <Plus className={`h-3.5 w-3.5 transition-all duration-200 ${isCurrentMonth ? "text-amber-400/70 group-hover:text-amber-600" : "text-slate-300 group-hover:text-slate-500"}`} />
+                )}
+                <span className={`text-[10px] font-semibold uppercase tracking-wide ${isCurrentMonth ? "text-amber-700" : "text-slate-400"}`}>
+                  {m.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function CoverageRow({
-  team,
-  months,
-  reportIndex,
-  onOpenReport,
-  onCreateForCell,
-}: {
-  team: { id: number; teamName: string; floorManagerName: string };
-  months: { month: number; year: number; label: string }[];
-  reportIndex: Map<string, ReportListItem>;
-  onOpenReport: (report: ReportListItem) => void;
-  onCreateForCell: (teamId: number, month: number, year: number) => void;
-}) {
-  return (
-    <>
-      <div className="py-2.5 px-3 sticky left-0 bg-white border-b border-slate-100 min-w-0 hover:bg-amber-50/30 transition-colors">
-        <p className="text-sm font-semibold text-slate-800 truncate">{team.teamName}</p>
-        {team.floorManagerName && (
-          <p className="text-[11px] text-slate-400 truncate">{team.floorManagerName}</p>
-        )}
-      </div>
-      {months.map((m, i) => {
-        const key = `${team.id}-${m.year}-${m.month}`;
-        const r = reportIndex.get(key);
-        const status = r?.report.status;
-        const isFinalized = status === "finalized";
-        const isDraft = !!r && !isFinalized;
-        const isCurrentMonth = i === months.length - 1;
-        const tooltip = r
-          ? `${MONTHS[m.month - 1]} ${m.year} — ${isFinalized ? "Finalized" : "Draft"} (click to open)`
-          : `${MONTHS[m.month - 1]} ${m.year} — no report yet (click to generate)`;
-        return (
-          <button
-            key={`${key}-cell`}
-            type="button"
-            title={tooltip}
-            onClick={() => (r ? onOpenReport(r) : onCreateForCell(team.id, m.month, m.year))}
-            className={`relative h-12 border-b flex items-center justify-center transition-all duration-200 group ${
-              isFinalized
-                ? "bg-emerald-50/80 hover:bg-emerald-100 border-emerald-100/60"
-                : isDraft
-                  ? "bg-amber-50/80 hover:bg-amber-100 border-amber-100/60"
-                  : isCurrentMonth
-                    ? "bg-amber-50/30 hover:bg-amber-50 border-amber-100/40"
-                    : "bg-white hover:bg-slate-50 border-slate-100/60"
-            }`}
-          >
-            {isFinalized && (
-              <div className="flex flex-col items-center gap-0.5">
-                <CheckCircle className="h-4 w-4 text-emerald-600 group-hover:scale-110 transition-transform" />
-              </div>
-            )}
-            {isDraft && (
-              <div className="flex flex-col items-center gap-0.5">
-                <FileSpreadsheet className="h-4 w-4 text-amber-600 group-hover:scale-110 transition-transform" />
-              </div>
-            )}
-            {!r && (
-              <Plus className={`h-3.5 w-3.5 transition-all duration-200 ${
-                isCurrentMonth ? "text-amber-400/70 group-hover:text-amber-600" : "text-slate-300 group-hover:text-slate-500"
-              }`} />
-            )}
-          </button>
-        );
-      })}
-    </>
   );
 }
 

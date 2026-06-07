@@ -51,7 +51,7 @@ interface AttendanceItem {
 interface ReportData {
   report: {
     id: number;
-    teamId: number;
+    teamId: number | null;
     reportMonth: number;
     reportYear: number;
     fmPerformance: string | null;

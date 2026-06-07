@@ -179,8 +179,15 @@ function MiniSpark({ values, max, color }: { values: number[]; max: number; colo
 // ============================================
 export default function WorkspacePage() {
   const { user } = useAuth();
-  const [selectedTeamId, setSelectedTeamId] = useState<string>("");
-  const [selectedGpId, setSelectedGpId] = useState<number | null>(null);
+  // Deep-link: /workspace?gp=ID pre-selects that GP. With one shared
+  // roster the GP is already in the global cadence, so seed the
+  // selection straight from the URL.
+  const [selectedGpId, setSelectedGpId] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const deepGp = new URLSearchParams(window.location.search).get("gp");
+    const id = deepGp ? Number(deepGp) : NaN;
+    return Number.isFinite(id) && id > 0 ? id : null;
+  });
   const [filter, setFilter] = useState<"all" | "overdue" | "due-soon" | "never">("all");
   const [search, setSearch] = useState("");
 
@@ -199,23 +206,11 @@ export default function WorkspacePage() {
   const [focusedCriterion, setFocusedCriterion] = useState<CriterionKey | null>(null);
   const [showHotkeysHint, setShowHotkeysHint] = useState(true);
 
-  // Fetch teams
-  const { data: teams, isLoading: teamsLoading } = trpc.fmTeam.list.useQuery();
-
-  // Auto-pick first team
-  useEffect(() => {
-    if (teams && teams.length > 0 && !selectedTeamId) {
-      setSelectedTeamId(String(teams[0].id));
-    }
-  }, [teams, selectedTeamId]);
-
-  const teamId = selectedTeamId ? Number(selectedTeamId) : undefined;
-
-  // Fetch cadence
+  // Fetch the company-wide cadence — every GP in one shared queue.
   const { data: cadenceData, isLoading: cadenceLoading, refetch: refetchCadence } =
     trpc.evaluation.cadence.useQuery(
-      { teamId: teamId! },
-      { enabled: !!teamId, refetchInterval: 60_000 },
+      {},
+      { refetchInterval: 60_000 },
     );
 
   const filteredGps = useMemo(() => {
@@ -231,47 +226,14 @@ export default function WorkspacePage() {
     return list;
   }, [cadenceData, filter, search]);
 
-  // Deep-link: when navigated to /workspace?gp=ID (e.g. from the
-  // GP Stats card "Open in Workspace" shortcut), pre-select that GP
-  // AND switch the team selector to the GP's team — otherwise the
-  // cadence still loads the previously-selected team and the auto-
-  // pick effect below would overwrite our choice.
-  //
-  // We track a `deepLinkPending` id rather than calling the setters
-  // directly, so the auto-pick effect knows to back off until we
-  // resolve the team and the cadence reloads with our GP in it.
-  const [deepLinkPending, setDeepLinkPending] = useState<number | null>(() => {
-    if (typeof window === "undefined") return null;
-    const params = new URLSearchParams(window.location.search);
-    const deepGp = params.get("gp");
-    if (!deepGp) return null;
-    const id = Number(deepGp);
-    return Number.isFinite(id) && id > 0 ? id : null;
-  });
-  // We need the global GP list (not just the team-scoped cadence) to
-  // resolve the deep-linked GP's owning team.
-  const { data: globalGpList } = trpc.gamePresenter.list.useQuery(undefined, {
-    enabled: deepLinkPending !== null,
-  });
+  // Auto-pick the first GP when the cadence loads & nothing is selected.
+  // The deep-linked GP (if any) is already seeded into selectedGpId
+  // above, and this backs off once that GP appears in the queue.
   useEffect(() => {
-    if (deepLinkPending == null || !globalGpList) return;
-    const gp = (globalGpList as any[]).find(g => g.id === deepLinkPending);
-    if (gp?.teamId) {
-      setSelectedTeamId(String(gp.teamId));
-    }
-    setSelectedGpId(deepLinkPending);
-    setDeepLinkPending(null);
-  }, [deepLinkPending, globalGpList]);
-
-  // Auto-pick first overdue GP when cadence loads & nothing selected.
-  // Skip while a deep-link is still being resolved so we don't
-  // overwrite the FM's incoming intent.
-  useEffect(() => {
-    if (deepLinkPending != null) return;
     if (!cadenceData?.gps || cadenceData.gps.length === 0) return;
     if (selectedGpId && cadenceData.gps.some(g => g.gpId === selectedGpId)) return;
     setSelectedGpId(cadenceData.gps[0].gpId);
-  }, [cadenceData, selectedGpId, deepLinkPending]);
+  }, [cadenceData, selectedGpId]);
 
   const selectedGp = useMemo(
     () => cadenceData?.gps.find(g => g.gpId === selectedGpId) ?? null,
@@ -441,22 +403,12 @@ export default function WorkspacePage() {
         )}
       />
 
-      {/* Team picker */}
+      {/* Cadence header — one shared queue across every GP */}
       <div className="glass-card p-3 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-primary" />
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Team</span>
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cadence — all GPs</span>
         </div>
-        <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-          <SelectTrigger className="glass-input h-9 min-w-[200px]">
-            <SelectValue placeholder="Select team..." />
-          </SelectTrigger>
-          <SelectContent>
-            {teams?.map(t => (
-              <SelectItem key={t.id} value={String(t.id)}>{t.teamName}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
 
         <div className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground">
           <Keyboard className="h-3.5 w-3.5" />

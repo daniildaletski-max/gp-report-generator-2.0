@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, ShieldAlert, CalendarCheck, Zap, SlidersHorizontal, Sun, Sparkles, ScanLine, BadgeEuro, Trophy } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, ShieldAlert, CalendarCheck, Zap, SlidersHorizontal, Sun, Sparkles, ScanLine, BadgeEuro, Trophy, Radar } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -31,6 +31,7 @@ const Assistant = lazy(() => import("./pages/Assistant"));
 const UploadBulk = lazy(() => import("./pages/UploadBulk"));
 const Bonus = lazy(() => import("./pages/Bonus"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
+const CommandCenter = lazy(() => import("./pages/CommandCenter"));
 
 function PageLoader() {
   return (
@@ -48,6 +49,7 @@ function PageLoader() {
 
 // Base sidebar items for all users
 const baseSidebarItems = [
+  { href: "/command", label: "Command", icon: Radar },
   { href: "/today", label: "Today", icon: Sun },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/workspace", label: "Workspace", icon: Zap },
@@ -94,6 +96,11 @@ function DashboardRoutes() {
         <div className="pb-20 md:pb-0">
           <Suspense fallback={<PageLoader />}>
           <Switch>
+            <Route path="/command">
+              <RouteErrorBoundary fallbackTitle="Command Center failed to load">
+                <CommandCenter />
+              </RouteErrorBoundary>
+            </Route>
             <Route path="/today">
               <RouteErrorBoundary fallbackTitle="Today failed to load">
                 <Today />
@@ -206,6 +213,7 @@ function Router() {
         )}
       </Route>
       {/* All dashboard pages use DashboardRoutes for consistent sidebar */}
+      <Route path="/command" component={DashboardRoutes} />
       <Route path="/today" component={DashboardRoutes} />
       <Route path="/dashboard" component={DashboardRoutes} />
       <Route path="/upload" component={DashboardRoutes} />
