@@ -120,8 +120,6 @@ export default function Dashboard() {
     teamId: selectedTeamId,
   });
 
-  const { data: teams } = trpc.fmTeam.list.useQuery();
-  
   const { data: stats, isLoading, isError: isStatsError, refetch: refetchStats } = trpc.dashboard.stats.useQuery({
     month: selectedMonth,
     year: selectedYear,
@@ -142,8 +140,6 @@ export default function Dashboard() {
     teamId: selectedTeamId,
     months: 6,
   });
-
-  const selectedTeamName = selectedTeamId ? teams?.find(t => t.id === selectedTeamId)?.teamName : undefined;
 
   const totalGPs = stats?.totalGPs || 0;
   const evaluatedGPs = (stats as { thisMonthGPs?: number })?.thisMonthGPs || 0;
@@ -251,7 +247,7 @@ export default function Dashboard() {
     <div className="p-4 sm:p-6 space-y-5">
       <PageHeader
         title="Dashboard"
-        subtitle={selectedTeamName ? `${selectedTeamName} performance` : 'Team performance overview'}
+        subtitle="Performance overview"
         icon={BarChart3}
         actions={
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -302,7 +298,7 @@ export default function Dashboard() {
                 })()}{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
               </p>
               <h2 className="text-xl sm:text-2xl font-bold text-foreground leading-tight tracking-tight">
-                {selectedTeamName ? `${selectedTeamName} · ${MONTHS[selectedMonth - 1]} ${selectedYear}` : `${MONTHS[selectedMonth - 1]} ${selectedYear} overview`}
+                {`${MONTHS[selectedMonth - 1]} ${selectedYear} overview`}
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
                 {evaluationProgress}% of GPs evaluated this month — {evaluatedGPs}/{totalGPs} done{pendingGPs > 0 ? `, ${pendingGPs} pending` : ""}.
@@ -462,7 +458,7 @@ export default function Dashboard() {
                 <BarChart3 className="h-4.5 w-4.5 text-primary" />
               </div>
               <div>
-                <CardTitle className="text-sm sm:text-base">GP Scores{selectedTeamName ? ` — ${selectedTeamName}` : ''}</CardTitle>
+                <CardTitle className="text-sm sm:text-base">GP Scores</CardTitle>
                 <CardDescription className="text-xs">Average total scores per GP</CardDescription>
               </div>
             </div>
@@ -677,7 +673,7 @@ export default function Dashboard() {
       <TeamComparisonSection isMobile={isMobile} />
 
       {/* Trend Section */}
-      <TrendSection isMobile={isMobile} selectedTeamId={selectedTeamId} selectedTeamName={selectedTeamName} teams={teams} />
+      <TrendSection isMobile={isMobile} selectedTeamId={selectedTeamId} />
 
       <GPDetailDrawer
         gpId={drawerGpId}
@@ -692,7 +688,7 @@ export default function Dashboard() {
 // ======================================
 // Trend Section (Score Trends, Volume, Summary)
 // ======================================
-function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { isMobile: boolean; selectedTeamId?: number; selectedTeamName?: string; teams?: { id: number; teamName: string }[] }) {
+function TrendSection({ isMobile, selectedTeamId }: { isMobile: boolean; selectedTeamId?: number }) {
   const { data: trendData, isLoading: isLoadingTrend, isError: isTrendError, refetch: refetchTrend } = trpc.dashboard.monthlyTrend.useQuery({
     teamId: selectedTeamId,
     months: 6,
@@ -751,7 +747,7 @@ function TrendSection({ isMobile, selectedTeamId, selectedTeamName, teams }: { i
                 <TrendingUp className="h-4.5 w-4.5 text-primary" />
               </div>
               <div>
-                <CardTitle className="text-sm sm:text-base">Score Trends{selectedTeamName ? ` — ${selectedTeamName}` : ''}</CardTitle>
+                <CardTitle className="text-sm sm:text-base">Score Trends</CardTitle>
                 <CardDescription className="text-xs">Average scores over 6 months</CardDescription>
               </div>
             </div>
