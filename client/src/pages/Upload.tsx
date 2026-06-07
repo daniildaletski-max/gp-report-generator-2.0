@@ -532,24 +532,15 @@ export default function UploadPage() {
   const processingRef = useRef(false);
 
   const { data: gpList } = trpc.gamePresenter.list.useQuery();
-  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const [coverageMonth] = useState(() => {
     const now = new Date();
     return { month: now.getMonth() + 1, year: now.getFullYear() };
   });
 
-  const { data: teamsList } = trpc.fmTeam.listWithGPs.useQuery();
+  // Company-wide coverage — every GP, no team scoping.
   const { data: coverageData, isLoading: coverageLoading } = trpc.evaluation.coverage.useQuery(
-    { month: coverageMonth.month, year: coverageMonth.year, teamId: selectedTeamId ?? undefined },
-    { enabled: !!selectedTeamId }
+    { month: coverageMonth.month, year: coverageMonth.year },
   );
-
-  // Auto-select first team if user has only one
-  useEffect(() => {
-    if (teamsList && teamsList.length > 0 && !selectedTeamId) {
-      setSelectedTeamId(teamsList[0].id);
-    }
-  }, [teamsList]);
 
   const uploadEvaluationMutation = trpc.evaluation.uploadAndExtract.useMutation();
   const uploadAttitudeMutation = trpc.attitudeScreenshot.upload.useMutation();
@@ -841,12 +832,9 @@ export default function UploadPage() {
         </TabsList>
       </Tabs>
 
-      {/* Team Coverage Panel */}
-      {activeTab === "evaluations" && teamsList && teamsList.length > 0 && (
-        <TeamCoveragePanel
-          teams={teamsList}
-          selectedTeamId={selectedTeamId}
-          onSelectTeam={setSelectedTeamId}
+      {/* Coverage Panel */}
+      {activeTab === "evaluations" && (
+        <CoveragePanel
           coverageData={coverageData}
           coverageLoading={coverageLoading}
           coverageMonth={coverageMonth}
@@ -1086,15 +1074,12 @@ export default function UploadPage() {
 }
 
 // ============================================
-// Team Coverage Panel — shows GP evaluation coverage for the selected team
+// Coverage Panel — company-wide GP evaluation coverage for the month
 // ============================================
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-interface TeamCoveragePanelProps {
-  teams: Array<{ id: number; teamName: string; gpCount: number }>;
-  selectedTeamId: number | null;
-  onSelectTeam: (id: number) => void;
+interface CoveragePanelProps {
   coverageData: Array<{
     teamId: number;
     teamName: string;
@@ -1114,39 +1099,24 @@ interface TeamCoveragePanelProps {
   coverageMonth: { month: number; year: number };
 }
 
-function TeamCoveragePanel({ teams, selectedTeamId, onSelectTeam, coverageData, coverageLoading, coverageMonth }: TeamCoveragePanelProps) {
+function CoveragePanel({ coverageData, coverageLoading, coverageMonth }: CoveragePanelProps) {
   const teamData = coverageData?.[0];
   const summary = teamData?.summary;
   const monthLabel = `${MONTH_NAMES[coverageMonth.month - 1]} ${coverageMonth.year}`;
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
-      {/* Header with team selector */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-b border-border bg-muted/30">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 p-4 border-b border-border bg-muted/30">
         <div className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center">
             <Users className="h-4 w-4 text-primary" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Team Coverage</h3>
-            <p className="text-xs text-muted-foreground">{monthLabel} evaluation progress</p>
+            <h3 className="text-sm font-semibold text-foreground">Coverage</h3>
+            <p className="text-xs text-muted-foreground">{monthLabel} evaluation progress — all GPs</p>
           </div>
         </div>
-        <Select
-          value={selectedTeamId ? String(selectedTeamId) : undefined}
-          onValueChange={(v) => onSelectTeam(Number(v))}
-        >
-          <SelectTrigger className="w-full sm:w-[220px] bg-background h-9 text-sm">
-            <SelectValue placeholder="Select team..." />
-          </SelectTrigger>
-          <SelectContent>
-            {teams.map((team) => (
-              <SelectItem key={team.id} value={String(team.id)}>
-                {team.teamName} ({team.gpCount} GPs)
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Summary strip */}
@@ -1176,9 +1146,9 @@ function TeamCoveragePanel({ teams, selectedTeamId, onSelectTeam, coverageData, 
           </div>
         )}
 
-        {!coverageLoading && !teamData && selectedTeamId && (
+        {!coverageLoading && !teamData && (
           <div className="text-center py-6 text-sm text-muted-foreground">
-            No GPs assigned to this team yet.
+            No coverage data yet.
           </div>
         )}
 
@@ -1250,7 +1220,7 @@ function TeamCoveragePanel({ teams, selectedTeamId, onSelectTeam, coverageData, 
 
         {!coverageLoading && teamData && teamData.gps.length === 0 && (
           <div className="text-center py-6 text-sm text-muted-foreground">
-            No GPs in this team. Assign GPs in the Admin panel.
+            No GPs yet.
           </div>
         )}
       </div>
