@@ -11,7 +11,9 @@ import { createLogger } from "./services/logger";
 
 const log = createLogger("ScheduledReports");
 import { notifyOwner } from "./_core/notification";
-import { MONTH_NAMES } from "@shared/const";
+import { invokeLLM } from "./_core/llm";
+import { sendEmail } from "./_core/email";
+import { MONTH_NAMES, COMPANY_NAME } from "@shared/const";
 import {
   buildCompanyReportContext,
   genManagementSummary,
@@ -525,5 +527,136 @@ export function initAutoCoaching() {
 }
 
 
+// ============================================
+// Weekly coaching digest — every Monday morning, email the management
+// team an AI-written summary of the week's priorities (the alert/warning
+// signals from the Operations Brain). Skips silently when nothing is
+// urgent, so it never becomes noise.
+// ============================================
+
+let isWeeklyDigestRunning = false;
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function runWeeklyCoachingDigest() {
+  if (isWeeklyDigestRunning) {
+    log.warn("[WeeklyDigest] Already running — skipping this tick");
+    return;
+  }
+  isWeeklyDigestRunning = true;
+  try {
+    const insights = await db.computeDashboardInsights({});
+    const urgent = insights.filter(i => i.severity === "alert" || i.severity === "warning");
+    if (urgent.length === 0) {
+      log.info("[WeeklyDigest] No urgent signals — skipping (no email).");
+      return;
+    }
+
+    const signalLines = insights
+      .map(i => `- [${i.severity}] ${i.title}: ${i.description}`)
+      .join("\n");
+
+    let digest = "";
+    try {
+      const res = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: `You are the operations director of ${COMPANY_NAME}, a live-casino game-presenter studio. Write a concise weekly coaching digest for the management team.
+
+Guidelines:
+- 4-6 sentences. No bullet points, no preamble like "Here is".
+- Lead with the top 1-2 priorities for this week.
+- Name the specific GPs and the action to take for each.
+- Reference the numbers from the signals. Do NOT invent anything.
+- Professional, direct, motivating.`,
+          },
+          {
+            role: "user",
+            content: `This week's auto-detected signals across the studio:\n${signalLines}`,
+          },
+        ],
+      });
+      const content = res.choices[0]?.message?.content;
+      digest = typeof content === "string" ? content : "";
+    } catch (e) {
+      log.error("[WeeklyDigest] LLM generation failed", e instanceof Error ? e : new Error(String(e)));
+    }
+    if (!digest) {
+      log.warn("[WeeklyDigest] Empty digest — not sending.");
+      return;
+    }
+
+    // Recipients: admins with an email on file, falling back to any user
+    // with one.
+    const rows = await db.getAllUsers();
+    const users = rows.map(r => r.user).filter((u): u is NonNullable<typeof u> => !!u);
+    const admins = users.filter(u => u.role === "admin" && u.email);
+    const recipients = (admins.length > 0 ? admins : users.filter(u => u.email))
+      .filter((u): u is typeof u & { email: string } => !!u.email);
+
+    const alertCount = insights.filter(i => i.severity === "alert").length;
+    const subject = `Weekly coaching digest — ${urgent.length} priorit${urgent.length === 1 ? "y" : "ies"}${alertCount > 0 ? ` (${alertCount} alert${alertCount === 1 ? "" : "s"})` : ""}`;
+    const signalsHtml = insights.slice(0, 12)
+      .map(i => `<li><strong>${escapeHtml(i.title)}</strong> — ${escapeHtml(i.description)}</li>`)
+      .join("");
+    const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#0f172a;max-width:640px;">
+      <h2 style="margin:0 0 8px;">Weekly coaching digest</h2>
+      <p style="font-size:15px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(digest)}</p>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;" />
+      <p style="font-weight:600;margin:0 0 6px;">Signals this week</p>
+      <ul style="font-size:13px;line-height:1.6;color:#334155;">${signalsHtml}</ul>
+    </div>`;
+    const body = `Weekly coaching digest\n\n${digest}\n\nSignals this week:\n${insights.slice(0, 12).map(i => `- ${i.title}`).join("\n")}`;
+
+    let sent = 0;
+    for (const r of recipients) {
+      try {
+        const result = await sendEmail({ to: r.email, subject, body, html });
+        if (result.success) sent++;
+      } catch (e) {
+        log.warn(`[WeeklyDigest] send to ${r.email} failed`, { error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+    log.info(`[WeeklyDigest] sent to ${sent}/${recipients.length} recipient(s)`);
+
+    try {
+      await notifyOwner({ title: subject, content: digest });
+    } catch { /* best-effort */ }
+  } catch (err) {
+    log.error("[WeeklyDigest] failed", err instanceof Error ? err : new Error(String(err)));
+  } finally {
+    isWeeklyDigestRunning = false;
+  }
+}
+
+/**
+ * Weekly coaching digest cron — Mondays at 08:00 EET.
+ * Override the schedule via WEEKLY_DIGEST_CRON ("off" disables).
+ */
+export function initWeeklyDigest() {
+  const expr = process.env.WEEKLY_DIGEST_CRON ?? "0 8 * * 1";
+  if (expr.toLowerCase() === "off") {
+    log.info("[WeeklyDigest] disabled via env");
+    return null;
+  }
+  const cronExpr = cron.validate(expr) ? expr : "0 8 * * 1";
+  const task = cron.schedule(cronExpr, () => {
+    log.info("[WeeklyDigest] Cron tick");
+    runWeeklyCoachingDigest().catch(err =>
+      log.error("[WeeklyDigest] unhandled error", err instanceof Error ? err : new Error(String(err))),
+    );
+  }, { timezone: "Europe/Tallinn" });
+  log.info(`[WeeklyDigest] scheduled with cron "${cronExpr}"`);
+  return task;
+}
+
+
 // Export for manual triggering (e.g., from admin panel)
-export { runMonthlyReportGeneration, runStudioworksAutoSync, runAutoCoachingFromInsights };
+export { runMonthlyReportGeneration, runStudioworksAutoSync, runAutoCoachingFromInsights, runWeeklyCoachingDigest };
