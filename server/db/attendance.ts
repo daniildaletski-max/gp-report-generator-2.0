@@ -68,7 +68,7 @@ export async function updateAttendance(id: number, data: Partial<InsertGpMonthly
   await db.update(gpMonthlyAttendance).set(data).where(eq(gpMonthlyAttendance.id, id));
 }
 
-export async function getAttendanceByTeamMonth(teamId: number | undefined, month: number, year: number) {
+export async function getAttendanceByTeamMonth(teamId: number | null | undefined, month: number, year: number) {
   const db = await getDb();
   if (!db) return [];
   // One shared database — when no teamId is given, cover every GP.

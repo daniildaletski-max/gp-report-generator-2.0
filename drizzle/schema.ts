@@ -288,7 +288,9 @@ export type InsertGpError = typeof gpErrors.$inferInsert;
  */
 export const reports = mysqlTable("reports", {
   id: int("id").autoincrement().primaryKey(),
-  teamId: int("teamId").notNull(),
+  // Nullable: a NULL teamId is a company-wide monthly report covering every
+  // GP. Legacy per-team reports keep their teamId for historical display.
+  teamId: int("teamId"),
   userId: int("userId"), // Owner of this report - for user data isolation
   reportMonth: int("reportMonth").notNull(),
   reportYear: int("reportYear").notNull(),

@@ -255,11 +255,13 @@ export async function getEvaluationsByTeam(teamId: number) {
 // AGGREGATION & DATA SHEET
 // ============================================
 
-export async function getGPMonthlyStats(teamId: number, year: number, month: number) {
+export async function getGPMonthlyStats(teamId: number | null, year: number, month: number) {
   const db = await getDb();
   if (!db) return [];
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59);
+  // One shared database — a null teamId aggregates every GP company-wide.
+  const teamFilter = teamId != null ? [eq(gamePresenters.teamId, teamId)] : [];
   return await db.select({
     gpId: gamePresenters.id,
     gpName: gamePresenters.name,
@@ -270,20 +272,24 @@ export async function getGPMonthlyStats(teamId: number, year: number, month: num
   })
   .from(evaluations)
   .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
-  .where(and(eq(gamePresenters.teamId, teamId), gte(evaluations.evaluationDate, startDate), lte(evaluations.evaluationDate, endDate)))
+  .where(and(...teamFilter, gte(evaluations.evaluationDate, startDate), lte(evaluations.evaluationDate, endDate)))
   .groupBy(gamePresenters.id, gamePresenters.name);
 }
 
-export async function getGPEvaluationsForDataSheet(teamId: number, year: number, month: number) {
+export async function getGPEvaluationsForDataSheet(teamId: number | null, year: number, month: number) {
   log.info("getGPEvaluationsForDataSheet", { teamId, year, month });
   const db = await getDb();
   if (!db) { log.info("No database connection"); return []; }
   const startDate = new Date(year, month - 1, 1, 0, 0, 0);
   const endDate = new Date(year, month, 0, 23, 59, 59);
 
-  const gps = await db.select({ gpId: gamePresenters.id, gpName: gamePresenters.name })
-    .from(gamePresenters)
-    .where(eq(gamePresenters.teamId, teamId));
+  // One shared database — a null teamId covers every GP company-wide.
+  const gps = await (teamId != null
+    ? db.select({ gpId: gamePresenters.id, gpName: gamePresenters.name })
+        .from(gamePresenters)
+        .where(eq(gamePresenters.teamId, teamId))
+    : db.select({ gpId: gamePresenters.id, gpName: gamePresenters.name })
+        .from(gamePresenters));
 
   const gpIds = gps.map(g => g.gpId);
   if (gpIds.length > 0) {

@@ -1,9 +1,40 @@
 /**
  * Reports Database Operations
  */
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import { reports, InsertReport, Report, fmTeams } from "../../drizzle/schema";
 import { getDb } from "./connection";
+
+/**
+ * Idempotent boot install: relax `reports.teamId` to NULL so a single
+ * company-wide monthly report (teamId = NULL, covering every GP) can coexist
+ * with legacy per-team rows. Same "the deploy pipeline doesn't run drizzle
+ * migrations" pattern as ensureManagerEmailColumn. Relaxing NOT NULL never
+ * fails on existing data, so it's safe to attempt on every boot.
+ */
+export async function ensureReportsTeamNullable(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.execute(sql.raw("ALTER TABLE `reports` MODIFY `teamId` int NULL"));
+  } catch {
+    // Best-effort: failure only means teamId stays NOT NULL, which surfaces
+    // loudly the first time a company report insert is attempted.
+  }
+}
+
+/**
+ * The company-wide report for a month, if one exists (teamId IS NULL). Used
+ * to dedupe generation so there is exactly one company report per (month, year).
+ */
+export async function getCompanyReportByMonthYear(month: number, year: number): Promise<Report | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(reports)
+    .where(and(isNull(reports.teamId), eq(reports.reportMonth, month), eq(reports.reportYear, year)))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
 
 export async function createReport(data: InsertReport): Promise<Report> {
   const db = await getDb();
