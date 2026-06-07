@@ -13,18 +13,25 @@ import {
 import {
   LayoutDashboard, FileSpreadsheet, FileCheck, Upload, CalendarCheck,
   Shield, Users, Target, BarChart3, AlertTriangle, RefreshCw,
-  User, Sparkles,
+  User, Sparkles, Radar, Sun, Zap, ScanLine, BadgeEuro, Trophy,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { GPDetailDrawer } from "@/components/GPDetailDrawer";
 import { useAuth } from "@/_core/hooks/useAuth";
 
 const NAV_ITEMS = [
+  { label: "Command Center", path: "/command", icon: Radar, hint: "Cockpit" },
+  { label: "Today", path: "/today", icon: Sun, hint: "Your day" },
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard, hint: "Overview" },
+  { label: "Workspace", path: "/workspace", icon: Zap, hint: "Evaluate" },
   { label: "Upload screenshots", path: "/upload", icon: Upload, hint: "AI extract" },
+  { label: "Bulk AI upload", path: "/upload-bulk", icon: ScanLine, hint: "Batch extract" },
   { label: "Evaluations", path: "/evaluations", icon: FileCheck, hint: "List + bulk" },
   { label: "Reports", path: "/reports", icon: FileSpreadsheet, hint: "Monthly Excel" },
   { label: "Attendance", path: "/attendance", icon: CalendarCheck, hint: "Sick / late / extra" },
+  { label: "Bonus", path: "/bonus", icon: BadgeEuro, hint: "Eligibility & payout" },
+  { label: "Leaderboard", path: "/leaderboard", icon: Trophy, hint: "Rankings" },
+  { label: "Assistant", path: "/assistant", icon: Sparkles, hint: "Ask your data" },
 ];
 
 const ADMIN_QUICK_TABS = [
