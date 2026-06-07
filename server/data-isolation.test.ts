@@ -251,10 +251,14 @@ function readAllRouterSource(fs: typeof import('fs')): string {
 }
 
 describe('data isolation - router source code verification', () => {
-  it('should pass userId to getErrorCountByGP in routers', async () => {
+  it('reads company-wide error counts for the monthly report (no per-user scoping)', async () => {
     const fs = await import('fs');
     const source = readAllRouterSource(fs);
-    expect(source).toContain('db.getErrorCountByGP(input.reportMonth, input.reportYear, ctx.user.id)');
+    // One shared database: the monthly report aggregates error counts
+    // across every GP, so the company report context calls
+    // getErrorCountByGP WITHOUT a userId scope (it was per-FM before
+    // the one-DB migration).
+    expect(source).toContain('db.getErrorCountByGP(month, year)');
   });
 
   it('should pass userId to deleteGpErrorsByMonthYear in routers', async () => {
