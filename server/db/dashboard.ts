@@ -637,17 +637,20 @@ export async function getDashboardActivityFeed(opts: {
         teamName: fmTeams.teamName,
       })
       .from(reports)
-      .innerJoin(fmTeams, eq(reports.teamId, fmTeams.id))
+      // leftJoin — company reports have teamId NULL (no fmTeams row); an
+      // innerJoin would silently drop every company-wide report.
+      .leftJoin(fmTeams, eq(reports.teamId, fmTeams.id))
       .where(conds.length > 0 ? and(...conds) : undefined)
       .orderBy(desc(reports.createdAt))
       .limit(perSource);
     for (const r of rows) {
       const monthName = new Date(r.reportYear, r.reportMonth - 1, 1).toLocaleString("en-US", { month: "short" });
+      const label = r.teamName ?? "All Teams";
       items.push({
         id: `report-${r.id}`,
         kind: "report",
         timestamp: r.createdAt,
-        title: `${r.teamName} — ${monthName} ${r.reportYear} report ${r.status === "finalized" ? "finalized" : "saved"}`,
+        title: `${label} — ${monthName} ${r.reportYear} report ${r.status === "finalized" ? "finalized" : "saved"}`,
         href: "/reports",
       });
     }
