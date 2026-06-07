@@ -32,19 +32,6 @@ function createAuthContext(): { ctx: TrpcContext } {
   return { ctx };
 }
 
-describe("fmTeam.list", () => {
-  it("returns list of FM teams", async () => {
-    const { ctx } = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-
-    const result = await caller.fmTeam.list();
-
-    expect(Array.isArray(result)).toBe(true);
-    // Should have at least the 3 default teams
-    expect(result.length).toBeGreaterThanOrEqual(0);
-  });
-});
-
 describe("gamePresenter.list", () => {
   it("returns list of game presenters", async () => {
     const { ctx } = createAuthContext();

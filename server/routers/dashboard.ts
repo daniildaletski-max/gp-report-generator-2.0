@@ -20,17 +20,6 @@ export const dashboardRouter = router({
       // Cache key includes role + user/team scope so admins and tenants
       // never share entries.
       if (ctx.user.role !== 'admin') {
-        if (teamId) {
-          const team = await db.getFmTeamById(teamId);
-          if (!team) {
-            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
-          }
-          return cache.getOrSet(
-            CacheKeys.dashboardStats(month, year, teamId),
-            () => db.getDashboardStats(input?.month, input?.year, teamId),
-            CacheTTL.DASHBOARD_STATS,
-          );
-        }
         return cache.getOrSet(
           CacheKeys.dashboardStatsByUser(month, year, ctx.user.id),
           () => db.getDashboardStatsByUser(input?.month, input?.year, ctx.user.id),
@@ -110,12 +99,6 @@ export const dashboardRouter = router({
       // crafted request can't read another tenant's insights. The DB
       // layer also filters by userId as defense in depth, but failing
       // FAST here gives a clean 403 instead of silently returning [].
-      if (ctx.user.role !== 'admin' && teamId) {
-        const team = await db.getFmTeamById(teamId);
-        if (!team) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
-        }
-      }
       return await db.computeDashboardInsights({
         teamId,
         userId: userScope,
@@ -149,12 +132,6 @@ export const dashboardRouter = router({
 
       // Same tenant-scope check as insights — non-admin must own the
       // team they're querying about.
-      if (ctx.user.role !== 'admin' && teamId) {
-        const team = await db.getFmTeamById(teamId);
-        if (!team) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
-        }
-      }
       return await db.getDashboardActivityFeed({
         limit,
         userId: userScope,

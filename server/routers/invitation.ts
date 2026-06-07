@@ -123,16 +123,13 @@ export const invitationRouter = router({
         return { valid: false, reason: 'Invitation has expired' };
       }
       
-      // Get team info
-      const team = invitation.teamId ? await db.getFmTeamById(invitation.teamId) : null;
-      
       return {
         valid: true,
         invitation: {
           email: invitation.email,
           role: invitation.role,
           teamId: invitation.teamId,
-          teamName: team?.teamName || null,
+          teamName: null,
           expiresAt: invitation.expiresAt,
         },
       };
