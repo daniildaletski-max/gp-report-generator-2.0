@@ -11,7 +11,6 @@ import { router } from "./_core/trpc";
 import { systemRouter } from "./_core/systemRouter";
 
 import { authRouter } from "./routers/auth";
-import { fmTeamRouter } from "./routers/fmTeam";
 import { evaluationRouter } from "./routers/evaluation";
 import { gamePresenterRouter } from "./routers/gamePresenter";
 import { userRouter } from "./routers/user";
@@ -35,7 +34,6 @@ import { leaderboardRouter } from "./routers/leaderboard";
 export const appRouter = router({
   system: systemRouter,
   auth: authRouter,
-  fmTeam: fmTeamRouter,
   evaluation: evaluationRouter,
   gamePresenter: gamePresenterRouter,
   user: userRouter,
