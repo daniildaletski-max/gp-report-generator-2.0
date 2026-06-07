@@ -165,57 +165,6 @@ export async function getMonthlyTrendData(months: number = 6, teamId?: number, u
   return results;
 }
 
-export async function getTeamComparisonData(userId: number, teamIds?: number[]) {
-  // One shared database — compare across every team; userId no longer scopes.
-  void userId;
-  const db = await getDb();
-  if (!db) return [];
-  const teams = await db.select().from(fmTeams);
-  if (teams.length === 0) return [];
-  const selectedTeams = teamIds && teamIds.length > 0 ? teams.filter(t => teamIds.includes(t.id)) : teams;
-  const results = [];
-  for (const team of selectedTeams) {
-    const gps = await db.select().from(gamePresenters).where(eq(gamePresenters.teamId, team.id));
-    if (gps.length === 0) {
-      results.push({ teamId: team.id, teamName: team.teamName, floorManager: team.floorManagerName, gpCount: 0, avgTotalScore: 0, avgAppearanceScore: 0, avgPerformanceScore: 0, totalEvaluations: 0, topScore: 0, lowScore: 0, gps: [] });
-      continue;
-    }
-    const gpIds = gps.map(g => g.id);
-    const teamStats = await db.select({
-      avgTotal: sql<number>`AVG(${evaluations.totalScore})`, avgAppearance: sql<number>`AVG(${evaluations.appearanceScore})`,
-      avgPerformance: sql<number>`AVG(${evaluations.gamePerformanceTotalScore})`, totalEvals: sql<number>`COUNT(*)`,
-      topScore: sql<number>`MAX(${evaluations.totalScore})`, lowScore: sql<number>`MIN(${evaluations.totalScore})`,
-    }).from(evaluations).where(inArray(evaluations.gamePresenterId, gpIds));
-    const stats = teamStats[0];
-    const gpStats = await db.select({
-      gpId: evaluations.gamePresenterId, avgTotal: sql<number>`AVG(${evaluations.totalScore})`,
-      avgAppearance: sql<number>`AVG(${evaluations.appearanceScore})`, avgPerformance: sql<number>`AVG(${evaluations.gamePerformanceTotalScore})`,
-      evalCount: sql<number>`COUNT(*)`,
-    }).from(evaluations).where(inArray(evaluations.gamePresenterId, gpIds)).groupBy(evaluations.gamePresenterId);
-    const gpData = gpStats.map(gs => {
-      const gp = gps.find(g => g.id === gs.gpId);
-      return {
-        id: gs.gpId, name: gp?.name || 'Unknown',
-        avgTotalScore: gs.avgTotal ? Number(Number(gs.avgTotal).toFixed(1)) : 0,
-        avgAppearanceScore: gs.avgAppearance ? Number(Number(gs.avgAppearance).toFixed(1)) : 0,
-        avgPerformanceScore: gs.avgPerformance ? Number(Number(gs.avgPerformance).toFixed(1)) : 0,
-        evaluationCount: Number(gs.evalCount || 0),
-      };
-    }).sort((a, b) => b.avgTotalScore - a.avgTotalScore);
-    results.push({
-      teamId: team.id, teamName: team.teamName, floorManager: team.floorManagerName,
-      gpCount: gps.length,
-      avgTotalScore: stats?.avgTotal ? Number(Number(stats.avgTotal).toFixed(1)) : 0,
-      avgAppearanceScore: stats?.avgAppearance ? Number(Number(stats.avgAppearance).toFixed(1)) : 0,
-      avgPerformanceScore: stats?.avgPerformance ? Number(Number(stats.avgPerformance).toFixed(1)) : 0,
-      totalEvaluations: Number(stats?.totalEvals || 0),
-      topScore: Number(stats?.topScore || 0), lowScore: Number(stats?.lowScore || 0),
-      gps: gpData,
-    });
-  }
-  return results.sort((a, b) => b.avgTotalScore - a.avgTotalScore);
-}
-
 // ============================================
 // Operations Brain — auto-generated insights + activity feed
 // ============================================
