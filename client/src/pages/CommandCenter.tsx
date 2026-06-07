@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import {
   Radar, Search, Sparkles, RefreshCw, Loader2, Wand2, ArrowRight, Users,
   TrendingDown, TrendingUp, Award, ScanLine, FileSpreadsheet, Clock,
-  CalendarX, AlertTriangle, Activity, FileCheck, ChevronRight, Zap,
+  CalendarX, AlertTriangle, Activity, FileCheck, ChevronRight, Zap, ChevronsDown,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -35,7 +35,8 @@ const MONTHS = [
 
 type InsightKind =
   | "missing_report" | "score_regression" | "score_improvement" | "coverage_gap"
-  | "evaluation_stale" | "attendance_risk" | "error_spike" | "top_performer";
+  | "evaluation_stale" | "attendance_risk" | "error_spike" | "top_performer"
+  | "sustained_decline";
 
 const INSIGHT_ICON: Record<InsightKind, React.ComponentType<{ className?: string }>> = {
   score_regression: TrendingDown,
@@ -46,6 +47,7 @@ const INSIGHT_ICON: Record<InsightKind, React.ComponentType<{ className?: string
   evaluation_stale: Clock,
   attendance_risk: CalendarX,
   error_spike: AlertTriangle,
+  sustained_decline: ChevronsDown,
 };
 
 const SEVERITY_STYLE: Record<string, { ring: string; icon: string; chip: string; label: string }> = {

@@ -2,7 +2,7 @@
  * Dashboard & Analytics Database Operations
  * Handles dashboard stats, monthly trends, team comparison, and admin stats
  */
-import { eq, and, or, inArray, isNull, sql, desc } from "drizzle-orm";
+import { eq, and, or, inArray, isNull, gte, lte, sql, desc } from "drizzle-orm";
 import { evaluations, gamePresenters, reports, users, fmTeams, errorFiles, gpMonthlyAttendance, monthlyGpStats } from "../../drizzle/schema";
 import { getDb } from "./connection";
 
@@ -229,7 +229,8 @@ export type InsightKind =
   | "evaluation_stale"
   | "attendance_risk"
   | "error_spike"
-  | "top_performer";
+  | "top_performer"
+  | "sustained_decline";
 
 export interface DashboardInsight {
   id: string;
@@ -293,6 +294,8 @@ export async function computeDashboardInsights(opts: {
   const twoMonthsAgoDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
   const twoMonthsAgoMonth = twoMonthsAgoDate.getMonth() + 1;
   const twoMonthsAgoYear = twoMonthsAgoDate.getFullYear();
+  // Three months ago — the start of the window for the 3-month trend check.
+  const threeMonthsAgoDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
 
   const insights: DashboardInsight[] = [];
 
@@ -412,6 +415,71 @@ export async function computeDashboardInsights(opts: {
         action: { label: "Open profile", href: `/dashboard?gp=${top.gpId}` },
         timestamp: lastMonthDate,
         metadata: { gpId: top.gpId, gpName: top.gpName },
+      });
+    }
+  } catch { /* skip on error */ }
+
+  // ----------------------------------------------------------
+  // Sustained decline — averages down 3 months running (predictive).
+  // A single down month is noise; three in a row is a trend worth
+  // catching before it compounds.
+  // ----------------------------------------------------------
+  try {
+    const windowStart = new Date(threeMonthsAgoDate.getFullYear(), threeMonthsAgoDate.getMonth(), 1);
+    const windowEnd = new Date(lastMonthYear, lastMonth, 0, 23, 59, 59); // end of last month
+    const rows = await db
+      .select({
+        gpId: evaluations.gamePresenterId,
+        gpName: gamePresenters.name,
+        m: sql<number>`MONTH(${evaluations.evaluationDate})`,
+        y: sql<number>`YEAR(${evaluations.evaluationDate})`,
+        avgScore: sql<number>`AVG(${evaluations.totalScore})`,
+        cnt: sql<number>`COUNT(*)`,
+      })
+      .from(evaluations)
+      .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+      .where(and(gte(evaluations.evaluationDate, windowStart), lte(evaluations.evaluationDate, windowEnd)))
+      .groupBy(
+        evaluations.gamePresenterId,
+        gamePresenters.name,
+        sql`MONTH(${evaluations.evaluationDate})`,
+        sql`YEAR(${evaluations.evaluationDate})`,
+      );
+
+    // Oldest → newest: [3 months ago, 2 months ago, last month].
+    const monthsSeq = [
+      { m: threeMonthsAgoDate.getMonth() + 1, y: threeMonthsAgoDate.getFullYear() },
+      { m: twoMonthsAgoMonth, y: twoMonthsAgoYear },
+      { m: lastMonth, y: lastMonthYear },
+    ];
+    const byGp = new Map<number, { gpName: string; series: (number | null)[] }>();
+    for (const r of rows) {
+      const idx = monthsSeq.findIndex(s => s.m === Number(r.m) && s.y === Number(r.y));
+      if (idx < 0 || Number(r.cnt) < 1) continue;
+      let entry = byGp.get(r.gpId);
+      if (!entry) { entry = { gpName: r.gpName, series: [null, null, null] }; byGp.set(r.gpId, entry); }
+      entry.series[idx] = Number(r.avgScore) || 0;
+    }
+
+    const decliners: { gpId: number; gpName: string; a: number; b: number; c: number; drop: number }[] = [];
+    for (const [gpId, { gpName, series }] of Array.from(byGp.entries())) {
+      const [a, b, c] = series;
+      if (a == null || b == null || c == null) continue; // need all three months
+      if (a > b && b > c && a - c >= 1.5) {
+        decliners.push({ gpId, gpName, a, b, c, drop: a - c });
+      }
+    }
+    decliners.sort((x, y) => y.drop - x.drop);
+    for (const d of decliners.slice(0, 2)) {
+      insights.push({
+        id: `sustained-decline-${d.gpId}-${lastMonthYear}-${lastMonth}`,
+        kind: "sustained_decline",
+        severity: "alert",
+        title: `${d.gpName} declining 3 months running`,
+        description: `Average fell ${d.a.toFixed(1)} → ${d.b.toFixed(1)} → ${d.c.toFixed(1)} (down ${d.drop.toFixed(1)} pts). The trend points down — coach now before it compounds.`,
+        action: { label: "Open profile", href: `/dashboard?gp=${d.gpId}` },
+        timestamp: lastMonthDate,
+        metadata: { gpId: d.gpId, gpName: d.gpName },
       });
     }
   } catch { /* skip on error */ }
