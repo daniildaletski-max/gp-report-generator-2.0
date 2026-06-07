@@ -2,8 +2,8 @@
  * Dashboard & Analytics Database Operations
  * Handles dashboard stats, monthly trends, team comparison, and admin stats
  */
-import { eq, and, or, inArray, sql, desc } from "drizzle-orm";
-import { evaluations, gamePresenters, reports, users, fmTeams, errorFiles } from "../../drizzle/schema";
+import { eq, and, or, inArray, isNull, sql, desc } from "drizzle-orm";
+import { evaluations, gamePresenters, reports, users, fmTeams, errorFiles, gpMonthlyAttendance, monthlyGpStats } from "../../drizzle/schema";
 import { getDb } from "./connection";
 
 // ============================================
@@ -222,11 +222,14 @@ export async function getTeamComparisonData(userId: number, teamIds?: number[]) 
 
 export type InsightSeverity = "alert" | "warning" | "recommendation" | "celebration" | "info";
 export type InsightKind =
-  | "stale_sync"
   | "missing_report"
   | "score_regression"
   | "score_improvement"
-  | "coverage_gap";
+  | "coverage_gap"
+  | "evaluation_stale"
+  | "attendance_risk"
+  | "error_spike"
+  | "top_performer";
 
 export interface DashboardInsight {
   id: string;
@@ -249,9 +252,15 @@ const SEVERITY_RANK: Record<InsightSeverity, number> = {
   info: 0,
 };
 
-const STALE_SYNC_DAYS = 14;
 const SCORE_DELTA_THRESHOLD = 2; // Points
-const MAX_INSIGHTS = 12;
+const MAX_INSIGHTS = 14;
+const STALE_EVAL_DAYS = 35;
+const ATTENDANCE_MISSED_THRESHOLD = 3;
+const ATTENDANCE_LATE_THRESHOLD = 3;
+const ERROR_SPIKE_MIN = 4; // at least this many mistakes this month
+const ERROR_SPIKE_DELTA = 3; // and at least this much more than last month
+const TOP_PERFORMER_MIN_SCORE = 20;
+const TOP_PERFORMER_MIN_EVALS = 3;
 
 /**
  * Compute auto-generated insights for the FM. Every check is wrapped
@@ -261,21 +270,14 @@ const MAX_INSIGHTS = 12;
 export async function computeDashboardInsights(opts: {
   teamId?: number;
   userId?: number;
-  /** Admin actions like opening the persona tab aren't FM-reachable —
-   *  the role lets us pick a sensible action target per insight. */
   userRole?: string;
 }): Promise<DashboardInsight[]> {
-  const isAdmin = opts.userRole === "admin";
-  // FMs can't open /admin (admin-only tab). For stale-sync
-  // insights they need either no action button (the insight is still
-  // useful as a heads-up) or a different target. We hide the action
-  // for non-admins — they should ping their admin to fix it.
-  const personaSyncAction = isAdmin
-    ? { label: "Sync now", href: "/admin" }
-    : undefined;
-  const personaConfigureAction = isAdmin
-    ? { label: "Configure", href: "/admin" }
-    : undefined;
+  // One shared database — insights are company-wide. teamId/userId/userRole
+  // are accepted for backwards-compatible callers but no longer scope the
+  // data (every check below runs across the whole studio).
+  void opts.teamId;
+  void opts.userId;
+  void opts.userRole;
   const db = await getDb();
   if (!db) return [];
 
@@ -292,74 +294,39 @@ export async function computeDashboardInsights(opts: {
   const twoMonthsAgoMonth = twoMonthsAgoDate.getMonth() + 1;
   const twoMonthsAgoYear = twoMonthsAgoDate.getFullYear();
 
-  // Resolve which teams the caller can see. When userId is set (non-admin
-  // caller), every branch ALSO filters by that userId so a crafted teamId
-  // can't pull another tenant's data — defense in depth on top of the
-  // router-level ownership check.
-  // One shared database — insights are global. We still group by team
-  // internally (the team rows remain as a coarse grouping), but the
-  // caller's userId no longer scopes which teams are considered.
-  void opts.userId;
-  let teamRows: { id: number; teamName: string }[];
-  try {
-    if (opts.teamId) {
-      teamRows = await db.select({ id: fmTeams.id, teamName: fmTeams.teamName })
-        .from(fmTeams).where(eq(fmTeams.id, opts.teamId)).limit(1);
-    } else {
-      teamRows = await db.select({ id: fmTeams.id, teamName: fmTeams.teamName }).from(fmTeams);
-    }
-  } catch {
-    teamRows = [];
-  }
-  if (teamRows.length === 0) return [];
-  const teamIds = teamRows.map(t => t.id);
-  const teamNameById = new Map(teamRows.map(t => [t.id, t.teamName]));
-
   const insights: DashboardInsight[] = [];
 
-  // Persona sync insights removed with the module.
-
   // ----------------------------------------------------------
-  // Insight 2: missing report for last calendar month
+  // Missing company report for last calendar month
   // ----------------------------------------------------------
   try {
-    const lastMonthReports = await db
-      .select({ teamId: reports.teamId })
+    const existing = await db
+      .select({ id: reports.id })
       .from(reports)
-      .where(
-        and(
-          inArray(reports.teamId, teamIds),
-          eq(reports.reportMonth, lastMonth),
-          eq(reports.reportYear, lastMonthYear),
-        ),
-      );
-    const teamsWithReport = new Set(lastMonthReports.map(r => r.teamId));
-    const monthName = new Date(lastMonthYear, lastMonth - 1, 1).toLocaleString("en-US", { month: "long" });
-    for (const t of teamRows) {
-      if (!teamsWithReport.has(t.id)) {
-        insights.push({
-          id: `missing-report-${t.id}-${lastMonthYear}-${lastMonth}`,
-          kind: "missing_report",
-          severity: "recommendation",
-          title: `${t.teamName} — ${monthName} report not generated`,
-          description: `No report exists for ${monthName} ${lastMonthYear}. Generate it now to keep the team's history complete.`,
-          action: { label: "Generate", href: "/reports" },
-          timestamp: lastMonthDate,
-          metadata: { teamId: t.id, teamName: t.teamName },
-        });
-      }
+      .where(and(isNull(reports.teamId), eq(reports.reportMonth, lastMonth), eq(reports.reportYear, lastMonthYear)))
+      .limit(1);
+    if (existing.length === 0) {
+      const monthName = lastMonthDate.toLocaleString("en-US", { month: "long" });
+      insights.push({
+        id: `missing-report-${lastMonthYear}-${lastMonth}`,
+        kind: "missing_report",
+        severity: "recommendation",
+        title: `${monthName} report not generated`,
+        description: `No company report exists for ${monthName} ${lastMonthYear}. Generate it to keep the monthly history complete.`,
+        action: { label: "Generate", href: "/reports" },
+        timestamp: lastMonthDate,
+      });
     }
   } catch { /* skip on error */ }
 
   // ----------------------------------------------------------
-  // Insight 3 & 4: GP score regressions / improvements (last month vs prior)
+  // Score regressions / improvements / top performer (last month vs prior)
   // ----------------------------------------------------------
   try {
     const lastMonthScores = await db
       .select({
         gpId: evaluations.gamePresenterId,
         gpName: gamePresenters.name,
-        teamId: gamePresenters.teamId,
         avgScore: sql<number>`AVG(${evaluations.totalScore})`,
         evalCount: sql<number>`COUNT(*)`,
       })
@@ -367,12 +334,11 @@ export async function computeDashboardInsights(opts: {
       .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
       .where(
         and(
-          inArray(gamePresenters.teamId, teamIds),
           sql`MONTH(${evaluations.evaluationDate}) = ${lastMonth}`,
           sql`YEAR(${evaluations.evaluationDate}) = ${lastMonthYear}`,
         ),
       )
-      .groupBy(evaluations.gamePresenterId, gamePresenters.name, gamePresenters.teamId);
+      .groupBy(evaluations.gamePresenterId, gamePresenters.name);
 
     const priorMonthScores = await db
       .select({
@@ -380,10 +346,8 @@ export async function computeDashboardInsights(opts: {
         avgScore: sql<number>`AVG(${evaluations.totalScore})`,
       })
       .from(evaluations)
-      .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
       .where(
         and(
-          inArray(gamePresenters.teamId, teamIds),
           sql`MONTH(${evaluations.evaluationDate}) = ${twoMonthsAgoMonth}`,
           sql`YEAR(${evaluations.evaluationDate}) = ${twoMonthsAgoYear}`,
         ),
@@ -394,7 +358,7 @@ export async function computeDashboardInsights(opts: {
 
     // Find biggest movers — limit to top 3 of each direction so the
     // insights panel doesn't get flooded with 50 GPs at +/- 0.5 points.
-    const movers: { gpId: number; gpName: string; teamId: number | null; current: number; prev: number; delta: number; evalCount: number }[] = [];
+    const movers: { gpId: number; gpName: string; current: number; prev: number; delta: number }[] = [];
     for (const lm of lastMonthScores) {
       const current = Number(lm.avgScore) || 0;
       const prev = priorByGp.get(lm.gpId) ?? 0;
@@ -402,21 +366,12 @@ export async function computeDashboardInsights(opts: {
       if (Number(lm.evalCount) < 2) continue;  // need enough data
       const delta = current - prev;
       if (Math.abs(delta) < SCORE_DELTA_THRESHOLD) continue;
-      movers.push({
-        gpId: lm.gpId,
-        gpName: lm.gpName,
-        teamId: lm.teamId,
-        current,
-        prev,
-        delta,
-        evalCount: Number(lm.evalCount),
-      });
+      movers.push({ gpId: lm.gpId, gpName: lm.gpName, current, prev, delta });
     }
 
     const regressions = movers.filter(m => m.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 3);
     const improvements = movers.filter(m => m.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 3);
-
-    const monthNameLM = new Date(lastMonthYear, lastMonth - 1, 1).toLocaleString("en-US", { month: "short" });
+    const monthNameLM = lastMonthDate.toLocaleString("en-US", { month: "short" });
 
     for (const r of regressions) {
       insights.push({
@@ -425,14 +380,9 @@ export async function computeDashboardInsights(opts: {
         severity: "alert",
         title: `${r.gpName} dropped ${Math.abs(r.delta).toFixed(1)} points`,
         description: `${monthNameLM} avg ${r.current.toFixed(1)}, down from ${r.prev.toFixed(1)} the month before. Worth a coaching check-in.`,
-        // Dashboard reads ?gp=ID and opens the GP-detail drawer — works
-        // for both admin and FM (the page is FM-reachable, the drawer
-        // already exists). The previous /admin?tab=stats&gpId=X link
-        // dropped users on a generic stats view because Admin only
-        // consumed the `tab` query param, ignoring `gpId`.
         action: { label: "Open profile", href: `/dashboard?gp=${r.gpId}` },
         timestamp: lastMonthDate,
-        metadata: { gpId: r.gpId, gpName: r.gpName, teamId: r.teamId ?? undefined, teamName: r.teamId ? teamNameById.get(r.teamId) : undefined },
+        metadata: { gpId: r.gpId, gpName: r.gpName },
       });
     }
     for (const im of improvements) {
@@ -444,62 +394,168 @@ export async function computeDashboardInsights(opts: {
         description: `${monthNameLM} avg ${im.current.toFixed(1)}, up from ${im.prev.toFixed(1)}. Worth recognising.`,
         action: { label: "Open profile", href: `/dashboard?gp=${im.gpId}` },
         timestamp: lastMonthDate,
-        metadata: { gpId: im.gpId, gpName: im.gpName, teamId: im.teamId ?? undefined, teamName: im.teamId ? teamNameById.get(im.teamId) : undefined },
+        metadata: { gpId: im.gpId, gpName: im.gpName },
+      });
+    }
+
+    // Top performer — highest average last month with enough evaluations.
+    const top = lastMonthScores
+      .filter(s => Number(s.evalCount) >= TOP_PERFORMER_MIN_EVALS && Number(s.avgScore) >= TOP_PERFORMER_MIN_SCORE)
+      .sort((a, b) => Number(b.avgScore) - Number(a.avgScore))[0];
+    if (top) {
+      insights.push({
+        id: `top-performer-${top.gpId}-${lastMonthYear}-${lastMonth}`,
+        kind: "top_performer",
+        severity: "celebration",
+        title: `${top.gpName} led the studio at ${Number(top.avgScore).toFixed(1)}/22`,
+        description: `Highest average score in ${monthNameLM} across ${Number(top.evalCount)} evaluations. Worth recognising.`,
+        action: { label: "Open profile", href: `/dashboard?gp=${top.gpId}` },
+        timestamp: lastMonthDate,
+        metadata: { gpId: top.gpId, gpName: top.gpName },
       });
     }
   } catch { /* skip on error */ }
 
   // ----------------------------------------------------------
-  // Insight 5: coverage gap — current month, no evaluations for >50% of GPs
+  // Coverage gap — company-wide, current month, >50% GPs unevaluated
   // ----------------------------------------------------------
   try {
-    const totalGpsByTeam = await db
-      .select({ teamId: gamePresenters.teamId, total: sql<number>`COUNT(*)` })
-      .from(gamePresenters)
-      .where(inArray(gamePresenters.teamId, teamIds))
-      .groupBy(gamePresenters.teamId);
-
-    const evaluatedThisMonth = await db
-      .select({
-        teamId: gamePresenters.teamId,
-        evaluated: sql<number>`COUNT(DISTINCT ${evaluations.gamePresenterId})`,
-      })
-      .from(evaluations)
-      .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
-      .where(
-        and(
-          inArray(gamePresenters.teamId, teamIds),
-          sql`MONTH(${evaluations.evaluationDate}) = ${currentMonth}`,
-          sql`YEAR(${evaluations.evaluationDate}) = ${currentYear}`,
-        ),
-      )
-      .groupBy(gamePresenters.teamId);
-
-    const evaluatedByTeam = new Map(evaluatedThisMonth.map(e => [e.teamId, Number(e.evaluated)]));
     const dayOfMonth = now.getDate();
-    // Only flag coverage gap after the 14th of the month — before that,
-    // it's normal for half the GPs to not have been evaluated yet.
+    // Only flag coverage gap after the 14th — before that it's normal for
+    // half the roster to not have been evaluated yet.
     if (dayOfMonth >= 14) {
-      for (const t of totalGpsByTeam) {
-        if (!t.teamId) continue;
-        const total = Number(t.total);
-        if (total === 0) continue;
-        const evaluated = evaluatedByTeam.get(t.teamId) ?? 0;
-        const coverage = evaluated / total;
-        if (coverage < 0.5) {
-          const teamName = teamNameById.get(t.teamId) ?? `Team ${t.teamId}`;
-          insights.push({
-            id: `coverage-gap-${t.teamId}-${currentYear}-${currentMonth}`,
-            kind: "coverage_gap",
-            severity: "warning",
-            title: `${teamName} — only ${evaluated}/${total} GPs evaluated this month`,
-            description: `${Math.round(coverage * 100)}% coverage with ${30 - dayOfMonth}-ish days left. Schedule the rest before month-end.`,
-            action: { label: "Open evaluations", href: "/evaluations" },
-            timestamp: now,
-            metadata: { teamId: t.teamId, teamName },
-          });
-        }
+      const [totalRow] = await db.select({ total: sql<number>`COUNT(*)` }).from(gamePresenters);
+      const [evalRow] = await db
+        .select({ evaluated: sql<number>`COUNT(DISTINCT ${evaluations.gamePresenterId})` })
+        .from(evaluations)
+        .where(
+          and(
+            sql`MONTH(${evaluations.evaluationDate}) = ${currentMonth}`,
+            sql`YEAR(${evaluations.evaluationDate}) = ${currentYear}`,
+          ),
+        );
+      const total = Number(totalRow?.total) || 0;
+      const evaluated = Number(evalRow?.evaluated) || 0;
+      if (total > 0 && evaluated / total < 0.5) {
+        const coverage = Math.round((evaluated / total) * 100);
+        insights.push({
+          id: `coverage-gap-${currentYear}-${currentMonth}`,
+          kind: "coverage_gap",
+          severity: "warning",
+          title: `Only ${evaluated}/${total} GPs evaluated this month`,
+          description: `${coverage}% coverage with ~${Math.max(0, 30 - dayOfMonth)} days left. Schedule the rest before month-end.`,
+          action: { label: "Open evaluations", href: "/evaluations" },
+          timestamp: now,
+        });
       }
+    }
+  } catch { /* skip on error */ }
+
+  // ----------------------------------------------------------
+  // Stale evaluations — GPs not evaluated in 35+ days
+  // ----------------------------------------------------------
+  try {
+    const staleThreshold = new Date(now.getTime() - STALE_EVAL_DAYS * 86400000);
+    const lastEvalByGp = await db
+      .select({
+        gpId: gamePresenters.id,
+        gpName: gamePresenters.name,
+        lastEval: sql<string | null>`MAX(${evaluations.evaluationDate})`,
+      })
+      .from(gamePresenters)
+      .leftJoin(evaluations, eq(evaluations.gamePresenterId, gamePresenters.id))
+      .groupBy(gamePresenters.id, gamePresenters.name);
+
+    const stale = lastEvalByGp
+      .filter(g => g.lastEval != null && new Date(g.lastEval) < staleThreshold)
+      .map(g => ({ gpId: g.gpId, gpName: g.gpName, daysSince: Math.floor((now.getTime() - new Date(g.lastEval!).getTime()) / 86400000) }))
+      .sort((a, b) => b.daysSince - a.daysSince)
+      .slice(0, 3);
+
+    for (const s of stale) {
+      insights.push({
+        id: `stale-eval-${s.gpId}`,
+        kind: "evaluation_stale",
+        severity: "warning",
+        title: `${s.gpName} not evaluated in ${s.daysSince} days`,
+        description: `Last evaluation was ${s.daysSince} days ago. A fresh one keeps coaching and bonus data current.`,
+        action: { label: "Evaluate now", href: `/workspace?gp=${s.gpId}` },
+        timestamp: now,
+        metadata: { gpId: s.gpId, gpName: s.gpName },
+      });
+    }
+  } catch { /* skip on error */ }
+
+  // ----------------------------------------------------------
+  // Attendance risk — this month's missed days / late arrivals
+  // ----------------------------------------------------------
+  try {
+    const att = await db
+      .select({
+        gpId: gpMonthlyAttendance.gamePresenterId,
+        gpName: gamePresenters.name,
+        missed: gpMonthlyAttendance.missedDays,
+        late: gpMonthlyAttendance.lateToWork,
+      })
+      .from(gpMonthlyAttendance)
+      .innerJoin(gamePresenters, eq(gpMonthlyAttendance.gamePresenterId, gamePresenters.id))
+      .where(and(eq(gpMonthlyAttendance.month, currentMonth), eq(gpMonthlyAttendance.year, currentYear)));
+
+    const atRisk = att
+      .filter(a => (a.missed ?? 0) >= ATTENDANCE_MISSED_THRESHOLD || (a.late ?? 0) >= ATTENDANCE_LATE_THRESHOLD)
+      .sort((a, b) => ((b.missed ?? 0) + (b.late ?? 0)) - ((a.missed ?? 0) + (a.late ?? 0)))
+      .slice(0, 3);
+
+    for (const a of atRisk) {
+      const parts: string[] = [];
+      if ((a.missed ?? 0) > 0) parts.push(`${a.missed} missed day${a.missed === 1 ? "" : "s"}`);
+      if ((a.late ?? 0) > 0) parts.push(`${a.late} late arrival${a.late === 1 ? "" : "s"}`);
+      insights.push({
+        id: `attendance-risk-${a.gpId}-${currentYear}-${currentMonth}`,
+        kind: "attendance_risk",
+        severity: "alert",
+        title: `${a.gpName} — attendance needs attention`,
+        description: `${parts.join(" and ")} this month. Worth a conversation before it affects the bonus.`,
+        action: { label: "Open attendance", href: "/attendance" },
+        timestamp: now,
+        metadata: { gpId: a.gpId, gpName: a.gpName },
+      });
+    }
+  } catch { /* skip on error */ }
+
+  // ----------------------------------------------------------
+  // Error spike — mistakes climbing month-over-month
+  // ----------------------------------------------------------
+  try {
+    const errThis = await db
+      .select({ gpId: monthlyGpStats.gamePresenterId, gpName: gamePresenters.name, mistakes: monthlyGpStats.mistakes })
+      .from(monthlyGpStats)
+      .innerJoin(gamePresenters, eq(monthlyGpStats.gamePresenterId, gamePresenters.id))
+      .where(and(eq(monthlyGpStats.month, currentMonth), eq(monthlyGpStats.year, currentYear)));
+
+    const errLast = await db
+      .select({ gpId: monthlyGpStats.gamePresenterId, mistakes: monthlyGpStats.mistakes })
+      .from(monthlyGpStats)
+      .where(and(eq(monthlyGpStats.month, lastMonth), eq(monthlyGpStats.year, lastMonthYear)));
+
+    const lastByGp = new Map(errLast.map(e => [e.gpId, e.mistakes ?? 0]));
+    const spikes = errThis
+      .map(e => ({ gpId: e.gpId, gpName: e.gpName, mistakes: e.mistakes ?? 0, prev: lastByGp.get(e.gpId) ?? 0 }))
+      .filter(e => e.mistakes >= ERROR_SPIKE_MIN && (e.mistakes - e.prev) >= ERROR_SPIKE_DELTA)
+      .sort((a, b) => (b.mistakes - b.prev) - (a.mistakes - a.prev))
+      .slice(0, 2);
+
+    for (const s of spikes) {
+      insights.push({
+        id: `error-spike-${s.gpId}-${currentYear}-${currentMonth}`,
+        kind: "error_spike",
+        severity: "warning",
+        title: `${s.gpName} — error count climbing`,
+        description: `${s.mistakes} mistakes this month, up from ${s.prev} last month. A quick review could reverse the trend.`,
+        action: { label: "Open profile", href: `/dashboard?gp=${s.gpId}` },
+        timestamp: now,
+        metadata: { gpId: s.gpId, gpName: s.gpName },
+      });
     }
   } catch { /* skip on error */ }
 

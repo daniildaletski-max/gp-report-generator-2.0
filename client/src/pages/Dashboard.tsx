@@ -1924,7 +1924,7 @@ function DashboardQuickActions({ onNavigate }: { onNavigate: (path: string) => v
 
 type Insight = {
   id: string;
-  kind: "stale_sync" | "missing_report" | "score_regression" | "score_improvement" | "coverage_gap";
+  kind: "missing_report" | "score_regression" | "score_improvement" | "coverage_gap" | "evaluation_stale" | "attendance_risk" | "error_spike" | "top_performer";
   severity: "alert" | "warning" | "recommendation" | "celebration" | "info";
   title: string;
   description: string;
