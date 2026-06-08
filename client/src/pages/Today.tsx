@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { PageHeader } from "@/components/PageHeader";
+import { QueryError } from "@/components/QueryError";
 import { EmptyState } from "@/components/EmptyState";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -98,6 +99,8 @@ export default function Today() {
 
   const stats = statsQ.data;
   const isLoading = coverageQ.isLoading || tasksQ.isLoading;
+  const isError = coverageQ.isError || tasksQ.isError || statsQ.isError;
+  const retryAll = () => { coverageQ.refetch(); tasksQ.refetch(); statsQ.refetch(); };
   const firstName = (user?.name ?? "").trim().split(" ")[0] || "there";
   const pct = totalGps > 0 ? Math.round((completeGps / totalGps) * 100) : 0;
 
@@ -130,8 +133,12 @@ export default function Today() {
         }
       />
 
+      {isError && (
+        <Card><CardContent className="p-0"><QueryError title="Couldn't load your day" onRetry={retryAll} /></CardContent></Card>
+      )}
+
       {/* progress strip */}
-      {!isLoading && (
+      {!isError && !isLoading && (
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
@@ -150,6 +157,7 @@ export default function Today() {
         </Card>
       )}
 
+      {!isError && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Evaluations to do */}
         <div className="lg:col-span-2">
@@ -242,6 +250,7 @@ export default function Today() {
           </Section>
         </div>
       </div>
+      )}
 
       <GPDetailDrawer gpId={drawerGpId} open={drawerGpId !== null} onOpenChange={(o) => { if (!o) setDrawerGpId(null); }} />
 

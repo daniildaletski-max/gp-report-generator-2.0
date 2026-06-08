@@ -50,9 +50,7 @@ export {
   getEvaluationsByMonth, getEvaluationsByMonthAndUser,
   getAllEvaluations, getAllEvaluationsByUser,
   getEvaluationWithGP, getEvaluationsWithGP, getEvaluationsWithGPByUser,
-  getEvaluationsByTeam,
   getGPMonthlyStats, getGPEvaluationsForDataSheet, getGpEvaluationsForPortal,
-  getEvaluationsNeedingReview, clearEvaluationReviewFlag,
 } from "./evaluations";
 
 // Attendance
@@ -112,7 +110,7 @@ export {
 // Dashboard & Analytics
 export {
   getDashboardStats, getDashboardStatsByTeam, getDashboardStatsByUser,
-  getAdminDashboardStats, getMonthlyTrendData, getTeamComparisonData,
+  getAdminDashboardStats, getMonthlyTrendData,
   computeDashboardInsights, getDashboardActivityFeed, getOnboardingStatus,
 } from "./dashboard";
 export type { DashboardInsight, InsightSeverity, InsightKind, ActivityItem, ActivityKind } from "./dashboard";

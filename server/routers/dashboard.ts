@@ -50,25 +50,6 @@ export const dashboardRouter = router({
       );
     }),
 
-  // Cross-team GP comparison
-  teamComparison: protectedProcedure
-    .input(z.object({
-      teamIds: z.array(z.number().positive()).optional(),
-    }).optional())
-    .query(async ({ ctx, input }) => {
-      const teamIds = input?.teamIds;
-      // Cache only the parameter-less variant; teamId arrays vary too much
-      // for a stable key and the underlying query is cheap with filters.
-      if (teamIds && teamIds.length > 0) {
-        return db.getTeamComparisonData(ctx.user.id, teamIds);
-      }
-      return cache.getOrSet(
-        CacheKeys.teamComparison(ctx.user.id),
-        () => db.getTeamComparisonData(ctx.user.id, teamIds),
-        CacheTTL.TEAM_COMPARISON,
-      );
-    }),
-
   /**
    * Auto-generated insights — the "Operations Brain". Looks at the
    * caller's data and surfaces the top items that need attention,
@@ -76,15 +57,19 @@ export const dashboardRouter = router({
    * manually check 5 different pages to figure out what's gone stale,
    * what's regressed, and what's missing this month.
    *
-   * Insight kinds:
-   *   - stale_sync       — Persona sync hasn't run for >14 days (warning)
-   *   - missing_report   — last calendar month has no report for a team (recommendation)
-   *   - score_regression — GPs whose avg score dropped >2 points vs prev month (alert)
-   *   - score_improvement — GPs whose avg score improved >2 points (celebration)
-   *   - coverage_gap     — current month has no evaluations for >50% of GPs (warning)
+   * Company-wide insight kinds:
+   *   - missing_report     — last month has no company report (recommendation)
+   *   - score_regression   — avg dropped >2 pts vs prior month (alert)
+   *   - score_improvement  — avg improved >2 pts (celebration)
+   *   - top_performer      — highest average last month (celebration)
+   *   - sustained_decline  — avg down 3 months running (alert, predictive)
+   *   - coverage_gap       — >50% of GPs unevaluated this month (warning)
+   *   - evaluation_stale   — a GP not evaluated in 35+ days (warning)
+   *   - attendance_risk    — high missed days / late arrivals this month (alert)
+   *   - error_spike        — mistakes climbing month-over-month (warning)
    *
-   * Sorted by severity (alert > warning > recommendation > info > success)
-   * then by recency. Capped at 12 items so the UI doesn't drown the FM.
+   * Sorted by severity (alert > warning > recommendation > celebration > info)
+   * then by recency. Capped so the UI doesn't drown the FM.
    */
   insights: protectedProcedure
     .input(z.object({

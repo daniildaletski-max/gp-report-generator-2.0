@@ -6,7 +6,7 @@ import { AIChatBox, type Message } from "@/components/AIChatBox";
 import { Sparkles } from "lucide-react";
 
 /**
- * Assistant — ask anything about your teams, GPs, coaching and what needs
+ * Assistant — ask anything about your GPs, coaching and what needs
  * attention. Thin client over assistant.ask: it keeps the visible chat
  * history and forwards the recent turns so follow-ups have context. The
  * server grounds every answer on a read-only snapshot of the caller's own
@@ -37,7 +37,7 @@ export default function Assistant() {
     <div className="space-y-6 p-4 md:p-6">
       <PageHeader
         title="Assistant"
-        subtitle="Ask anything about your teams, GPs, coaching and what needs attention — answered from your live data."
+        subtitle="Ask anything about your GPs, scores, coaching and what needs attention — answered from your live studio data."
         icon={Sparkles}
       />
       <AIChatBox

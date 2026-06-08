@@ -676,27 +676,6 @@ export const evaluationRouter = router({
       return await db.getEvaluationRevisions(input.id);
     }),
 
-  /** Evaluations flagged for human review — scoped to the caller unless admin. */
-  needsReview: protectedProcedure.query(async ({ ctx }) => {
-    return await db.getEvaluationsNeedingReview(ctx.user.role === "admin" ? undefined : ctx.user.id);
-  }),
-
-  /** Dismiss the review flag after a human has checked the evaluation. */
-  clearReview: protectedProcedure
-    .input(z.object({ id: z.number().positive() }))
-    .mutation(async ({ ctx, input }) => {
-      const evaluation = await db.getEvaluationWithGP(input.id);
-      if (!evaluation) throw new TRPCError({ code: 'NOT_FOUND', message: 'Evaluation not found' });
-      if (ctx.user.role !== 'admin') {
-        const evalUserId = evaluation.evaluation?.userId || evaluation.evaluation?.uploadedById;
-        if (evalUserId !== ctx.user.id) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
-        }
-      }
-      await db.clearEvaluationReviewFlag(input.id);
-      return { success: true };
-    }),
-
   delete: protectedProcedure
     .input(z.object({ id: z.number().positive() }))
     .mutation(async ({ ctx, input }) => {

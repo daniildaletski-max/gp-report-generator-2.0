@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, ShieldAlert, CalendarCheck, Zap, SlidersHorizontal, Sun, Sparkles, ScanLine, BadgeEuro, Trophy, Radar } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, SlidersHorizontal, Sun, Sparkles, ScanLine, BadgeEuro, Trophy, Radar } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -24,7 +24,6 @@ const Attendance = lazy(() => import("./pages/Attendance"));
 const Workspace = lazy(() => import("./pages/Workspace"));
 const GPPortal = lazy(() => import("./pages/GPPortal"));
 const InvitePage = lazy(() => import("./pages/InvitePage"));
-const Review = lazy(() => import("./pages/Review"));
 const Rubric = lazy(() => import("./pages/Rubric"));
 const Today = lazy(() => import("./pages/Today"));
 const Assistant = lazy(() => import("./pages/Assistant"));
@@ -62,7 +61,6 @@ const baseSidebarItems = [
   // Placed after the first five so the mobile bottom nav (slice 0..5)
   // is unchanged; these live in the desktop sidebar.
   { href: "/upload-bulk", label: "Bulk AI", icon: ScanLine },
-  { href: "/review", label: "Review", icon: ShieldAlert },
   { href: "/assistant", label: "Assistant", icon: Sparkles },
 ];
 
@@ -124,11 +122,6 @@ function DashboardRoutes() {
             <Route path="/evaluations">
               <RouteErrorBoundary fallbackTitle="Evaluations failed to load">
                 <Evaluations />
-              </RouteErrorBoundary>
-            </Route>
-            <Route path="/review">
-              <RouteErrorBoundary fallbackTitle="Review queue failed to load">
-                <Review />
               </RouteErrorBoundary>
             </Route>
             <Route path="/assistant">
@@ -219,7 +212,6 @@ function Router() {
       <Route path="/upload" component={DashboardRoutes} />
       <Route path="/upload-bulk" component={DashboardRoutes} />
       <Route path="/evaluations" component={DashboardRoutes} />
-      <Route path="/review" component={DashboardRoutes} />
       <Route path="/assistant" component={DashboardRoutes} />
       <Route path="/rubric" component={DashboardRoutes} />
       <Route path="/reports" component={DashboardRoutes} />

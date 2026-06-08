@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
+import { QueryError } from "@/components/QueryError";
 import { useLiveEvents } from "@/hooks/useLiveEvents";
 import { MONTH_NAMES, MAX_TOTAL_SCORE } from "@shared/const";
 import {
@@ -33,7 +34,7 @@ export default function LeaderboardPage() {
   const [year, setYear] = useState(now.getFullYear());
   useLiveEvents();
 
-  const { data, isLoading } = trpc.leaderboard.get.useQuery({ month, year });
+  const { data, isLoading, isError, refetch } = trpc.leaderboard.get.useQuery({ month, year });
   const rows = data?.rows ?? [];
   const a = data?.analytics;
   const podium = useMemo(() => rows.slice(0, 3), [rows]);
@@ -58,6 +59,10 @@ export default function LeaderboardPage() {
         }
       />
 
+      {isError ? (
+        <Card><CardContent className="p-0"><QueryError title="Couldn't load the leaderboard" onRetry={() => refetch()} /></CardContent></Card>
+      ) : (
+        <>
       {/* Analytics strip */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Card><CardContent className="p-4">
@@ -196,6 +201,8 @@ export default function LeaderboardPage() {
           )}
         </CardContent>
       </Card>
+        </>
+      )}
     </div>
   );
 }

@@ -842,7 +842,7 @@ function GPAccessLinksTab({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Real name <span className="text-[10px] font-normal text-muted-foreground">(for Persona)</span></TableHead>
+                    <TableHead>Real name <span className="text-[10px] font-normal text-muted-foreground">(legal name)</span></TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Access Link</TableHead>
                     <TableHead className="w-[150px]">Actions</TableHead>

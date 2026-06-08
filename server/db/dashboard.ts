@@ -2,7 +2,7 @@
  * Dashboard & Analytics Database Operations
  * Handles dashboard stats, monthly trends, team comparison, and admin stats
  */
-import { eq, and, or, inArray, isNull, sql, desc } from "drizzle-orm";
+import { eq, and, or, inArray, isNull, gte, lte, sql, desc } from "drizzle-orm";
 import { evaluations, gamePresenters, reports, users, fmTeams, errorFiles, gpMonthlyAttendance, monthlyGpStats } from "../../drizzle/schema";
 import { getDb } from "./connection";
 
@@ -165,57 +165,6 @@ export async function getMonthlyTrendData(months: number = 6, teamId?: number, u
   return results;
 }
 
-export async function getTeamComparisonData(userId: number, teamIds?: number[]) {
-  // One shared database — compare across every team; userId no longer scopes.
-  void userId;
-  const db = await getDb();
-  if (!db) return [];
-  const teams = await db.select().from(fmTeams);
-  if (teams.length === 0) return [];
-  const selectedTeams = teamIds && teamIds.length > 0 ? teams.filter(t => teamIds.includes(t.id)) : teams;
-  const results = [];
-  for (const team of selectedTeams) {
-    const gps = await db.select().from(gamePresenters).where(eq(gamePresenters.teamId, team.id));
-    if (gps.length === 0) {
-      results.push({ teamId: team.id, teamName: team.teamName, floorManager: team.floorManagerName, gpCount: 0, avgTotalScore: 0, avgAppearanceScore: 0, avgPerformanceScore: 0, totalEvaluations: 0, topScore: 0, lowScore: 0, gps: [] });
-      continue;
-    }
-    const gpIds = gps.map(g => g.id);
-    const teamStats = await db.select({
-      avgTotal: sql<number>`AVG(${evaluations.totalScore})`, avgAppearance: sql<number>`AVG(${evaluations.appearanceScore})`,
-      avgPerformance: sql<number>`AVG(${evaluations.gamePerformanceTotalScore})`, totalEvals: sql<number>`COUNT(*)`,
-      topScore: sql<number>`MAX(${evaluations.totalScore})`, lowScore: sql<number>`MIN(${evaluations.totalScore})`,
-    }).from(evaluations).where(inArray(evaluations.gamePresenterId, gpIds));
-    const stats = teamStats[0];
-    const gpStats = await db.select({
-      gpId: evaluations.gamePresenterId, avgTotal: sql<number>`AVG(${evaluations.totalScore})`,
-      avgAppearance: sql<number>`AVG(${evaluations.appearanceScore})`, avgPerformance: sql<number>`AVG(${evaluations.gamePerformanceTotalScore})`,
-      evalCount: sql<number>`COUNT(*)`,
-    }).from(evaluations).where(inArray(evaluations.gamePresenterId, gpIds)).groupBy(evaluations.gamePresenterId);
-    const gpData = gpStats.map(gs => {
-      const gp = gps.find(g => g.id === gs.gpId);
-      return {
-        id: gs.gpId, name: gp?.name || 'Unknown',
-        avgTotalScore: gs.avgTotal ? Number(Number(gs.avgTotal).toFixed(1)) : 0,
-        avgAppearanceScore: gs.avgAppearance ? Number(Number(gs.avgAppearance).toFixed(1)) : 0,
-        avgPerformanceScore: gs.avgPerformance ? Number(Number(gs.avgPerformance).toFixed(1)) : 0,
-        evaluationCount: Number(gs.evalCount || 0),
-      };
-    }).sort((a, b) => b.avgTotalScore - a.avgTotalScore);
-    results.push({
-      teamId: team.id, teamName: team.teamName, floorManager: team.floorManagerName,
-      gpCount: gps.length,
-      avgTotalScore: stats?.avgTotal ? Number(Number(stats.avgTotal).toFixed(1)) : 0,
-      avgAppearanceScore: stats?.avgAppearance ? Number(Number(stats.avgAppearance).toFixed(1)) : 0,
-      avgPerformanceScore: stats?.avgPerformance ? Number(Number(stats.avgPerformance).toFixed(1)) : 0,
-      totalEvaluations: Number(stats?.totalEvals || 0),
-      topScore: Number(stats?.topScore || 0), lowScore: Number(stats?.lowScore || 0),
-      gps: gpData,
-    });
-  }
-  return results.sort((a, b) => b.avgTotalScore - a.avgTotalScore);
-}
-
 // ============================================
 // Operations Brain — auto-generated insights + activity feed
 // ============================================
@@ -229,7 +178,8 @@ export type InsightKind =
   | "evaluation_stale"
   | "attendance_risk"
   | "error_spike"
-  | "top_performer";
+  | "top_performer"
+  | "sustained_decline";
 
 export interface DashboardInsight {
   id: string;
@@ -293,6 +243,8 @@ export async function computeDashboardInsights(opts: {
   const twoMonthsAgoDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
   const twoMonthsAgoMonth = twoMonthsAgoDate.getMonth() + 1;
   const twoMonthsAgoYear = twoMonthsAgoDate.getFullYear();
+  // Three months ago — the start of the window for the 3-month trend check.
+  const threeMonthsAgoDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
 
   const insights: DashboardInsight[] = [];
 
@@ -412,6 +364,71 @@ export async function computeDashboardInsights(opts: {
         action: { label: "Open profile", href: `/dashboard?gp=${top.gpId}` },
         timestamp: lastMonthDate,
         metadata: { gpId: top.gpId, gpName: top.gpName },
+      });
+    }
+  } catch { /* skip on error */ }
+
+  // ----------------------------------------------------------
+  // Sustained decline — averages down 3 months running (predictive).
+  // A single down month is noise; three in a row is a trend worth
+  // catching before it compounds.
+  // ----------------------------------------------------------
+  try {
+    const windowStart = new Date(threeMonthsAgoDate.getFullYear(), threeMonthsAgoDate.getMonth(), 1);
+    const windowEnd = new Date(lastMonthYear, lastMonth, 0, 23, 59, 59); // end of last month
+    const rows = await db
+      .select({
+        gpId: evaluations.gamePresenterId,
+        gpName: gamePresenters.name,
+        m: sql<number>`MONTH(${evaluations.evaluationDate})`,
+        y: sql<number>`YEAR(${evaluations.evaluationDate})`,
+        avgScore: sql<number>`AVG(${evaluations.totalScore})`,
+        cnt: sql<number>`COUNT(*)`,
+      })
+      .from(evaluations)
+      .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+      .where(and(gte(evaluations.evaluationDate, windowStart), lte(evaluations.evaluationDate, windowEnd)))
+      .groupBy(
+        evaluations.gamePresenterId,
+        gamePresenters.name,
+        sql`MONTH(${evaluations.evaluationDate})`,
+        sql`YEAR(${evaluations.evaluationDate})`,
+      );
+
+    // Oldest → newest: [3 months ago, 2 months ago, last month].
+    const monthsSeq = [
+      { m: threeMonthsAgoDate.getMonth() + 1, y: threeMonthsAgoDate.getFullYear() },
+      { m: twoMonthsAgoMonth, y: twoMonthsAgoYear },
+      { m: lastMonth, y: lastMonthYear },
+    ];
+    const byGp = new Map<number, { gpName: string; series: (number | null)[] }>();
+    for (const r of rows) {
+      const idx = monthsSeq.findIndex(s => s.m === Number(r.m) && s.y === Number(r.y));
+      if (idx < 0 || Number(r.cnt) < 1) continue;
+      let entry = byGp.get(r.gpId);
+      if (!entry) { entry = { gpName: r.gpName, series: [null, null, null] }; byGp.set(r.gpId, entry); }
+      entry.series[idx] = Number(r.avgScore) || 0;
+    }
+
+    const decliners: { gpId: number; gpName: string; a: number; b: number; c: number; drop: number }[] = [];
+    for (const [gpId, { gpName, series }] of Array.from(byGp.entries())) {
+      const [a, b, c] = series;
+      if (a == null || b == null || c == null) continue; // need all three months
+      if (a > b && b > c && a - c >= 1.5) {
+        decliners.push({ gpId, gpName, a, b, c, drop: a - c });
+      }
+    }
+    decliners.sort((x, y) => y.drop - x.drop);
+    for (const d of decliners.slice(0, 2)) {
+      insights.push({
+        id: `sustained-decline-${d.gpId}-${lastMonthYear}-${lastMonth}`,
+        kind: "sustained_decline",
+        severity: "alert",
+        title: `${d.gpName} declining 3 months running`,
+        description: `Average fell ${d.a.toFixed(1)} → ${d.b.toFixed(1)} → ${d.c.toFixed(1)} (down ${d.drop.toFixed(1)} pts). The trend points down — coach now before it compounds.`,
+        action: { label: "Open profile", href: `/dashboard?gp=${d.gpId}` },
+        timestamp: lastMonthDate,
+        metadata: { gpId: d.gpId, gpName: d.gpName },
       });
     }
   } catch { /* skip on error */ }

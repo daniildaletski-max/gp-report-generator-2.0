@@ -10,7 +10,7 @@ import { appRouter } from "../routers";
 import { createContext, authenticateUser } from "./context";
 import { subscribe, subscriberCount } from "./events";
 import { serveStatic, setupVite } from "./vite";
-import { initScheduledReports, initStudioworksSync, initAutoCoaching } from "../scheduledReports";
+import { initScheduledReports, initStudioworksSync, initAutoCoaching, initWeeklyDigest } from "../scheduledReports";
 import { createLogger } from "../services/logger";
 import { requestTracingMiddleware, requestValidation } from "../services/requestTracing";
 import { cache } from "../services/cache";
@@ -499,6 +499,10 @@ async function startServer() {
     // into action items so the FM doesn't have to manually create
     // a coaching plan for every GP that dropped points.
     initAutoCoaching();
+    // Weekly coaching digest — Mondays at 08:00 EET, emails the
+    // management team an AI summary of the week's alert/warning signals.
+    // Silent when nothing's urgent. Disable via WEEKLY_DIGEST_CRON=off.
+    initWeeklyDigest();
     // (Persona attendance auto-sync removed with the one-shared-DB
     // refactor — attendance now ingested from other sources only.)
     // Idempotent schema repair for `game_presenters.realName`.

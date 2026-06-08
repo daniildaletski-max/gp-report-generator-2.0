@@ -191,8 +191,6 @@ export const CacheKeys = {
     `dashboard:user:${month}:${year}:${userId || 'all'}`,
   monthlyTrend: (months: number, teamId?: number, userId?: number) =>
     `dashboard:trend:${months}:${teamId || 'all'}:${userId || 'all'}`,
-  teamComparison: (userId: number) =>
-    `dashboard:comparison:${userId}`,
   adminStats: () => 'dashboard:admin',
 } as const;
 
@@ -202,7 +200,6 @@ export const CacheKeys = {
 export const CacheTTL = {
   DASHBOARD_STATS: 30_000,     // 30 seconds  — frequently accessed
   MONTHLY_TREND: 120_000,      // 2 minutes   — heavy query, changes slowly
-  TEAM_COMPARISON: 120_000,    // 2 minutes
   ADMIN_STATS: 60_000,         // 1 minute
   DEFAULT: 60_000,             // 1 minute
 } as const;

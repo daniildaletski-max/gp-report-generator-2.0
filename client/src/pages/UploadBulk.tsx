@@ -273,7 +273,6 @@ export default function UploadBulk() {
       // Make Today / Dashboard / coverage refresh.
       utils.evaluation.coverage.invalidate();
       utils.evaluation.list.invalidate();
-      utils.evaluation.needsReview.invalidate();
       utils.dashboard.insights.invalidate();
     } catch (e: any) {
       toast.error(`Save failed: ${e?.message ?? "unknown error"}`);
