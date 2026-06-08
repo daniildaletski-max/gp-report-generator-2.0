@@ -5,9 +5,21 @@ import {
   scoreDistribution,
   buildAnalyticsOverview,
   previousPeriod,
+  monthWindow,
+  aggregateCriteriaTrend,
   CRITERION_KEYS,
   type AnalyticsRow,
+  type TrendRow,
 } from "./analytics";
+
+function trendRow(p: Partial<TrendRow>): TrendRow {
+  return {
+    month: 1, year: 2026, totalScore: null,
+    hairScore: null, makeupScore: null, outfitScore: null,
+    postureScore: null, dealingStyleScore: null, gamePerformanceScore: null,
+    ...p,
+  };
+}
 
 function row(p: Partial<AnalyticsRow>): AnalyticsRow {
   return {
@@ -130,5 +142,51 @@ describe("previousPeriod", () => {
   });
   it("steps back one month within a year", () => {
     expect(previousPeriod(5, 2026)).toEqual({ month: 4, year: 2026 });
+  });
+});
+
+describe("monthWindow", () => {
+  it("returns n months ending at the given period, oldest first", () => {
+    expect(monthWindow(3, 2026, 6)).toEqual([
+      { month: 10, year: 2025 },
+      { month: 11, year: 2025 },
+      { month: 12, year: 2025 },
+      { month: 1, year: 2026 },
+      { month: 2, year: 2026 },
+      { month: 3, year: 2026 },
+    ]);
+  });
+  it("crosses the year boundary correctly", () => {
+    expect(monthWindow(1, 2026, 3)).toEqual([
+      { month: 11, year: 2025 },
+      { month: 12, year: 2025 },
+      { month: 1, year: 2026 },
+    ]);
+  });
+});
+
+describe("aggregateCriteriaTrend", () => {
+  it("buckets rows into each period and averages per criterion", () => {
+    const periods = [{ month: 1, year: 2026 }, { month: 2, year: 2026 }];
+    const out = aggregateCriteriaTrend([
+      trendRow({ month: 1, year: 2026, hairScore: 2, totalScore: 18 }),
+      trendRow({ month: 1, year: 2026, hairScore: 4, totalScore: 20 }),
+      trendRow({ month: 2, year: 2026, hairScore: 3, totalScore: 16 }),
+    ], periods);
+    expect(out).toHaveLength(2);
+    expect(out[0].count).toBe(2);
+    expect(out[0].avgTotal).toBe(19);
+    expect(out[0].criteria.hair).toBe(3); // (2 + 4) / 2
+    expect(out[0].criteria.makeup).toBeNull(); // no data
+    expect(out[1].count).toBe(1);
+    expect(out[1].criteria.hair).toBe(3);
+    expect(out[0].label).toMatch(/^Jan/);
+  });
+
+  it("yields zero-count empty points for periods with no rows", () => {
+    const out = aggregateCriteriaTrend([], [{ month: 4, year: 2026 }]);
+    expect(out[0].count).toBe(0);
+    expect(out[0].avgTotal).toBe(0);
+    expect(out[0].criteria.hair).toBeNull();
   });
 });

@@ -10,7 +10,7 @@
  * scoreDistribution / buildAnalyticsOverview), so the aggregation logic is
  * unit-testable with plain literals and never needs a live connection.
  */
-import { and, sql } from "drizzle-orm";
+import { and, gte, sql } from "drizzle-orm";
 import { evaluations } from "../../drizzle/schema";
 import { getDb } from "./connection";
 
@@ -19,12 +19,9 @@ export const CRITERION_KEYS = [
 ] as const;
 export type CriterionKey = (typeof CRITERION_KEYS)[number];
 
-/** The subset of evaluation columns analytics needs. A plain shape so the
- *  pure aggregators are trivial to test with object literals. */
-export type AnalyticsRow = {
-  gamePresenterId: number | null;
-  game: string | null;
-  totalScore: number | null;
+/** The six per-criterion score columns — shared by the single-period rows
+ *  and the trend rows so one set of aggregators serves both. */
+export type ScoreCols = {
   hairScore: number | null;
   makeupScore: number | null;
   outfitScore: number | null;
@@ -33,7 +30,15 @@ export type AnalyticsRow = {
   gamePerformanceScore: number | null;
 };
 
-const SCORE_COLUMN: Record<CriterionKey, keyof AnalyticsRow> = {
+/** A single evaluation row, reduced to the columns analytics needs. A plain
+ *  shape so the pure aggregators are trivial to test with object literals. */
+export type AnalyticsRow = ScoreCols & {
+  gamePresenterId: number | null;
+  game: string | null;
+  totalScore: number | null;
+};
+
+const SCORE_COLUMN: Record<CriterionKey, keyof ScoreCols> = {
   hair: "hairScore",
   makeup: "makeupScore",
   outfit: "outfitScore",
@@ -196,4 +201,94 @@ export async function getAnalyticsOverview(month: number, year: number): Promise
     fetchPeriodRows(db, prev.month, prev.year),
   ]);
   return buildAnalyticsOverview(month, year, rows as AnalyticsRow[], prevRows as AnalyticsRow[]);
+}
+
+// ---- Criteria trend (multi-month) ------------------------------------------
+
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** A trend row carries the period it belongs to alongside its scores. */
+export type TrendRow = ScoreCols & {
+  month: number;
+  year: number;
+  totalScore: number | null;
+};
+
+export type CriteriaTrendPoint = {
+  month: number;
+  year: number;
+  label: string;
+  count: number;
+  avgTotal: number;
+  /** Average per criterion for the period; null when it had no data. */
+  criteria: Record<CriterionKey, number | null>;
+};
+
+/** The ordered list of the `n` calendar months ending at (month, year),
+ *  oldest first. */
+export function monthWindow(month: number, year: number, n: number): Array<{ month: number; year: number }> {
+  const out: Array<{ month: number; year: number }> = [];
+  let m = month;
+  let y = year;
+  for (let i = 0; i < n; i++) {
+    out.unshift({ month: m, year: y });
+    m -= 1;
+    if (m < 1) {
+      m = 12;
+      y -= 1;
+    }
+  }
+  return out;
+}
+
+/** Bucket trend rows into the given ordered periods, averaging each
+ *  criterion (and the total) per period — PURE, unit-tested. */
+export function aggregateCriteriaTrend(
+  rows: TrendRow[],
+  periods: Array<{ month: number; year: number }>,
+): CriteriaTrendPoint[] {
+  return periods.map(p => {
+    const inPeriod = rows.filter(r => r.month === p.month && r.year === p.year);
+    const totals = inPeriod.map(r => r.totalScore).filter(isNum);
+    const criteria = {} as Record<CriterionKey, number | null>;
+    for (const key of CRITERION_KEYS) {
+      const vals = inPeriod.map(r => r[SCORE_COLUMN[key]]).filter(isNum);
+      criteria[key] = vals.length ? round1(mean(vals)) : null;
+    }
+    return {
+      month: p.month,
+      year: p.year,
+      label: `${MONTH_SHORT[p.month - 1]} ${String(p.year).slice(2)}`,
+      count: inPeriod.length,
+      avgTotal: totals.length ? round1(mean(totals)) : 0,
+      criteria,
+    };
+  });
+}
+
+const TREND_SELECT = {
+  month: sql<number>`MONTH(${evaluations.evaluationDate})`,
+  year: sql<number>`YEAR(${evaluations.evaluationDate})`,
+  totalScore: evaluations.totalScore,
+  hairScore: evaluations.hairScore,
+  makeupScore: evaluations.makeupScore,
+  outfitScore: evaluations.outfitScore,
+  postureScore: evaluations.postureScore,
+  dealingStyleScore: evaluations.dealingStyleScore,
+  gamePerformanceScore: evaluations.gamePerformanceScore,
+} as const;
+
+export async function getCriteriaTrend(months: number): Promise<CriteriaTrendPoint[]> {
+  const now = new Date();
+  const periods = monthWindow(now.getMonth() + 1, now.getFullYear(), months);
+  const db = await getDb();
+  if (!db) return aggregateCriteriaTrend([], periods);
+  // First day of the oldest month in the window — one range-filtered read.
+  const start = periods[0];
+  const startDate = new Date(start.year, start.month - 1, 1);
+  const rows = await db
+    .select(TREND_SELECT)
+    .from(evaluations)
+    .where(gte(evaluations.evaluationDate, startDate));
+  return aggregateCriteriaTrend(rows as TrendRow[], periods);
 }

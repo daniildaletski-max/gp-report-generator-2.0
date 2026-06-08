@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, Legend,
+  BarChart, Bar, LineChart as ReLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Cell, Legend,
 } from "recharts";
 
 const CHART_TOOLTIP = {
@@ -47,6 +47,20 @@ export default function Analytics() {
   );
 
   const { data, isLoading, isError, refetch } = trpc.analytics.overview.useQuery({ month, year });
+  const { data: trend } = trpc.analytics.criteriaTrend.useQuery({ months: 6 });
+
+  // Small-multiples: one series per criterion across the trend window.
+  const trendTiles = useMemo(() => {
+    if (!trend || trend.length === 0) return null;
+    const keys = Object.keys(SCORE_CONFIG) as Array<keyof typeof SCORE_CONFIG>;
+    const tiles = keys.map(key => ({
+      key,
+      label: SCORE_CONFIG[key].label,
+      max: SCORE_CONFIG[key].max,
+      points: trend.map(t => ({ label: t.label, value: t.criteria[key] })),
+    }));
+    return tiles.some(t => t.points.some(p => p.value != null)) ? tiles : null;
+  }, [trend]);
 
   // Radar: each criterion as a % of its max, current vs previous month.
   const radarData = useMemo(() => {
@@ -258,6 +272,30 @@ export default function Analytics() {
             </CardContent>
           </Card>
 
+          {/* Criteria over time — small multiples */}
+          {trendTiles && (
+            <Card variant="glass">
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20">
+                    <TrendingUp className="h-4.5 w-4.5 text-primary" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-sm sm:text-base">Criteria over time</CardTitle>
+                    <CardDescription className="text-xs">Average per criterion across the last 6 months</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {trendTiles.map(t => (
+                    <CriterionTrendTile key={t.key} label={t.label} max={t.max} points={t.points} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Per-game performance */}
           <Card variant="glass">
             <CardHeader>
@@ -295,6 +333,38 @@ export default function Analytics() {
             </CardContent>
           </Card>
         </>
+      )}
+    </div>
+  );
+}
+
+function CriterionTrendTile({
+  label, max, points,
+}: { label: string; max: number; points: Array<{ label: string; value: number | null }> }) {
+  const withData = points.filter(p => p.value != null) as Array<{ label: string; value: number }>;
+  const latest = withData.length ? withData[withData.length - 1].value : null;
+  const first = withData.length ? withData[0].value : null;
+  const delta = latest != null && first != null ? Math.round((latest - first) * 10) / 10 : null;
+  return (
+    <div className="rounded-xl border border-border bg-card/50 p-3">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-medium text-foreground truncate">{label}</span>
+        <span className="text-xs font-bold tabular-nums text-foreground">
+          {latest != null ? latest.toFixed(1) : "—"}<span className="text-[10px] text-muted-foreground font-normal">/{max}</span>
+        </span>
+      </div>
+      <ResponsiveContainer width="100%" height={56}>
+        <ReLineChart data={points} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+          <YAxis domain={[0, max]} hide />
+          <XAxis dataKey="label" hide />
+          <Tooltip contentStyle={CHART_TOOLTIP} formatter={(v: number) => [v == null ? "—" : Number(v).toFixed(1), label]} />
+          <Line type="monotone" dataKey="value" stroke="oklch(0.65 0.12 85)" strokeWidth={2} dot={{ r: 2 }} connectNulls />
+        </ReLineChart>
+      </ResponsiveContainer>
+      {delta != null && delta !== 0 && (
+        <div className={`text-[10px] font-semibold mt-0.5 ${delta > 0 ? "text-emerald-600" : "text-rose-600"}`}>
+          {delta > 0 ? "+" : ""}{delta.toFixed(1)} over period
+        </div>
       )}
     </div>
   );
