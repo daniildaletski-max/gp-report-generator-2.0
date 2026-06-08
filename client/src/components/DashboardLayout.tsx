@@ -17,7 +17,7 @@ import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useLiveEvents } from "@/hooks/useLiveEvents";
 import { LayoutDashboard, LogOut, PanelLeft, Search } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState, createContext, useContext, useCallback } from "react";
+import { CSSProperties, useEffect, useRef, useState, createContext, useContext, useCallback, Fragment } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
@@ -31,6 +31,9 @@ type MenuItem = {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   path: string;
+  /** Optional group label. Consecutive items sharing a section render under
+   *  one header; a new value starts a new group. */
+  section?: string;
 };
 
 const defaultMenuItems: MenuItem[] = [
@@ -49,10 +52,10 @@ export default function DashboardLayout({
   sidebarItems,
 }: {
   children: React.ReactNode;
-  sidebarItems?: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }[];
+  sidebarItems?: { href: string; label: string; icon: React.ComponentType<{ className?: string }>; section?: string }[];
 }) {
-  const menuItems: MenuItem[] = sidebarItems 
-    ? sidebarItems.map(item => ({ icon: item.icon, label: item.label, path: item.href }))
+  const menuItems: MenuItem[] = sidebarItems
+    ? sidebarItems.map(item => ({ icon: item.icon, label: item.label, path: item.href, section: item.section }))
     : defaultMenuItems;
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
@@ -251,36 +254,46 @@ function DashboardLayoutContent({
             </div>
 
             <SidebarMenu className="px-2 py-2">
-              {!isCollapsed && (
-                <li className="px-2 pt-1 pb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">
-                  Workspace
-                </li>
-              )}
-              {menuItems.map(item => {
+              {menuItems.map((item, idx) => {
                 const isActive = location.startsWith(item.path);
+                const prevSection = idx > 0 ? menuItems[idx - 1].section : undefined;
+                const isNewSection = !!item.section && item.section !== prevSection;
                 return (
-                  <SidebarMenuItem key={item.path} className="relative group/nav">
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className={`h-11 transition-all duration-300 font-normal rounded-xl ${
-                        isActive
-                          ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary border border-primary/25 shadow-md shadow-primary/10"
-                          : "hover:bg-primary/5 text-muted-foreground hover:text-foreground hover:translate-x-0.5"
-                      }`}
-                    >
-                      {isActive && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[65%] bg-gradient-to-b from-primary to-primary/60 rounded-r-full" />
-                      )}
-                      <item.icon
-                        className={`h-4 w-4 transition-all duration-200 ${
-                          isActive ? "text-primary scale-110" : "group-hover/nav:scale-110 group-hover/nav:text-primary"
+                  <Fragment key={item.path}>
+                    {/* Group header when expanded, a hairline divider when
+                        collapsed — so the nav reads as labelled clusters
+                        instead of one long flat list. */}
+                    {isNewSection && !isCollapsed && (
+                      <li className={`px-2 ${idx === 0 ? "pt-1" : "pt-4"} pb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold`}>
+                        {item.section}
+                      </li>
+                    )}
+                    {isNewSection && isCollapsed && idx > 0 && (
+                      <li aria-hidden className="mx-2 my-1.5 border-t border-border/60" />
+                    )}
+                    <SidebarMenuItem className="relative group/nav">
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        onClick={() => setLocation(item.path)}
+                        tooltip={item.label}
+                        className={`h-11 transition-all duration-300 font-normal rounded-xl ${
+                          isActive
+                            ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary border border-primary/25 shadow-md shadow-primary/10"
+                            : "hover:bg-primary/5 text-muted-foreground hover:text-foreground hover:translate-x-0.5"
                         }`}
-                      />
-                      <span className={isActive ? "font-semibold" : ""}>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                      >
+                        {isActive && (
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[65%] bg-gradient-to-b from-primary to-primary/60 rounded-r-full" />
+                        )}
+                        <item.icon
+                          className={`h-4 w-4 transition-all duration-200 ${
+                            isActive ? "text-primary scale-110" : "group-hover/nav:scale-110 group-hover/nav:text-primary"
+                          }`}
+                        />
+                        <span className={isActive ? "font-semibold" : ""}>{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  </Fragment>
                 );
               })}
             </SidebarMenu>
