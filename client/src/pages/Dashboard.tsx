@@ -1211,7 +1211,7 @@ function DashboardHero({
     <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3 sm:gap-4 items-start">
       <SparkGradients />
       {/* Primary tile — Avg Team Score */}
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-5 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-5 sm:p-6 shadow-sm hover:shadow-lg hover:shadow-primary/5 hover:border-primary/25 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
         <div className="absolute -top-12 -right-12 h-48 w-48 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
         <div className="relative flex flex-col gap-4">
           <div className="flex items-start justify-between gap-3">
@@ -1361,17 +1361,17 @@ function MiniMetric({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 hover:border-primary/30 hover:shadow-sm transition-all">
+    <div className="rounded-2xl border border-border bg-card p-4 metric-hover">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{label}</p>
-          <p className="text-2xl font-bold tabular-nums text-foreground mt-1">{primary}</p>
+          <p className="text-2xl font-bold tabular-nums text-foreground mt-1 number-tick">{primary}</p>
           {secondary && (
             <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{secondary}</p>
           )}
         </div>
-        <div className="rounded-xl bg-muted/50 p-2 shrink-0">
-          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+        <div className="rounded-xl bg-primary/8 border border-primary/15 p-2 shrink-0 transition-all duration-300 group-hover:scale-110 group-hover:bg-primary/12">
+          <Icon className="h-3.5 w-3.5 text-primary/70" />
         </div>
       </div>
       <div className="flex items-end justify-between gap-2 mt-2 min-h-[28px]">

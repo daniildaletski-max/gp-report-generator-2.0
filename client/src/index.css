@@ -1216,12 +1216,144 @@
     transform: translateY(-2px);
     box-shadow: 0 8px 25px -8px rgba(212, 175, 55, 0.15), 0 4px 10px -4px rgba(15, 23, 42, 0.06);
   }
+
+  /* ===== ENHANCED MICRO-INTERACTIONS ===== */
+
+  /* Smooth hover lift for metric cards — subtle Y translation + soft shadow bloom */
+  .metric-hover {
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+                box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.28s ease;
+  }
+  .metric-hover:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px -8px rgba(212, 175, 55, 0.12),
+               0 4px 12px -4px rgba(0, 0, 0, 0.05);
+    border-color: rgba(212, 175, 55, 0.4);
+  }
+  .metric-hover:active {
+    transform: translateY(-1px);
+    transition-duration: 100ms;
+  }
+
+  /* Table row premium hover — gold left accent + subtle bg shift */
+  .table-row-premium {
+    position: relative;
+    transition: background 0.2s ease, transform 0.15s ease;
+  }
+  .table-row-premium::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 15%;
+    bottom: 15%;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: linear-gradient(180deg, #d4af37, #f5d060);
+    opacity: 0;
+    transform: scaleY(0.5);
+    transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .table-row-premium:hover {
+    background: rgba(212, 175, 55, 0.04);
+  }
+  .table-row-premium:hover::before {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+
+  /* Podium card entrance animation */
+  .podium-entrance {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+    animation: podium-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  .podium-entrance:nth-child(1) { animation-delay: 0.1s; }
+  .podium-entrance:nth-child(2) { animation-delay: 0.2s; }
+  .podium-entrance:nth-child(3) { animation-delay: 0.3s; }
+
+  /* Badge unlock pulse */
+  .badge-unlock-pulse {
+    animation: badge-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Score ring glow on hover */
+  .score-glow {
+    transition: box-shadow 0.3s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .score-glow:hover {
+    box-shadow: 0 0 24px rgba(212, 175, 55, 0.12), 0 8px 20px -8px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+  }
+
+  /* Smooth number tick animation */
+  .number-tick {
+    display: inline-block;
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .number-tick:hover {
+    transform: scale(1.05);
+  }
+
+  /* Nav item ink spread on active */
+  .nav-ink-spread {
+    position: relative;
+    overflow: hidden;
+  }
+  .nav-ink-spread::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at var(--ink-x, 50%) var(--ink-y, 50%), rgba(212, 175, 55, 0.08) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+  .nav-ink-spread:hover::after {
+    opacity: 1;
+  }
+
+  /* Smooth content reveal */
+  .content-reveal {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: content-reveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  /* Breathing glow for live indicators */
+  .breathing-glow {
+    animation: breathing 3s ease-in-out infinite;
+  }
+}
+
+@keyframes podium-in {
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes badge-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(212, 175, 55, 0); }
+}
+
+@keyframes content-reveal {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes breathing {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
 }
 
 @keyframes row-exit {
   0% { opacity: 1; transform: translateX(0); max-height: 80px; }
   50% { opacity: 0.5; transform: translateX(30px); }
   100% { opacity: 0; transform: translateX(60px); max-height: 0; margin: 0; padding: 0; overflow: hidden; }
+}
+
+@keyframes number-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+  100% { transform: scale(1); }
 }
 
 @keyframes stagger-in {

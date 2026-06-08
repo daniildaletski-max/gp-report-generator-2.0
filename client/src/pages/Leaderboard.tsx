@@ -64,26 +64,26 @@ export default function LeaderboardPage() {
       ) : (
         <>
       {/* Analytics strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <Card><CardContent className="p-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 stagger-children">
+        <Card className="metric-hover"><CardContent className="p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Ranked GPs</div>
-          <div className="text-2xl font-semibold mt-1 tabular-nums">{a?.rankedGPs ?? 0}<span className="text-sm text-muted-foreground"> / {a?.totalGPs ?? 0}</span></div>
+          <div className="text-2xl font-semibold mt-1.5 tabular-nums number-tick">{a?.rankedGPs ?? 0}<span className="text-sm text-muted-foreground"> / {a?.totalGPs ?? 0}</span></div>
         </CardContent></Card>
-        <Card><CardContent className="p-4">
+        <Card className="metric-hover"><CardContent className="p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Star className="h-3.5 w-3.5" /> Company avg</div>
-          <div className="text-2xl font-semibold mt-1 tabular-nums">{a ? round1(a.avgTotal) : "0.0"}<span className="text-sm text-muted-foreground"> /{MAX_TOTAL_SCORE}</span></div>
+          <div className="text-2xl font-semibold mt-1.5 tabular-nums number-tick">{a ? round1(a.avgTotal) : "0.0"}<span className="text-sm text-muted-foreground"> /{MAX_TOTAL_SCORE}</span></div>
         </CardContent></Card>
-        <Card><CardContent className="p-4">
+        <Card className="metric-hover"><CardContent className="p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1.5"><BarChart3 className="h-3.5 w-3.5" /> Median</div>
-          <div className="text-2xl font-semibold mt-1 tabular-nums">{a ? round1(a.medianTotal) : "0.0"}</div>
+          <div className="text-2xl font-semibold mt-1.5 tabular-nums number-tick">{a ? round1(a.medianTotal) : "0.0"}</div>
         </CardContent></Card>
-        <Card><CardContent className="p-4">
+        <Card className="metric-hover"><CardContent className="p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1.5"><BadgeEuro className="h-3.5 w-3.5" /> Bonus payout</div>
-          <div className="text-2xl font-semibold mt-1 tabular-nums">€{(a?.totalBonusPayout ?? 0).toLocaleString()}</div>
+          <div className="text-2xl font-semibold mt-1.5 tabular-nums number-tick">€{(a?.totalBonusPayout ?? 0).toLocaleString()}</div>
         </CardContent></Card>
-        <Card><CardContent className="p-4">
+        <Card className="metric-hover"><CardContent className="p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Total evals</div>
-          <div className="text-2xl font-semibold mt-1 tabular-nums">{a?.totalEvaluations ?? 0}</div>
+          <div className="text-2xl font-semibold mt-1.5 tabular-nums number-tick">{a?.totalEvaluations ?? 0}</div>
         </CardContent></Card>
       </div>
 
@@ -94,9 +94,9 @@ export default function LeaderboardPage() {
             const P = PODIUM[i];
             const Icon = P.icon;
             return (
-              <Card key={r.gpId} className={`bg-gradient-to-br ${P.bg} ring-1 ${P.ring}`}>
+              <Card key={r.gpId} className={`bg-gradient-to-br ${P.bg} ring-1 ${P.ring} podium-entrance hover:shadow-lg transition-shadow duration-300`}>
                 <CardContent className="p-4 flex items-center gap-3">
-                  <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${P.chip} border`}>
+                  <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${P.chip} border transition-transform duration-300 hover:scale-110`}>
                     <Icon className="h-6 w-6" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -117,7 +117,7 @@ export default function LeaderboardPage() {
       {/* Movers + distribution */}
       {a && (a.topImprovers.length > 0 || a.topDecliners.length > 0) && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <Card><CardContent className="p-4">
+          <Card className="score-glow"><CardContent className="p-4">
             <div className="text-sm font-semibold flex items-center gap-1.5 mb-2 text-emerald-700"><TrendingUp className="h-4 w-4" /> Top improvers</div>
             <div className="space-y-1.5">
               {a.topImprovers.length === 0 ? <p className="text-xs text-muted-foreground">No month-over-month gainers.</p> :
@@ -129,7 +129,7 @@ export default function LeaderboardPage() {
                 ))}
             </div>
           </CardContent></Card>
-          <Card><CardContent className="p-4">
+          <Card className="score-glow"><CardContent className="p-4">
             <div className="text-sm font-semibold flex items-center gap-1.5 mb-2 text-rose-700"><TrendingDown className="h-4 w-4" /> Needs attention</div>
             <div className="space-y-1.5">
               {a.topDecliners.length === 0 ? <p className="text-xs text-muted-foreground">No month-over-month decliners.</p> :
@@ -141,7 +141,7 @@ export default function LeaderboardPage() {
                 ))}
             </div>
           </CardContent></Card>
-          <Card><CardContent className="p-4">
+          <Card className="score-glow"><CardContent className="p-4">
             <div className="text-sm font-semibold flex items-center gap-1.5 mb-2"><BarChart3 className="h-4 w-4 text-primary" /> Distribution</div>
             <div className="space-y-1.5">
               {a.distribution.map(d => {
@@ -183,7 +183,7 @@ export default function LeaderboardPage() {
               </thead>
               <tbody>
                 {rows.map(r => (
-                  <tr key={r.gpId} className={`border-b border-slate-100 hover:bg-slate-50/60 ${r.rank <= 3 ? "bg-amber-50/30" : ""}`}>
+                  <tr key={r.gpId} className={`border-b border-slate-100 table-row-premium ${r.rank <= 3 ? "bg-amber-50/30" : ""}`}>
                     <td className="px-3 py-2 font-semibold tabular-nums">{r.rank}</td>
                     <td className="px-3 py-2 font-medium text-slate-800">{r.gpName}</td>
                     <td className="px-3 py-2 text-right font-semibold tabular-nums">{round1(r.avgTotal)}</td>

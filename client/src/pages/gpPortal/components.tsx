@@ -41,7 +41,7 @@ export function AICoachCard({
     : null;
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow transition-shadow duration-300">
+    <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-lg hover:shadow-amber-50/40 hover:border-amber-200/40 transition-all duration-400 ease-[cubic-bezier(0.22,1,0.36,1)]">
       {/* One restrained corner accent — same family as the hero,
           replaces the previous ambient-glow soup. */}
       <div className="pointer-events-none absolute -top-12 -right-12 h-36 w-36 rounded-full bg-amber-100/40 blur-2xl" aria-hidden />
@@ -221,7 +221,7 @@ export function PerformancePulseHero({
   const showSubScores = appearancePct != null && gamePerfPct != null;
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white">
+    <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm hover:shadow-lg hover:shadow-amber-100/30 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]">
       {/* Single warm corner glow — the only decorative element. */}
       <div className="pointer-events-none absolute -top-32 -right-24 h-72 w-72 rounded-full bg-gradient-to-br from-amber-100/70 to-yellow-50/0 blur-3xl" aria-hidden />
       {/* Hairline accent at top — one line, not five. */}

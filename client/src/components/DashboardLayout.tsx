@@ -276,14 +276,14 @@ function DashboardLayoutContent({
                         isActive={isActive}
                         onClick={() => setLocation(item.path)}
                         tooltip={item.label}
-                        className={`h-11 transition-all duration-300 font-normal rounded-xl ${
+                        className={`h-11 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] font-normal rounded-xl nav-ink-spread ${
                           isActive
                             ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary border border-primary/25 shadow-md shadow-primary/10"
                             : "hover:bg-primary/5 text-muted-foreground hover:text-foreground hover:translate-x-0.5"
                         }`}
                       >
                         {isActive && (
-                          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[65%] bg-gradient-to-b from-primary to-primary/60 rounded-r-full" />
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[65%] bg-gradient-to-b from-primary to-primary/60 rounded-r-full animate-in fade-in-0 slide-in-from-left-1 duration-300" />
                         )}
                         <item.icon
                           className={`h-4 w-4 transition-all duration-200 ${
@@ -393,7 +393,7 @@ function DashboardLayoutContent({
           className="hidden md:flex fixed bottom-3 right-3 z-40 items-center gap-1.5 rounded-full border bg-card/90 backdrop-blur px-2.5 py-1 text-[11px] shadow-sm select-none"
           title={live.connected ? "Live updates connected" : "Live updates reconnecting…"}
         >
-          <span className={`h-2 w-2 rounded-full ${live.connected ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/40"}`} />
+          <span className={`h-2 w-2 rounded-full ${live.connected ? "bg-emerald-500 breathing-glow" : "bg-muted-foreground/40"}`} />
           <span className="text-muted-foreground">{live.connected ? "Live" : "Offline"}</span>
         </div>
       </SidebarInset>

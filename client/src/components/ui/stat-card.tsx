@@ -106,15 +106,15 @@ export function StatCard({ icon: Icon, value, label, color = "violet", suffix, c
       <div className={cn("absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r", colors.accentLine)} />
       
       <div className="flex items-start justify-between mb-3">
-        <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-105", colors.iconBg)}>
-          <Icon className={cn("h-5 w-5", colors.iconText)} />
+        <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:rotate-3", colors.iconBg)}>
+          <Icon className={cn("h-5 w-5 transition-transform duration-300 group-hover:scale-110", colors.iconText)} />
         </div>
       </div>
       <div className="flex items-baseline gap-1">
-        <AnimatedValue value={value} className={cn("text-2xl sm:text-3xl font-bold tracking-tight", colors.valueText)} />
-        {suffix && <span className="text-sm text-muted-foreground font-medium">{suffix}</span>}
+        <AnimatedValue value={value} className={cn("text-2xl sm:text-3xl font-bold tracking-tight transition-colors duration-300", colors.valueText)} />
+        {suffix && <span className="text-sm text-muted-foreground font-medium transition-opacity duration-300 group-hover:opacity-80">{suffix}</span>}
       </div>
-      <p className="text-xs sm:text-sm font-medium text-muted-foreground mt-1.5">{label}</p>
+      <p className="text-xs sm:text-sm font-medium text-muted-foreground mt-1.5 transition-colors duration-300 group-hover:text-foreground/70">{label}</p>
     </div>
   );
 }

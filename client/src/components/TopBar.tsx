@@ -118,13 +118,13 @@ export function TopBar({
   }, [insightsList.length]);
 
   return (
-    <div className="hidden md:flex sticky top-0 z-30 h-14 items-center gap-3 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 px-4">
+    <div className="hidden md:flex sticky top-0 z-30 h-14 items-center gap-3 border-b border-border/80 bg-background/85 backdrop-blur-lg supports-[backdrop-filter]:bg-background/70 px-4">
       <Breadcrumb crumbs={breadcrumb} />
 
       <div className="flex-1" />
 
       {/* Real search input — typing immediately opens the palette with the query pre-filled */}
-      <div className="hidden lg:flex items-center gap-2 h-9 w-72 px-3 rounded-xl border border-border bg-muted/40 hover:bg-muted/70 hover:border-primary/30 focus-within:border-primary/40 focus-within:bg-muted/60 transition-colors text-left text-sm text-muted-foreground">
+      <div className="hidden lg:flex items-center gap-2 h-9 w-72 px-3 rounded-xl border border-border bg-muted/40 hover:bg-muted/70 hover:border-primary/30 focus-within:border-primary/40 focus-within:bg-muted/60 focus-within:shadow-sm focus-within:shadow-primary/5 transition-all duration-200 text-left text-sm text-muted-foreground">
         <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <input
           ref={searchInputRef}

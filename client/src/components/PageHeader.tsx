@@ -17,11 +17,11 @@ interface PageHeaderProps {
  */
 export function PageHeader({ title, subtitle, icon: Icon, actions, children }: PageHeaderProps) {
   return (
-    <header className="flex flex-col gap-4 pb-2">
+    <header className="flex flex-col gap-4 pb-3">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-3.5 content-reveal" style={{ animationDelay: '0.05s' }}>
           {Icon && (
-            <div className="hidden sm:flex h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/15 items-center justify-center text-primary">
+            <div className="hidden sm:flex h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/20 items-center justify-center text-primary shadow-sm shadow-primary/10 transition-transform duration-300 hover:scale-110">
               <Icon className="h-5 w-5" />
             </div>
           )}
@@ -30,12 +30,12 @@ export function PageHeader({ title, subtitle, icon: Icon, actions, children }: P
               {title}
             </h1>
             {subtitle && (
-              <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
+              <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
             )}
           </div>
         </div>
         {actions && (
-          <div className="flex items-center gap-2 flex-wrap">{actions}</div>
+          <div className="flex items-center gap-2.5 flex-wrap content-reveal" style={{ animationDelay: '0.15s' }}>{actions}</div>
         )}
       </div>
       {children}
