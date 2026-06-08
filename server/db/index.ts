@@ -167,4 +167,5 @@ export {
   upsertStudioworksAlias, deleteStudioworksAlias,
   frequencyToMs, shouldRunScheduledSync, nextRunAt,
   getStudioworksSyncSettings, updateStudioworksSyncSettings,
+  studioworksContentHash, getStudioworksImport, recordStudioworksImport,
 } from "./studioworks";

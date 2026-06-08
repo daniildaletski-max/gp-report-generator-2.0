@@ -3372,6 +3372,7 @@ type SwSyncSummary = {
   source: "json" | "html" | "none";
   totalFound: number;
   inserted: number;
+  updated: number;
   skippedExisting: number;
   unmatched: number;
   errors: number;
@@ -3607,7 +3608,7 @@ function StudioworksSyncTab() {
       if (data.status === "failed") {
         toast.error(`Sync failed: ${data.error ?? "no evaluations imported"}`);
       } else {
-        toast.success(`Imported ${data.inserted} new (${data.skippedExisting} already in DB, ${data.unmatched} unmatched)`);
+        toast.success(`Imported ${data.inserted} new${data.updated ? `, ${data.updated} updated` : ""} (${data.skippedExisting} unchanged, ${data.unmatched} unmatched)`);
       }
       // Refresh anything that depends on evaluations
       await Promise.all([

@@ -5,6 +5,7 @@ import {
   frequencyToMs,
   shouldRunScheduledSync,
   nextRunAt,
+  studioworksContentHash,
 } from "./studioworks";
 
 describe("normalizeStudioworksName", () => {
@@ -100,5 +101,23 @@ describe("nextRunAt", () => {
     const last = new Date("2026-06-08T00:00:00Z");
     expect(nextRunAt({ autoSyncEnabled: 1, frequency: "12h" }, last)?.toISOString())
       .toBe(new Date("2026-06-08T12:00:00Z").toISOString());
+  });
+});
+
+describe("studioworksContentHash", () => {
+  const base = { d: "2026-04-30", g: "Baccarat", t: 20, hair: 3, oa: "great" };
+
+  it("is stable for identical content", () => {
+    expect(studioworksContentHash(base)).toBe(studioworksContentHash({ ...base }));
+  });
+  it("is independent of key order", () => {
+    expect(studioworksContentHash({ a: 1, b: 2 })).toBe(studioworksContentHash({ b: 2, a: 1 }));
+  });
+  it("changes when any value changes", () => {
+    expect(studioworksContentHash(base)).not.toBe(studioworksContentHash({ ...base, t: 21 }));
+    expect(studioworksContentHash(base)).not.toBe(studioworksContentHash({ ...base, oa: "ok" }));
+  });
+  it("treats null and empty-string as equivalent (avoids spurious updates)", () => {
+    expect(studioworksContentHash({ x: null })).toBe(studioworksContentHash({ x: "" }));
   });
 });

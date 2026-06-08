@@ -53,6 +53,7 @@ export interface StudioworksSyncSummary {
   source: "json" | "html" | "none";
   totalFound: number;
   inserted: number;
+  updated: number;
   skippedExisting: number;
   unmatched: number;
   errors: number;
@@ -179,7 +180,70 @@ async function importOne(
     }
   }
 
-  // Idempotency
+  // The evaluation's mutable content — used for both writes and the
+  // change-detection hash. Falls back to schema defaults when studioworks
+  // didn't supply a particular rating.
+  const r = raw.ratings;
+  const evalFields = {
+    evaluatorName: raw.evaluatorName ?? null,
+    evaluationDate: date,
+    game: raw.game ?? null,
+    totalScore: raw.totalScore ?? null,
+    hairScore: r.hair?.score ?? null,
+    hairMaxScore: r.hair?.maxScore ?? 3,
+    hairComment: r.hair?.comment ?? null,
+    makeupScore: r.makeup?.score ?? null,
+    makeupMaxScore: r.makeup?.maxScore ?? 3,
+    makeupComment: r.makeup?.comment ?? null,
+    outfitScore: r.outfit?.score ?? null,
+    outfitMaxScore: r.outfit?.maxScore ?? 3,
+    outfitComment: r.outfit?.comment ?? null,
+    postureScore: r.posture?.score ?? null,
+    postureMaxScore: r.posture?.maxScore ?? 3,
+    postureComment: r.posture?.comment ?? null,
+    dealingStyleScore: r.dealingStyle?.score ?? null,
+    dealingStyleMaxScore: r.dealingStyle?.maxScore ?? 5,
+    dealingStyleComment: r.dealingStyle?.comment ?? null,
+    gamePerformanceScore: r.gamePerformance?.score ?? null,
+    gamePerformanceMaxScore: r.gamePerformance?.maxScore ?? 5,
+    gamePerformanceComment: r.gamePerformance?.comment ?? null,
+  };
+  const hash = db.studioworksContentHash({
+    d: isoDay(date), g: raw.game ?? "", e: raw.evaluatorName ?? "", t: raw.totalScore ?? "",
+    hair: r.hair?.score ?? "", makeup: r.makeup?.score ?? "", outfit: r.outfit?.score ?? "",
+    posture: r.posture?.score ?? "", dealing: r.dealingStyle?.score ?? "", perf: r.gamePerformance?.score ?? "",
+    hc: r.hair?.comment ?? "", mc: r.makeup?.comment ?? "", oc: r.outfit?.comment ?? "",
+    pc: r.posture?.comment ?? "", dc: r.dealingStyle?.comment ?? "", gc: r.gamePerformance?.comment ?? "",
+    oa: raw.overallComment ?? "",
+  });
+
+  // 1) Stable external-id idempotency + freshness. If we've imported this
+  //    externalId before, an unchanged hash means skip; a changed hash
+  //    means Studioworks edited the source → update in place (which records
+  //    an audit revision via updateEvaluation).
+  const mapping = await db.getStudioworksImport(raw.externalId);
+  if (mapping) {
+    if (mapping.contentHash === hash) {
+      return { ...baseDetail, matched: true, gpId, gpName, viaAlias, skippedExisting: true };
+    }
+    try {
+      const updatedRow = await db.updateEvaluation(mapping.evaluationId, evalFields, {
+        editedById: triggeredByAdminUserId,
+        reason: "Studioworks sync: source evaluation changed",
+      });
+      if (updatedRow) {
+        await db.recordStudioworksImport(raw.externalId, mapping.evaluationId, hash);
+        return { ...baseDetail, matched: true, gpId, gpName, viaAlias, updated: true };
+      }
+      // Mapped evaluation no longer exists — fall through and re-insert.
+    } catch (e) {
+      return { ...baseDetail, matched: true, gpId, gpName, viaAlias, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  // 2) No external-id mapping yet. Fall back to the (gp, day, evaluator,
+  //    game) heuristic to catch rows imported before external-id tracking,
+  //    and backfill the mapping so future syncs use the fast path.
   const existing = await findExistingEvaluation({
     gpId,
     date,
@@ -187,47 +251,16 @@ async function importOne(
     game: raw.game,
   });
   if (existing) {
-    return {
-      ...baseDetail,
-      matched: true,
-      gpId,
-      gpName,
-      viaAlias,
-      skippedExisting: true,
-    };
+    await db.recordStudioworksImport(raw.externalId, existing.id, hash);
+    return { ...baseDetail, matched: true, gpId, gpName, viaAlias, skippedExisting: true };
   }
 
-  // Build the evaluation row. Fields fall back to their schema defaults
-  // when studioworks didn't supply a particular rating (e.g. older
-  // evaluations missing one of the criteria).
+  // 3) Genuinely new — insert it and record the external-id mapping.
   try {
-    const r = raw.ratings;
-    await db.createEvaluation({
+    const created = await db.createEvaluation({
       gamePresenterId: gpId,
-      evaluatorName: raw.evaluatorName ?? null,
-      evaluationDate: date,
-      game: raw.game ?? null,
-      totalScore: raw.totalScore ?? null,
-      hairScore: r.hair?.score ?? null,
-      hairMaxScore: r.hair?.maxScore ?? 3,
-      hairComment: r.hair?.comment ?? null,
-      makeupScore: r.makeup?.score ?? null,
-      makeupMaxScore: r.makeup?.maxScore ?? 3,
-      makeupComment: r.makeup?.comment ?? null,
-      outfitScore: r.outfit?.score ?? null,
-      outfitMaxScore: r.outfit?.maxScore ?? 3,
-      outfitComment: r.outfit?.comment ?? null,
-      postureScore: r.posture?.score ?? null,
-      postureMaxScore: r.posture?.maxScore ?? 3,
-      postureComment: r.posture?.comment ?? null,
-      dealingStyleScore: r.dealingStyle?.score ?? null,
-      dealingStyleMaxScore: r.dealingStyle?.maxScore ?? 5,
-      dealingStyleComment: r.dealingStyle?.comment ?? null,
-      gamePerformanceScore: r.gamePerformance?.score ?? null,
-      gamePerformanceMaxScore: r.gamePerformance?.maxScore ?? 5,
-      gamePerformanceComment: r.gamePerformance?.comment ?? null,
-      // rawExtractedData stores the externalId so we can do future
-      // upgrades (proper external-id idempotency) without a migration.
+      ...evalFields,
+      // rawExtractedData keeps the externalId for traceability too.
       rawExtractedData: {
         source: "studioworks",
         externalId: raw.externalId,
@@ -235,15 +268,13 @@ async function importOne(
         scrapedAt: new Date().toISOString(),
         triggeredByAdminUserId: triggeredByAdminUserId,
       } as any,
-      // IMPORTANT: ownership goes to the GP's owner (the FM whose team
-      // this GP belongs to), NOT the admin who triggered the sync.
-      // Otherwise user-scoped reads (getEvaluationsWithGPByUser etc.)
-      // would hide the eval from the FM who actually needs it.
-      // Fallback to the admin only when the GP has no owner yet
-      // (orphan GPs created via fuzzy-create on upload paths).
+      // Ownership goes to the GP's owner (the FM whose team this GP belongs
+      // to), NOT the admin who triggered the sync, so user-scoped reads
+      // still see it. Fall back to the admin for orphan GPs.
       uploadedById: gpOwnerId ?? triggeredByAdminUserId,
       userId: gpOwnerId ?? triggeredByAdminUserId,
     });
+    await db.recordStudioworksImport(raw.externalId, created.id, hash);
     return { ...baseDetail, matched: true, gpId, gpName, viaAlias };
   } catch (e) {
     return {
@@ -1015,6 +1046,7 @@ export const studioworksSyncRouter = router({
         source: result.source,
         totalFound: 0,
         inserted: 0,
+        updated: 0,
         skippedExisting: 0,
         unmatched: 0,
         errors: 0,
@@ -1041,21 +1073,16 @@ export const studioworksSyncRouter = router({
       }
     }
 
-    const inserted = details.filter(d => d.matched && !d.skippedExisting && !d.error).length;
-    const skippedExisting = details.filter(d => d.skippedExisting).length;
-    const unmatched = details.filter(d => !d.matched && !d.error?.includes("date")).length;
-    const errors = details.filter(d => d.error).length;
-    const status: StudioworksSyncSummary["status"] =
-      result.evaluations.length === 0 ? "failed" :
-        unmatched > 0 || errors > 0 ? "partial" : "success";
+    const { inserted, updated, skipped: skippedExisting, unmatched, errors, status } =
+      db.summarizeImportDetails(details, result.evaluations.length);
 
-    log.info(`Studioworks sync: source=${result.source} found=${result.evaluations.length} inserted=${inserted} skipped=${skippedExisting} unmatched=${unmatched} errors=${errors}`);
+    log.info(`Studioworks sync: source=${result.source} found=${result.evaluations.length} inserted=${inserted} updated=${updated} skipped=${skippedExisting} unmatched=${unmatched} errors=${errors}`);
 
-    if (inserted > 0) publish({ type: "evaluations.changed", source: "studioworks", count: inserted });
+    if (inserted > 0 || updated > 0) publish({ type: "evaluations.changed", source: "studioworks", count: inserted + updated });
 
     await db.recordStudioworksSyncLog({
       triggeredById: ctx.user.id, trigger: "manual", dataSource: result.source,
-      status, totalFound: result.evaluations.length, inserted, updated: 0,
+      status, totalFound: result.evaluations.length, inserted, updated,
       skipped: skippedExisting, unmatched, errors, durationMs: Date.now() - startedAt,
     });
 
@@ -1064,6 +1091,7 @@ export const studioworksSyncRouter = router({
       source: result.source,
       totalFound: result.evaluations.length,
       inserted,
+      updated,
       skippedExisting,
       unmatched,
       errors,
@@ -1148,21 +1176,16 @@ export const studioworksSyncRouter = router({
         }
       }
 
-      const inserted = details.filter(d => d.matched && !d.skippedExisting && !d.error).length;
-      const skippedExisting = details.filter(d => d.skippedExisting).length;
-      const unmatched = details.filter(d => !d.matched && !d.error?.includes("date")).length;
-      const errors = details.filter(d => d.error).length;
-      const status: StudioworksSyncSummary["status"] =
-        input.evaluations.length === 0 ? "failed" :
-          unmatched > 0 || errors > 0 ? "partial" : "success";
+      const { inserted, updated, skipped: skippedExisting, unmatched, errors, status } =
+        db.summarizeImportDetails(details, input.evaluations.length);
 
-      log.info(`Studioworks import-batch (user=${ctx.user.id}): submitted=${input.evaluations.length} inserted=${inserted} skipped=${skippedExisting} unmatched=${unmatched} errors=${errors}`);
+      log.info(`Studioworks import-batch (user=${ctx.user.id}): submitted=${input.evaluations.length} inserted=${inserted} updated=${updated} skipped=${skippedExisting} unmatched=${unmatched} errors=${errors}`);
 
-      if (inserted > 0) publish({ type: "evaluations.changed", source: "studioworks", userId: ctx.user.id, count: inserted });
+      if (inserted > 0 || updated > 0) publish({ type: "evaluations.changed", source: "studioworks", userId: ctx.user.id, count: inserted + updated });
 
       await db.recordStudioworksSyncLog({
         triggeredById: ctx.user.id, trigger: "import", dataSource: "browser",
-        status, totalFound: input.evaluations.length, inserted, updated: 0,
+        status, totalFound: input.evaluations.length, inserted, updated,
         skipped: skippedExisting, unmatched, errors, durationMs: Date.now() - startedAt,
       });
 
@@ -1171,6 +1194,7 @@ export const studioworksSyncRouter = router({
         source: "json",
         totalFound: input.evaluations.length,
         inserted,
+        updated,
         skippedExisting,
         unmatched,
         errors,

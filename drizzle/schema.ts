@@ -611,3 +611,24 @@ export const studioworksSyncSettings = mysqlTable("studioworks_sync_settings", {
 export type StudioworksSyncSettings = typeof studioworksSyncSettings.$inferSelect;
 export type InsertStudioworksSyncSettings = typeof studioworksSyncSettings.$inferInsert;
 
+/**
+ * Studioworks imports — a stable map from a Studioworks evaluation's
+ * externalId to the local evaluation row it created, plus a content hash.
+ * This is what makes the sync idempotent AND able to detect edits: on
+ * re-sync, a known externalId with a changed hash means Studioworks edited
+ * the source, so we update the local row in place (and record an audit
+ * revision) instead of skipping it.
+ */
+export const studioworksImports = mysqlTable("studioworks_imports", {
+  id: int("id").autoincrement().primaryKey(),
+  externalId: varchar("externalId", { length: 255 }).notNull(),
+  evaluationId: int("evaluationId").notNull(),
+  /** Hash of the meaningful content — changes when the source evaluation does. */
+  contentHash: varchar("contentHash", { length: 32 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type StudioworksImport = typeof studioworksImports.$inferSelect;
+export type InsertStudioworksImport = typeof studioworksImports.$inferInsert;
+

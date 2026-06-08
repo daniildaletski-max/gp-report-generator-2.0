@@ -13,6 +13,7 @@ import {
   studioworksSyncLogs,
   studioworksNameAliases,
   studioworksSyncSettings,
+  studioworksImports,
   type InsertStudioworksSyncLog,
   type StudioworksSyncLog,
   type StudioworksNameAlias,
@@ -71,7 +72,83 @@ export async function ensureStudioworksSyncSchema(): Promise<void> {
   );
   // Seed the single control row so the UI/cron always have something to read.
   await db.execute(sql.raw("INSERT IGNORE INTO `studioworks_sync_settings` (`id`) VALUES (1)"));
+  await db.execute(
+    sql.raw(`CREATE TABLE IF NOT EXISTS \`studioworks_imports\` (
+      \`id\` int AUTO_INCREMENT PRIMARY KEY,
+      \`externalId\` varchar(255) NOT NULL,
+      \`evaluationId\` int NOT NULL,
+      \`contentHash\` varchar(32) NOT NULL,
+      \`createdAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY \`uq_sw_import_extid\` (\`externalId\`)
+    )`),
+  );
   log.info("Studioworks sync tables ensured");
+}
+
+// ============================================
+// Content hash + import mapping (idempotency + change detection)
+// ============================================
+
+/**
+ * Stable FNV-1a hash of an evaluation's meaningful content. Key order is
+ * normalized so the hash only changes when a value does. PURE — unit-tested.
+ */
+export function studioworksContentHash(input: Record<string, unknown>): string {
+  const s = Object.keys(input)
+    .sort()
+    .map(k => `${k}=${input[k] ?? ""}`)
+    .join("|");
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16);
+}
+
+export async function getStudioworksImport(
+  externalId: string,
+): Promise<{ evaluationId: number; contentHash: string } | null> {
+  try {
+    const db = await getDb();
+    if (!db) return null;
+    const rows = await db
+      .select()
+      .from(studioworksImports)
+      .where(eq(studioworksImports.externalId, externalId))
+      .limit(1);
+    return rows[0] ? { evaluationId: rows[0].evaluationId, contentHash: rows[0].contentHash } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Upsert the externalId → evaluation + hash mapping. Best-effort. */
+export async function recordStudioworksImport(
+  externalId: string,
+  evaluationId: number,
+  contentHash: string,
+): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const existing = await db
+      .select()
+      .from(studioworksImports)
+      .where(eq(studioworksImports.externalId, externalId))
+      .limit(1);
+    if (existing[0]) {
+      await db
+        .update(studioworksImports)
+        .set({ evaluationId, contentHash })
+        .where(eq(studioworksImports.id, existing[0].id));
+    } else {
+      await db.insert(studioworksImports).values({ externalId, evaluationId, contentHash });
+    }
+  } catch (err) {
+    log.warn(`Could not record studioworks import mapping: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 // ============================================
