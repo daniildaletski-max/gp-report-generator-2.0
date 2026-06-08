@@ -26,6 +26,7 @@ const NAV_ITEMS = [
   { label: "Upload screenshots", path: "/upload", icon: Upload, hint: "AI extract" },
   { label: "Bulk AI upload", path: "/upload?mode=bulk", icon: ScanLine, hint: "Batch extract" },
   { label: "Evaluations", path: "/evaluations", icon: FileCheck, hint: "List + bulk" },
+  { label: "Analytics", path: "/analytics", icon: BarChart3, hint: "Deep-dive" },
   { label: "Reports", path: "/reports", icon: FileSpreadsheet, hint: "Monthly Excel" },
   { label: "Attendance", path: "/attendance", icon: CalendarCheck, hint: "Sick / late / extra" },
   { label: "Bonus", path: "/bonus", icon: BadgeEuro, hint: "Eligibility & payout" },

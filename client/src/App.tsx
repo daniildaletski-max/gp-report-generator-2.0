@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, SlidersHorizontal, Sparkles, BadgeEuro, Trophy, Radar } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, SlidersHorizontal, Sparkles, BadgeEuro, Trophy, Radar, LineChart } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -29,6 +29,7 @@ const Assistant = lazy(() => import("./pages/Assistant"));
 const Bonus = lazy(() => import("./pages/Bonus"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const CommandCenter = lazy(() => import("./pages/CommandCenter"));
+const Analytics = lazy(() => import("./pages/Analytics"));
 
 function PageLoader() {
   return (
@@ -57,6 +58,7 @@ const baseSidebarItems = [
   { href: "/workspace", label: "Workspace", icon: Zap, section: "Evaluate" },
   { href: "/upload", label: "Upload", icon: UploadIcon, section: "Evaluate" },
   { href: "/evaluations", label: "Evaluations", icon: FileCheck, section: "Evaluate" },
+  { href: "/analytics", label: "Analytics", icon: LineChart, section: "Insights" },
   { href: "/reports", label: "Reports", icon: FileSpreadsheet, section: "Insights" },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck, section: "Insights" },
   { href: "/bonus", label: "Bonus", icon: BadgeEuro, section: "Insights" },
@@ -122,6 +124,11 @@ function DashboardRoutes() {
             <Route path="/rubric">
               <RouteErrorBoundary fallbackTitle="Rubric manager failed to load">
                 <Rubric />
+              </RouteErrorBoundary>
+            </Route>
+            <Route path="/analytics">
+              <RouteErrorBoundary fallbackTitle="Analytics failed to load">
+                <Analytics />
               </RouteErrorBoundary>
             </Route>
             <Route path="/reports">
@@ -202,6 +209,7 @@ function Router() {
       <Route path="/evaluations" component={DashboardRoutes} />
       <Route path="/assistant" component={DashboardRoutes} />
       <Route path="/rubric" component={DashboardRoutes} />
+      <Route path="/analytics" component={DashboardRoutes} />
       <Route path="/reports" component={DashboardRoutes} />
       <Route path="/admin" component={DashboardRoutes} />
       <Route path="/attendance" component={DashboardRoutes} />
