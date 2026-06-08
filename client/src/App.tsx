@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, SlidersHorizontal, Sparkles, ScanLine, BadgeEuro, Trophy, Radar } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, SlidersHorizontal, Sparkles, BadgeEuro, Trophy, Radar } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -26,7 +26,6 @@ const GPPortal = lazy(() => import("./pages/GPPortal"));
 const InvitePage = lazy(() => import("./pages/InvitePage"));
 const Rubric = lazy(() => import("./pages/Rubric"));
 const Assistant = lazy(() => import("./pages/Assistant"));
-const UploadBulk = lazy(() => import("./pages/UploadBulk"));
 const Bonus = lazy(() => import("./pages/Bonus"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const CommandCenter = lazy(() => import("./pages/CommandCenter"));
@@ -49,15 +48,15 @@ function PageLoader() {
 // nav reads as a short hierarchy instead of one long flat list. `section`
 // drives the group headers rendered in DashboardLayout. Order matters: the
 // mobile bottom nav takes the first five (Command, Dashboard, Workspace,
-// Upload, Evaluations), so heavier/secondary surfaces (Bulk AI, Assistant)
-// are kept past that cutoff and live only in the desktop sidebar.
+// Upload, Evaluations), so the secondary Assistant surface is kept past
+// that cutoff and lives only in the desktop sidebar. (Upload now hosts the
+// Bulk AI flow as a mode toggle, so it no longer needs its own nav item.)
 const baseSidebarItems = [
   { href: "/command", label: "Command", icon: Radar, section: "Overview" },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, section: "Overview" },
   { href: "/workspace", label: "Workspace", icon: Zap, section: "Evaluate" },
   { href: "/upload", label: "Upload", icon: UploadIcon, section: "Evaluate" },
   { href: "/evaluations", label: "Evaluations", icon: FileCheck, section: "Evaluate" },
-  { href: "/upload-bulk", label: "Bulk AI", icon: ScanLine, section: "Evaluate" },
   { href: "/reports", label: "Reports", icon: FileSpreadsheet, section: "Insights" },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck, section: "Insights" },
   { href: "/bonus", label: "Bonus", icon: BadgeEuro, section: "Insights" },
@@ -108,11 +107,6 @@ function DashboardRoutes() {
             <Route path="/upload">
               <RouteErrorBoundary fallbackTitle="Upload page failed to load">
                 <Upload />
-              </RouteErrorBoundary>
-            </Route>
-            <Route path="/upload-bulk">
-              <RouteErrorBoundary fallbackTitle="Bulk AI upload failed to load">
-                <UploadBulk />
               </RouteErrorBoundary>
             </Route>
             <Route path="/evaluations">
@@ -205,7 +199,6 @@ function Router() {
       <Route path="/command" component={DashboardRoutes} />
       <Route path="/dashboard" component={DashboardRoutes} />
       <Route path="/upload" component={DashboardRoutes} />
-      <Route path="/upload-bulk" component={DashboardRoutes} />
       <Route path="/evaluations" component={DashboardRoutes} />
       <Route path="/assistant" component={DashboardRoutes} />
       <Route path="/rubric" component={DashboardRoutes} />
