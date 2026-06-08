@@ -545,3 +545,90 @@ export const personaNameAliases = mysqlTable("persona_name_aliases", {
 export type PersonaNameAlias = typeof personaNameAliases.$inferSelect;
 export type InsertPersonaNameAlias = typeof personaNameAliases.$inferInsert;
 
+/**
+ * Studioworks sync logs — one row per sync/import run (server scrape,
+ * browser import-batch, or scheduled cron). Gives admins an auditable
+ * history of what synced, when, from which extraction path, and what
+ * failed — the Studioworks counterpart to the Persona sync log. Company-
+ * wide (one shared database), so no team scoping.
+ */
+export const studioworksSyncLogs = mysqlTable("studioworks_sync_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  triggeredById: int("triggeredById"), // null when run by the cron
+  trigger: mysqlEnum("trigger", ["manual", "import", "scheduled"]).default("manual").notNull(),
+  dataSource: mysqlEnum("dataSource", ["json", "html", "excel", "browser", "none"]).default("none").notNull(),
+  status: mysqlEnum("status", ["success", "partial", "failed"]).notNull(),
+  totalFound: int("totalFound").default(0).notNull(),
+  inserted: int("inserted").default(0).notNull(),
+  updated: int("updated").default(0).notNull(),
+  skipped: int("skipped").default(0).notNull(),
+  unmatched: int("unmatched").default(0).notNull(),
+  errors: int("errors").default(0).notNull(),
+  durationMs: int("durationMs"),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type StudioworksSyncLog = typeof studioworksSyncLogs.$inferSelect;
+export type InsertStudioworksSyncLog = typeof studioworksSyncLogs.$inferInsert;
+
+/**
+ * Studioworks name aliases — persistent map from a Studioworks presenter
+ * name to a GP id. When sync sees a name here, the alias wins and the
+ * fuzzy matcher is skipped, so the same unmatched names don't fail every
+ * run. Keyed by a normalized (lowercased, whitespace-collapsed) name;
+ * company-wide.
+ */
+export const studioworksNameAliases = mysqlTable("studioworks_name_aliases", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Normalized name — the lookup key (lowercased, collapsed whitespace). */
+  normalizedName: varchar("normalizedName", { length: 255 }).notNull(),
+  /** Original name as seen, kept for display. */
+  displayName: varchar("displayName", { length: 255 }).notNull(),
+  gamePresenterId: int("gamePresenterId").notNull(),
+  createdById: int("createdById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type StudioworksNameAlias = typeof studioworksNameAliases.$inferSelect;
+export type InsertStudioworksNameAlias = typeof studioworksNameAliases.$inferInsert;
+
+/**
+ * Studioworks sync settings — a single-row (id = 1) control record so
+ * admins can drive the auto-sync from the UI: turn it on/off and set how
+ * often it runs, without redeploying to change STUDIOWORKS_SYNC_CRON. The
+ * cron still ticks on its env cadence but gates each run on these values.
+ */
+export const studioworksSyncSettings = mysqlTable("studioworks_sync_settings", {
+  id: int("id").primaryKey(), // always 1
+  autoSyncEnabled: int("autoSyncEnabled").default(1).notNull(),
+  frequency: mysqlEnum("frequency", ["6h", "12h", "daily"]).default("6h").notNull(),
+  updatedById: int("updatedById"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type StudioworksSyncSettings = typeof studioworksSyncSettings.$inferSelect;
+export type InsertStudioworksSyncSettings = typeof studioworksSyncSettings.$inferInsert;
+
+/**
+ * Studioworks imports — a stable map from a Studioworks evaluation's
+ * externalId to the local evaluation row it created, plus a content hash.
+ * This is what makes the sync idempotent AND able to detect edits: on
+ * re-sync, a known externalId with a changed hash means Studioworks edited
+ * the source, so we update the local row in place (and record an audit
+ * revision) instead of skipping it.
+ */
+export const studioworksImports = mysqlTable("studioworks_imports", {
+  id: int("id").autoincrement().primaryKey(),
+  externalId: varchar("externalId", { length: 255 }).notNull(),
+  evaluationId: int("evaluationId").notNull(),
+  /** Hash of the meaningful content — changes when the source evaluation does. */
+  contentHash: varchar("contentHash", { length: 32 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type StudioworksImport = typeof studioworksImports.$inferSelect;
+export type InsertStudioworksImport = typeof studioworksImports.$inferInsert;
+
