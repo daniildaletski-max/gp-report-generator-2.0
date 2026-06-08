@@ -165,6 +165,72 @@ export default function GPPortal() {
   }, [data]);
 
   /**
+   * Personal records — all-time highs across the GP's whole history.
+   *
+   * Surfaces the GP's best self in one card so the Overview reads as a
+   * trophy shelf, not just a current-month dashboard. Every metric is
+   * computed client-side from data already on the page.
+   */
+  const personalRecords = useMemo(() => {
+    if (!data) return null;
+    const evs = (data.evaluations as any[]) ?? [];
+    if (evs.length === 0) return null;
+
+    // Highest single evaluation total, with its date.
+    let bestScore = 0;
+    let bestScoreDate: string | null = null;
+    let bestAppearance = 0;
+    let bestGamePerf = 0;
+    let totalPerfects = 0;
+    for (const e of evs) {
+      const total = Number(e.totalScore || 0);
+      if (total > bestScore) {
+        bestScore = total;
+        bestScoreDate = e.evaluationDate ?? null;
+      }
+      if (total >= MAX_TOTAL_SCORE) totalPerfects++;
+      const app = (Number(e.hairScore) || 0) + (Number(e.makeupScore) || 0) + (Number(e.outfitScore) || 0) + (Number(e.postureScore) || 0);
+      if (app > bestAppearance) bestAppearance = app;
+      const perf = Number(e.gamePerformanceTotalScore ?? e.gamePerformanceScore ?? 0);
+      if (perf > bestGamePerf) bestGamePerf = perf;
+    }
+
+    // Longest perfect-score streak ever (chronological order).
+    const chrono = [...evs].sort((a: any, b: any) =>
+      new Date(a.evaluationDate || 0).getTime() - new Date(b.evaluationDate || 0).getTime(),
+    );
+    let longestStreak = 0;
+    let run = 0;
+    for (const e of chrono) {
+      if (Number(e.totalScore || 0) >= MAX_TOTAL_SCORE) {
+        run += 1;
+        if (run > longestStreak) longestStreak = run;
+      } else {
+        run = 0;
+      }
+    }
+
+    // Best monthly average (only count months that actually had data).
+    const hist = ((data.monthlyHistory as any[]) ?? []).filter(m => Number(m.evalCount || 0) > 0);
+    let bestMonth: { label: string; avg: number } | null = null;
+    for (const m of hist) {
+      const avg = Number(m.avgTotal || 0);
+      if (!bestMonth || avg > bestMonth.avg) bestMonth = { label: m.label, avg };
+    }
+
+    return {
+      totalEvals: evs.length,
+      bestScore,
+      bestScoreDate,
+      bestAppearance,
+      bestGamePerf,
+      totalPerfects,
+      longestStreak,
+      bestMonth,
+    };
+  }, [data]);
+
+  /**
    * Focus areas: which evaluation categories have the lowest average and
    * could move the most. Returns the bottom-2 with one concrete tip each.
    */
@@ -1246,6 +1312,74 @@ export default function GPPortal() {
                 </section>
               );
             })()}
+
+            {/* Personal Records — all-time highs. The trophy-shelf
+                framing turns the page from "current month dashboard"
+                into "this is who you are at your best", which is what
+                makes the portal feel like a personal space. */}
+            {personalRecords && (
+              <section>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2.5 text-slate-900">
+                    <span className="inline-block h-6 w-1 rounded-full bg-gradient-to-b from-violet-400 to-fuchsia-500" aria-hidden />
+                    <Medal className="h-5 w-5 text-violet-600" />
+                    Personal Records
+                  </h2>
+                  <span className="text-[11px] text-muted-foreground">All time</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  <RecordTile
+                    icon={Gem}
+                    label="Best single score"
+                    value={`${personalRecords.bestScore}/${MAX_TOTAL_SCORE}`}
+                    sublabel={personalRecords.bestScoreDate ? format(new Date(personalRecords.bestScoreDate), "dd MMM yyyy") : null}
+                    tone="violet"
+                  />
+                  <RecordTile
+                    icon={Crown}
+                    label="Best month"
+                    value={personalRecords.bestMonth ? personalRecords.bestMonth.avg.toFixed(1) : "—"}
+                    sublabel={personalRecords.bestMonth?.label ?? "Not enough data yet"}
+                    tone="amber"
+                  />
+                  <RecordTile
+                    icon={Sparkles}
+                    label="Best appearance"
+                    value={`${personalRecords.bestAppearance}/${MAX_APPEARANCE_SCORE}`}
+                    sublabel="Hair + Makeup + Outfit + Posture"
+                    tone="pink"
+                  />
+                  <RecordTile
+                    icon={Gamepad2}
+                    label="Best game perf"
+                    value={`${personalRecords.bestGamePerf}/${MAX_GAME_PERFORMANCE_SCORE}`}
+                    sublabel="Dealing + Game performance"
+                    tone="sky"
+                  />
+                  <RecordTile
+                    icon={Flame}
+                    label="Longest streak"
+                    value={`${personalRecords.longestStreak}`}
+                    sublabel={personalRecords.longestStreak === 1 ? "perfect-score eval" : "perfect-score evals in a row"}
+                    tone="orange"
+                  />
+                  <RecordTile
+                    icon={Trophy}
+                    label="Perfect scores"
+                    value={`${personalRecords.totalPerfects}`}
+                    sublabel={`${MAX_TOTAL_SCORE}/${MAX_TOTAL_SCORE} earned`}
+                    tone="emerald"
+                  />
+                  <RecordTile
+                    icon={BarChart3}
+                    label="Total evaluations"
+                    value={`${personalRecords.totalEvals}`}
+                    sublabel="career so far"
+                    tone="indigo"
+                  />
+                </div>
+              </section>
+            )}
 
             {/* Achievements moved into Overview */}
             <section>
@@ -2439,5 +2573,52 @@ function PeerBenchmarkRow({
         })}
       </div>
     </section>
+  );
+}
+
+// ============================================
+// RecordTile — single cell in the Personal Records grid. One value, one
+// short context line, a tone-coloured stripe + icon container. Tiny on
+// purpose so the grid scans like a trophy shelf, not a stat dump.
+// ============================================
+function RecordTile({
+  icon: Icon, label, value, sublabel, tone,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  sublabel: string | null;
+  tone: "violet" | "amber" | "pink" | "sky" | "orange" | "emerald" | "indigo";
+}) {
+  const accent =
+    tone === "violet" ? "from-violet-300 to-violet-400" :
+    tone === "amber" ? "from-amber-300 to-amber-400" :
+    tone === "pink" ? "from-pink-300 to-pink-400" :
+    tone === "sky" ? "from-sky-300 to-sky-400" :
+    tone === "orange" ? "from-orange-300 to-orange-400" :
+    tone === "emerald" ? "from-emerald-300 to-emerald-400" :
+    "from-indigo-300 to-indigo-400";
+  const iconBg =
+    tone === "violet" ? "bg-violet-100 text-violet-700 border-violet-200" :
+    tone === "amber" ? "bg-amber-100 text-amber-700 border-amber-200" :
+    tone === "pink" ? "bg-pink-100 text-pink-700 border-pink-200" :
+    tone === "sky" ? "bg-sky-100 text-sky-700 border-sky-200" :
+    tone === "orange" ? "bg-orange-100 text-orange-700 border-orange-200" :
+    tone === "emerald" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+    "bg-indigo-100 text-indigo-700 border-indigo-200";
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white px-3.5 py-3 transition-all hover:shadow-sm">
+      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${accent}`} aria-hidden />
+      <div className="flex items-start gap-2.5">
+        <span className={`h-9 w-9 shrink-0 rounded-lg border flex items-center justify-center ${iconBg}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold truncate">{label}</p>
+          <p className="text-xl font-bold tabular-nums text-slate-900 leading-tight mt-0.5">{value}</p>
+          {sublabel && <p className="text-[10px] text-slate-400 mt-0.5 truncate">{sublabel}</p>}
+        </div>
+      </div>
+    </div>
   );
 }
