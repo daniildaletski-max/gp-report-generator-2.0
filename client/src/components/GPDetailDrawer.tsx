@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useIsMobile } from "@/hooks/useMobile";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -6,12 +7,14 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
-  User, Target, AlertTriangle, ThumbsUp, ThumbsDown, FileCheck,
-  Calendar, TrendingUp,
+  User, AlertTriangle, ThumbsUp, ThumbsDown, FileCheck,
+  Calendar, TrendingUp, Sparkles, Loader2, Zap, ArrowDown, ArrowUp,
 } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import { MAX_TOTAL_SCORE, MAX_APPEARANCE_SCORE, MAX_GAME_PERFORMANCE_SCORE } from "@shared/const";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../../server/routers";
@@ -75,6 +78,8 @@ function ProfileSkeleton() {
 
 function ProfileContent({ data }: { data: Profile }) {
   const { gp, currentMonth, trend, recentEvaluations, recentErrors, recentAttitude } = data;
+  const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
 
   const trendChartData = useMemo(() => trend.map(m => ({
     month: m.label,
@@ -83,7 +88,45 @@ function ProfileContent({ data }: { data: Profile }) {
     Performance: Number(m.avgPerformance) || 0,
   })), [trend]);
 
+  // Previous month with actual data — used for MoM deltas on the
+  // headline cards so the FM sees direction, not just absolute numbers.
+  const prevMonth = useMemo(() => {
+    for (let i = trend.length - 2; i >= 0; i--) {
+      if (Number(trend[i].evalCount || 0) > 0 || (trend[i].mistakes ?? 0) > 0) return trend[i];
+    }
+    return null;
+  }, [trend]);
+
+  // Best total score across the recent slice, and the best monthly avg
+  // across the whole trend window — a compact "personal best" reminder.
+  const bestSoFar = useMemo(() => {
+    const bestEval = recentEvaluations.reduce((max, e) => Math.max(max, e.totalScore ?? 0), 0);
+    const bestMonth = trend.filter(m => Number(m.evalCount || 0) > 0)
+      .reduce<{ avg: number; label: string } | null>((best, m) => {
+        const avg = Number(m.avgTotal || 0);
+        return !best || avg > best.avg ? { avg, label: m.label } : best;
+      }, null);
+    return { bestEval, bestMonth };
+  }, [recentEvaluations, trend]);
+
   const lastEval = recentEvaluations[0];
+
+  // Generate a fresh AI coaching plan for this one GP — reuses the same
+  // bulkCoach mutation the Command Center uses, just with a single ID.
+  const coach = trpc.commandCenter.bulkCoach.useMutation({
+    onSuccess: (res) => {
+      const created = res.totals.created;
+      if (created === 0) {
+        toast.info("No new coaching plans generated for this GP.");
+      } else {
+        toast.success(`Created ${created} coaching plan${created === 1 ? "" : "s"}. Check the Plan tab.`);
+      }
+      utils.actionItems.list.invalidate();
+      utils.actionItems.stats.invalidate();
+      utils.dashboard.insights.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "Could not generate plan"),
+  });
 
   return (
     <div className="flex flex-col h-full">
@@ -94,15 +137,38 @@ function ProfileContent({ data }: { data: Profile }) {
           </div>
           <div className="flex-1 min-w-0">
             <SheetTitle className="text-xl">{gp.name}</SheetTitle>
-            <SheetDescription className="flex items-center gap-2 flex-wrap mt-0.5">
-              {gp.teamName ? (
-                <Badge variant="outline" className="text-xs">{gp.teamName}</Badge>
-              ) : (
-                <Badge variant="outline" className="text-xs text-muted-foreground">No team</Badge>
-              )}
-              {gp.floorManagerName && <span className="text-xs">FM: {gp.floorManagerName}</span>}
+            <SheetDescription className="text-xs text-muted-foreground mt-0.5">
+              {bestSoFar.bestEval > 0
+                ? <>Best so far: <span className="font-semibold text-foreground tabular-nums">{bestSoFar.bestEval}/{MAX_TOTAL_SCORE}</span>{bestSoFar.bestMonth ? <> · top month <span className="font-semibold text-foreground">{bestSoFar.bestMonth.label}</span> at <span className="tabular-nums">{bestSoFar.bestMonth.avg.toFixed(1)}</span></> : null}</>
+                : "No evaluations recorded yet"}
             </SheetDescription>
           </div>
+        </div>
+
+        {/* Quick actions — one-click shortcuts the FM would otherwise have
+            to bounce between Workspace + Command Center to perform. */}
+        <div className="flex items-center gap-2 mt-3">
+          <Button
+            size="sm"
+            variant="default"
+            className="gap-1.5 flex-1 sm:flex-none"
+            onClick={() => coach.mutate({ gpIds: [gp.id], maxPerGp: 2 })}
+            disabled={coach.isPending}
+            title="Generate fresh AI coaching plans for this GP"
+          >
+            {coach.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            <span className="text-xs">AI plan</span>
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 flex-1 sm:flex-none"
+            onClick={() => setLocation(`/workspace?gp=${gp.id}`)}
+            title="Open this GP in the evaluation workspace"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            <span className="text-xs">Evaluate</span>
+          </Button>
         </div>
       </SheetHeader>
 
@@ -129,20 +195,28 @@ function ProfileContent({ data }: { data: Profile }) {
               label="This month evals"
               value={String(currentMonth.evalCount)}
               accent="primary"
+              delta={prevMonth ? currentMonth.evalCount - Number(prevMonth.evalCount || 0) : null}
+              betterIsUp
             />
             <HeadlineCard
               icon={<AlertTriangle className="h-4 w-4" />}
               label="Mistakes"
               value={String(currentMonth.mistakes)}
               accent={currentMonth.mistakes > 3 ? "rose" : "muted"}
+              delta={prevMonth ? currentMonth.mistakes - (prevMonth.mistakes ?? 0) : null}
+              betterIsUp={false}
             />
             <HeadlineCard
               icon={<ThumbsUp className="h-4 w-4" />}
               label="Attitude"
               value={currentMonth.attitude !== null ? (currentMonth.attitude > 0 ? `+${currentMonth.attitude}` : String(currentMonth.attitude)) : "—"}
               accent={(currentMonth.attitude ?? 0) >= 0 ? "primary" : "rose"}
+              delta={prevMonth && prevMonth.attitude !== null && currentMonth.attitude !== null
+                ? currentMonth.attitude - prevMonth.attitude : null}
+              betterIsUp
             />
           </div>
+          {prevMonth && <p className="text-[10px] text-muted-foreground -mt-2">Δ vs {prevMonth.label}</p>}
 
           {/* 6-month trend chart */}
           <Card>
@@ -230,18 +304,42 @@ function ProfileContent({ data }: { data: Profile }) {
 }
 
 function HeadlineCard({
-  icon, label, value, accent,
-}: { icon: React.ReactNode; label: string; value: string; accent: "primary" | "amber" | "rose" | "muted" }) {
+  icon, label, value, accent, delta, betterIsUp,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  accent: "primary" | "amber" | "rose" | "muted";
+  /** Difference vs the previous month with data. null = no comparison. */
+  delta?: number | null;
+  /** Direction that's positive: true means "up is good" (evals, attitude);
+   *  false means "down is good" (mistakes). */
+  betterIsUp?: boolean;
+}) {
   const tone = {
     primary: "border-primary/20 bg-primary/5 text-primary",
     amber: "border-amber-200 bg-amber-50 text-amber-700",
     rose: "border-rose-200 bg-rose-50 text-rose-700",
     muted: "border-border bg-muted/30 text-muted-foreground",
   }[accent];
+  // Colour the delta by whether the direction is good for the metric.
+  let deltaCls = "text-muted-foreground";
+  if (delta != null && delta !== 0) {
+    const good = betterIsUp ? delta > 0 : delta < 0;
+    deltaCls = good ? "text-emerald-600" : "text-rose-600";
+  }
   return (
     <div className={`rounded-lg border p-3 ${tone}`}>
       <div className="flex items-center gap-1.5 mb-1">{icon}<span className="text-[10px] font-medium uppercase tracking-wider">{label}</span></div>
-      <p className="text-lg font-bold text-foreground">{value}</p>
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-lg font-bold text-foreground">{value}</p>
+        {delta != null && (
+          <span className={`text-[10px] font-semibold tabular-nums inline-flex items-center gap-0.5 ${deltaCls}`}>
+            {delta > 0 ? <ArrowUp className="h-2.5 w-2.5" /> : delta < 0 ? <ArrowDown className="h-2.5 w-2.5" /> : null}
+            {delta > 0 ? "+" : ""}{delta}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
