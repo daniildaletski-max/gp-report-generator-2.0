@@ -7,6 +7,7 @@ import {
   previousPeriod,
   monthWindow,
   aggregateCriteriaTrend,
+  topMovers,
   CRITERION_KEYS,
   type AnalyticsRow,
   type TrendRow,
@@ -107,6 +108,41 @@ describe("scoreDistribution", () => {
     ]);
     const by = Object.fromEntries(d.map(b => [b.bucket, b.count]));
     expect(by).toEqual({ excellent: 2, strong: 1, fair: 2, weak: 2 });
+  });
+});
+
+describe("topMovers", () => {
+  const cur = [
+    row({ gamePresenterId: 1, totalScore: 20 }), // up from 14
+    row({ gamePresenterId: 2, totalScore: 12 }), // down from 18
+    row({ gamePresenterId: 3, totalScore: 15 }), // flat
+    row({ gamePresenterId: 4, totalScore: 19 }), // no prior month
+  ];
+  const prev = [
+    row({ gamePresenterId: 1, totalScore: 14 }),
+    row({ gamePresenterId: 2, totalScore: 18 }),
+    row({ gamePresenterId: 3, totalScore: 15 }),
+  ];
+
+  it("ranks improvers by largest gain and decliners by largest drop", () => {
+    const { improvers, decliners } = topMovers(cur, prev);
+    expect(improvers.map(m => m.gpId)).toEqual([1]);
+    expect(improvers[0]).toMatchObject({ gpId: 1, avg: 20, prevAvg: 14, delta: 6 });
+    expect(decliners.map(m => m.gpId)).toEqual([2]);
+    expect(decliners[0].delta).toBe(-6);
+  });
+
+  it("excludes flat GPs and GPs absent from the prior month", () => {
+    const ids = topMovers(cur, prev);
+    const all = [...ids.improvers, ...ids.decliners].map(m => m.gpId);
+    expect(all).not.toContain(3); // flat
+    expect(all).not.toContain(4); // no prior month
+  });
+
+  it("respects the limit", () => {
+    const many = Array.from({ length: 8 }, (_, i) => row({ gamePresenterId: i + 1, totalScore: 20 }));
+    const base = Array.from({ length: 8 }, (_, i) => row({ gamePresenterId: i + 1, totalScore: 10 }));
+    expect(topMovers(many, base, 3).improvers).toHaveLength(3);
   });
 });
 

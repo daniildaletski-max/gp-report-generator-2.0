@@ -133,6 +133,46 @@ export function scoreDistribution(rows: AnalyticsRow[]): DistributionBucket[] {
   }));
 }
 
+export type Mover = {
+  gpId: number;
+  avg: number;
+  prevAvg: number;
+  delta: number;
+  evals: number;
+};
+export type Movers = { improvers: Mover[]; decliners: Mover[] };
+
+/** GPs whose monthly average moved the most vs the previous month. Only GPs
+ *  evaluated in BOTH months are comparable. PURE, unit-tested. */
+export function topMovers(rows: AnalyticsRow[], prevRows: AnalyticsRow[], limit = 5): Movers {
+  const avgByGp = (data: AnalyticsRow[]) => {
+    const map = new Map<number, number[]>();
+    for (const r of data) {
+      if (!isNum(r.gamePresenterId) || !isNum(r.totalScore)) continue;
+      const arr = map.get(r.gamePresenterId) ?? [];
+      arr.push(r.totalScore);
+      map.set(r.gamePresenterId, arr);
+    }
+    return map;
+  };
+  const cur = avgByGp(rows);
+  const prev = avgByGp(prevRows);
+  const movers: Mover[] = [];
+  for (const [gpId, curVals] of Array.from(cur.entries())) {
+    const prevVals = prev.get(gpId);
+    if (!prevVals || prevVals.length === 0) continue; // need both months to compare
+    const avg = round1(mean(curVals));
+    const prevAvg = round1(mean(prevVals));
+    const delta = round1(avg - prevAvg);
+    if (delta === 0) continue;
+    movers.push({ gpId, avg, prevAvg, delta, evals: curVals.length });
+  }
+  return {
+    improvers: movers.filter(m => m.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, limit),
+    decliners: movers.filter(m => m.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, limit),
+  };
+}
+
 export type AnalyticsOverview = {
   period: { month: number; year: number };
   totalEvaluations: number;
@@ -141,6 +181,7 @@ export type AnalyticsOverview = {
   criteria: CriterionStat[];
   games: GroupStat[];
   distribution: DistributionBucket[];
+  movers: Movers;
 };
 
 /** Assemble the full overview from already-fetched rows — PURE, unit-tested. */
@@ -160,6 +201,7 @@ export function buildAnalyticsOverview(
     criteria: criterionBreakdown(rows, prevRows),
     games: gameBreakdown(rows),
     distribution: scoreDistribution(rows),
+    movers: topMovers(rows, prevRows),
   };
 }
 

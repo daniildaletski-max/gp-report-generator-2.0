@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { PageHeader } from "@/components/PageHeader";
 import { QueryError } from "@/components/QueryError";
+import { GPDetailDrawer } from "@/components/GPDetailDrawer";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -45,6 +46,9 @@ export default function Analytics() {
   const [year, setYear] = useUrlState<number>(
     "year", now.getFullYear(), raw => urlNumber.parse(raw), v => (v === now.getFullYear() ? null : String(v)),
   );
+  const [drawerGpId, setDrawerGpId] = useUrlState<number | null>(
+    "gp", null, raw => urlNumber.parse(raw), v => (v == null ? null : String(v)),
+  );
 
   const { data, isLoading, isError, refetch } = trpc.analytics.overview.useQuery({ month, year });
   const { data: trend } = trpc.analytics.criteriaTrend.useQuery({ months: 6 });
@@ -61,6 +65,13 @@ export default function Analytics() {
     }));
     return tiles.some(t => t.points.some(p => p.value != null)) ? tiles : null;
   }, [trend]);
+
+  const { data: gpList } = trpc.gamePresenter.list.useQuery();
+  const gpName = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const g of (gpList ?? []) as Array<{ id: number; name: string }>) m.set(g.id, g.name);
+    return m;
+  }, [gpList]);
 
   // Radar: each criterion as a % of its max, current vs previous month.
   const radarData = useMemo(() => {
@@ -228,6 +239,14 @@ export default function Analytics() {
             </Card>
           </div>
 
+          {/* Top movers — biggest month-over-month swings, clickable into the GP drawer */}
+          {(data.movers.improvers.length > 0 || data.movers.decliners.length > 0) && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <MoversList title="Most improved" sub="Largest gains vs last month" tone="emerald" icon={TrendingUp} movers={data.movers.improvers} gpName={gpName} onPick={setDrawerGpId} />
+              <MoversList title="Biggest drops" sub="Largest declines vs last month" tone="rose" icon={TrendingDown} movers={data.movers.decliners} gpName={gpName} onPick={setDrawerGpId} />
+            </div>
+          )}
+
           {/* Criteria breakdown with MoM deltas */}
           <Card variant="glass">
             <CardHeader>
@@ -334,7 +353,70 @@ export default function Analytics() {
           </Card>
         </>
       )}
+
+      <GPDetailDrawer
+        gpId={drawerGpId}
+        open={drawerGpId !== null}
+        onOpenChange={(o) => { if (!o) setDrawerGpId(null); }}
+      />
     </div>
+  );
+}
+
+function MoversList({
+  title, sub, tone, icon: Icon, movers, gpName, onPick,
+}: {
+  title: string;
+  sub: string;
+  tone: "emerald" | "rose";
+  icon: React.ComponentType<{ className?: string }>;
+  movers: Array<{ gpId: number; avg: number; prevAvg: number; delta: number; evals: number }>;
+  gpName: Map<number, string>;
+  onPick: (id: number) => void;
+}) {
+  const accent = tone === "emerald"
+    ? "text-emerald-600 bg-emerald-100 border-emerald-200"
+    : "text-rose-600 bg-rose-100 border-rose-200";
+  return (
+    <Card variant="glass">
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className={`flex items-center justify-center w-9 h-9 rounded-xl border ${accent}`}>
+            <Icon className="h-4.5 w-4.5" />
+          </div>
+          <div>
+            <CardTitle className="text-sm sm:text-base">{title}</CardTitle>
+            <CardDescription className="text-xs">{sub}</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {movers.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Nothing to show this month.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {movers.map(m => (
+              <button
+                key={m.gpId}
+                type="button"
+                onClick={() => onPick(m.gpId)}
+                className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-border bg-card/50 hover:border-primary/40 hover:bg-primary/5 transition-all text-left"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{gpName.get(m.gpId) ?? `GP #${m.gpId}`}</p>
+                  <p className="text-[10px] text-muted-foreground tabular-nums">
+                    {m.prevAvg.toFixed(1)} → {m.avg.toFixed(1)} · {m.evals} eval{m.evals === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <span className={`shrink-0 text-sm font-bold tabular-nums ${tone === "emerald" ? "text-emerald-600" : "text-rose-600"}`}>
+                  {m.delta > 0 ? "+" : ""}{m.delta.toFixed(1)}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
