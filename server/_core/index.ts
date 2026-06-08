@@ -21,6 +21,7 @@ import { ensureAttitudeManualColumn } from "../db/attitude";
 import { ensureMistakesConsolidated } from "../db/attendance";
 import { ensureWorkedHoursColumn } from "../db/monthlyStats";
 import { ensureReportsTeamNullable } from "../db/reports";
+import { ensureStudioworksSyncSchema } from "../db/studioworks";
 import { ENV } from "./env";
 import * as db from "../db";
 
@@ -548,6 +549,12 @@ async function startServer() {
     // same "deploy pipeline doesn't run drizzle migrations" reason.
     ensureReportsTeamNullable().catch(err => {
       log.warn("reports.teamId nullable boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Studioworks advanced sync — run-history + learned name-alias tables.
+    // Idempotent boot install; same "deploy pipeline doesn't run drizzle
+    // migrations" reason as the other ensure* installers.
+    ensureStudioworksSyncSchema().catch(err => {
+      log.warn("studioworks sync schema boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
     });
     // Automation credentials audit — surfaces missing RESEND_API_KEY /
     // PERSONA_* / STUDIOWORKS_* env vars in deploy logs so operators

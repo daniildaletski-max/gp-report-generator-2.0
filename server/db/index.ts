@@ -157,3 +157,12 @@ export {
   ensureEvaluationHistorySchema, diffEvaluation,
   recordEvaluationRevision, getEvaluationRevisions,
 } from "./evaluationHistory";
+
+// Studioworks sync — run history + learned name aliases
+export {
+  ensureStudioworksSyncSchema,
+  normalizeStudioworksName, summarizeImportDetails,
+  recordStudioworksSyncLog, listStudioworksSyncLogs,
+  resolveStudioworksAlias, listStudioworksAliases,
+  upsertStudioworksAlias, deleteStudioworksAlias,
+} from "./studioworks";

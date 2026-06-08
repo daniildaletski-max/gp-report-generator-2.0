@@ -305,8 +305,12 @@ async function runStudioworksAutoSync() {
   }
   isStudioworksSyncRunning = true;
   try {
+    const startedAt = Date.now();
     const { syncStudioworksEvaluations } = await import("./services/studioworksScraper");
-    const { findBestMatchingGP, createEvaluation, getEvaluationsByGP, getDb } = await import("./db");
+    const {
+      findBestMatchingGP, createEvaluation, getEvaluationsByGP, getDb,
+      resolveStudioworksAlias, getGamePresenterById, recordStudioworksSyncLog,
+    } = await import("./db");
     const db = await getDb();
     if (!db) {
       log.error("[StudioworksAutoSync] DB not available, aborting", new Error("DB unavailable"));
@@ -316,6 +320,12 @@ async function runStudioworksAutoSync() {
     const result = await syncStudioworksEvaluations();
     if (!result.success) {
       log.warn(`[StudioworksAutoSync] Scraper returned failure: ${result.error}`);
+      await recordStudioworksSyncLog({
+        triggeredById: null, trigger: "scheduled", dataSource: result.source,
+        status: "failed", totalFound: 0, inserted: 0, updated: 0, skipped: 0,
+        unmatched: 0, errors: 0, durationMs: Date.now() - startedAt,
+        errorMessage: result.error ?? "scraper failed",
+      });
       return;
     }
     let inserted = 0;
@@ -325,9 +335,13 @@ async function runStudioworksAutoSync() {
       try {
         const date = new Date(raw.date);
         if (isNaN(date.getTime())) continue;
-        const match = await findBestMatchingGP(raw.presenterName, 0.7);
-        if (!match) { unmatched++; continue; }
-        const gpId = match.gamePresenter.id;
+        // A learned alias wins over the fuzzy matcher.
+        const aliasGpId = await resolveStudioworksAlias(raw.presenterName);
+        const aliasGp = aliasGpId ? await getGamePresenterById(aliasGpId) : null;
+        const match = aliasGp ? null : await findBestMatchingGP(raw.presenterName, 0.7);
+        if (!aliasGp && !match) { unmatched++; continue; }
+        const gpId = aliasGp ? aliasGp.id : match!.gamePresenter.id;
+        const gpOwnerId = (aliasGp ? aliasGp.userId : match!.gamePresenter.userId) ?? null;
         // Idempotency — same (gp, day, evaluator, game) already there?
         const evals = await getEvaluationsByGP(gpId);
         const dayKey = (d: Date) => d.toISOString().slice(0, 10);
@@ -366,8 +380,8 @@ async function runStudioworksAutoSync() {
           gamePerformanceMaxScore: r.gamePerformance?.maxScore ?? 5,
           gamePerformanceComment: r.gamePerformance?.comment ?? null,
           rawExtractedData: { source: "studioworks", externalId: raw.externalId, scheduledAt: new Date().toISOString() } as any,
-          uploadedById: match.gamePresenter.userId ?? null,
-          userId: match.gamePresenter.userId ?? null,
+          uploadedById: gpOwnerId,
+          userId: gpOwnerId,
         });
         inserted++;
       } catch (e) {
@@ -375,6 +389,12 @@ async function runStudioworksAutoSync() {
       }
     }
     log.info(`[StudioworksAutoSync] inserted=${inserted} skipped=${skipped} unmatched=${unmatched} total=${result.evaluations.length}`);
+    await recordStudioworksSyncLog({
+      triggeredById: null, trigger: "scheduled", dataSource: result.source,
+      status: result.evaluations.length === 0 ? "failed" : unmatched > 0 ? "partial" : "success",
+      totalFound: result.evaluations.length, inserted, updated: 0, skipped,
+      unmatched, errors: 0, durationMs: Date.now() - startedAt,
+    });
     // Realtime: tell every open client the moment fresh evals land so their
     // screens refresh without waiting for the next poll. Broadcast (no
     // userId) — clients refetch their own server-scoped queries.

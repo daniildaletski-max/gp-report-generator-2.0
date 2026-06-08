@@ -40,6 +40,10 @@ interface ImportDetail {
   gpName?: string;
   /** Skipped because we already have this exact evaluation in DB. */
   skippedExisting?: boolean;
+  /** Resolved via a learned name alias rather than the fuzzy matcher. */
+  viaAlias?: boolean;
+  /** An existing evaluation was updated in place (freshness sync). */
+  updated?: boolean;
   /** Error string when this row failed to insert (other rows still process). */
   error?: string;
 }
@@ -141,6 +145,7 @@ async function importOne(
   let gpId: number;
   let gpName: string;
   let gpOwnerId: number | null = null;
+  let viaAlias = false;
   if (forceGpId) {
     const gp = await db.getGamePresenterById(forceGpId);
     if (!gp) {
@@ -149,14 +154,29 @@ async function importOne(
     gpId = gp.id;
     gpName = gp.name;
     gpOwnerId = gp.userId ?? null;
+    // Learn this manual mapping so future syncs auto-resolve the same
+    // Studioworks name without the FM having to re-map it. Best-effort.
+    await db.upsertStudioworksAlias(raw.presenterName, gp.id, triggeredByAdminUserId);
   } else {
-    const match = await db.findBestMatchingGP(raw.presenterName, 0.7);
-    if (!match) {
-      return { ...baseDetail, error: `no GP matched for "${raw.presenterName}"` };
+    // 1) A learned alias wins over the fuzzy matcher — this is what kills
+    //    the "same dozen names fail to match every single run" pain.
+    const aliasGpId = await db.resolveStudioworksAlias(raw.presenterName);
+    const aliasGp = aliasGpId ? await db.getGamePresenterById(aliasGpId) : null;
+    if (aliasGp) {
+      gpId = aliasGp.id;
+      gpName = aliasGp.name;
+      gpOwnerId = aliasGp.userId ?? null;
+      viaAlias = true;
+    } else {
+      // 2) Fall back to the global fuzzy matcher.
+      const match = await db.findBestMatchingGP(raw.presenterName, 0.7);
+      if (!match) {
+        return { ...baseDetail, error: `no GP matched for "${raw.presenterName}"` };
+      }
+      gpId = match.gamePresenter.id;
+      gpName = match.gamePresenter.name;
+      gpOwnerId = match.gamePresenter.userId ?? null;
     }
-    gpId = match.gamePresenter.id;
-    gpName = match.gamePresenter.name;
-    gpOwnerId = match.gamePresenter.userId ?? null;
   }
 
   // Idempotency
@@ -172,6 +192,7 @@ async function importOne(
       matched: true,
       gpId,
       gpName,
+      viaAlias,
       skippedExisting: true,
     };
   }
@@ -223,7 +244,7 @@ async function importOne(
       uploadedById: gpOwnerId ?? triggeredByAdminUserId,
       userId: gpOwnerId ?? triggeredByAdminUserId,
     });
-    return { ...baseDetail, matched: true, gpId, gpName };
+    return { ...baseDetail, matched: true, gpId, gpName, viaAlias };
   } catch (e) {
     return {
       ...baseDetail,
@@ -980,8 +1001,15 @@ export const studioworksSyncRouter = router({
    * batch — each row reports its own status.
    */
   syncNow: adminProcedure.mutation(async ({ ctx }): Promise<StudioworksSyncSummary> => {
+    const startedAt = Date.now();
     const result = await syncStudioworksEvaluations();
     if (!result.success) {
+      await db.recordStudioworksSyncLog({
+        triggeredById: ctx.user.id, trigger: "manual", dataSource: result.source,
+        status: "failed", totalFound: 0, inserted: 0, updated: 0, skipped: 0,
+        unmatched: 0, errors: 0, durationMs: Date.now() - startedAt,
+        errorMessage: result.error ?? "sync failed",
+      });
       return {
         status: "failed",
         source: result.source,
@@ -1024,6 +1052,12 @@ export const studioworksSyncRouter = router({
     log.info(`Studioworks sync: source=${result.source} found=${result.evaluations.length} inserted=${inserted} skipped=${skippedExisting} unmatched=${unmatched} errors=${errors}`);
 
     if (inserted > 0) publish({ type: "evaluations.changed", source: "studioworks", count: inserted });
+
+    await db.recordStudioworksSyncLog({
+      triggeredById: ctx.user.id, trigger: "manual", dataSource: result.source,
+      status, totalFound: result.evaluations.length, inserted, updated: 0,
+      skipped: skippedExisting, unmatched, errors, durationMs: Date.now() - startedAt,
+    });
 
     return {
       status,
@@ -1077,6 +1111,7 @@ export const studioworksSyncRouter = router({
       })).min(1).max(1000),
     }))
     .mutation(async ({ ctx, input }): Promise<StudioworksSyncSummary> => {
+      const startedAt = Date.now();
       const details: ImportDetail[] = [];
       for (const raw of input.evaluations) {
         try {
@@ -1124,6 +1159,12 @@ export const studioworksSyncRouter = router({
       log.info(`Studioworks import-batch (user=${ctx.user.id}): submitted=${input.evaluations.length} inserted=${inserted} skipped=${skippedExisting} unmatched=${unmatched} errors=${errors}`);
 
       if (inserted > 0) publish({ type: "evaluations.changed", source: "studioworks", userId: ctx.user.id, count: inserted });
+
+      await db.recordStudioworksSyncLog({
+        triggeredById: ctx.user.id, trigger: "import", dataSource: "browser",
+        status, totalFound: input.evaluations.length, inserted, updated: 0,
+        skipped: skippedExisting, unmatched, errors, durationMs: Date.now() - startedAt,
+      });
 
       return {
         status,
@@ -1260,5 +1301,34 @@ export const studioworksSyncRouter = router({
       if (inserted > 0) publish({ type: "evaluations.changed", source: "studioworks-attitude", userId: ctx.user.id, count: inserted });
 
       return { status, totalFound: input.events.length, inserted, skippedExisting, unmatched, errors, details };
+    }),
+
+  /**
+   * Sync run history — the most recent runs with status + counts, for the
+   * admin "Sync history" panel.
+   */
+  history: adminProcedure
+    .input(z.object({ limit: z.number().min(1).max(100).optional() }).optional())
+    .query(async ({ input }) => db.listStudioworksSyncLogs(input?.limit ?? 20)),
+
+  /** Learned name → GP aliases (the client maps gpId → name from its own list). */
+  aliases: adminProcedure.query(async () => db.listStudioworksAliases()),
+
+  /** Add or update a learned name mapping by hand. */
+  addAlias: adminProcedure
+    .input(z.object({ name: z.string().min(1).max(255), gamePresenterId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const gp = await db.getGamePresenterById(input.gamePresenterId);
+      if (!gp) throw new TRPCError({ code: "NOT_FOUND", message: "Game presenter not found" });
+      await db.upsertStudioworksAlias(input.name, input.gamePresenterId, ctx.user.id);
+      return { success: true };
+    }),
+
+  /** Forget a learned mapping. */
+  removeAlias: adminProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ input }) => {
+      await db.deleteStudioworksAlias(input.id);
+      return { success: true };
     }),
 });

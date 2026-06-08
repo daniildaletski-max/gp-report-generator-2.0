@@ -30,7 +30,7 @@ import {
   TrendingUp, TrendingDown, Search, Filter, X, Eye, EyeOff, Calendar,
   Award, Target, Zap, Clock, ChevronUp, ChevronDown, ChevronRight, Mail, Send, UserPlus,
   MailCheck, MailX, MailQuestion, Sparkles, Timer, Trophy, ThumbsUp, ThumbsDown,
-  MoreVertical, Gamepad2
+  MoreVertical, Gamepad2, Link2, ArrowRight
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -3378,6 +3378,145 @@ type SwSyncSummary = {
   error?: string;
 };
 
+function SwStatusBadge({ status }: { status: string }) {
+  const cls =
+    status === "success" ? "text-emerald-700 border-emerald-200 bg-emerald-50"
+    : status === "partial" ? "text-amber-700 border-amber-200 bg-amber-50"
+    : "text-rose-700 border-rose-200 bg-rose-50";
+  return <Badge variant="outline" className={`text-[10px] capitalize ${cls}`}>{status}</Badge>;
+}
+
+/** Persisted history of Studioworks sync + import runs. */
+function StudioworksSyncHistory() {
+  const { data: logs, isLoading } = trpc.studioworksSync.history.useQuery({ limit: 15 });
+  return (
+    <Card className="border border-border">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><Activity className="h-4 w-4" /> Sync history</CardTitle>
+        <CardDescription>Recent sync &amp; import runs — status, counts, and timing. Records every run (manual, browser import, or scheduled).</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : !logs || logs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No syncs recorded yet — run a sync or import to populate this.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground border-b">
+                  <th className="py-2 pr-3 font-semibold">When</th>
+                  <th className="py-2 pr-3 font-semibold">Trigger</th>
+                  <th className="py-2 pr-3 font-semibold">Status</th>
+                  <th className="py-2 pr-3 font-semibold text-right">Found</th>
+                  <th className="py-2 pr-3 font-semibold text-right">New</th>
+                  <th className="py-2 pr-3 font-semibold text-right">Skipped</th>
+                  <th className="py-2 pr-3 font-semibold text-right">Unmatched</th>
+                  <th className="py-2 pr-3 font-semibold text-right">Errors</th>
+                  <th className="py-2 pr-3 font-semibold text-right">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map(l => (
+                  <tr key={l.id} className="border-b last:border-0">
+                    <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">{new Date(l.createdAt).toLocaleString()}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">
+                      <Badge variant="outline" className="text-[10px] capitalize">{l.trigger}</Badge>
+                      <span className="ml-1 text-[10px] text-muted-foreground">{l.dataSource}</span>
+                    </td>
+                    <td className="py-2 pr-3"><SwStatusBadge status={l.status} /></td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{l.totalFound}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-emerald-600 font-medium">{l.inserted}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{l.skipped}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-amber-600">{l.unmatched}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-rose-600">{l.errors}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">{l.durationMs != null ? `${(l.durationMs / 1000).toFixed(1)}s` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Learned Studioworks-name → GP mappings (auto-learned on manual fixes; curatable here). */
+function StudioworksNameAliases() {
+  const utils = trpc.useUtils();
+  const { data: aliases, isLoading } = trpc.studioworksSync.aliases.useQuery();
+  const { data: gps } = trpc.gamePresenter.list.useQuery();
+  const [name, setName] = useState("");
+  const [gpId, setGpId] = useState("");
+
+  const gpName = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const g of (gps ?? []) as Array<{ id: number; name: string }>) m.set(g.id, g.name);
+    return m;
+  }, [gps]);
+  const sortedGps = useMemo(
+    () => [...((gps ?? []) as Array<{ id: number; name: string }>)].sort((a, b) => a.name.localeCompare(b.name)),
+    [gps],
+  );
+
+  const add = trpc.studioworksSync.addAlias.useMutation({
+    onSuccess: () => { toast.success("Mapping saved"); setName(""); setGpId(""); utils.studioworksSync.aliases.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const remove = trpc.studioworksSync.removeAlias.useMutation({
+    onSuccess: () => utils.studioworksSync.aliases.invalidate(),
+    onError: (e) => toast.error(e.message),
+  });
+
+  return (
+    <Card className="border border-border">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><Link2 className="h-4 w-4" /> Name mappings</CardTitle>
+        <CardDescription>
+          Studioworks names that resolve straight to a GP. The importer learns these automatically whenever you map an unmatched name — so the same names never fail to match again. Curate them here.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Input placeholder="Studioworks name (e.g. Anna M.)" value={name} onChange={(e) => setName(e.target.value)} className="sm:max-w-xs" />
+          <Select value={gpId} onValueChange={setGpId}>
+            <SelectTrigger className="sm:max-w-xs"><SelectValue placeholder="Maps to GP…" /></SelectTrigger>
+            <SelectContent>
+              {sortedGps.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button
+            onClick={() => add.mutate({ name: name.trim(), gamePresenterId: Number(gpId) })}
+            disabled={!name.trim() || !gpId || add.isPending}
+          >
+            {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add mapping"}
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : !aliases || aliases.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No learned mappings yet. Map an unmatched name during an import and it'll appear here.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {aliases.map(a => (
+              <div key={a.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-card/50">
+                <span className="text-sm font-medium text-foreground">{a.displayName}</span>
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-sm text-foreground flex-1 truncate">{gpName.get(a.gamePresenterId) ?? `GP #${a.gamePresenterId}`}</span>
+                <Button variant="ghost" size="sm" className="text-rose-600 hover:text-rose-700" onClick={() => remove.mutate({ id: a.id })} disabled={remove.isPending}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function StudioworksSyncTab() {
   const [testResult, setTestResult] = useState<SwTestResult | null>(null);
   const [syncResult, setSyncResult] = useState<SwSyncSummary | null>(null);
@@ -3475,6 +3614,9 @@ function StudioworksSyncTab() {
           </div>
         </CardContent>
       </Card>
+
+      <StudioworksSyncHistory />
+      <StudioworksNameAliases />
 
       {/* Test result panel */}
       {testResult && (
