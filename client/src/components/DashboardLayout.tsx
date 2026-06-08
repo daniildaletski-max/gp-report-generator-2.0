@@ -297,25 +297,6 @@ function DashboardLayoutContent({
                 );
               })}
             </SidebarMenu>
-
-            {/* Decorative bottom-of-nav badge — gives the sidebar visual
-                anchor and reminds the user of the brand colour. Hidden
-                when collapsed since there's no room. */}
-            {!isCollapsed && (
-              <div className="mt-auto px-3 pb-3 pt-6">
-                <div className="rounded-xl border border-primary/15 bg-gradient-to-br from-primary/5 via-card to-card p-3">
-                  <div className="flex items-center gap-2">
-                    <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow shadow-primary/20">
-                      <span className="text-white text-[10px] font-bold">GP</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-semibold text-foreground truncate">Reports Workspace</p>
-                      <p className="text-[10px] text-muted-foreground truncate">v2 · live</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </SidebarContent>
 
           <SidebarFooter className="p-3 border-t border-primary/10">
