@@ -114,3 +114,4 @@ temp/
 *_notes.txt
 todo.md
 .manus/
+.project-config.json
