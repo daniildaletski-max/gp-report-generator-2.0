@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense, type ReactNode } from "react";
+import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,18 @@ import {
   Users,
   TrendingUp,
   CircleDot,
+  Zap,
+  ScanLine,
 } from "lucide-react";
+
+// Bulk review panel is lazy-loaded so the Quick path stays lean — its code
+// (react-dropzone, the editable review grid) only ships when the user
+// switches to Bulk AI mode.
+const BulkUploadPanel = lazy(() =>
+  import("./UploadBulk").then((m) => ({ default: m.BulkUploadPanel })),
+);
+
+type UploadMode = "quick" | "bulk";
 
 // ============ TYPES ============
 
@@ -504,7 +516,7 @@ function AttitudeResultCard({ file, onRemove, onRetry }: { file: FileWithPreview
 
 // ============ MAIN COMPONENT ============
 
-export default function UploadPage() {
+function QuickUploadPanel({ modeToggle }: { modeToggle: ReactNode }) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<UploadType>("evaluations");
   // Files are scoped per tab so switching between Evaluations / Attitude
@@ -809,13 +821,14 @@ export default function UploadPage() {
   return (
     <div className="space-y-5 p-4 md:p-6 max-w-4xl mx-auto">
       <PageHeader
-        title="Upload Screenshots"
+        title="Upload"
         subtitle={
           activeTab === "evaluations"
-            ? "Upload evaluation screenshots — AI extracts scores automatically"
+            ? "AI extracts scores and saves each screenshot automatically"
             : "Upload attitude screenshots for the selected GP"
         }
         icon={CloudUpload}
+        actions={modeToggle}
       />
 
       {/* Tab Switcher */}
@@ -1259,4 +1272,65 @@ function UploadStat({
       </div>
     </div>
   );
+}
+
+// ============================================
+// Mode toggle + page shell — one Upload route, two workflows.
+//   • Quick  — AI extracts and saves each screenshot on drop (+ Attitude).
+//   • Bulk AI — extract a stack in parallel into an editable review grid,
+//               then save them all in one shot.
+// The active mode lives in the URL (?mode=bulk) so it deep-links and the
+// Cmd+K palette can jump straight to it.
+// ============================================
+
+function UploadModeToggle({ mode, onChange }: { mode: UploadMode; onChange: (m: UploadMode) => void }) {
+  const opt = (value: UploadMode, label: string, Icon: React.ComponentType<{ className?: string }>) => (
+    <button
+      type="button"
+      onClick={() => onChange(value)}
+      aria-pressed={mode === value}
+      className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium transition-colors ${
+        mode === value
+          ? "bg-background shadow-sm text-foreground"
+          : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  );
+  return (
+    <div className="inline-flex items-center rounded-lg border border-border bg-muted/40 p-0.5" role="group" aria-label="Upload mode">
+      {opt("quick", "Quick", Zap)}
+      {opt("bulk", "Bulk AI", ScanLine)}
+    </div>
+  );
+}
+
+function PanelLoader() {
+  return (
+    <div className="flex items-center justify-center py-24 text-muted-foreground">
+      <Loader2 className="h-5 w-5 animate-spin" />
+    </div>
+  );
+}
+
+export default function UploadPage() {
+  const search = useSearch();
+  const [, setLocation] = useLocation();
+  const mode: UploadMode = new URLSearchParams(search).get("mode") === "bulk" ? "bulk" : "quick";
+  const setMode = useCallback(
+    (m: UploadMode) => setLocation(m === "bulk" ? "/upload?mode=bulk" : "/upload", { replace: true }),
+    [setLocation],
+  );
+  const toggle = <UploadModeToggle mode={mode} onChange={setMode} />;
+
+  if (mode === "bulk") {
+    return (
+      <Suspense fallback={<PanelLoader />}>
+        <BulkUploadPanel modeToggle={toggle} />
+      </Suspense>
+    );
+  }
+  return <QuickUploadPanel modeToggle={toggle} />;
 }

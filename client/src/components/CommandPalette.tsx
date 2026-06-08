@@ -24,7 +24,7 @@ const NAV_ITEMS = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard, hint: "Overview" },
   { label: "Workspace", path: "/workspace", icon: Zap, hint: "Evaluate" },
   { label: "Upload screenshots", path: "/upload", icon: Upload, hint: "AI extract" },
-  { label: "Bulk AI upload", path: "/upload-bulk", icon: ScanLine, hint: "Batch extract" },
+  { label: "Bulk AI upload", path: "/upload?mode=bulk", icon: ScanLine, hint: "Batch extract" },
   { label: "Evaluations", path: "/evaluations", icon: FileCheck, hint: "List + bulk" },
   { label: "Reports", path: "/reports", icon: FileSpreadsheet, hint: "Monthly Excel" },
   { label: "Attendance", path: "/attendance", icon: CalendarCheck, hint: "Sick / late / extra" },

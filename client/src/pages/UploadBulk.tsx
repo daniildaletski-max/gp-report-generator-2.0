@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDropzone } from "react-dropzone";
 import { nanoid } from "nanoid";
 import { trpc } from "@/lib/trpc";
@@ -80,7 +80,7 @@ function safeFilename(name: string): string {
   return (name.replace(/[^\w\-. ]+/g, "_") || "screenshot.png").slice(0, 200);
 }
 
-export default function UploadBulk() {
+export function BulkUploadPanel({ modeToggle }: { modeToggle?: ReactNode }) {
   const utils = trpc.useUtils();
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const filesRef = useRef<Map<string, File>>(new Map()); // raw File kept off-state for base64 conversion
@@ -312,11 +312,12 @@ export default function UploadBulk() {
   return (
     <div className="space-y-6 p-4 md:p-6 animate-fade-in">
       <PageHeader
-        title="Bulk evaluations"
+        title="Upload"
         subtitle="Drop a stack of screenshots — the AI extracts them in parallel, you review one grid, then save them all at once."
         icon={ScanLine}
         actions={
           <div className="flex items-center gap-2">
+            {modeToggle}
             {counts.saved > 0 && (
               <Button variant="outline" size="sm" onClick={clearSaved}>
                 <CheckCircle2 className="h-4 w-4 mr-1.5 text-emerald-600" /> Clear saved
