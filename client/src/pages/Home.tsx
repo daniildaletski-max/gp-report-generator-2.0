@@ -112,7 +112,7 @@ export default function Home() {
                       <ArrowRight className="ml-2 h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
                     </Button>
                   </Link>
-                  <Link href="/today">
+                  <Link href="/command">
                     <Button size="lg" variant="outline" className="w-full sm:w-auto rounded-2xl px-8 h-14 font-medium border-primary/20 text-primary hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-all duration-300 hover:scale-[1.03]">
                       Open app
                     </Button>

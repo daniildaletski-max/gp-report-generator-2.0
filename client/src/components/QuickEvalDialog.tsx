@@ -12,7 +12,7 @@ import { Scissors, Palette, Shirt, PersonStanding, Dices, Star, Loader2, Message
 
 /**
  * Quick evaluation modal — score a GP across the six criteria in seconds,
- * from anywhere (the Today command center, a GP row, etc.). Reuses the
+ * from anywhere (the Workspace queue, a GP row, etc.). Reuses the
  * existing `evaluation.create` endpoint; the server derives
  * appearance/game/total and tags the rubric version.
  *

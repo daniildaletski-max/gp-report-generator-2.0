@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, SlidersHorizontal, Sun, Sparkles, ScanLine, BadgeEuro, Trophy, Radar } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, SlidersHorizontal, Sparkles, ScanLine, BadgeEuro, Trophy, Radar } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -25,7 +25,6 @@ const Workspace = lazy(() => import("./pages/Workspace"));
 const GPPortal = lazy(() => import("./pages/GPPortal"));
 const InvitePage = lazy(() => import("./pages/InvitePage"));
 const Rubric = lazy(() => import("./pages/Rubric"));
-const Today = lazy(() => import("./pages/Today"));
 const Assistant = lazy(() => import("./pages/Assistant"));
 const UploadBulk = lazy(() => import("./pages/UploadBulk"));
 const Bonus = lazy(() => import("./pages/Bonus"));
@@ -46,32 +45,34 @@ function PageLoader() {
   );
 }
 
-// Base sidebar items for all users
+// Base sidebar items for all users, grouped into labelled sections so the
+// nav reads as a short hierarchy instead of one long flat list. `section`
+// drives the group headers rendered in DashboardLayout. Order matters: the
+// mobile bottom nav takes the first five (Command, Dashboard, Workspace,
+// Upload, Evaluations), so heavier/secondary surfaces (Bulk AI, Assistant)
+// are kept past that cutoff and live only in the desktop sidebar.
 const baseSidebarItems = [
-  { href: "/command", label: "Command", icon: Radar },
-  { href: "/today", label: "Today", icon: Sun },
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/workspace", label: "Workspace", icon: Zap },
-  { href: "/upload", label: "Upload", icon: UploadIcon },
-  { href: "/evaluations", label: "Evaluations", icon: FileCheck },
-  { href: "/reports", label: "Reports", icon: FileSpreadsheet },
-  { href: "/attendance", label: "Attendance", icon: CalendarCheck },
-  { href: "/bonus", label: "Bonus", icon: BadgeEuro },
-  { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
-  // Placed after the first five so the mobile bottom nav (slice 0..5)
-  // is unchanged; these live in the desktop sidebar.
-  { href: "/upload-bulk", label: "Bulk AI", icon: ScanLine },
-  { href: "/assistant", label: "Assistant", icon: Sparkles },
+  { href: "/command", label: "Command", icon: Radar, section: "Overview" },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, section: "Overview" },
+  { href: "/workspace", label: "Workspace", icon: Zap, section: "Evaluate" },
+  { href: "/upload", label: "Upload", icon: UploadIcon, section: "Evaluate" },
+  { href: "/evaluations", label: "Evaluations", icon: FileCheck, section: "Evaluate" },
+  { href: "/upload-bulk", label: "Bulk AI", icon: ScanLine, section: "Evaluate" },
+  { href: "/reports", label: "Reports", icon: FileSpreadsheet, section: "Insights" },
+  { href: "/attendance", label: "Attendance", icon: CalendarCheck, section: "Insights" },
+  { href: "/bonus", label: "Bonus", icon: BadgeEuro, section: "Insights" },
+  { href: "/leaderboard", label: "Leaderboard", icon: Trophy, section: "Insights" },
+  { href: "/assistant", label: "Assistant", icon: Sparkles, section: "Insights" },
 ];
 
 // Admin-only item
-const adminSidebarItem = { href: "/admin", label: "Admin", icon: Shield };
+const adminSidebarItem = { href: "/admin", label: "Admin", icon: Shield, section: "Admin" };
 
 // FM-only item (Team Management)
-const fmSidebarItem = { href: "/admin", label: "Settings", icon: Settings };
+const fmSidebarItem = { href: "/admin", label: "Settings", icon: Settings, section: "Admin" };
 
 // Admin-only rubric manager
-const rubricSidebarItem = { href: "/rubric", label: "Rubric", icon: SlidersHorizontal };
+const rubricSidebarItem = { href: "/rubric", label: "Rubric", icon: SlidersHorizontal, section: "Admin" };
 
 function DashboardRoutes() {
   const { user } = useAuth();
@@ -97,11 +98,6 @@ function DashboardRoutes() {
             <Route path="/command">
               <RouteErrorBoundary fallbackTitle="Command Center failed to load">
                 <CommandCenter />
-              </RouteErrorBoundary>
-            </Route>
-            <Route path="/today">
-              <RouteErrorBoundary fallbackTitle="Today failed to load">
-                <Today />
               </RouteErrorBoundary>
             </Route>
             <Route path="/dashboard">
@@ -207,7 +203,6 @@ function Router() {
       </Route>
       {/* All dashboard pages use DashboardRoutes for consistent sidebar */}
       <Route path="/command" component={DashboardRoutes} />
-      <Route path="/today" component={DashboardRoutes} />
       <Route path="/dashboard" component={DashboardRoutes} />
       <Route path="/upload" component={DashboardRoutes} />
       <Route path="/upload-bulk" component={DashboardRoutes} />

@@ -13,7 +13,7 @@ import {
 import {
   LayoutDashboard, FileSpreadsheet, FileCheck, Upload, CalendarCheck,
   Shield, Users, Target, BarChart3, AlertTriangle, RefreshCw,
-  User, Sparkles, Radar, Sun, Zap, ScanLine, BadgeEuro, Trophy,
+  User, Sparkles, Radar, Zap, ScanLine, BadgeEuro, Trophy,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { GPDetailDrawer } from "@/components/GPDetailDrawer";
@@ -21,7 +21,6 @@ import { useAuth } from "@/_core/hooks/useAuth";
 
 const NAV_ITEMS = [
   { label: "Command Center", path: "/command", icon: Radar, hint: "Cockpit" },
-  { label: "Today", path: "/today", icon: Sun, hint: "Your day" },
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard, hint: "Overview" },
   { label: "Workspace", path: "/workspace", icon: Zap, hint: "Evaluate" },
   { label: "Upload screenshots", path: "/upload", icon: Upload, hint: "AI extract" },

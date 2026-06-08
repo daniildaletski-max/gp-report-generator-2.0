@@ -105,19 +105,20 @@ export async function getDashboardStatsByUser(month?: number, year?: number, use
 export async function getAdminDashboardStats() {
   const db = await getDb();
   if (!db) return null;
-  const [totalUsers, totalTeams, totalGPs, totalEvaluations, totalReports] = await Promise.all([
+  // Admin overview KPIs. Teams are gone product-wide (fm_teams is dormant
+  // schema), recentReports/recentUsers had no client consumer — dropped to
+  // shrink the payload and remove the stale fmTeams leftJoin.
+  const [totalUsers, totalGPs, totalEvaluations, totalReports] = await Promise.all([
     db.select({ count: sql<number>`COUNT(*)` }).from(users),
-    db.select({ count: sql<number>`COUNT(*)` }).from(fmTeams),
     db.select({ count: sql<number>`COUNT(*)` }).from(gamePresenters),
     db.select({ count: sql<number>`COUNT(*)` }).from(evaluations),
     db.select({ count: sql<number>`COUNT(*)` }).from(reports),
   ]);
-  const recentReports = await db.select({ report: reports, team: fmTeams }).from(reports).leftJoin(fmTeams, eq(reports.teamId, fmTeams.id)).orderBy(desc(reports.createdAt)).limit(5);
-  const recentUsers = await db.select().from(users).orderBy(desc(users.lastSignedIn)).limit(5);
   return {
-    totalUsers: totalUsers[0]?.count || 0, totalTeams: totalTeams[0]?.count || 0,
-    totalGPs: totalGPs[0]?.count || 0, totalEvaluations: totalEvaluations[0]?.count || 0,
-    totalReports: totalReports[0]?.count || 0, recentReports, recentUsers,
+    totalUsers: totalUsers[0]?.count || 0,
+    totalGPs: totalGPs[0]?.count || 0,
+    totalEvaluations: totalEvaluations[0]?.count || 0,
+    totalReports: totalReports[0]?.count || 0,
   };
 }
 

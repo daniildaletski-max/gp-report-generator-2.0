@@ -165,6 +165,72 @@ export default function GPPortal() {
   }, [data]);
 
   /**
+   * Personal records — all-time highs across the GP's whole history.
+   *
+   * Surfaces the GP's best self in one card so the Overview reads as a
+   * trophy shelf, not just a current-month dashboard. Every metric is
+   * computed client-side from data already on the page.
+   */
+  const personalRecords = useMemo(() => {
+    if (!data) return null;
+    const evs = (data.evaluations as any[]) ?? [];
+    if (evs.length === 0) return null;
+
+    // Highest single evaluation total, with its date.
+    let bestScore = 0;
+    let bestScoreDate: string | null = null;
+    let bestAppearance = 0;
+    let bestGamePerf = 0;
+    let totalPerfects = 0;
+    for (const e of evs) {
+      const total = Number(e.totalScore || 0);
+      if (total > bestScore) {
+        bestScore = total;
+        bestScoreDate = e.evaluationDate ?? null;
+      }
+      if (total >= MAX_TOTAL_SCORE) totalPerfects++;
+      const app = (Number(e.hairScore) || 0) + (Number(e.makeupScore) || 0) + (Number(e.outfitScore) || 0) + (Number(e.postureScore) || 0);
+      if (app > bestAppearance) bestAppearance = app;
+      const perf = Number(e.gamePerformanceTotalScore ?? e.gamePerformanceScore ?? 0);
+      if (perf > bestGamePerf) bestGamePerf = perf;
+    }
+
+    // Longest perfect-score streak ever (chronological order).
+    const chrono = [...evs].sort((a: any, b: any) =>
+      new Date(a.evaluationDate || 0).getTime() - new Date(b.evaluationDate || 0).getTime(),
+    );
+    let longestStreak = 0;
+    let run = 0;
+    for (const e of chrono) {
+      if (Number(e.totalScore || 0) >= MAX_TOTAL_SCORE) {
+        run += 1;
+        if (run > longestStreak) longestStreak = run;
+      } else {
+        run = 0;
+      }
+    }
+
+    // Best monthly average (only count months that actually had data).
+    const hist = ((data.monthlyHistory as any[]) ?? []).filter(m => Number(m.evalCount || 0) > 0);
+    let bestMonth: { label: string; avg: number } | null = null;
+    for (const m of hist) {
+      const avg = Number(m.avgTotal || 0);
+      if (!bestMonth || avg > bestMonth.avg) bestMonth = { label: m.label, avg };
+    }
+
+    return {
+      totalEvals: evs.length,
+      bestScore,
+      bestScoreDate,
+      bestAppearance,
+      bestGamePerf,
+      totalPerfects,
+      longestStreak,
+      bestMonth,
+    };
+  }, [data]);
+
+  /**
    * Focus areas: which evaluation categories have the lowest average and
    * could move the most. Returns the bottom-2 with one concrete tip each.
    */
@@ -281,16 +347,38 @@ export default function GPPortal() {
 
   const achievements = useMemo(() => {
     if (!data) return [];
-    const totalEvals = data.evaluations.length;
+    const evs = (data.evaluations as any[]) ?? [];
+    const totalEvals = evs.length;
     const avgScore = totalEvals > 0
-      ? data.evaluations.reduce((s: number, e: any) => s + (e.totalScore || 0), 0) / totalEvals
+      ? evs.reduce((s: number, e: any) => s + (e.totalScore || 0), 0) / totalEvals
       : 0;
-    const perfectScores = data.evaluations.filter((e: any) => (e.totalScore || 0) >= MAX_TOTAL_SCORE).length;
+    const perfectScores = evs.filter((e: any) => (e.totalScore || 0) >= MAX_TOTAL_SCORE).length;
     const mistakes = data.monthlyStats?.current?.mistakes ?? 0;
     const attitude = data.monthlyStats?.current?.attitude ?? 0;
-    const bestScore = totalEvals > 0
-      ? Math.max(...data.evaluations.map((e: any) => e.totalScore || 0))
-      : 0;
+    const bestScore = totalEvals > 0 ? Math.max(...evs.map((e: any) => e.totalScore || 0)) : 0;
+
+    // Subscore stats — across every evaluation. Powers the category-
+    // mastery tiles (Style Icon / Game Maven / Polished).
+    const sumApp = evs.reduce((s, e: any) => s + (Number(e.appearanceScore) || 0), 0);
+    const cntApp = evs.filter((e: any) => Number(e.appearanceScore) > 0).length;
+    const sumPerf = evs.reduce((s, e: any) => s + (Number(e.gamePerformanceTotalScore ?? e.gamePerformanceScore ?? 0) || 0), 0);
+    const cntPerf = evs.filter((e: any) => Number(e.gamePerformanceTotalScore ?? e.gamePerformanceScore ?? 0) > 0).length;
+    const avgAppearance = cntApp > 0 ? sumApp / cntApp : 0;
+    const avgGamePerf = cntPerf > 0 ? sumPerf / cntPerf : 0;
+    // A "perfect appearance" eval = hair+makeup+outfit+posture = MAX_APPEARANCE_SCORE.
+    const perfectAppearance = evs.some((e: any) =>
+      ((Number(e.hairScore) || 0) + (Number(e.makeupScore) || 0) + (Number(e.outfitScore) || 0) + (Number(e.postureScore) || 0)) >= MAX_APPEARANCE_SCORE);
+
+    // Month-over-month deltas drive the Comeback / Rising Star tiles.
+    // Uses monthlyHistory (oldest-first) — only counts months with data.
+    const histWithData = ((data.monthlyHistory as any[]) ?? []).filter(m => Number(m.evalCount || 0) > 0);
+    const last = histWithData[histWithData.length - 1];
+    const prev = histWithData[histWithData.length - 2];
+    const prevPrev = histWithData[histWithData.length - 3];
+    const momDelta = last && prev ? Number(last.avgTotal) - Number(prev.avgTotal) : 0;
+    const risingTwo = !!last && !!prev && !!prevPrev
+      && Number(last.avgTotal) > Number(prev.avgTotal)
+      && Number(prev.avgTotal) > Number(prevPrev.avgTotal);
 
     // Each badge surfaces a progress hint when locked so the GP can see
     // how close they are to the next unlock — turns the locked column
@@ -298,6 +386,7 @@ export default function GPPortal() {
     // hierarchy on the badge: common badges feel earned, legendary
     // ones feel like a flex.
     return [
+      // --- Volume tier --------------------------------------------------
       {
         icon: Star, title: 'First Steps', description: 'Complete your first evaluation',
         unlocked: totalEvals >= 1, color: 'bg-amber-50 border-amber-200',
@@ -308,10 +397,25 @@ export default function GPPortal() {
       {
         icon: Flame, title: 'On Fire', description: 'Complete 5 evaluations',
         unlocked: totalEvals >= 5, color: 'bg-orange-50 border-orange-200',
-        rarity: 'rare' as const,
+        rarity: 'common' as const,
         progress: Math.min(1, totalEvals / 5),
         progressLabel: totalEvals >= 5 ? null : `${totalEvals} / 5 evals`,
       },
+      {
+        icon: BarChart3, title: 'Veteran', description: 'Reach 25 evaluations',
+        unlocked: totalEvals >= 25, color: 'bg-indigo-50 border-indigo-200',
+        rarity: 'rare' as const,
+        progress: Math.min(1, totalEvals / 25),
+        progressLabel: totalEvals >= 25 ? null : `${totalEvals} / 25 evals`,
+      },
+      {
+        icon: Trophy, title: 'Centurion', description: 'Reach 100 evaluations',
+        unlocked: totalEvals >= 100, color: 'bg-amber-50 border-amber-200',
+        rarity: 'epic' as const,
+        progress: Math.min(1, totalEvals / 100),
+        progressLabel: totalEvals >= 100 ? null : `${totalEvals} / 100 evals`,
+      },
+      // --- Quality tier -------------------------------------------------
       {
         icon: Crown, title: 'Excellence', description: 'Average score above 20',
         unlocked: avgScore >= 20, color: 'bg-yellow-50 border-yellow-200',
@@ -327,6 +431,36 @@ export default function GPPortal() {
         progressLabel: perfectScores > 0 ? null : `Best ${bestScore} / ${MAX_TOTAL_SCORE}`,
       },
       {
+        icon: Medal, title: 'Perfectionist', description: 'Earn 5 perfect-score evaluations',
+        unlocked: perfectScores >= 5, color: 'bg-purple-50 border-purple-200',
+        rarity: 'legendary' as const,
+        progress: Math.min(1, perfectScores / 5),
+        progressLabel: perfectScores >= 5 ? null : `${perfectScores} / 5 perfect scores`,
+      },
+      // --- Category mastery --------------------------------------------
+      {
+        icon: Sparkles, title: 'Style Icon', description: 'Average appearance ≥ 11',
+        unlocked: avgAppearance >= 11, color: 'bg-pink-50 border-pink-200',
+        rarity: 'epic' as const,
+        progress: Math.max(0, Math.min(1, avgAppearance / 11)),
+        progressLabel: avgAppearance >= 11 ? null : `${avgAppearance.toFixed(1)} / 11 appearance avg`,
+      },
+      {
+        icon: Gamepad2, title: 'Game Maven', description: 'Average game performance ≥ 9',
+        unlocked: avgGamePerf >= 9, color: 'bg-sky-50 border-sky-200',
+        rarity: 'epic' as const,
+        progress: Math.max(0, Math.min(1, avgGamePerf / 9)),
+        progressLabel: avgGamePerf >= 9 ? null : `${avgGamePerf.toFixed(1)} / 9 game perf avg`,
+      },
+      {
+        icon: Shirt, title: 'Polished', description: `Score a perfect ${MAX_APPEARANCE_SCORE}/${MAX_APPEARANCE_SCORE} appearance`,
+        unlocked: perfectAppearance, color: 'bg-rose-50 border-rose-200',
+        rarity: 'rare' as const,
+        progress: null,
+        progressLabel: perfectAppearance ? null : "Nail every appearance subscore",
+      },
+      // --- Conduct ------------------------------------------------------
+      {
         icon: Shield, title: 'Flawless', description: 'Zero mistakes this month',
         unlocked: mistakes === 0, color: 'bg-green-50 border-green-200',
         rarity: 'epic' as const,
@@ -334,14 +468,43 @@ export default function GPPortal() {
         progressLabel: mistakes === 0 ? null : `${mistakes} mistake${mistakes === 1 ? "" : "s"} so far`,
       },
       {
-        icon: Heart, title: 'Team Player', description: 'Positive attitude score',
+        icon: Heart, title: 'Team Player', description: 'Positive attitude this month',
         unlocked: attitude > 0, color: 'bg-pink-50 border-pink-200',
-        rarity: 'rare' as const,
+        rarity: 'common' as const,
         progress: null,
         progressLabel: attitude > 0 ? null : "Earn positive feedback",
       },
+      {
+        icon: ThumbsUp, title: 'Beloved', description: 'Attitude score of 5 or more',
+        unlocked: attitude >= 5, color: 'bg-pink-50 border-pink-200',
+        rarity: 'rare' as const,
+        progress: attitude > 0 ? Math.min(1, attitude / 5) : 0,
+        progressLabel: attitude >= 5 ? null : `${Math.max(0, attitude)} / 5 attitude`,
+      },
+      // --- Streak / momentum -------------------------------------------
+      {
+        icon: Flame, title: 'Hot Streak', description: 'Three perfect-score evals in a row',
+        unlocked: cleanStreak >= 3, color: 'bg-orange-50 border-orange-200',
+        rarity: 'epic' as const,
+        progress: Math.min(1, cleanStreak / 3),
+        progressLabel: cleanStreak >= 3 ? null : `${cleanStreak} / 3 perfect in a row`,
+      },
+      {
+        icon: TrendingUp, title: 'Comeback', description: 'Higher monthly average than last month',
+        unlocked: momDelta >= 0.5, color: 'bg-emerald-50 border-emerald-200',
+        rarity: 'rare' as const,
+        progress: momDelta > 0 ? Math.min(1, momDelta / 0.5) : 0,
+        progressLabel: momDelta >= 0.5 ? null : "Climb above last month's avg",
+      },
+      {
+        icon: TrendingUp, title: 'Rising Star', description: 'Improving for 2 months running',
+        unlocked: risingTwo, color: 'bg-emerald-50 border-emerald-200',
+        rarity: 'epic' as const,
+        progress: null,
+        progressLabel: risingTwo ? null : "Two consecutive monthly gains",
+      },
     ];
-  }, [data]);
+  }, [data, cleanStreak]);
 
   /**
    * GP Level + XP — gamified progression layered on top of raw eval
@@ -1149,6 +1312,74 @@ export default function GPPortal() {
                 </section>
               );
             })()}
+
+            {/* Personal Records — all-time highs. The trophy-shelf
+                framing turns the page from "current month dashboard"
+                into "this is who you are at your best", which is what
+                makes the portal feel like a personal space. */}
+            {personalRecords && (
+              <section>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2.5 text-slate-900">
+                    <span className="inline-block h-6 w-1 rounded-full bg-gradient-to-b from-violet-400 to-fuchsia-500" aria-hidden />
+                    <Medal className="h-5 w-5 text-violet-600" />
+                    Personal Records
+                  </h2>
+                  <span className="text-[11px] text-muted-foreground">All time</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  <RecordTile
+                    icon={Gem}
+                    label="Best single score"
+                    value={`${personalRecords.bestScore}/${MAX_TOTAL_SCORE}`}
+                    sublabel={personalRecords.bestScoreDate ? format(new Date(personalRecords.bestScoreDate), "dd MMM yyyy") : null}
+                    tone="violet"
+                  />
+                  <RecordTile
+                    icon={Crown}
+                    label="Best month"
+                    value={personalRecords.bestMonth ? personalRecords.bestMonth.avg.toFixed(1) : "—"}
+                    sublabel={personalRecords.bestMonth?.label ?? "Not enough data yet"}
+                    tone="amber"
+                  />
+                  <RecordTile
+                    icon={Sparkles}
+                    label="Best appearance"
+                    value={`${personalRecords.bestAppearance}/${MAX_APPEARANCE_SCORE}`}
+                    sublabel="Hair + Makeup + Outfit + Posture"
+                    tone="pink"
+                  />
+                  <RecordTile
+                    icon={Gamepad2}
+                    label="Best game perf"
+                    value={`${personalRecords.bestGamePerf}/${MAX_GAME_PERFORMANCE_SCORE}`}
+                    sublabel="Dealing + Game performance"
+                    tone="sky"
+                  />
+                  <RecordTile
+                    icon={Flame}
+                    label="Longest streak"
+                    value={`${personalRecords.longestStreak}`}
+                    sublabel={personalRecords.longestStreak === 1 ? "perfect-score eval" : "perfect-score evals in a row"}
+                    tone="orange"
+                  />
+                  <RecordTile
+                    icon={Trophy}
+                    label="Perfect scores"
+                    value={`${personalRecords.totalPerfects}`}
+                    sublabel={`${MAX_TOTAL_SCORE}/${MAX_TOTAL_SCORE} earned`}
+                    tone="emerald"
+                  />
+                  <RecordTile
+                    icon={BarChart3}
+                    label="Total evaluations"
+                    value={`${personalRecords.totalEvals}`}
+                    sublabel="career so far"
+                    tone="indigo"
+                  />
+                </div>
+              </section>
+            )}
 
             {/* Achievements moved into Overview */}
             <section>
@@ -2342,5 +2573,52 @@ function PeerBenchmarkRow({
         })}
       </div>
     </section>
+  );
+}
+
+// ============================================
+// RecordTile — single cell in the Personal Records grid. One value, one
+// short context line, a tone-coloured stripe + icon container. Tiny on
+// purpose so the grid scans like a trophy shelf, not a stat dump.
+// ============================================
+function RecordTile({
+  icon: Icon, label, value, sublabel, tone,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  sublabel: string | null;
+  tone: "violet" | "amber" | "pink" | "sky" | "orange" | "emerald" | "indigo";
+}) {
+  const accent =
+    tone === "violet" ? "from-violet-300 to-violet-400" :
+    tone === "amber" ? "from-amber-300 to-amber-400" :
+    tone === "pink" ? "from-pink-300 to-pink-400" :
+    tone === "sky" ? "from-sky-300 to-sky-400" :
+    tone === "orange" ? "from-orange-300 to-orange-400" :
+    tone === "emerald" ? "from-emerald-300 to-emerald-400" :
+    "from-indigo-300 to-indigo-400";
+  const iconBg =
+    tone === "violet" ? "bg-violet-100 text-violet-700 border-violet-200" :
+    tone === "amber" ? "bg-amber-100 text-amber-700 border-amber-200" :
+    tone === "pink" ? "bg-pink-100 text-pink-700 border-pink-200" :
+    tone === "sky" ? "bg-sky-100 text-sky-700 border-sky-200" :
+    tone === "orange" ? "bg-orange-100 text-orange-700 border-orange-200" :
+    tone === "emerald" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+    "bg-indigo-100 text-indigo-700 border-indigo-200";
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white px-3.5 py-3 transition-all hover:shadow-sm">
+      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${accent}`} aria-hidden />
+      <div className="flex items-start gap-2.5">
+        <span className={`h-9 w-9 shrink-0 rounded-lg border flex items-center justify-center ${iconBg}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold truncate">{label}</p>
+          <p className="text-xl font-bold tabular-nums text-slate-900 leading-tight mt-0.5">{value}</p>
+          {sublabel && <p className="text-[10px] text-slate-400 mt-0.5 truncate">{sublabel}</p>}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -270,7 +270,7 @@ export default function UploadBulk() {
       toast.success(
         `Saved ${res.created.length}${res.failed.length ? `, ${res.failed.length} failed` : ""}${review ? ` — ${review} flagged for review` : ""}`,
       );
-      // Make Today / Dashboard / coverage refresh.
+      // Make Dashboard / coverage refresh.
       utils.evaluation.coverage.invalidate();
       utils.evaluation.list.invalidate();
       utils.dashboard.insights.invalidate();
