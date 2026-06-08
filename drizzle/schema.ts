@@ -594,3 +594,20 @@ export const studioworksNameAliases = mysqlTable("studioworks_name_aliases", {
 export type StudioworksNameAlias = typeof studioworksNameAliases.$inferSelect;
 export type InsertStudioworksNameAlias = typeof studioworksNameAliases.$inferInsert;
 
+/**
+ * Studioworks sync settings — a single-row (id = 1) control record so
+ * admins can drive the auto-sync from the UI: turn it on/off and set how
+ * often it runs, without redeploying to change STUDIOWORKS_SYNC_CRON. The
+ * cron still ticks on its env cadence but gates each run on these values.
+ */
+export const studioworksSyncSettings = mysqlTable("studioworks_sync_settings", {
+  id: int("id").primaryKey(), // always 1
+  autoSyncEnabled: int("autoSyncEnabled").default(1).notNull(),
+  frequency: mysqlEnum("frequency", ["6h", "12h", "daily"]).default("6h").notNull(),
+  updatedById: int("updatedById"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type StudioworksSyncSettings = typeof studioworksSyncSettings.$inferSelect;
+export type InsertStudioworksSyncSettings = typeof studioworksSyncSettings.$inferInsert;
+

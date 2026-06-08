@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { normalizeStudioworksName, summarizeImportDetails } from "./studioworks";
+import {
+  normalizeStudioworksName,
+  summarizeImportDetails,
+  frequencyToMs,
+  shouldRunScheduledSync,
+  nextRunAt,
+} from "./studioworks";
 
 describe("normalizeStudioworksName", () => {
   it("lowercases, trims, and collapses internal whitespace", () => {
@@ -55,5 +61,44 @@ describe("summarizeImportDetails", () => {
 
   it("honors an explicit totalFound over the details length", () => {
     expect(summarizeImportDetails([{ matched: true }], 5).totalFound).toBe(5);
+  });
+});
+
+describe("frequencyToMs", () => {
+  it("maps each frequency to milliseconds", () => {
+    expect(frequencyToMs("6h")).toBe(6 * 3600_000);
+    expect(frequencyToMs("12h")).toBe(12 * 3600_000);
+    expect(frequencyToMs("daily")).toBe(24 * 3600_000);
+  });
+});
+
+describe("shouldRunScheduledSync", () => {
+  const now = new Date("2026-06-08T12:00:00Z");
+
+  it("never runs when disabled", () => {
+    expect(shouldRunScheduledSync({ autoSyncEnabled: 0, frequency: "6h" }, null, now)).toBe(false);
+  });
+  it("runs when enabled and never run before", () => {
+    expect(shouldRunScheduledSync({ autoSyncEnabled: 1, frequency: "6h" }, null, now)).toBe(true);
+  });
+  it("waits until the frequency gap has elapsed", () => {
+    const fourHoursAgo = new Date(now.getTime() - 4 * 3600_000);
+    const sevenHoursAgo = new Date(now.getTime() - 7 * 3600_000);
+    expect(shouldRunScheduledSync({ autoSyncEnabled: 1, frequency: "6h" }, fourHoursAgo, now)).toBe(false);
+    expect(shouldRunScheduledSync({ autoSyncEnabled: 1, frequency: "6h" }, sevenHoursAgo, now)).toBe(true);
+  });
+  it("treats an unparseable last-run as due", () => {
+    expect(shouldRunScheduledSync({ autoSyncEnabled: 1, frequency: "daily" }, "not-a-date", now)).toBe(true);
+  });
+});
+
+describe("nextRunAt", () => {
+  it("is null when disabled", () => {
+    expect(nextRunAt({ autoSyncEnabled: 0, frequency: "6h" }, new Date())).toBeNull();
+  });
+  it("is last-run + frequency when enabled", () => {
+    const last = new Date("2026-06-08T00:00:00Z");
+    expect(nextRunAt({ autoSyncEnabled: 1, frequency: "12h" }, last)?.toISOString())
+      .toBe(new Date("2026-06-08T12:00:00Z").toISOString());
   });
 });

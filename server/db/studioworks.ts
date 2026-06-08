@@ -12,6 +12,7 @@ import { eq, desc, sql } from "drizzle-orm";
 import {
   studioworksSyncLogs,
   studioworksNameAliases,
+  studioworksSyncSettings,
   type InsertStudioworksSyncLog,
   type StudioworksSyncLog,
   type StudioworksNameAlias,
@@ -59,6 +60,17 @@ export async function ensureStudioworksSyncSchema(): Promise<void> {
       UNIQUE KEY \`uq_sw_alias_name\` (\`normalizedName\`)
     )`),
   );
+  await db.execute(
+    sql.raw(`CREATE TABLE IF NOT EXISTS \`studioworks_sync_settings\` (
+      \`id\` int PRIMARY KEY,
+      \`autoSyncEnabled\` int NOT NULL DEFAULT 1,
+      \`frequency\` enum('6h','12h','daily') NOT NULL DEFAULT '6h',
+      \`updatedById\` int NULL,
+      \`updatedAt\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
+  );
+  // Seed the single control row so the UI/cron always have something to read.
+  await db.execute(sql.raw("INSERT IGNORE INTO `studioworks_sync_settings` (`id`) VALUES (1)"));
   log.info("Studioworks sync tables ensured");
 }
 
@@ -200,4 +212,91 @@ export async function deleteStudioworksAlias(id: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
   await db.delete(studioworksNameAliases).where(eq(studioworksNameAliases.id, id));
+}
+
+// ============================================
+// Scheduling settings + PURE gating (unit-tested)
+// ============================================
+
+export type SyncFrequency = "6h" | "12h" | "daily";
+
+export type SyncSettingsLike = { autoSyncEnabled: number; frequency: SyncFrequency };
+
+const DEFAULT_SETTINGS = { autoSyncEnabled: 1, frequency: "6h" as SyncFrequency };
+
+/** Minimum gap between scheduled runs for a frequency, in milliseconds. */
+export function frequencyToMs(f: SyncFrequency): number {
+  switch (f) {
+    case "12h": return 12 * 3600_000;
+    case "daily": return 24 * 3600_000;
+    case "6h":
+    default: return 6 * 3600_000;
+  }
+}
+
+function toDate(v: Date | string | null | undefined): Date | null {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Should the scheduled cron actually run this tick? Disabled → never; no
+ * prior run → yes; otherwise only once the frequency gap has elapsed.
+ * PURE so the gating is unit-tested without a DB or a clock.
+ */
+export function shouldRunScheduledSync(
+  settings: SyncSettingsLike,
+  lastRunAt: Date | string | null,
+  now: Date = new Date(),
+): boolean {
+  if (!settings.autoSyncEnabled) return false;
+  const last = toDate(lastRunAt);
+  if (!last) return true;
+  return now.getTime() - last.getTime() >= frequencyToMs(settings.frequency);
+}
+
+/** When the next scheduled run is due (null when disabled). PURE. */
+export function nextRunAt(settings: SyncSettingsLike, lastRunAt: Date | string | null): Date | null {
+  if (!settings.autoSyncEnabled) return null;
+  const last = toDate(lastRunAt);
+  if (!last) return new Date(); // due now
+  return new Date(last.getTime() + frequencyToMs(settings.frequency));
+}
+
+export async function getStudioworksSyncSettings(): Promise<SyncSettingsLike & { updatedAt: Date | null }> {
+  const db = await getDb();
+  if (!db) return { ...DEFAULT_SETTINGS, updatedAt: null };
+  try {
+    const rows = await db.select().from(studioworksSyncSettings).where(eq(studioworksSyncSettings.id, 1)).limit(1);
+    if (rows[0]) {
+      return {
+        autoSyncEnabled: rows[0].autoSyncEnabled,
+        frequency: rows[0].frequency as SyncFrequency,
+        updatedAt: rows[0].updatedAt,
+      };
+    }
+  } catch (err) {
+    log.warn(`Could not read studioworks sync settings: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  return { ...DEFAULT_SETTINGS, updatedAt: null };
+}
+
+export async function updateStudioworksSyncSettings(
+  patch: { autoSyncEnabled?: number; frequency?: SyncFrequency },
+  byId: number | null,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await db.select().from(studioworksSyncSettings).where(eq(studioworksSyncSettings.id, 1)).limit(1);
+  if (existing[0]) {
+    await db.update(studioworksSyncSettings).set({ ...patch, updatedById: byId }).where(eq(studioworksSyncSettings.id, 1));
+  } else {
+    await db.insert(studioworksSyncSettings).values({
+      id: 1,
+      autoSyncEnabled: patch.autoSyncEnabled ?? DEFAULT_SETTINGS.autoSyncEnabled,
+      frequency: patch.frequency ?? DEFAULT_SETTINGS.frequency,
+      updatedById: byId,
+    });
+  }
 }

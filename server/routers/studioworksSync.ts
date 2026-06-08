@@ -1331,4 +1331,32 @@ export const studioworksSyncRouter = router({
       await db.deleteStudioworksAlias(input.id);
       return { success: true };
     }),
+
+  /** Auto-sync schedule + last/next run, for the admin Schedule card. */
+  settings: adminProcedure.query(async () => {
+    const settings = await db.getStudioworksSyncSettings();
+    const last = (await db.listStudioworksSyncLogs(1))[0] ?? null;
+    const lastRunAt = last?.createdAt ?? null;
+    return {
+      autoSyncEnabled: settings.autoSyncEnabled === 1,
+      frequency: settings.frequency,
+      lastRunAt,
+      lastStatus: last?.status ?? null,
+      nextRunAt: db.nextRunAt(settings, lastRunAt),
+    };
+  }),
+
+  /** Change the auto-sync enable flag and/or frequency. */
+  updateSettings: adminProcedure
+    .input(z.object({
+      autoSyncEnabled: z.boolean().optional(),
+      frequency: z.enum(["6h", "12h", "daily"]).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await db.updateStudioworksSyncSettings({
+        autoSyncEnabled: input.autoSyncEnabled === undefined ? undefined : input.autoSyncEnabled ? 1 : 0,
+        frequency: input.frequency,
+      }, ctx.user.id);
+      return { success: true };
+    }),
 });

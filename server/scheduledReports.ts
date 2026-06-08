@@ -310,10 +310,20 @@ async function runStudioworksAutoSync() {
     const {
       findBestMatchingGP, createEvaluation, getEvaluationsByGP, getDb,
       resolveStudioworksAlias, getGamePresenterById, recordStudioworksSyncLog,
+      getStudioworksSyncSettings, listStudioworksSyncLogs, shouldRunScheduledSync,
     } = await import("./db");
     const db = await getDb();
     if (!db) {
       log.error("[StudioworksAutoSync] DB not available, aborting", new Error("DB unavailable"));
+      return;
+    }
+
+    // UI-driven control: respect the enable flag + frequency without
+    // needing a redeploy to change STUDIOWORKS_SYNC_CRON.
+    const settings = await getStudioworksSyncSettings();
+    const lastLog = (await listStudioworksSyncLogs(1))[0] ?? null;
+    if (!shouldRunScheduledSync(settings, lastLog?.createdAt ?? null)) {
+      log.info(`[StudioworksAutoSync] skipped by settings (enabled=${settings.autoSyncEnabled}, frequency=${settings.frequency})`);
       return;
     }
 

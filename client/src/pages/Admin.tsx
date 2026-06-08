@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -3386,6 +3387,70 @@ function SwStatusBadge({ status }: { status: string }) {
   return <Badge variant="outline" className={`text-[10px] capitalize ${cls}`}>{status}</Badge>;
 }
 
+/** Drive the background auto-sync from the UI: on/off, frequency, last/next run. */
+function StudioworksSchedule() {
+  const utils = trpc.useUtils();
+  const { data, isLoading } = trpc.studioworksSync.settings.useQuery();
+  const update = trpc.studioworksSync.updateSettings.useMutation({
+    onSuccess: () => utils.studioworksSync.settings.invalidate(),
+    onError: (e) => toast.error(e.message),
+  });
+  const fmt = (d: Date | string | null | undefined) => (d ? new Date(d).toLocaleString() : "—");
+  const busy = isLoading || update.isPending;
+  return (
+    <Card className="border border-border">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><Clock className="h-4 w-4" /> Auto-sync schedule</CardTitle>
+        <CardDescription>Control the background sync without a redeploy. The cron checks on its server cadence and runs when due.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={data?.autoSyncEnabled ?? false}
+              onCheckedChange={(v) => update.mutate({ autoSyncEnabled: v })}
+              disabled={busy}
+            />
+            <div>
+              <p className="text-sm font-medium">{data?.autoSyncEnabled ? "Auto-sync on" : "Auto-sync off"}</p>
+              <p className="text-xs text-muted-foreground">Scheduled background imports</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Run every</span>
+            <Select
+              value={data?.frequency ?? "6h"}
+              onValueChange={(v) => update.mutate({ frequency: v as "6h" | "12h" | "daily" })}
+            >
+              <SelectTrigger className="w-32" disabled={busy || !data?.autoSyncEnabled}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="6h">6 hours</SelectItem>
+                <SelectItem value="12h">12 hours</SelectItem>
+                <SelectItem value="daily">Daily</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+          <div className="rounded-lg border border-border bg-card/50 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Last run</p>
+            <p className="text-foreground mt-0.5">{fmt(data?.lastRunAt)}</p>
+            {data?.lastStatus && <div className="mt-1"><SwStatusBadge status={data.lastStatus} /></div>}
+          </div>
+          <div className="rounded-lg border border-border bg-card/50 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Next run</p>
+            <p className="text-foreground mt-0.5">{data?.autoSyncEnabled ? fmt(data?.nextRunAt) : "Disabled"}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card/50 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Frequency</p>
+            <p className="text-foreground mt-0.5">{data?.frequency === "daily" ? "Daily" : `Every ${data?.frequency ?? "6h"}`}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 /** Persisted history of Studioworks sync + import runs. */
 function StudioworksSyncHistory() {
   const { data: logs, isLoading } = trpc.studioworksSync.history.useQuery({ limit: 15 });
@@ -3571,6 +3636,8 @@ function StudioworksSyncTab() {
         </div>
         <StudioworksImportButton variant="default" />
       </div>
+
+      <StudioworksSchedule />
 
       <Card className="border border-border">
         <CardHeader>
