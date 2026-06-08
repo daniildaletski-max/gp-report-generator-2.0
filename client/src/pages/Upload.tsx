@@ -516,7 +516,7 @@ function AttitudeResultCard({ file, onRemove, onRetry }: { file: FileWithPreview
 
 // ============ MAIN COMPONENT ============
 
-function QuickUploadPanel({ modeToggle }: { modeToggle: ReactNode }) {
+function QuickUploadPanel({ modeToggle, onSwitchToBulk }: { modeToggle: ReactNode; onSwitchToBulk: () => void }) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<UploadType>("evaluations");
   // Files are scoped per tab so switching between Evaluations / Attitude
@@ -536,6 +536,7 @@ function QuickUploadPanel({ modeToggle }: { modeToggle: ReactNode }) {
     [activeTab],
   );
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [bulkTipDismissed, setBulkTipDismissed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [overallProgress, setOverallProgress] = useState(0);
@@ -1046,12 +1047,35 @@ function QuickUploadPanel({ modeToggle }: { modeToggle: ReactNode }) {
         </div>
       )}
 
-      {/* Empty state hint */}
+      {/* Empty state hint + Bulk AI nudge (evaluations only) — shown before
+          any files are dropped, i.e. exactly at the decision point. */}
       {!hasFiles && (
-        <div className="text-center py-8">
-          <p className="text-sm text-muted-foreground">
-            Tip: You can paste screenshots directly from clipboard with <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border text-xs font-mono">Ctrl+V</kbd>
-          </p>
+        <div className="space-y-3">
+          {activeTab === "evaluations" && !bulkTipDismissed && (
+            <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+              <ScanLine className="h-4 w-4 text-primary shrink-0" />
+              <p className="text-sm text-foreground flex-1">
+                Uploading a large batch?{" "}
+                <span className="text-muted-foreground">Bulk AI extracts them in parallel and lets you review every read before saving.</span>
+              </p>
+              <Button variant="outline" size="sm" className="h-8 shrink-0" onClick={onSwitchToBulk}>
+                <ScanLine className="h-3.5 w-3.5 mr-1.5" /> Switch to Bulk AI
+              </Button>
+              <button
+                type="button"
+                onClick={() => setBulkTipDismissed(true)}
+                aria-label="Dismiss tip"
+                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+          <div className="text-center py-4">
+            <p className="text-sm text-muted-foreground">
+              Tip: You can paste screenshots directly from clipboard with <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border text-xs font-mono">Ctrl+V</kbd>
+            </p>
+          </div>
         </div>
       )}
 
@@ -1332,5 +1356,5 @@ export default function UploadPage() {
       </Suspense>
     );
   }
-  return <QuickUploadPanel modeToggle={toggle} />;
+  return <QuickUploadPanel modeToggle={toggle} onSwitchToBulk={() => setMode("bulk")} />;
 }
