@@ -147,6 +147,45 @@ function useCountUp(target: number, durationMs = 900): number {
   return val;
 }
 
+/**
+ * Tiny dependency-free sparkline. Hand-rolled SVG (not recharts) so it
+ * renders crisply in the constrained hero slot without a ResponsiveContainer
+ * fighting for height. Draws a soft area fill + line + an endpoint dot.
+ */
+function Sparkline({
+  values, color = "#f59e0b", width = 132, height = 44,
+}: { values: number[]; color?: string; width?: number; height?: number }) {
+  const clean = (values ?? []).filter((v) => Number.isFinite(v));
+  if (clean.length < 2) return null;
+  const min = Math.min(...clean);
+  const max = Math.max(...clean);
+  const range = max - min || 1;
+  const pad = 4;
+  const pts = clean.map((v, i) => {
+    const x = pad + (i / (clean.length - 1)) * (width - pad * 2);
+    const y = pad + (1 - (v - min) / range) * (height - pad * 2);
+    return [x, y] as const;
+  });
+  const line = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const area = `${line} L${pts[pts.length - 1][0].toFixed(1)},${(height - pad).toFixed(1)} L${pts[0][0].toFixed(1)},${(height - pad).toFixed(1)} Z`;
+  const [lx, ly] = pts[pts.length - 1];
+  const gradId = `gp-spark-${color.replace("#", "")}`;
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden className="overflow-visible">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+          <stop offset="100%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gradId})`} />
+      <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lx} cy={ly} r={3} fill={color} />
+      <circle cx={lx} cy={ly} r={6} fill={color} opacity={0.18} />
+    </svg>
+  );
+}
+
 export function PerformancePulseHero({
   gpFirstName,
   greeting,
@@ -170,6 +209,7 @@ export function PerformancePulseHero({
   selectedYear,
   onMonthChange,
   isLoadingMonth,
+  trend,
 }: {
   gpFirstName: string;
   greeting: string;
@@ -202,6 +242,8 @@ export function PerformancePulseHero({
   selectedYear?: number;
   onMonthChange?: (month: number, year: number) => void;
   isLoadingMonth?: boolean;
+  /** Recent monthly average totals (oldest→newest) for the hero sparkline. */
+  trend?: number[];
 }) {
   const animated = useCountUp(avgScore, 900);
   const overallPct = maxScore > 0 ? Math.min(100, Math.max(0, (avgScore / maxScore) * 100)) : 0;
@@ -283,6 +325,17 @@ export function PerformancePulseHero({
               </span>
             )}
           </div>
+
+          {/* Trajectory sparkline — turns the "+x vs last month" chip into a
+              visible story of where the GP is heading. */}
+          {trend && trend.length >= 2 && (
+            <div className="sm:ml-auto flex flex-col items-end gap-1 pb-1">
+              <Sparkline values={trend} color="#f59e0b" />
+              <span className="text-[10px] uppercase tracking-[0.14em] text-slate-400 font-semibold">
+                last {trend.length} months
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Primary progress bar — horizontal, takes the full width.
@@ -838,23 +891,28 @@ export function MonthTabHeader({ selectedMonth, selectedYear, onChange, evalCoun
 // ============================================================================
 
 export function AtAGlanceStrip({
-  evalCount, mistakes, attitude, lastEvaluationDate,
+  evalCount, mistakes, attitude, lastEvaluationDate, trends,
 }: {
   evalCount: number;
   mistakes: number;
   attitude: number;
   lastEvaluationDate: Date | null;
+  /** Per-month series (oldest→newest) powering the mini-sparklines. */
+  trends?: { evals?: number[]; mistakes?: number[]; attitude?: number[] };
 }) {
   const recencyLabel = lastEvaluationDate
     ? formatDistanceToNow(lastEvaluationDate, { addSuffix: true })
     : "—";
   // Single neutral tile — distinguishes itself by the icon tint
   // alone, not the whole tile background. Reads as a clean
-  // "card row" instead of four competing colour blocks.
-  const tiles: Array<{ icon: typeof Eye; label: string; value: string | number; iconCls: string }> = [
-    { icon: Eye, label: "Evaluations", value: evalCount, iconCls: "text-amber-600 bg-amber-50 border-amber-100" },
-    { icon: AlertTriangle, label: "Mistakes", value: mistakes, iconCls: mistakes > 0 ? "text-rose-600 bg-rose-50 border-rose-100" : "text-emerald-600 bg-emerald-50 border-emerald-100" },
-    { icon: ThumbsUp, label: "Attitude", value: attitude > 0 ? `+${attitude}` : `${attitude}`, iconCls: attitude > 0 ? "text-emerald-600 bg-emerald-50 border-emerald-100" : "text-slate-500 bg-slate-50 border-slate-100" },
+  // "card row" instead of four competing colour blocks. A small
+  // sparkline on the right turns each number into a trend.
+  const spark = (s: number[] | undefined, color: string) =>
+    s && s.filter(Number.isFinite).length >= 2 ? { values: s, color } : undefined;
+  const tiles: Array<{ icon: typeof Eye; label: string; value: string | number; iconCls: string; spark?: { values: number[]; color: string } }> = [
+    { icon: Eye, label: "Evaluations", value: evalCount, iconCls: "text-amber-600 bg-amber-50 border-amber-100", spark: spark(trends?.evals, "#f59e0b") },
+    { icon: AlertTriangle, label: "Mistakes", value: mistakes, iconCls: mistakes > 0 ? "text-rose-600 bg-rose-50 border-rose-100" : "text-emerald-600 bg-emerald-50 border-emerald-100", spark: spark(trends?.mistakes, "#f43f5e") },
+    { icon: ThumbsUp, label: "Attitude", value: attitude > 0 ? `+${attitude}` : `${attitude}`, iconCls: attitude > 0 ? "text-emerald-600 bg-emerald-50 border-emerald-100" : "text-slate-500 bg-slate-50 border-slate-100", spark: spark(trends?.attitude, "#10b981") },
     { icon: Clock, label: "Last eval", value: recencyLabel, iconCls: "text-slate-500 bg-slate-50 border-slate-100" },
   ];
   return (
@@ -867,10 +925,15 @@ export function AtAGlanceStrip({
           <div className={`shrink-0 inline-flex items-center justify-center h-9 w-9 rounded-lg border ${t.iconCls}`}>
             <t.icon className="h-4 w-4" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400 font-semibold">{t.label}</p>
             <p className="text-lg sm:text-xl font-semibold text-slate-900 truncate leading-tight tabular-nums mt-0.5">{t.value}</p>
           </div>
+          {t.spark && (
+            <div className="shrink-0 hidden sm:block self-center">
+              <Sparkline values={t.spark.values} color={t.spark.color} width={54} height={26} />
+            </div>
+          )}
         </div>
       ))}
     </div>

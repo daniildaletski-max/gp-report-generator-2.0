@@ -139,15 +139,30 @@ function buildBookmarkletScript(): string {
       } catch (e) {}
     }
   }
-  // Strategy 3: header-aware table scrape.
+  // Strategy 3: header-aware table scrape. Avoids the "Game Presenter"
+  // trap — that header contains BOTH "game" and a name token, so we claim
+  // the name column FIRST and exclude already-used columns, and the game
+  // detector explicitly refuses any presenter/name column.
   if (collected.length === 0) {
     for (const table of document.querySelectorAll("table")) {
       const headRow = table.querySelector("thead tr") || table.querySelector("tr");
       const heads = [].slice.call(headRow ? headRow.querySelectorAll("th,td") : []).map((h) => norm(h.textContent).toLowerCase());
-      const col = (...names) => heads.findIndex((h) => names.some((n) => h.indexOf(n) >= 0));
-      const ci = { name: col("presenter","name","dealer","employee","gp"), date: col("date"), game: col("game","table"),
-        hair: col("hair"), makeup: col("makeup","make up"), outfit: col("outfit","clothing"), posture: col("posture"),
-        dealing: col("dealing"), perf: col("performance","commenting"), total: col("total") };
+      const used = new Set();
+      const claim = (pred) => { const idx = heads.findIndex((h, i) => !used.has(i) && pred(h)); if (idx >= 0) used.add(idx); return idx; };
+      const has = (...names) => (h) => names.some((n) => h.indexOf(n) >= 0);
+      const ci = {};
+      ci.name = claim(has("presenter","dealer","employee"));
+      if (ci.name < 0) ci.name = claim(has("name"));
+      ci.game = claim((h) => h.indexOf("game") >= 0 && h.indexOf("presenter") < 0 && h.indexOf("name") < 0 && h.indexOf("dealer") < 0);
+      ci.date = claim(has("date"));
+      ci.evaluator = claim(has("evaluator","reviewer","assessor"));
+      ci.hair = claim(has("hair"));
+      ci.makeup = claim(has("makeup","make up"));
+      ci.outfit = claim(has("outfit","clothing"));
+      ci.posture = claim(has("posture"));
+      ci.dealing = claim(has("dealing"));
+      ci.perf = claim(has("performance","commenting"));
+      ci.total = claim(has("total"));
       if (ci.name < 0) continue;
       const bodyRows = [].slice.call(table.querySelectorAll("tbody tr"));
       const rows = bodyRows.length ? bodyRows : [].slice.call(table.querySelectorAll("tr")).slice(1);
@@ -158,7 +173,9 @@ function buildBookmarkletScript(): string {
         const mk = (i, max) => { const n = num(cell(i)); return n == null ? undefined : { score: n, maxScore: max }; };
         pushEval({
           externalId: "dom-" + Math.random().toString(36).slice(2),
-          presenterName: name, date: cell(ci.date) || new Date().toISOString().slice(0,10), game: cell(ci.game) || undefined,
+          presenterName: name, date: cell(ci.date) || new Date().toISOString().slice(0,10),
+          evaluatorName: cell(ci.evaluator) || undefined,
+          game: cell(ci.game) || undefined,
           totalScore: num(cell(ci.total)),
           ratings: { hair: mk(ci.hair,3), makeup: mk(ci.makeup,3), outfit: mk(ci.outfit,3), posture: mk(ci.posture,3), dealingStyle: mk(ci.dealing,5), gamePerformance: mk(ci.perf,5) },
         });
@@ -166,6 +183,12 @@ function buildBookmarkletScript(): string {
       if (collected.length > 0) break;
     }
   }
+  // Guard against the footgun the user hit: if rows were found but NONE
+  // carry any score, importing would create hollow 0/12 evaluations. The
+  // Studioworks LIST view doesn't expose per-criterion scores (they live
+  // in each evaluation's detail), so steer to the Excel export instead.
+  const CRIT = ["hair","makeup","outfit","posture","dealingStyle","gamePerformance"];
+  const anyScores = collected.some((e) => e.totalScore != null || (e.ratings && CRIT.some((k) => e.ratings[k] != null)));
   // Present: copy to clipboard + a review panel (no cross-origin POST).
   const panel = (title, payload, tone, instruction) => {
     const wrap = document.createElement("div"); wrap.id = PANEL_ID;
@@ -192,6 +215,13 @@ function buildBookmarkletScript(): string {
     panel("No evaluations found", JSON.stringify(diag, null, 2),
       "#dc2626",
       "Couldn't auto-detect evaluations. Make sure you're on the evaluations LIST (not a single eval) and it's fully loaded, then re-run. If it still fails, copy this diagnostic and send it to support so we can map this exact page.");
+    return;
+  }
+  if (!anyScores) {
+    panel("Found " + collected.length + " names, but NO scores",
+      JSON.stringify(collected.map((e) => ({ presenterName: e.presenterName, date: e.date })), null, 2),
+      "#d97706",
+      "This page lists evaluations but doesn't show the per-criterion scores (those are inside each evaluation's detail view). Importing now would create empty 0/12 rows. For complete scores, use 'Export report XLS' in Studioworks and upload it on the Excel tab. (Names detected are shown above in case you still want just those.)");
     return;
   }
   panel("Copied " + collected.length + " evaluations",
@@ -527,19 +557,14 @@ export function StudioworksImporter({
       toast.error("Map at least one name to a GP first");
       return;
     }
-    // Re-build payloads from the parsed list (or from importMutation.data
-    // if parsed was cleared) but only for rows whose name has a mapping.
-    const sourceList: RawEval[] = parsed.length > 0 ? parsed : (importMutation.data?.details ?? [])
-      .filter(d => !d.matched && !d.skippedExisting)
-      .map(d => ({
-        externalId: d.externalId,
-        presenterName: d.presenterName,
-        evaluatorName: d.evaluatorName,
-        date: d.date,
-        game: d.game,
-        ratings: {},
-      }));
-    const payload = sourceList
+    // Re-import from the ORIGINAL parsed rows so the scores ride along.
+    // (Rebuilding from importMutation.data.details would lose ratings —
+    // details only carry name/date/game — and create empty 0/12 rows.)
+    if (parsed.length === 0) {
+      toast.error("Re-parse the evaluations first — the original rows (with scores) are needed to re-import.");
+      return;
+    }
+    const payload = parsed
       .filter(r => nameMappings[r.presenterName.toLowerCase().trim()])
       .map(r => ({ ...r, forceGpId: nameMappings[r.presenterName.toLowerCase().trim()] }));
     if (payload.length === 0) {
@@ -547,7 +572,7 @@ export function StudioworksImporter({
       return;
     }
     resolveMutation.mutate({ evaluations: payload });
-  }, [nameMappings, parsed, importMutation.data, resolveMutation]);
+  }, [nameMappings, parsed, resolveMutation]);
 
   const onCopyBookmarklet = useCallback(async () => {
     const href = asBookmarkletHref(buildBookmarkletScript());
