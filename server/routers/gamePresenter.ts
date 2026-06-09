@@ -93,6 +93,33 @@ export const gamePresenterRouter = router({
       return { success: true, gp: created };
     }),
 
+  /**
+   * Create a brand-new GP (no teamId, no fuzzy fallback). Used by the
+   * studioworks importer's unmatched-name resolver when the FM confirms
+   * a name is a genuinely new presenter rather than a missed match.
+   *
+   * Unlike `createForTeam`, this is for the one-shared-DB model: no team
+   * scoping is required. Unlike `findOrCreateGamePresenter`, this path
+   * SKIPS the fuzzy match step — the FM has already decided it's a new
+   * person, so silently merging into a close-but-different existing GP
+   * would be the wrong outcome.
+   */
+  create: protectedProcedure
+    .input(z.object({ name: z.string().min(1).max(200) }))
+    .mutation(async ({ ctx, input }) => {
+      const dbi = await getDbDirect();
+      if (!dbi) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+      const name = input.name.trim();
+      const result = await dbi.insert(gamePresenters).values({
+        name,
+        teamId: null,
+        userId: ctx.user.id,
+      });
+      const created = await db.getGamePresenterById(Number(result[0].insertId));
+      if (!created) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Created GP could not be re-read' });
+      return { success: true, gp: created };
+    }),
+
   delete: protectedProcedure
     .input(z.object({ gpId: z.number() }))
     .mutation(async ({ ctx, input }) => {

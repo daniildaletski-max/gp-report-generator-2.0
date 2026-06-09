@@ -31,7 +31,7 @@ export {
 
 // Game Presenters
 export {
-  findBestMatchingGP, findAllMatchingGPs,
+  findBestMatchingGP, findAllMatchingGPs, nameMatchScore,
   findAllMatchingGPsByUser, findBestMatchingGPByUser,
   findOrCreateGamePresenter,
   getAllGamePresenters, getAllGamePresentersByUser,
