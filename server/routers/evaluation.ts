@@ -418,8 +418,42 @@ export const evaluationRouter = router({
       const currentMonth = now.getMonth() + 1;
       const currentYear = now.getFullYear();
 
-      const result = await Promise.all(gps.map(async (gp) => {
-        const evals = await db.getEvaluationsByGP(gp.id);
+      // Bulk-load every dataset the per-GP shaping needs in 3 queries
+      // total instead of the old N*3 sequential fan-out (cadence was the
+      // audit-flagged hotspot at ~150 round-trips for a 50-GP roster).
+      // Each lookup falls back to a permissive default on failure so the
+      // procedure still returns a usable result if one source is down.
+      const gpIds = gps.map(g => g.id);
+      const [evalsByGp, attRows, allItems] = await Promise.all([
+        db.getEvaluationsForGPs(gpIds).catch(() => new Map<number, any[]>()),
+        db.getAttendanceByTeamMonth(null, currentMonth, currentYear).catch(() => [] as any[]),
+        db.listActionItems({}).catch(() => [] as any[]),
+      ]);
+
+      const attendanceById = new Map<number, { sick: number; missed: number; late: number; extra: number }>();
+      for (const row of attRows as Array<{
+        gamePresenter: { id: number };
+        attendance?: { sickLeaves?: number; missedDays?: number; lateToWork?: number; extraShifts?: number } | null;
+      }>) {
+        const a = row.attendance;
+        if (a && row.gamePresenter?.id) {
+          attendanceById.set(row.gamePresenter.id, {
+            sick: a.sickLeaves ?? 0,
+            missed: a.missedDays ?? 0,
+            late: a.lateToWork ?? 0,
+            extra: a.extraShifts ?? 0,
+          });
+        }
+      }
+      const openActionsById = new Map<number, number>();
+      for (const it of allItems as Array<{ gamePresenterId?: number; gpId?: number; status: string }>) {
+        if (it.status !== "open" && it.status !== "in_progress") continue;
+        const id = (it as any).gamePresenterId ?? (it as any).gpId;
+        if (typeof id === "number") openActionsById.set(id, (openActionsById.get(id) ?? 0) + 1);
+      }
+
+      const result = gps.map((gp) => {
+        const evals = (evalsByGp.get(gp.id) ?? []).slice();
         // Sort newest first by evaluationDate (fallback to createdAt).
         evals.sort((a, b) => {
           const ta = (a.evaluationDate ?? a.createdAt ?? new Date(0)).getTime?.() ?? 0;
@@ -456,26 +490,9 @@ export const evaluationRouter = router({
         checkLow("dealingStyleScore", "Dealing Style", 5);
         checkLow("gamePerformanceScore", "Game Performance", 5);
 
-        // Attendance for current month — best-effort lookup.
-        let attendance: { sick: number; missed: number; late: number; extra: number } | null = null;
-        try {
-          const att = await db.findAttendance(gp.id, currentMonth, currentYear);
-          if (att) {
-            attendance = {
-              sick: att.sickLeaves ?? 0,
-              missed: att.missedDays ?? 0,
-              late: att.lateToWork ?? 0,
-              extra: att.extraShifts ?? 0,
-            };
-          }
-        } catch { /* swallow */ }
-
-        // Open action items count.
-        let openActions = 0;
-        try {
-          const items = await db.listActionItems({ gpId: gp.id });
-          openActions = items.filter((i: any) => i.status === "open" || i.status === "in_progress").length;
-        } catch { /* swallow */ }
+        // O(1) lookups from the prebuilt maps — see bulk reads above.
+        const attendance = attendanceById.get(gp.id) ?? null;
+        const openActions = openActionsById.get(gp.id) ?? 0;
 
         // Compute urgency tier from days-since plus eval count.
         const evalCount = evals.length;
@@ -563,7 +580,7 @@ export const evaluationRouter = router({
           attendance,
           openActions,
         };
-      }));
+      });
 
       // Sort: never first (most urgent for new GPs), then overdue (longest first),
       // then due-soon, then fresh; alphabetical fallback.

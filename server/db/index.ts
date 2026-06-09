@@ -46,7 +46,7 @@ export {
   createEvaluation, updateEvaluation, deleteEvaluation,
   deleteEvaluationsByDateRange, deleteEvaluationsByMonth,
   deleteEvaluationsByDateRangeAndUser, deleteEvaluationsByMonthAndUser,
-  getEvaluationById, getEvaluationsByGP, getEvaluationsByGPAndMonth,
+  getEvaluationById, getEvaluationsByGP, getEvaluationsForGPs, getEvaluationsByGPAndMonth,
   getEvaluationsByMonth, getEvaluationsByMonthAndUser,
   getAllEvaluations, getAllEvaluationsByUser,
   getEvaluationWithGP, getEvaluationsWithGP, getEvaluationsWithGPByUser,
