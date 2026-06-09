@@ -38,7 +38,7 @@ import { toast } from "sonner";
 import {
   Download, Bookmark, Terminal, ClipboardPaste, Check, X, AlertTriangle,
   Loader2, Send, ExternalLink, Copy, ChevronRight, Search, Sparkles,
-  Link2, RefreshCw, UserCheck, FileSpreadsheet, UploadCloud, UserPlus, Lightbulb,
+  Link2, UserCheck, FileSpreadsheet, UploadCloud, UserPlus, Lightbulb,
 } from "lucide-react";
 
 // ============================================
@@ -48,115 +48,156 @@ import {
 // (re-using existing session cookies), falls back to scraping rows
 // off the page. Never throws — surfaces errors to the user instead.
 // ============================================
-function buildBookmarkletScript(opts: { apiOrigin: string; sessionToken: string; autoRefreshMin?: number }): string {
-  // The script is wrapped in an IIFE and as a string we URL-encode
-  // for the bookmarklet form. Variables are inlined at copy time.
-  const autoMin = Math.max(0, Math.floor(opts.autoRefreshMin ?? 0));
+function buildBookmarkletScript(): string {
+  // Runs on the team.studioworks.ee origin (bookmarklet click or DevTools
+  // console paste). It does NOT POST anywhere: our app is cookie-authed on
+  // a different origin, so a cross-site POST can't carry the session. The
+  // reliable handoff is the clipboard — scrape here, copy clean JSON, the
+  // FM pastes into our same-origin "Bulk paste" tab where the import runs
+  // authenticated. When nothing is found it copies a diagnostic instead so
+  // we can map the page without guessing.
   const body = `
 (async () => {
-  const API = ${JSON.stringify(opts.apiOrigin)};
-  const TOKEN = ${JSON.stringify(opts.sessionToken)};
-  const AUTO_MIN = ${autoMin};
-  // Idempotent guard so the user can't accidentally fire two
-  // overlapping auto-refresh loops in the same Studioworks tab.
-  if (window.__gpReportAutoRefresh) {
-    clearInterval(window.__gpReportAutoRefresh);
-    window.__gpReportAutoRefresh = null;
-  }
-  const banner = (msg, color) => {
-    const el = document.createElement("div");
-    el.textContent = msg;
-    el.style.cssText = "position:fixed;top:16px;right:16px;background:" + color + ";color:white;padding:12px 16px;border-radius:8px;font-family:system-ui;font-size:13px;font-weight:600;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,0.2)";
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 6000);
+  const PANEL_ID = "__gpReportPanel";
+  const old = document.getElementById(PANEL_ID); if (old) old.remove();
+  const norm = (s) => (s == null ? "" : String(s)).replace(/\\s+/g, " ").trim();
+  const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : undefined; };
+  const collected = [];
+  const seen = new Set();
+  const pushEval = (e) => {
+    if (!e || !e.presenterName) return;
+    const key = (e.presenterName + "|" + (e.date||"") + "|" + (e.evaluatorName||"") + "|" + (e.game||"")).toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key); collected.push(e);
   };
-  const runOnce = async () => {
-  try {
-    banner("Scanning Studioworks for evaluations…", "#0ea5e9");
-    // Strategy 1: look for embedded JSON on page (Next/Nuxt/Inertia
-    // patterns commonly drop a state blob into a <script id="__NEXT_DATA__">
-    // or window.__INITIAL_STATE__). We pick whatever yields evals first.
-    const collected = [];
-    const tryJson = (obj) => {
-      if (!obj || typeof obj !== "object") return;
-      const stack = [obj];
-      while (stack.length) {
-        const cur = stack.pop();
-        if (Array.isArray(cur)) { stack.push(...cur); continue; }
-        if (cur && typeof cur === "object") {
-          if (cur.presenter && (cur.score != null || cur.totalScore != null)) {
-            collected.push(cur);
-          } else {
-            for (const k in cur) {
-              if (cur[k] && typeof cur[k] === "object") stack.push(cur[k]);
-            }
-          }
-        }
-      }
+  const pick = (o, keys) => { for (const k of keys) if (o && o[k] != null) return o[k]; return undefined; };
+  const rating = (v, max) => {
+    if (v == null) return undefined;
+    if (typeof v === "number") return { score: v, maxScore: max };
+    if (typeof v === "object") { const s = num(v.score ?? v.value ?? v.rating); return s == null ? undefined : { score: s, maxScore: num(v.maxScore ?? v.max ?? v.outOf) ?? max, comment: v.comment ?? v.note }; }
+    const s = num(v); return s == null ? undefined : { score: s, maxScore: max };
+  };
+  const fromObject = (o) => {
+    const presenterRaw = pick(o, ["presenterName","presenter","gpName","gp","employee","dealer","name"]);
+    const pName = presenterRaw && typeof presenterRaw === "object" ? (presenterRaw.name ?? presenterRaw.fullName) : presenterRaw;
+    if (!pName) return null;
+    const evalRaw = pick(o, ["evaluator","reviewer","author"]);
+    const evalName = evalRaw && typeof evalRaw === "object" ? evalRaw.name : (pick(o, ["evaluatorName"]) ?? evalRaw);
+    const r = o.ratings || o.scores || o.criteria || o;
+    return {
+      externalId: norm(pick(o, ["id","uuid","_id","evaluationId"])) || ("sw-" + Math.random().toString(36).slice(2)),
+      presenterName: norm(pName),
+      evaluatorName: norm(evalName) || undefined,
+      date: norm(pick(o, ["date","evaluationDate","createdAt","evalDate"])) || new Date().toISOString().slice(0,10),
+      game: norm(pick(o, ["game","gameType","table"])) || undefined,
+      totalScore: num(pick(o, ["totalScore","total","score"])),
+      ratings: {
+        hair: rating(pick(r, ["hair"]), 3),
+        makeup: rating(pick(r, ["makeup","makeUp"]), 3),
+        outfit: rating(pick(r, ["outfit","clothing"]), 3),
+        posture: rating(pick(r, ["posture"]), 3),
+        dealingStyle: rating(pick(r, ["dealingStyle","dealing","dealing_style"]), 5),
+        gamePerformance: rating(pick(r, ["gamePerformance","gamePerf","performance","game_performance","gameCommenting"]), 5),
+      },
+      overallComment: norm(pick(o, ["overallComment","comment","notes"])) || undefined,
     };
-    const nextData = document.getElementById("__NEXT_DATA__");
-    if (nextData?.textContent) {
-      try { tryJson(JSON.parse(nextData.textContent)); } catch {}
-    }
-    if (window.__INITIAL_STATE__) tryJson(window.__INITIAL_STATE__);
-    // Strategy 2: scrape DOM rows. Studioworks renders eval rows with
-    // a recognisable presenter-name + per-criteria-score layout.
-    if (collected.length === 0) {
-      const rows = document.querySelectorAll("[data-eval-id], tr.evaluation-row, .evaluation-card, table tr");
-      rows.forEach((row, idx) => {
-        const text = row.textContent || "";
-        if (!text || text.length < 20) return;
-        const nums = (text.match(/\\b\\d+(?:\\.\\d+)?\\b/g) || []).map(Number).filter(n => n <= 30);
-        const dateMatch = text.match(/\\d{4}-\\d{2}-\\d{2}/) || text.match(/\\d{2}\\.\\d{2}\\.\\d{4}/);
-        const nameMatch = row.querySelector("[class*=name], .presenter, td:first-child")?.textContent?.trim();
-        if (!nameMatch || nums.length < 3) return;
-        collected.push({
-          externalId: row.getAttribute("data-eval-id") || ("dom-" + idx + "-" + Date.now()),
-          presenterName: nameMatch,
-          date: dateMatch ? dateMatch[0] : new Date().toISOString().slice(0,10),
-          totalScore: nums[nums.length - 1],
-          ratings: {
-            hair: nums[0] != null ? { score: nums[0], maxScore: 3 } : undefined,
-            makeup: nums[1] != null ? { score: nums[1], maxScore: 3 } : undefined,
-            outfit: nums[2] != null ? { score: nums[2], maxScore: 3 } : undefined,
-            posture: nums[3] != null ? { score: nums[3], maxScore: 3 } : undefined,
-            dealingStyle: nums[4] != null ? { score: nums[4], maxScore: 5 } : undefined,
-            gamePerformance: nums[5] != null ? { score: nums[5], maxScore: 5 } : undefined,
-          },
-        });
-      });
-    }
-    if (collected.length === 0) {
-      banner("No evaluations found on this page. Open the evaluations list and retry.", "#dc2626");
-      return;
-    }
-    banner("Found " + collected.length + " evaluations. Sending to GP Report Generator…", "#0ea5e9");
-    const res = await fetch(API + "/api/trpc/studioworksSync.importBatch?batch=1", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + TOKEN },
-      body: JSON.stringify({ "0": { json: { evaluations: collected } } }),
-    });
-    if (!res.ok) {
-      const t = await res.text();
-      banner("Import failed: " + res.status + " " + (t.slice(0, 120)), "#dc2626");
-      return;
-    }
-    const data = await res.json();
-    const sum = data?.[0]?.result?.data?.json;
-    if (sum) {
-      banner("Imported " + sum.inserted + " new · " + sum.skippedExisting + " duplicate · " + sum.unmatched + " unmatched", "#16a34a");
-    } else {
-      banner("Done. Re-open GP Report to confirm.", "#16a34a");
-    }
-  } catch (e) {
-    banner("Error: " + (e && e.message ? e.message : e), "#dc2626");
-  }
   };
-  await runOnce();
-  if (AUTO_MIN > 0) {
-    window.__gpReportAutoRefresh = setInterval(runOnce, AUTO_MIN * 60_000);
-    banner("Auto-refresh ON: re-scraping every " + AUTO_MIN + " min. Click bookmarklet again to stop.", "#7c3aed");
+  // Strategy 1: deep-scan any embedded JSON state blob.
+  const looksEval = (o) => o && typeof o === "object" && !Array.isArray(o)
+    && (("presenter" in o)||("presenterName" in o)||("gpName" in o)||("employee" in o)||("dealer" in o))
+    && (("score" in o)||("totalScore" in o)||("ratings" in o)||("scores" in o)||("date" in o)||("evaluationDate" in o));
+  const scan = (root) => {
+    const stack = [root]; let guard = 0;
+    while (stack.length && guard++ < 300000) {
+      const cur = stack.pop();
+      if (Array.isArray(cur)) { for (const x of cur) stack.push(x); continue; }
+      if (cur && typeof cur === "object") {
+        if (looksEval(cur)) { const e = fromObject(cur); if (e) pushEval(e); }
+        for (const k in cur) { const v = cur[k]; if (v && typeof v === "object") stack.push(v); }
+      }
+    }
+  };
+  const nd = document.getElementById("__NEXT_DATA__");
+  if (nd && nd.textContent) { try { scan(JSON.parse(nd.textContent)); } catch (e) {} }
+  for (const key of ["__INITIAL_STATE__","__NUXT__","__remixContext","__APOLLO_STATE__"]) {
+    try { if (window[key]) scan(window[key]); } catch (e) {}
   }
+  if (collected.length === 0) {
+    document.querySelectorAll('script[type="application/json"]').forEach((s) => {
+      try { scan(JSON.parse(s.textContent || "")); } catch (e) {}
+    });
+  }
+  // Strategy 2: same-origin API probe — cookies ARE sent here (same site).
+  if (collected.length === 0) {
+    const paths = ["/api/evaluations?per_page=500","/api/evaluations","/api/v1/evaluations","/evaluations.json","/api/reviews"];
+    for (const p of paths) {
+      try {
+        const r = await fetch(p, { credentials: "include", headers: { accept: "application/json" } });
+        if (!r.ok) continue;
+        scan(await r.json());
+        if (collected.length > 0) break;
+      } catch (e) {}
+    }
+  }
+  // Strategy 3: header-aware table scrape.
+  if (collected.length === 0) {
+    for (const table of document.querySelectorAll("table")) {
+      const headRow = table.querySelector("thead tr") || table.querySelector("tr");
+      const heads = [].slice.call(headRow ? headRow.querySelectorAll("th,td") : []).map((h) => norm(h.textContent).toLowerCase());
+      const col = (...names) => heads.findIndex((h) => names.some((n) => h.indexOf(n) >= 0));
+      const ci = { name: col("presenter","name","dealer","employee","gp"), date: col("date"), game: col("game","table"),
+        hair: col("hair"), makeup: col("makeup","make up"), outfit: col("outfit","clothing"), posture: col("posture"),
+        dealing: col("dealing"), perf: col("performance","commenting"), total: col("total") };
+      if (ci.name < 0) continue;
+      const bodyRows = [].slice.call(table.querySelectorAll("tbody tr"));
+      const rows = bodyRows.length ? bodyRows : [].slice.call(table.querySelectorAll("tr")).slice(1);
+      for (const tr of rows) {
+        const cells = [].slice.call(tr.querySelectorAll("td")); if (cells.length < 2) continue;
+        const cell = (i) => (i >= 0 && i < cells.length ? norm(cells[i].textContent) : "");
+        const name = cell(ci.name); if (!name || /^[\\d.]+$/.test(name)) continue;
+        const mk = (i, max) => { const n = num(cell(i)); return n == null ? undefined : { score: n, maxScore: max }; };
+        pushEval({
+          externalId: "dom-" + Math.random().toString(36).slice(2),
+          presenterName: name, date: cell(ci.date) || new Date().toISOString().slice(0,10), game: cell(ci.game) || undefined,
+          totalScore: num(cell(ci.total)),
+          ratings: { hair: mk(ci.hair,3), makeup: mk(ci.makeup,3), outfit: mk(ci.outfit,3), posture: mk(ci.posture,3), dealingStyle: mk(ci.dealing,5), gamePerformance: mk(ci.perf,5) },
+        });
+      }
+      if (collected.length > 0) break;
+    }
+  }
+  // Present: copy to clipboard + a review panel (no cross-origin POST).
+  const panel = (title, payload, tone, instruction) => {
+    const wrap = document.createElement("div"); wrap.id = PANEL_ID;
+    wrap.style.cssText = "position:fixed;top:16px;right:16px;width:440px;max-width:92vw;background:#fff;border:2px solid " + tone + ";border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.25);z-index:2147483647;font-family:system-ui;padding:14px";
+    const h = document.createElement("div"); h.textContent = title; h.style.cssText = "font-weight:700;font-size:14px;color:" + tone + ";margin-bottom:6px";
+    const note = document.createElement("div"); note.textContent = instruction; note.style.cssText = "font-size:12px;color:#334155;margin-bottom:8px;white-space:pre-wrap";
+    const ta = document.createElement("textarea"); ta.value = payload; ta.readOnly = true; ta.style.cssText = "width:100%;height:120px;font:11px/1.4 monospace;border:1px solid #cbd5e1;border-radius:8px;padding:6px;resize:vertical;box-sizing:border-box";
+    const row = document.createElement("div"); row.style.cssText = "display:flex;gap:8px;margin-top:8px";
+    const copyBtn = document.createElement("button"); copyBtn.textContent = "Copy"; copyBtn.style.cssText = "flex:1;background:" + tone + ";color:#fff;border:0;border-radius:8px;padding:8px;font-weight:600;cursor:pointer";
+    const closeBtn = document.createElement("button"); closeBtn.textContent = "Close"; closeBtn.style.cssText = "background:#e2e8f0;color:#334155;border:0;border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer";
+    const doCopy = () => { ta.focus(); ta.select(); try { document.execCommand("copy"); } catch (e) {} try { if (navigator.clipboard) navigator.clipboard.writeText(payload); } catch (e) {} copyBtn.textContent = "Copied!"; setTimeout(() => { copyBtn.textContent = "Copy"; }, 1500); };
+    copyBtn.onclick = doCopy; closeBtn.onclick = () => wrap.remove();
+    row.appendChild(copyBtn); row.appendChild(closeBtn);
+    wrap.appendChild(h); wrap.appendChild(note); wrap.appendChild(ta); wrap.appendChild(row);
+    document.body.appendChild(wrap);
+    doCopy();
+  };
+  if (collected.length === 0) {
+    const diag = { url: location.href, title: document.title,
+      tables: document.querySelectorAll("table").length, rows: document.querySelectorAll("tr").length,
+      jsonScripts: document.querySelectorAll('script[type="application/json"]').length,
+      globals: ["__NEXT_DATA__","__INITIAL_STATE__","__NUXT__","__remixContext","__APOLLO_STATE__"].filter((k) => k === "__NEXT_DATA__" ? !!document.getElementById(k) : !!window[k]),
+      sampleRow: norm(((document.querySelector("tbody tr") || document.querySelector("tr")) || {}).textContent || "").slice(0, 300) };
+    panel("No evaluations found", JSON.stringify(diag, null, 2),
+      "#dc2626",
+      "Couldn't auto-detect evaluations. Make sure you're on the evaluations LIST (not a single eval) and it's fully loaded, then re-run. If it still fails, copy this diagnostic and send it to support so we can map this exact page.");
+    return;
+  }
+  panel("Copied " + collected.length + " evaluations",
+    JSON.stringify(collected),
+    "#16a34a",
+    "Copied to clipboard. Switch to GP Report Generator -> Import from Studioworks -> Bulk paste, paste (Ctrl/Cmd+V), then Parse. (If copy was blocked, select the text below and copy manually.)");
 })();
   `.trim();
   return body;
@@ -319,7 +360,6 @@ export function StudioworksImporter({
   const [pasteText, setPasteText] = useState("");
   const [parsed, setParsed] = useState<RawEval[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [autoRefreshMin, setAutoRefreshMin] = useState<number>(0);
   // For unmatched-resolver: maps unmatched presenter name -> chosen GP id.
   const [nameMappings, setNameMappings] = useState<Record<string, number>>({});
   // Hidden <input type=file> trigger for the Excel-upload tab.
@@ -510,41 +550,29 @@ export function StudioworksImporter({
   }, [nameMappings, parsed, importMutation.data, resolveMutation]);
 
   const onCopyBookmarklet = useCallback(async () => {
-    const apiOrigin = window.location.origin;
-    const script = buildBookmarkletScript({ apiOrigin, sessionToken: "", autoRefreshMin });
-    const href = asBookmarkletHref(script);
+    const href = asBookmarkletHref(buildBookmarkletScript());
     try {
       await navigator.clipboard.writeText(href);
-      toast.success("Bookmarklet copied — drag this onto your bookmarks bar:", {
-        description: "Then click it while you're on team.studioworks.ee/evaluations.",
+      toast.success("Bookmarklet copied — drag the link below onto your bookmarks bar", {
+        description: "Then click it on team.studioworks.ee/evaluations. It copies the evals to your clipboard — come back here and paste into Bulk paste.",
+      });
+    } catch {
+      toast.error("Couldn't copy — drag the link below onto your bookmarks bar instead.");
+    }
+  }, []);
+
+  const onCopyConsoleSnippet = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(buildBookmarkletScript());
+      toast.success("Console snippet copied", {
+        description: "Open team.studioworks.ee/evaluations, DevTools (F12) → Console, paste, Enter. It copies the evals to your clipboard.",
       });
     } catch {
       toast.error("Couldn't copy — please copy manually from the textarea below.");
     }
   }, []);
 
-  const onCopyConsoleSnippet = useCallback(async () => {
-    const apiOrigin = window.location.origin;
-    const script = buildBookmarkletScript({ apiOrigin, sessionToken: "", autoRefreshMin });
-    try {
-      await navigator.clipboard.writeText(script);
-      toast.success("Console snippet copied", {
-        description: autoRefreshMin > 0
-          ? `Auto-refresh ON (every ${autoRefreshMin} min). Paste into DevTools console.`
-          : "Open team.studioworks.ee/evaluations, open DevTools (F12), Console tab, paste, hit Enter.",
-      });
-    } catch {
-      toast.error("Couldn't copy — please copy manually from the textarea below.");
-    }
-  }, [autoRefreshMin]);
-
-  const consoleSnippet = useMemo(() => {
-    return buildBookmarkletScript({
-      apiOrigin: typeof window !== "undefined" ? window.location.origin : "",
-      sessionToken: "",
-      autoRefreshMin,
-    });
-  }, [autoRefreshMin]);
+  const consoleSnippet = useMemo(() => buildBookmarkletScript(), []);
 
   const toggleAll = (on: boolean) =>
     setSelected(on ? new Set(parsed.map(r => r.externalId)) : new Set());
@@ -673,44 +701,15 @@ export function StudioworksImporter({
             {/* Bookmarklet */}
             <TabsContent value="bookmarklet" className="space-y-3">
               <ol className="space-y-2 text-sm text-slate-700 list-decimal list-inside">
-                <li>Click <strong>Copy bookmarklet</strong> below.</li>
-                <li>Drag the link onto your browser&apos;s bookmarks bar (or right-click → Add bookmark, paste URL).</li>
-                <li>Open <a href="https://team.studioworks.ee/evaluations" target="_blank" rel="noreferrer" className="text-primary underline inline-flex items-center gap-0.5">team.studioworks.ee/evaluations <ExternalLink className="h-3 w-3" /></a> in another tab. Make sure you&apos;re logged in.</li>
-                <li>Click the bookmarklet. A banner shows progress; evals appear here automatically.</li>
+                <li>Click <strong>Copy bookmarklet</strong>, then drag the link below onto your bookmarks bar (or right-click → Add bookmark, paste the URL).</li>
+                <li>Open <a href="https://team.studioworks.ee/evaluations" target="_blank" rel="noreferrer" className="text-primary underline inline-flex items-center gap-0.5">team.studioworks.ee/evaluations <ExternalLink className="h-3 w-3" /></a>, logged in, and let the list load fully.</li>
+                <li>Click the bookmarklet. A panel appears and <strong>copies the evaluations to your clipboard</strong>.</li>
+                <li>Come back here, open the <strong>Bulk paste</strong> tab, paste (Ctrl/Cmd+V), and hit Parse.</li>
               </ol>
 
-              {/* Auto-refresh selector — turns the bookmarklet into a
-                  background poller. The FM clicks once and Studioworks
-                  is re-scraped every N minutes for as long as the tab
-                  stays open. */}
-              <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <RefreshCw className={`h-3.5 w-3.5 text-violet-700 ${autoRefreshMin > 0 ? "animate-spin" : ""}`} />
-                    <span className="text-xs font-semibold text-violet-800">Auto-refresh mode</span>
-                  </div>
-                  <Select
-                    value={String(autoRefreshMin)}
-                    onValueChange={v => setAutoRefreshMin(Number(v))}
-                  >
-                    <SelectTrigger className="h-8 w-[160px] text-xs glass-input">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">Off (one-shot)</SelectItem>
-                      <SelectItem value="5">Every 5 min</SelectItem>
-                      <SelectItem value="10">Every 10 min</SelectItem>
-                      <SelectItem value="15">Every 15 min</SelectItem>
-                      <SelectItem value="30">Every 30 min</SelectItem>
-                      <SelectItem value="60">Every 60 min</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <p className="text-[11px] text-violet-700">
-                  {autoRefreshMin > 0
-                    ? `Bookmarklet will keep re-scraping Studioworks every ${autoRefreshMin} min while the tab stays open. Click again to stop.`
-                    : "Set an interval to turn the bookmarklet into a background poller. Closest thing to true automation without server-side browser deps."}
-                </p>
+              <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 flex items-start gap-2">
+                <Sparkles className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span>The bookmarklet no longer needs to reach our server from Studioworks (that cross-origin call was being blocked). It just reads the page and copies clean JSON to your clipboard — pasting it here imports it under your logged-in session, which always works.</span>
               </div>
 
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
@@ -734,17 +733,17 @@ export function StudioworksImporter({
               </div>
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex items-start gap-2">
                 <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                <span>Browsers block cross-origin requests from bookmarklets in some setups. If the bookmarklet doesn&apos;t fire, use the <strong>Console</strong> tab instead — same script, just paste in DevTools.</span>
+                <span>If the bookmarklet won&apos;t run (some browsers block <code>javascript:</code> bookmarks), use the <strong>Console</strong> tab — same script, pasted into DevTools. If the panel says &quot;No evaluations found&quot;, copy its diagnostic and send it over so we can map your Studioworks layout.</span>
               </div>
             </TabsContent>
 
             {/* Console */}
             <TabsContent value="console" className="space-y-3">
               <ol className="space-y-2 text-sm text-slate-700 list-decimal list-inside">
-                <li>Open <a href="https://team.studioworks.ee/evaluations" target="_blank" rel="noreferrer" className="text-primary underline inline-flex items-center gap-0.5">team.studioworks.ee/evaluations <ExternalLink className="h-3 w-3" /></a>.</li>
+                <li>Open <a href="https://team.studioworks.ee/evaluations" target="_blank" rel="noreferrer" className="text-primary underline inline-flex items-center gap-0.5">team.studioworks.ee/evaluations <ExternalLink className="h-3 w-3" /></a> and let the list load.</li>
                 <li>Open DevTools (F12 or Cmd+Opt+I), switch to the <strong>Console</strong> tab.</li>
                 <li>Click <strong>Copy snippet</strong> below, paste into the console, hit Enter.</li>
-                <li>A banner shows progress; evals appear here automatically.</li>
+                <li>A panel copies the evaluations to your clipboard — come back here and paste them into the <strong>Bulk paste</strong> tab.</li>
               </ol>
               <Button onClick={onCopyConsoleSnippet} className="gap-1.5">
                 <Copy className="h-3.5 w-3.5" />
