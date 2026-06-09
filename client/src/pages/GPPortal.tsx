@@ -611,54 +611,50 @@ export default function GPPortal() {
   const mistakeCount = monthDetails?.stats?.mistakes ?? 0;
 
   return (
-    <div className="min-h-screen text-slate-900 relative bg-slate-50/60">
-      {/* Header — sticky personal bar. Calm white surface, single
-          hairline accent at the bottom. Lets the hero own the gold
-          accent without a competing tinted strip up top. */}
-      <header className="relative z-20 border-b border-slate-200 bg-white/85 backdrop-blur-md sticky top-0">
-        <div className="container py-3 sm:py-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br ${tier?.color ?? "from-amber-400 to-amber-600"} flex items-center justify-center shadow-sm shrink-0`}>
-              {tier ? <tier.icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" /> : <Star className="h-5 w-5 sm:h-6 sm:w-6 text-white" />}
+    <div className="min-h-screen text-slate-900 relative bg-[#FAF9F7]">
+      {/* Header — editorial personal bar: a quiet monochrome monogram,
+          the name in refined type, and the tier as a single sparing amber
+          label. No competing colour blocks; the page owns the whitespace. */}
+      <header className="relative z-20 border-b border-slate-200/70 bg-[#FAF9F7]/80 backdrop-blur-md sticky top-0">
+        <div className="container py-4 sm:py-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 min-w-0 flex-1">
+            <div className="h-11 w-11 sm:h-12 sm:w-12 rounded-full bg-white border border-slate-200 flex items-center justify-center shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+              <span className="text-base sm:text-lg font-semibold text-slate-700 tracking-tight">{data.gpName.charAt(0).toUpperCase()}</span>
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-lg sm:text-xl font-bold text-slate-900 truncate">{data.gpName}</h1>
-              <div className="flex items-center gap-2 flex-wrap text-[11px]">
-                {tier && (
-                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border ${tier.bg} ${tier.textColor} font-semibold uppercase tracking-wider`}>
-                    <tier.icon className="h-2.5 w-2.5" />
-                    {tier.name}
-                  </span>
-                )}
+              <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight truncate leading-tight">{data.gpName}</h1>
+              <div className="flex items-center gap-2.5 text-[11px] mt-0.5">
+                {tier && <span className="uppercase tracking-[0.18em] font-semibold text-amber-600">{tier.name}</span>}
+                {tier && <span className="text-slate-300" aria-hidden>·</span>}
+                <span className="text-slate-400">{greeting}</span>
                 {cleanStreak > 0 && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold uppercase tracking-wider">
-                    <Flame className="h-2.5 w-2.5" />
-                    {cleanStreak} clean
-                  </span>
+                  <>
+                    <span className="text-slate-300" aria-hidden>·</span>
+                    <span className="inline-flex items-center gap-1 text-slate-500">
+                      <Flame className="h-3 w-3 text-amber-500" />{cleanStreak} clean
+                    </span>
+                  </>
                 )}
-                <span className="text-slate-500 hidden sm:inline">{greeting}</span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[10px] text-slate-400 hidden md:inline tabular-nums">
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="text-[10px] text-slate-300 hidden md:inline tabular-nums">
               {format(lastRefresh, 'HH:mm')}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
+            <button
               onClick={() => refetch()}
               disabled={isFetching}
-              className="h-8 w-8 p-0 bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+              className="h-9 w-9 inline-flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-50"
               title="Refresh"
             >
               <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-            </Button>
+            </button>
           </div>
         </div>
       </header>
 
-      <main className="container py-6 sm:py-8 space-y-8 sm:space-y-10 relative z-10">
+      <main className="container py-8 sm:py-12 space-y-10 sm:space-y-14 relative z-10">
 
         {/* Empty state — no evaluations yet. Don't burn the GP with a
             wall of zeros / "no data" everywhere. Friendly welcome
@@ -1002,38 +998,25 @@ export default function GPPortal() {
             Monthly Details panel (where the date-filter bug fix is visible) is
             never more than one click away. Active tab persists in `?tab=`. */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          {/* Pill-style tab bar — softer rounding, gold gradient on active,
-              tighter spacing. Keeps icons-only on mobile, icon+label on
-              desktop so the strip doesn't crowd small screens. */}
-          <TabsList className="bg-white/80 backdrop-blur-sm border border-slate-200/80 shadow-sm h-auto p-1 rounded-2xl grid grid-cols-4 w-full sm:w-auto sm:inline-flex gap-1">
-            <TabsTrigger
-              value="overview"
-              className="rounded-xl data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/50 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:bg-amber-50/60 transition-all duration-200 py-2 px-3 text-xs sm:text-sm font-semibold"
-            >
-              <LayoutDashboard className="h-3.5 w-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Overview</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="trend"
-              className="rounded-xl data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/50 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:bg-amber-50/60 transition-all duration-200 py-2 px-3 text-xs sm:text-sm font-semibold"
-            >
-              <TrendingUp className="h-3.5 w-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Trend</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="evaluations"
-              className="rounded-xl data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/50 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:bg-amber-50/60 transition-all duration-200 py-2 px-3 text-xs sm:text-sm font-semibold"
-            >
-              <Eye className="h-3.5 w-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Evaluations</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="month"
-              className="rounded-xl data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/50 data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:bg-amber-50/60 transition-all duration-200 py-2 px-3 text-xs sm:text-sm font-semibold"
-            >
-              <Calendar className="h-3.5 w-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Month</span>
-            </TabsTrigger>
+          {/* Editorial underline tabs — a quiet hairline rule with an amber
+              underline on the active tab (the single accent). No filled
+              pills competing with the content. */}
+          <TabsList className="bg-transparent border-0 border-b border-slate-200 rounded-none h-auto p-0 w-full justify-start gap-6 sm:gap-8">
+            {([
+              { v: "overview", Icon: LayoutDashboard, label: "Overview" },
+              { v: "trend", Icon: TrendingUp, label: "Trend" },
+              { v: "evaluations", Icon: Eye, label: "Evaluations" },
+              { v: "month", Icon: Calendar, label: "Month" },
+            ] as const).map(t => (
+              <TabsTrigger
+                key={t.v}
+                value={t.v}
+                className="rounded-none border-0 border-b-2 border-transparent -mb-px px-0 pt-0 pb-3 text-sm font-medium transition-colors bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-amber-500 data-[state=active]:text-slate-900 data-[state=inactive]:text-slate-400 hover:text-slate-600"
+              >
+                <t.Icon className="h-4 w-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">{t.label}</span>
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           <TabsContent value="overview" className="mt-6 space-y-6">
