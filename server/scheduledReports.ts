@@ -21,6 +21,7 @@ import {
   genOverview,
   generateExcelAndEmail,
 } from "./routers/_shared";
+import { generateExecutiveSummary } from "./services/executiveSummary";
 
 let isMonthlyGenerationRunning = false;
 
@@ -126,7 +127,16 @@ async function generateCompanyReport(
       return null;
     }
 
-    const [fmPerformance, goalsThisMonth, teamOverview] = await Promise.all([
+    // Pull the deep analytics overview AND draft the AI narratives +
+    // executive summary in parallel. Each is best-effort: a failed LLM
+    // call leaves the field null rather than aborting the whole report.
+    const analyticsOverview = await db.getAnalyticsOverview(reportMonth, reportYear);
+    const gpListForNames = await db.getGamePresentersByTeam(null);
+    const gpNamesById = new Map<number, string>(
+      (gpListForNames as Array<{ id: number; name: string }>).map(g => [g.id, g.name]),
+    );
+
+    const [fmPerformance, goalsThisMonth, teamOverview, executiveSummary] = await Promise.all([
       genManagementSummary(context.dataContext).catch(e => {
         log.error("Failed to auto-generate fmPerformance", e instanceof Error ? e : new Error(String(e)));
         return null;
@@ -137,6 +147,10 @@ async function generateCompanyReport(
       }),
       genOverview(context.dataContext).catch(e => {
         log.error("Failed to auto-generate teamOverview", e instanceof Error ? e : new Error(String(e)));
+        return null;
+      }),
+      generateExecutiveSummary(analyticsOverview, gpNamesById).catch(e => {
+        log.error("Failed to auto-generate executive summary", e instanceof Error ? e : new Error(String(e)));
         return null;
       }),
     ]);
@@ -150,7 +164,12 @@ async function generateCompanyReport(
       goalsThisMonth,
       teamOverview,
       additionalComments: "Auto-generated monthly report",
-      reportData: { stats: context.stats, attendance: context.attendance },
+      reportData: {
+        stats: context.stats,
+        attendance: context.attendance,
+        analyticsOverview,
+        executiveSummary,
+      },
       status: "generated",
       generatedById: ownerId,
       userId: ownerId,
