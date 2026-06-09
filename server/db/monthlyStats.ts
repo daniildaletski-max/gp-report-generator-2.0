@@ -2,7 +2,7 @@
  * Monthly GP Stats Database Operations
  * Handles attitude, mistakes, bulk operations, and GP history
  */
-import { eq, and, sql, gte } from "drizzle-orm";
+import { eq, and, sql, gte, inArray } from "drizzle-orm";
 import { monthlyGpStats, InsertMonthlyGpStats, MonthlyGpStats, gamePresenters } from "../../drizzle/schema";
 import { getDb } from "./connection";
 import { getOrCreateAttendance, updateAttendance } from "./attendance";
@@ -82,16 +82,36 @@ export async function getMonthlyGpStats(gpId: number, month: number, year: numbe
   return result.length > 0 ? result[0] : null;
 }
 
+/**
+ * Bulk fetch one month's stats rows for many GPs in a single query,
+ * keyed by gamePresenterId. Kills the per-GP lookup loop that made
+ * listWithStats issue N queries for an N-GP roster.
+ */
+export async function getMonthlyGpStatsForGPs(
+  gamePresenterIds: number[],
+  month: number,
+  year: number,
+): Promise<Map<number, MonthlyGpStats>> {
+  const out = new Map<number, MonthlyGpStats>();
+  if (gamePresenterIds.length === 0) return out;
+  const db = await getDb();
+  if (!db) return out;
+  const rows = await db.select().from(monthlyGpStats)
+    .where(and(
+      inArray(monthlyGpStats.gamePresenterId, gamePresenterIds),
+      eq(monthlyGpStats.month, month),
+      eq(monthlyGpStats.year, year),
+    ));
+  for (const r of rows) out.set(r.gamePresenterId, r);
+  return out;
+}
+
 export async function getGamePresentersByTeamWithStats(teamId: number, month: number, year: number) {
   const db = await getDb();
   if (!db) return [];
   const gps = await db.select().from(gamePresenters).where(eq(gamePresenters.teamId, teamId)).orderBy(gamePresenters.name);
-  return await Promise.all(gps.map(async (gp) => {
-    const statsResult = await db.select().from(monthlyGpStats)
-      .where(and(eq(monthlyGpStats.gamePresenterId, gp.id), eq(monthlyGpStats.month, month), eq(monthlyGpStats.year, year)))
-      .limit(1);
-    return { ...gp, stats: statsResult.length > 0 ? statsResult[0] : null };
-  }));
+  const statsByGp = await getMonthlyGpStatsForGPs(gps.map(g => g.id), month, year);
+  return gps.map(gp => ({ ...gp, stats: statsByGp.get(gp.id) ?? null }));
 }
 
 // ============================================

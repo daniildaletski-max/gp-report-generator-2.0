@@ -139,31 +139,40 @@ export async function getMonthlyTrendData(months: number = 6, teamId?: number, u
   // One shared database — trends are global; the userId param is ignored.
   void userId;
 
-  const results = [];
-  for (const m of monthList) {
-    const conditions: any[] = [sql`MONTH(${evaluations.evaluationDate}) = ${m.month}`, sql`YEAR(${evaluations.evaluationDate}) = ${m.year}`];
-    if (teamId) conditions.push(eq(gamePresenters.teamId, teamId));
+  // ONE grouped aggregate over the whole window instead of the previous
+  // query-per-month loop (6 sequential round-trips on every dashboard
+  // load). Per-month output shape is unchanged; months with no
+  // evaluations still emit a zeroed bucket.
+  const windowStart = new Date(monthList[0].year, monthList[0].month - 1, 1);
+  const conditions: any[] = [gte(evaluations.evaluationDate, windowStart)];
+  if (teamId) conditions.push(eq(gamePresenters.teamId, teamId));
 
-    const statsRaw = await db.select({
-      totalEvaluations: sql<number>`COUNT(*)`, uniqueGPs: sql<number>`COUNT(DISTINCT ${evaluations.gamePresenterId})`,
-      avgTotalScore: sql<number>`AVG(${evaluations.totalScore})`,
-      avgAppearance: sql<number>`AVG(${evaluations.hairScore} + ${evaluations.makeupScore} + ${evaluations.outfitScore} + ${evaluations.postureScore})`,
-      avgPerformance: sql<number>`AVG(${evaluations.dealingStyleScore} + ${evaluations.gamePerformanceScore})`,
-      topScore: sql<number>`MAX(${evaluations.totalScore})`, lowScore: sql<number>`MIN(${evaluations.totalScore})`,
-    }).from(evaluations).innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id)).where(and(...conditions));
+  const grouped = await db.select({
+    y: sql<number>`YEAR(${evaluations.evaluationDate})`,
+    m: sql<number>`MONTH(${evaluations.evaluationDate})`,
+    totalEvaluations: sql<number>`COUNT(*)`, uniqueGPs: sql<number>`COUNT(DISTINCT ${evaluations.gamePresenterId})`,
+    avgTotalScore: sql<number>`AVG(${evaluations.totalScore})`,
+    avgAppearance: sql<number>`AVG(${evaluations.hairScore} + ${evaluations.makeupScore} + ${evaluations.outfitScore} + ${evaluations.postureScore})`,
+    avgPerformance: sql<number>`AVG(${evaluations.dealingStyleScore} + ${evaluations.gamePerformanceScore})`,
+    topScore: sql<number>`MAX(${evaluations.totalScore})`, lowScore: sql<number>`MIN(${evaluations.totalScore})`,
+  }).from(evaluations)
+    .innerJoin(gamePresenters, eq(evaluations.gamePresenterId, gamePresenters.id))
+    .where(and(...conditions))
+    .groupBy(sql`YEAR(${evaluations.evaluationDate})`, sql`MONTH(${evaluations.evaluationDate})`);
 
-    const row = statsRaw[0];
-    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    results.push({
+  const byPeriod = new Map(grouped.map(r => [`${Number(r.y)}-${Number(r.m)}`, r]));
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return monthList.map(m => {
+    const row = byPeriod.get(`${m.year}-${m.month}`);
+    return {
       month: m.month, year: m.year, label: `${monthNames[m.month - 1]} ${m.year}`,
       totalEvaluations: Number(row?.totalEvaluations || 0), uniqueGPs: Number(row?.uniqueGPs || 0),
       avgTotalScore: row?.avgTotalScore ? Number(Number(row.avgTotalScore).toFixed(1)) : 0,
       avgAppearanceScore: row?.avgAppearance ? Number(Number(row.avgAppearance).toFixed(1)) : 0,
       avgPerformanceScore: row?.avgPerformance ? Number(Number(row.avgPerformance).toFixed(1)) : 0,
       topScore: Number(row?.topScore || 0), lowScore: Number(row?.lowScore || 0),
-    });
-  }
-  return results;
+    };
+  });
 }
 
 // ============================================
