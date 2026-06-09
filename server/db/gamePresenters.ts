@@ -46,6 +46,22 @@ function normalizeName(name: string): string {
 }
 
 /**
+ * Exported for tests + the studioworks suggestMatches endpoint: a single
+ * 0..1 score between two names that combines all the matcher's heuristics
+ * (exact normalized equality, full-string Levenshtein, order-independent
+ * token similarity, substring-contains). Higher is more similar.
+ */
+export function nameMatchScore(a: string, b: string): number {
+  const na = normalizeName(a);
+  const nb = normalizeName(b);
+  if (na === nb) return 1;
+  const fullStringSim = calculateSimilarity(na, nb);
+  const tokenSim = tokenSimilarity(na, nb);
+  const containsMatch = nb.includes(na) || na.includes(nb);
+  return Math.max(fullStringSim, tokenSim, containsMatch ? 0.85 : 0);
+}
+
+/**
  * Token-based name similarity that ignores word order.
  *
  * Why: HR systems (Persona) routinely emit `Lastname Firstname`

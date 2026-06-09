@@ -38,7 +38,7 @@ import { toast } from "sonner";
 import {
   Download, Bookmark, Terminal, ClipboardPaste, Check, X, AlertTriangle,
   Loader2, Send, ExternalLink, Copy, ChevronRight, Search, Sparkles,
-  Link2, RefreshCw, UserCheck, FileSpreadsheet, UploadCloud,
+  Link2, RefreshCw, UserCheck, FileSpreadsheet, UploadCloud, UserPlus, Lightbulb,
 } from "lucide-react";
 
 // ============================================
@@ -331,6 +331,23 @@ export function StudioworksImporter({
   // Pull GP list for the unmatched-resolver dropdown. Filtered by the
   // backend to GPs visible to the current user.
   const { data: gpList } = trpc.gamePresenter.list.useQuery();
+  const utils = trpc.useUtils();
+
+  // Inline "Create new GP" for the unmatched-resolver. The matcher is
+  // robust (handles diacritics + word order + typos), so when it can't
+  // find a name it usually means the GP doesn't exist yet — let the FM
+  // create it inline without leaving the importer.
+  const createGpMutation = trpc.gamePresenter.create.useMutation({
+    onSuccess: (res, vars) => {
+      const created = res.gp;
+      if (!created) return;
+      const key = vars.name.toLowerCase().trim();
+      setNameMappings(prev => ({ ...prev, [key]: created.id }));
+      utils.gamePresenter.list.invalidate();
+      toast.success(`Created "${created.name}" and mapped it`);
+    },
+    onError: (err) => toast.error(`Couldn't create GP: ${err.message}`),
+  });
 
   const importMutation = trpc.studioworksSync.importBatch.useMutation({
     onSuccess: (res) => {
@@ -933,35 +950,22 @@ export function StudioworksImporter({
                     </Badge>
                   </div>
                   <p className="text-[11px] text-amber-800">
-                    These names didn&apos;t match any GP automatically. Pick the right one and re-import.
+                    These names didn&apos;t match any GP automatically. Pick a suggested match, create a brand-new GP, or pick one from the full list — then re-import.
                   </p>
-                  <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                  <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
                     {unmatchedNames.map(u => {
                       const key = u.name.toLowerCase().trim();
                       const mapped = nameMappings[key];
                       return (
-                        <div key={u.externalId} className="flex items-center gap-2 bg-white rounded-md border border-amber-200 px-2 py-1.5">
-                          <Link2 className={`h-3.5 w-3.5 shrink-0 ${mapped ? "text-emerald-600" : "text-amber-500"}`} />
-                          <span className="text-xs font-semibold text-slate-700 min-w-0 flex-1 truncate">
-                            {u.name}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{u.date}</span>
-                          <Select
-                            value={mapped ? String(mapped) : ""}
-                            onValueChange={v => setNameMappings(prev => ({ ...prev, [key]: Number(v) }))}
-                          >
-                            <SelectTrigger className="glass-input h-7 text-xs w-[160px] shrink-0">
-                              <SelectValue placeholder="Pick GP…" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(gpList ?? []).map((gp: any) => (
-                                <SelectItem key={gp.id} value={String(gp.id)}>
-                                  {gp.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        <UnmatchedNameRow
+                          key={u.externalId}
+                          unmatched={u}
+                          mappedGpId={mapped}
+                          gpList={(gpList ?? []) as Array<{ id: number; name: string }>}
+                          onMap={(gpId) => setNameMappings(prev => ({ ...prev, [key]: gpId }))}
+                          onCreate={() => createGpMutation.mutate({ name: u.name })}
+                          creating={createGpMutation.isPending && createGpMutation.variables?.name === u.name}
+                        />
                       );
                     })}
                   </div>
@@ -1050,5 +1054,102 @@ export function StudioworksImportButton({
         onImported={onImported}
       />
     </>
+  );
+}
+
+// ============================================
+// Unmatched-name row — surfaces near-miss suggestions from the matcher
+// AND a one-click "Create as new GP" option, so the FM never has to
+// scroll the full GP list for names the system can't find. The fuzzy
+// matcher is robust (handles diacritics, word order, typos via
+// containsMatch + token similarity), so when it can't resolve a name it
+// usually means the GP doesn't exist yet — this row lets the FM act on
+// that fact inline instead of leaving the importer to add the GP.
+// ============================================
+
+function UnmatchedNameRow({
+  unmatched, mappedGpId, gpList, onMap, onCreate, creating,
+}: {
+  unmatched: { name: string; date: string; externalId: string };
+  mappedGpId: number | undefined;
+  gpList: Array<{ id: number; name: string }>;
+  onMap: (gpId: number) => void;
+  onCreate: () => void;
+  creating: boolean;
+}) {
+  // Top fuzzy candidates regardless of threshold — see studioworksSync.suggestMatches.
+  const { data: suggestions } = trpc.studioworksSync.suggestMatches.useQuery(
+    { name: unmatched.name, limit: 3 },
+    { staleTime: 5 * 60_000 },
+  );
+  const topSuggestions = (suggestions ?? []).filter(s => s.score >= 0.45).slice(0, 3);
+  const mappedName = mappedGpId ? gpList.find(g => g.id === mappedGpId)?.name : null;
+
+  return (
+    <div className="bg-white rounded-md border border-amber-200 px-2.5 py-2 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <Link2 className={`h-3.5 w-3.5 shrink-0 ${mappedGpId ? "text-emerald-600" : "text-amber-500"}`} />
+        <span className="text-xs font-semibold text-slate-700 min-w-0 flex-1 truncate">{unmatched.name}</span>
+        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{unmatched.date}</span>
+        <Select
+          value={mappedGpId ? String(mappedGpId) : ""}
+          onValueChange={v => onMap(Number(v))}
+        >
+          <SelectTrigger className="glass-input h-7 text-xs w-[160px] shrink-0">
+            <SelectValue placeholder="Pick GP…" />
+          </SelectTrigger>
+          <SelectContent>
+            {gpList.map(gp => (
+              <SelectItem key={gp.id} value={String(gp.id)}>{gp.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Near-miss suggestions + create-new — the row's value-add. */}
+      <div className="flex items-center gap-1.5 flex-wrap pl-5">
+        {topSuggestions.length > 0 && (
+          <>
+            <Lightbulb className="h-3 w-3 text-amber-600 shrink-0" />
+            <span className="text-[10px] text-amber-700 font-medium">Closest:</span>
+            {topSuggestions.map(s => {
+              const isMapped = mappedGpId === s.id;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => onMap(s.id)}
+                  className={`inline-flex items-center gap-1 text-[10px] rounded-full px-2 py-0.5 border transition-colors ${
+                    isMapped
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                      : "bg-white border-amber-200 text-slate-700 hover:bg-amber-50 hover:border-amber-300"
+                  }`}
+                  title={`${s.matchedField === "realName" ? "Real name: " : ""}${s.name}`}
+                >
+                  {isMapped && <Check className="h-2.5 w-2.5" />}
+                  <span className="truncate max-w-[120px]">{s.name}</span>
+                  <span className="tabular-nums text-amber-600">{Math.round(s.score * 100)}%</span>
+                </button>
+              );
+            })}
+          </>
+        )}
+        <button
+          type="button"
+          onClick={onCreate}
+          disabled={creating || !!mappedGpId}
+          className="inline-flex items-center gap-1 text-[10px] rounded-full px-2 py-0.5 border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Create a brand-new GP with this exact name"
+        >
+          {creating ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <UserPlus className="h-2.5 w-2.5" />}
+          Create new
+        </button>
+        {mappedName && (
+          <span className="text-[10px] text-emerald-700 ml-auto">
+            → <span className="font-medium">{mappedName}</span>
+          </span>
+        )}
+      </div>
+    </div>
   );
 }

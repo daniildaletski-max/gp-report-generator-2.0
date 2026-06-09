@@ -1335,6 +1335,42 @@ export const studioworksSyncRouter = router({
     .input(z.object({ limit: z.number().min(1).max(100).optional() }).optional())
     .query(async ({ input }) => db.listStudioworksSyncLogs(input?.limit ?? 20)),
 
+  /**
+   * Top N near-miss matches for an unmatched studioworks name. The
+   * importer's "Map unmatched names" panel uses this to surface
+   * close-but-below-threshold candidates so the FM can see whether a real
+   * match exists — and the matcher just scored it under 0.7 — rather than
+   * blindly scrolling the full GP list to find them.
+   *
+   * Returns scored matches REGARDLESS of threshold, sorted descending.
+   * Compares against both `gp.name` (stage/dealer name) and `gp.realName`
+   * (HR/legal name) when present, keeping whichever scored higher.
+   */
+  suggestMatches: protectedProcedure
+    .input(z.object({
+      name: z.string().min(1).max(255),
+      limit: z.number().int().min(1).max(20).optional(),
+    }))
+    .query(async ({ input }) => {
+      const limit = input.limit ?? 5;
+      const gps = await db.getAllGamePresenters();
+      const scored = gps.map(gp => {
+        const stage = db.nameMatchScore(input.name, gp.name);
+        const real = gp.realName ? db.nameMatchScore(input.name, gp.realName) : 0;
+        return {
+          id: gp.id,
+          name: gp.name,
+          realName: gp.realName ?? null,
+          score: Math.max(stage, real),
+          matchedField: real > stage ? "realName" as const : "name" as const,
+        };
+      });
+      return scored
+        .filter(s => s.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
+    }),
+
   /** Learned name → GP aliases (the client maps gpId → name from its own list). */
   aliases: adminProcedure.query(async () => db.listStudioworksAliases()),
 
