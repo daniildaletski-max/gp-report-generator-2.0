@@ -13,6 +13,7 @@ import {
   genGoals,
   genOverview,
 } from "./_shared";
+import { generateExecutiveSummary } from "../services/executiveSummary";
 import { createLogger } from "../services/logger";
 const log = createLogger("Router");
 
@@ -132,6 +133,20 @@ export const reportRouter = router({
         teamOverview = c;
       }
 
+      // Pull the deep analytics overview AND ask the LLM to synthesize it
+      // into an executive summary. Both are persisted with the report so
+      // the saved artifact carries the deep numbers + narrative — the
+      // historical view doesn't have to re-derive them.
+      const analyticsOverview = await db.getAnalyticsOverview(input.reportMonth, input.reportYear);
+      const gpListForNames = await db.getGamePresentersByTeam(null);
+      const gpNamesById = new Map<number, string>(
+        (gpListForNames as Array<{ id: number; name: string }>).map(g => [g.id, g.name]),
+      );
+      const executiveSummary = await generateExecutiveSummary(analyticsOverview, gpNamesById).catch(err => {
+        log.error("Failed to auto-generate executive summary", err instanceof Error ? err : new Error(String(err)));
+        return null;
+      });
+
       const payload = {
         teamId: null,
         reportMonth: input.reportMonth,
@@ -140,7 +155,12 @@ export const reportRouter = router({
         goalsThisMonth,
         teamOverview,
         additionalComments: input.additionalComments || null,
-        reportData: { stats: context.stats, attendance: context.attendance },
+        reportData: {
+          stats: context.stats,
+          attendance: context.attendance,
+          analyticsOverview,
+          executiveSummary,
+        },
         status: "generated" as const,
         generatedById: ctx.user.id,
         userId: ctx.user.id,
@@ -266,6 +286,31 @@ export const reportRouter = router({
   googleSheetsAvailable: protectedProcedure.query(() => {
     return { available: isGoogleSheetsAvailable() };
   }),
+
+  /**
+   * Executive summary preview — pulls the deep analytics overview for the
+   * period and asks the LLM to synthesize it into a 5-7 sentence narrative.
+   * Returns the narrative AND the analytics overview so the Reports page
+   * can show both the prose and the underlying numbers side-by-side.
+   *
+   * Read-only: doesn't persist. The `generate` mutation calls the same
+   * helper and stores the result in `reportData.analyticsOverview` so the
+   * historical report carries it.
+   */
+  executiveSummary: protectedProcedure
+    .input(z.object({
+      reportMonth: z.number().min(1).max(12),
+      reportYear: z.number().min(2020).max(2100),
+    }))
+    .query(async ({ input }) => {
+      const overview = await db.getAnalyticsOverview(input.reportMonth, input.reportYear);
+      const gps = await db.getGamePresentersByTeam(null);
+      const gpNames = new Map<number, string>(
+        (gps as Array<{ id: number; name: string }>).map(g => [g.id, g.name]),
+      );
+      const summary = await generateExecutiveSummary(overview, gpNames);
+      return { summary, overview };
+    }),
 
   // One shared database — everyone sees every report.
   list: protectedProcedure.query(async () => {

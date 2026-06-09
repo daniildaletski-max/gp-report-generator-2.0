@@ -15,7 +15,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2, Trash2, Eye, Calendar, Search, X, Copy, CheckCircle, ExternalLink, Sheet } from "lucide-react";
+import { FileSpreadsheet, Download, Plus, Loader2, Sparkles, RefreshCw, Wand2, Trash2, Eye, Calendar, Search, X, Copy, CheckCircle, ExternalLink, Sheet, LineChart, Target, TrendingDown } from "lucide-react";
+import { MAX_TOTAL_SCORE, MONTH_NAMES, SCORE_CONFIG } from "@shared/const";
 import { format } from "date-fns";
 
 const MONTHS = [
@@ -455,6 +456,13 @@ export default function ReportsPage() {
           email). Only renders when there's something to fix or when
           the user is an admin overseeing multiple teams. */}
       <DeliveryReadinessPanel data={deliveryReadiness} />
+
+      {/* AI Executive Summary preview — synthesizes the deep analytics
+          dimensions (per-criterion strengths/weaknesses with MoM deltas,
+          per-game performance, distribution, top movers) into a short
+          narrative. Lives above the report dialog so the operator can read
+          the AI's read of last month BEFORE generating the report. */}
+      <ExecutiveSummaryCard />
 
       <Dialog open={showNewReport} onOpenChange={setShowNewReport}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1346,6 +1354,186 @@ function ReportKpi({
           <p className="text-xl font-bold tabular-nums text-slate-900 leading-tight">{value.toLocaleString()}</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================
+// AI Executive Summary — synthesizes the deep analytics dimensions into a
+// 5-7 sentence narrative the operator can paste into the report. Pulls
+// the analytics overview AND asks the LLM to compose the summary on the
+// server (report.executiveSummary). Shows the prose plus the underlying
+// numbers (headline + strongest + focus area + biggest movers) side-by-
+// side so the operator can sanity-check the AI against the data.
+// ============================================
+
+function ExecutiveSummaryCard() {
+  const now = new Date();
+  // Default to last month — that's the month the operator is reporting on.
+  const lastMonth = now.getMonth() === 0
+    ? { month: 12, year: now.getFullYear() - 1 }
+    : { month: now.getMonth(), year: now.getFullYear() };
+  const [period, setPeriod] = useState(lastMonth);
+  const { data, isLoading, isError, refetch, isFetching } = trpc.report.executiveSummary.useQuery(
+    { reportMonth: period.month, reportYear: period.year },
+    { staleTime: 1000 * 60 * 10 },
+  );
+  const { data: gpList } = trpc.gamePresenter.list.useQuery();
+  const gpNames = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const g of (gpList ?? []) as Array<{ id: number; name: string }>) m.set(g.id, g.name);
+    return m;
+  }, [gpList]);
+
+  const headline = data?.overview;
+  const focus = useMemo(() => {
+    if (!headline) return null;
+    const withData = headline.criteria.filter(c => c.sampleSize > 0);
+    if (withData.length === 0) return null;
+    return [...withData].sort((a, b) => {
+      const aMax = SCORE_CONFIG[a.key as keyof typeof SCORE_CONFIG]?.max ?? 1;
+      const bMax = SCORE_CONFIG[b.key as keyof typeof SCORE_CONFIG]?.max ?? 1;
+      return (a.avg / aMax) - (b.avg / bMax);
+    })[0];
+  }, [headline]);
+
+  return (
+    <Card className="overflow-hidden border-violet-200/60 shadow-sm">
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-violet-400/60 to-transparent" />
+      <CardHeader className="pb-3 bg-gradient-to-br from-white to-violet-50/40">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-violet-100 border border-violet-200">
+              <Sparkles className="h-4 w-4 text-violet-700" />
+            </div>
+            <div>
+              <CardTitle className="text-base">AI Executive Summary</CardTitle>
+              <CardDescription>
+                Synthesized from the deep analytics — criteria, games, distribution, movers.
+              </CardDescription>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Select value={String(period.month)} onValueChange={v => setPeriod(p => ({ ...p, month: Number(v) }))}>
+              <SelectTrigger className="w-36 h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MONTH_NAMES.map((m, i) => (
+                  <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={String(period.year)} onValueChange={v => setPeriod(p => ({ ...p, year: Number(v) }))}>
+              <SelectTrigger className="w-24 h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i).map(y => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              title="Regenerate"
+              aria-label="Regenerate executive summary"
+            >
+              <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-2 space-y-4">
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-[92%]" />
+            <Skeleton className="h-4 w-[80%]" />
+          </div>
+        ) : isError ? (
+          <p className="text-sm text-rose-600">Couldn't generate the summary — try again, or check that the AI key is configured.</p>
+        ) : data?.summary ? (
+          <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">{data.summary}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No summary available — likely no evaluations for this period or the AI is offline. The numbers below are still accurate.
+          </p>
+        )}
+
+        {headline && headline.totalEvaluations > 0 && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 pt-2 border-t border-violet-100">
+            <ExecKpi label="Evaluations" value={`${headline.totalEvaluations}`} icon={FileSpreadsheet} />
+            <ExecKpi label="GPs evaluated" value={`${headline.uniqueGps}`} icon={Sparkles} />
+            <ExecKpi label="Avg score" value={`${headline.avgTotal.toFixed(1)}/${MAX_TOTAL_SCORE}`} icon={LineChart} />
+            <ExecKpi
+              label="Focus area"
+              value={focus ? (SCORE_CONFIG[focus.key as keyof typeof SCORE_CONFIG]?.label ?? focus.key) : "—"}
+              sub={focus ? `${focus.avg.toFixed(1)}/${SCORE_CONFIG[focus.key as keyof typeof SCORE_CONFIG]?.max}` : ""}
+              icon={Target}
+              tone="rose"
+            />
+          </div>
+        )}
+
+        {headline && (headline.movers.improvers.length > 0 || headline.movers.decliners.length > 0) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <MoverList title="Most improved" tone="emerald" icon={TrendingDown} flip movers={headline.movers.improvers} gpNames={gpNames} />
+            <MoverList title="Biggest drops" tone="rose" icon={TrendingDown} movers={headline.movers.decliners} gpNames={gpNames} />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ExecKpi({
+  label, value, sub, icon: Icon, tone,
+}: { label: string; value: string; sub?: string; icon: React.ComponentType<{ className?: string }>; tone?: "rose" }) {
+  const iconBg = tone === "rose"
+    ? "bg-rose-100 text-rose-700 border-rose-200"
+    : "bg-violet-100 text-violet-700 border-violet-200";
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-violet-100 bg-white px-3 py-2">
+      <span className={`h-8 w-8 shrink-0 rounded-lg border flex items-center justify-center ${iconBg}`}>
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold truncate">{label}</p>
+        <p className="text-sm font-bold tabular-nums text-slate-900 leading-tight truncate">{value}</p>
+        {sub && <p className="text-[10px] text-muted-foreground truncate">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+function MoverList({
+  title, tone, icon: Icon, flip,
+  movers, gpNames,
+}: {
+  title: string;
+  tone: "emerald" | "rose";
+  icon: React.ComponentType<{ className?: string }>;
+  flip?: boolean;
+  movers: Array<{ gpId: number; avg: number; prevAvg: number; delta: number; evals: number }>;
+  gpNames: Map<number, string>;
+}) {
+  const color = tone === "emerald" ? "text-emerald-600" : "text-rose-600";
+  return (
+    <div className="rounded-lg border border-violet-100 bg-white p-3">
+      <div className={`flex items-center gap-1.5 text-xs font-semibold ${color} mb-2`}>
+        <Icon className={`h-3.5 w-3.5 ${flip ? "rotate-180" : ""}`} /> {title}
+      </div>
+      <ul className="space-y-1">
+        {movers.slice(0, 3).map(m => (
+          <li key={m.gpId} className="flex items-center justify-between text-xs">
+            <span className="text-slate-700 truncate">{gpNames.get(m.gpId) ?? `GP #${m.gpId}`}</span>
+            <span className={`tabular-nums font-semibold ${color}`}>
+              {m.prevAvg.toFixed(1)} → {m.avg.toFixed(1)} ({m.delta > 0 ? "+" : ""}{m.delta.toFixed(1)})
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
