@@ -29,6 +29,21 @@ vi.mock("./db", () => ({
   createReport: vi.fn().mockResolvedValue({ id: 1 }),
   deleteReport: vi.fn().mockResolvedValue(undefined),
   updateReport: vi.fn().mockResolvedValue(undefined),
+  // Reports v2: cron now also pulls the analytics overview + GP list to
+  // generate the AI executive summary alongside the existing narratives.
+  getAnalyticsOverview: vi.fn().mockResolvedValue({
+    period: { month: 5, year: 2026 },
+    totalEvaluations: 0, uniqueGps: 0, avgTotal: 0,
+    criteria: [], games: [], distribution: [],
+    movers: { improvers: [], decliners: [] },
+  }),
+  getGamePresentersByTeam: vi.fn().mockResolvedValue([]),
+}));
+
+// Reports v2: stub the executive-summary LLM call so the cron tests don't
+// hit a real model.
+vi.mock("./services/executiveSummary", () => ({
+  generateExecutiveSummary: vi.fn().mockResolvedValue("exec summary"),
 }));
 
 // Mock the shared report helpers — the cron reuses the on-demand path's

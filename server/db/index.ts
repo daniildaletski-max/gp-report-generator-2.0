@@ -46,7 +46,7 @@ export {
   createEvaluation, updateEvaluation, deleteEvaluation,
   deleteEvaluationsByDateRange, deleteEvaluationsByMonth,
   deleteEvaluationsByDateRangeAndUser, deleteEvaluationsByMonthAndUser,
-  getEvaluationById, getEvaluationsByGP, getEvaluationsByGPAndMonth,
+  getEvaluationById, getEvaluationsByGP, getEvaluationsForGPs, getEvaluationsByGPAndMonth,
   getEvaluationsByMonth, getEvaluationsByMonthAndUser,
   getAllEvaluations, getAllEvaluationsByUser,
   getEvaluationWithGP, getEvaluationsWithGP, getEvaluationsWithGPByUser,
@@ -169,3 +169,19 @@ export {
   getStudioworksSyncSettings, updateStudioworksSyncSettings,
   studioworksContentHash, getStudioworksImport, recordStudioworksImport,
 } from "./studioworks";
+
+// Analytics — per-criterion / per-game / distribution / movers / trend.
+// Pure + DB functions both exported so the report layer can reuse the
+// shaping without re-running the SQL.
+export {
+  CRITERION_KEYS,
+  criterionBreakdown, gameBreakdown, scoreDistribution, topMovers,
+  buildAnalyticsOverview, getAnalyticsOverview,
+  monthWindow, aggregateCriteriaTrend, getCriteriaTrend,
+  previousPeriod,
+} from "./analytics";
+export type {
+  CriterionKey, AnalyticsRow, TrendRow,
+  CriterionStat, GroupStat, DistributionBucket, Mover, Movers,
+  AnalyticsOverview, CriteriaTrendPoint,
+} from "./analytics";

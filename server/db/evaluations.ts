@@ -181,6 +181,39 @@ export async function getEvaluationsByGP(gamePresenterId: number): Promise<Evalu
   return await db.select().from(evaluations).where(eq(evaluations.gamePresenterId, gamePresenterId)).orderBy(desc(evaluations.evaluationDate));
 }
 
+/**
+ * Bulk fetch evaluations for many GPs in ONE round-trip, grouped by gpId
+ * and sorted newest-first within each group. Returns a Map so callers
+ * (the cadence procedure) can look up by id without an N+1 query loop.
+ *
+ * When `limitPerGp` is set, each group is truncated to that many rows
+ * AFTER sorting — we still pull all rows for each GP in one SQL call,
+ * but the in-memory groups stay small.
+ */
+export async function getEvaluationsForGPs(
+  gamePresenterIds: number[],
+  limitPerGp?: number,
+): Promise<Map<number, Evaluation[]>> {
+  const out = new Map<number, Evaluation[]>();
+  if (gamePresenterIds.length === 0) return out;
+  const db = await getDb();
+  if (!db) return out;
+  const rows = await db
+    .select()
+    .from(evaluations)
+    .where(inArray(evaluations.gamePresenterId, gamePresenterIds))
+    .orderBy(desc(evaluations.evaluationDate));
+  for (const id of gamePresenterIds) out.set(id, []);
+  for (const r of rows) {
+    if (r.gamePresenterId == null) continue;
+    const arr = out.get(r.gamePresenterId);
+    if (!arr) continue;
+    if (limitPerGp != null && arr.length >= limitPerGp) continue;
+    arr.push(r);
+  }
+  return out;
+}
+
 export async function getEvaluationsByGPAndMonth(gamePresenterId: number, year: number, month: number): Promise<Evaluation[]> {
   const db = await getDb();
   if (!db) return [];
