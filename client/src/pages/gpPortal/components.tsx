@@ -891,23 +891,28 @@ export function MonthTabHeader({ selectedMonth, selectedYear, onChange, evalCoun
 // ============================================================================
 
 export function AtAGlanceStrip({
-  evalCount, mistakes, attitude, lastEvaluationDate,
+  evalCount, mistakes, attitude, lastEvaluationDate, trends,
 }: {
   evalCount: number;
   mistakes: number;
   attitude: number;
   lastEvaluationDate: Date | null;
+  /** Per-month series (oldest→newest) powering the mini-sparklines. */
+  trends?: { evals?: number[]; mistakes?: number[]; attitude?: number[] };
 }) {
   const recencyLabel = lastEvaluationDate
     ? formatDistanceToNow(lastEvaluationDate, { addSuffix: true })
     : "—";
   // Single neutral tile — distinguishes itself by the icon tint
   // alone, not the whole tile background. Reads as a clean
-  // "card row" instead of four competing colour blocks.
-  const tiles: Array<{ icon: typeof Eye; label: string; value: string | number; iconCls: string }> = [
-    { icon: Eye, label: "Evaluations", value: evalCount, iconCls: "text-amber-600 bg-amber-50 border-amber-100" },
-    { icon: AlertTriangle, label: "Mistakes", value: mistakes, iconCls: mistakes > 0 ? "text-rose-600 bg-rose-50 border-rose-100" : "text-emerald-600 bg-emerald-50 border-emerald-100" },
-    { icon: ThumbsUp, label: "Attitude", value: attitude > 0 ? `+${attitude}` : `${attitude}`, iconCls: attitude > 0 ? "text-emerald-600 bg-emerald-50 border-emerald-100" : "text-slate-500 bg-slate-50 border-slate-100" },
+  // "card row" instead of four competing colour blocks. A small
+  // sparkline on the right turns each number into a trend.
+  const spark = (s: number[] | undefined, color: string) =>
+    s && s.filter(Number.isFinite).length >= 2 ? { values: s, color } : undefined;
+  const tiles: Array<{ icon: typeof Eye; label: string; value: string | number; iconCls: string; spark?: { values: number[]; color: string } }> = [
+    { icon: Eye, label: "Evaluations", value: evalCount, iconCls: "text-amber-600 bg-amber-50 border-amber-100", spark: spark(trends?.evals, "#f59e0b") },
+    { icon: AlertTriangle, label: "Mistakes", value: mistakes, iconCls: mistakes > 0 ? "text-rose-600 bg-rose-50 border-rose-100" : "text-emerald-600 bg-emerald-50 border-emerald-100", spark: spark(trends?.mistakes, "#f43f5e") },
+    { icon: ThumbsUp, label: "Attitude", value: attitude > 0 ? `+${attitude}` : `${attitude}`, iconCls: attitude > 0 ? "text-emerald-600 bg-emerald-50 border-emerald-100" : "text-slate-500 bg-slate-50 border-slate-100", spark: spark(trends?.attitude, "#10b981") },
     { icon: Clock, label: "Last eval", value: recencyLabel, iconCls: "text-slate-500 bg-slate-50 border-slate-100" },
   ];
   return (
@@ -920,10 +925,15 @@ export function AtAGlanceStrip({
           <div className={`shrink-0 inline-flex items-center justify-center h-9 w-9 rounded-lg border ${t.iconCls}`}>
             <t.icon className="h-4 w-4" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400 font-semibold">{t.label}</p>
             <p className="text-lg sm:text-xl font-semibold text-slate-900 truncate leading-tight tabular-nums mt-0.5">{t.value}</p>
           </div>
+          {t.spark && (
+            <div className="shrink-0 hidden sm:block self-center">
+              <Sparkline values={t.spark.values} color={t.spark.color} width={54} height={26} />
+            </div>
+          )}
         </div>
       ))}
     </div>

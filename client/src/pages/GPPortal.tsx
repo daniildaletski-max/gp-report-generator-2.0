@@ -507,6 +507,17 @@ export default function GPPortal() {
   }, [data, cleanStreak]);
 
   /**
+   * Closest locked achievement — the single badge the GP is nearest to
+   * earning, by progress fraction. Powers the "next goal" callout so the
+   * Overview always shows a concrete, attainable target with a progress bar.
+   */
+  const nextGoal = useMemo(() => {
+    const locked = achievements.filter((a: any) => !a.unlocked && typeof a.progress === "number" && a.progress < 1);
+    if (locked.length === 0) return null;
+    return [...locked].sort((a: any, b: any) => (b.progress ?? 0) - (a.progress ?? 0))[0];
+  }, [achievements]);
+
+  /**
    * GP Level + XP — gamified progression layered on top of raw eval
    * counts so every action a GP takes feels like it moves a needle.
    *
@@ -772,6 +783,11 @@ export default function GPPortal() {
               ? new Date(recentEvaluations[0].evaluationDate)
               : null
           }
+          trends={{
+            evals: (data.monthlyHistory as any[] ?? []).map((m: any) => Number(m.evalCount || 0)),
+            mistakes: (data.monthlyHistory as any[] ?? []).map((m: any) => Number(m.mistakes || 0)),
+            attitude: (data.monthlyHistory as any[] ?? []).map((m: any) => Number(m.attitude || 0)),
+          }}
         />
 
         {/* Level + XP banner — gamified progression bar.
@@ -897,6 +913,10 @@ export default function GPPortal() {
             />
           </section>
         )}
+
+        {/* Next goal — the closest locked badge with a progress bar, so the
+            Overview always shows one concrete, attainable target. */}
+        {nextGoal && <NextGoalCard goal={nextGoal as any} />}
 
         {/* Peer benchmark — anonymous percentile rank within team for
             each score family. Doesn't show others' actual numbers,
@@ -2604,6 +2624,44 @@ function PeerBenchmarkRow({
         })}
       </div>
     </section>
+  );
+}
+
+// ============================================
+// NextGoalCard — the closest locked badge with a progress bar. Gives the
+// Overview one concrete, attainable target instead of only the (already-
+// unlocked) trophy shelf.
+// ============================================
+function NextGoalCard({ goal }: { goal: { icon: any; title: string; description: string; progress: number; progressLabel: string | null } }) {
+  const Icon = goal.icon;
+  const pct = Math.max(0, Math.min(100, (goal.progress ?? 0) * 100));
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-white to-yellow-50 p-5 shadow-sm">
+      <div className="pointer-events-none absolute -top-16 -right-12 h-40 w-40 rounded-full bg-gradient-to-br from-amber-200/50 to-yellow-100/0 blur-2xl" aria-hidden />
+      <div className="relative flex items-center gap-4">
+        <div className="shrink-0 h-12 w-12 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center">
+          <Icon className="h-6 w-6 text-amber-600" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-[0.16em] font-bold text-amber-700">Next badge</span>
+            <span className="text-[10px] text-slate-300" aria-hidden>·</span>
+            <span className="text-[10px] font-semibold text-slate-500 tabular-nums">{Math.round(pct)}% there</span>
+          </div>
+          <p className="text-base font-bold text-slate-900 leading-tight mt-0.5 truncate">{goal.title}</p>
+          <p className="text-xs text-slate-500 truncate">{goal.description}</p>
+          <div className="mt-2.5 h-2 rounded-full bg-amber-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-[width] duration-700 ease-out"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          {goal.progressLabel && (
+            <p className="text-[11px] text-amber-700 font-medium mt-1.5">{goal.progressLabel}</p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
