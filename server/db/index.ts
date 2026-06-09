@@ -170,6 +170,17 @@ export {
   studioworksContentHash, getStudioworksImport, recordStudioworksImport,
 } from "./studioworks";
 
+// Company goals — monthly targets + live progress (the management layer)
+export {
+  ensureGoalsSchema,
+  monthElapsedFraction, computeGoalProgress, overallGoalStatus,
+  DEFAULT_GOAL_TARGETS,
+  getCompanyGoals, upsertCompanyGoals, getGoalActuals, getGoalsOverview,
+} from "./goals";
+export type {
+  GoalStatus, GoalTargets, GoalActuals, GoalProgressItem, GoalsOverview,
+} from "./goals";
+
 // Analytics — per-criterion / per-game / distribution / movers / trend.
 // Pure + DB functions both exported so the report layer can reuse the
 // shaping without re-running the SQL.

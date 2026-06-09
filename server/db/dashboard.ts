@@ -189,7 +189,8 @@ export type InsightKind =
   | "attendance_risk"
   | "error_spike"
   | "top_performer"
-  | "sustained_decline";
+  | "sustained_decline"
+  | "goal_at_risk";
 
 export interface DashboardInsight {
   id: string;
@@ -583,6 +584,32 @@ export async function computeDashboardInsights(opts: {
         timestamp: now,
         metadata: { gpId: s.gpId, gpName: s.gpName },
       });
+    }
+  } catch { /* skip on error */ }
+
+  // ----------------------------------------------------------
+  // 10) Monthly goals slipping — surfaces the management targets the
+  //     moment they go at_risk/behind, instead of waiting for someone
+  //     to open the goals card. Quiet for the first quarter of the
+  //     month so day-2 zeroes don't cry wolf.
+  // ----------------------------------------------------------
+  try {
+    const { getGoalsOverview, monthElapsedFraction } = await import("./goals");
+    const elapsed = monthElapsedFraction(currentMonth, currentYear, now);
+    if (elapsed >= 0.25) {
+      const overview = await getGoalsOverview(currentMonth, currentYear, now);
+      for (const item of overview.progress) {
+        if (item.status !== "at_risk" && item.status !== "behind") continue;
+        insights.push({
+          id: `goal-${item.key}-${currentYear}-${currentMonth}`,
+          kind: "goal_at_risk",
+          severity: item.status === "behind" ? "alert" : "warning",
+          title: `Monthly goal ${item.status === "behind" ? "behind" : "at risk"}: ${item.label}`,
+          description: `${item.detail} · ${overview.elapsedPct}% of the month gone.`,
+          action: { label: "Open goals", href: "/dashboard" },
+          timestamp: now,
+        });
+      }
     }
   } catch { /* skip on error */ }
 
