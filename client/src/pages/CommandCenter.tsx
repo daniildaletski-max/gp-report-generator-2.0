@@ -27,6 +27,7 @@ import {
   Radar, Search, Sparkles, RefreshCw, Loader2, Wand2, ArrowRight, Users,
   TrendingDown, TrendingUp, Award, ScanLine, FileSpreadsheet, Clock,
   CalendarX, AlertTriangle, Activity, FileCheck, ChevronRight, Zap, ChevronsDown, Mail,
+  HelpCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -256,35 +257,9 @@ export default function CommandCenterPage() {
             <Card><CardContent className="p-0"><QueryError size="compact" title="Couldn't load signals" onRetry={() => refetchInsights()} /></CardContent></Card>
           ) : (insights && insights.length > 0) ? (
             <div className="space-y-2">
-              {insights.map(insight => {
-                const sev = SEVERITY_STYLE[insight.severity] ?? SEVERITY_STYLE.info;
-                const Icon = INSIGHT_ICON[insight.kind as InsightKind] ?? Activity;
-                return (
-                  <div key={insight.id} className={`rounded-xl border p-3 flex items-start gap-3 transition-colors ${sev.ring}`}>
-                    <span className={`h-9 w-9 shrink-0 rounded-lg border flex items-center justify-center ${sev.icon}`}>
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{insight.title}</p>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${sev.chip}`}>{sev.label}</span>
-                      </div>
-                      <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{insight.description}</p>
-                    </div>
-                    {insight.action && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-xs shrink-0 self-center"
-                        onClick={() => setLocation(insight.action!.href)}
-                      >
-                        {insight.action.label}
-                        <ArrowRight className="h-3 w-3 ml-1" />
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
+              {insights.map(insight => (
+                <InsightRow key={insight.id} insight={insight as any} onNavigate={setLocation} />
+              ))}
             </div>
           ) : (
             <Card>
@@ -450,6 +425,107 @@ export default function CommandCenterPage() {
       </Card>
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+    </div>
+  );
+}
+
+// ============================================
+// InsightRow — one signal with its action button AND an on-demand
+// AI "Why?" explainer. Clicking Why asks commandCenter.explainInsight
+// for a data-grounded causal read + next steps; the answer expands
+// inline (and is cached server-side per insight per day).
+// ============================================
+
+type SignalInsight = {
+  id: string;
+  kind: string;
+  severity: string;
+  title: string;
+  description: string;
+  action?: { label: string; href: string } | null;
+  metadata?: { gpId?: number; gpName?: string } | null;
+};
+
+function InsightRow({ insight, onNavigate }: { insight: SignalInsight; onNavigate: (path: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const explain = trpc.commandCenter.explainInsight.useMutation({
+    onSuccess: (res) => {
+      if (res.explanation) {
+        setExplanation(res.explanation);
+        setExpanded(true);
+      } else if ("error" in res && res.error) {
+        toast.error(res.error);
+      }
+    },
+    onError: (err) => toast.error(err.message || "Couldn't generate the explanation"),
+  });
+
+  const onWhy = () => {
+    if (explanation) {
+      setExpanded(e => !e);
+      return;
+    }
+    explain.mutate({
+      id: insight.id,
+      kind: insight.kind,
+      title: insight.title,
+      description: insight.description,
+      gpId: insight.metadata?.gpId,
+      gpName: insight.metadata?.gpName,
+    });
+  };
+
+  const sev = SEVERITY_STYLE[insight.severity] ?? SEVERITY_STYLE.info;
+  const Icon = INSIGHT_ICON[insight.kind as InsightKind] ?? Activity;
+  return (
+    <div className={`rounded-xl border transition-colors ${sev.ring}`}>
+      <div className="p-3 flex items-start gap-3">
+        <span className={`h-9 w-9 shrink-0 rounded-lg border flex items-center justify-center ${sev.icon}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-slate-800 truncate">{insight.title}</p>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${sev.chip}`}>{sev.label}</span>
+          </div>
+          <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{insight.description}</p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0 self-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={onWhy}
+            disabled={explain.isPending}
+            title="Ask the AI why this signal fired"
+          >
+            {explain.isPending
+              ? <Loader2 className="h-3 w-3 animate-spin" />
+              : <HelpCircle className="h-3 w-3" />}
+            <span className="ml-1">Why?</span>
+          </Button>
+          {insight.action && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => onNavigate(insight.action!.href)}
+            >
+              {insight.action.label}
+              <ArrowRight className="h-3 w-3 ml-1" />
+            </Button>
+          )}
+        </div>
+      </div>
+      {expanded && explanation && (
+        <div className="mx-3 mb-3 rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-wider font-semibold text-violet-700 mb-1 flex items-center gap-1">
+            <Sparkles className="h-3 w-3" /> AI analysis
+          </p>
+          <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">{explanation}</p>
+        </div>
+      )}
     </div>
   );
 }

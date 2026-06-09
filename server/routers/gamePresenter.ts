@@ -26,24 +26,20 @@ export const gamePresenterRouter = router({
       year: z.number(),
     }))
     .query(async ({ ctx, input }) => {
-      // User-based data isolation
+      // Two bulk reads instead of the old per-GP stats loop (N+1):
+      // one roster query + one inArray() stats query, joined in memory.
+      // Output shape is identical: { ...gp, stats: MonthlyGpStats | null }.
       if (ctx.user.role !== 'admin') {
         const userGPs = await db.getAllGamePresentersByUser(ctx.user.id);
-        const result = await Promise.all(userGPs.map(async (gp) => {
-          const stats = await db.getMonthlyGpStats(gp.id, input.month, input.year);
-          return { ...gp, stats };
-        }));
-        return result;
+        const statsByGp = await db.getMonthlyGpStatsForGPs(userGPs.map(g => g.id), input.month, input.year);
+        return userGPs.map(gp => ({ ...gp, stats: statsByGp.get(gp.id) ?? null }));
       }
       // Admin: use teamId if provided, otherwise all GPs
       const teamId = input.teamId;
       if (!teamId) {
         const allGPs = await db.getAllGamePresenters();
-        const result = await Promise.all(allGPs.map(async (gp) => {
-          const stats = await db.getMonthlyGpStats(gp.id, input.month, input.year);
-          return { ...gp, stats };
-        }));
-        return result;
+        const statsByGp = await db.getMonthlyGpStatsForGPs(allGPs.map(g => g.id), input.month, input.year);
+        return allGPs.map(gp => ({ ...gp, stats: statsByGp.get(gp.id) ?? null }));
       }
       return await db.getGamePresentersByTeamWithStats(teamId, input.month, input.year);
     }),

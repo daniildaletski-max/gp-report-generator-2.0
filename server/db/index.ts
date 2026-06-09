@@ -62,7 +62,7 @@ export {
 // Monthly Stats
 export {
   getOrCreateMonthlyGpStats, updateMonthlyGpStats,
-  getMonthlyGpStatsByTeam, getAllMonthlyGpStats, getMonthlyGpStats,
+  getMonthlyGpStatsByTeam, getAllMonthlyGpStats, getMonthlyGpStats, getMonthlyGpStatsForGPs,
   getGamePresentersByTeamWithStats,
   bulkUpdateMonthlyGpStats, bulkSetAttitude, bulkResetMistakes,
   incrementGPMistakes,

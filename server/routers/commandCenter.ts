@@ -34,6 +34,9 @@ type Briefing = {
 };
 const briefingCache = new Map<string, Briefing>();
 
+/** Per-insight, per-day cache of "why did this happen" explanations. */
+const explainCache = new Map<string, string>();
+
 export const commandCenterRouter = router({
   /**
    * Executive briefing — a 4–6 sentence narrative of where the studio
@@ -163,5 +166,89 @@ Guidelines:
         results,
         totals: { gps: input.gpIds.length, succeeded: input.gpIds.length - failed, failed, created },
       };
+    }),
+
+  /**
+   * "Why did this happen?" — a grounded LLM explanation for one insight
+   * signal. Builds a compact numeric context (the GP's recent evaluations
+   * + 6-month history when the signal points at a GP, else the company
+   * trend) and asks for a short causal read plus concrete next steps.
+   * Cached per insight per UTC day so repeated clicks don't re-bill the
+   * LLM; best-effort error message instead of a thrown 500.
+   */
+  explainInsight: protectedProcedure
+    .input(z.object({
+      id: z.string().min(1).max(200),
+      kind: z.string().min(1).max(50),
+      title: z.string().min(1).max(300),
+      description: z.string().min(1).max(1000),
+      gpId: z.number().int().positive().optional(),
+      gpName: z.string().max(255).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const day = new Date().toISOString().slice(0, 10);
+      const cacheKey = `${input.id}::${day}`;
+      const cached = explainCache.get(cacheKey);
+      if (cached) return { explanation: cached, cached: true };
+
+      // Grounding context — real numbers only, so the model can't drift.
+      const lines: string[] = [];
+      if (input.gpId) {
+        const gp = await db.getGamePresenterById(input.gpId);
+        lines.push(`Game Presenter: ${gp?.name ?? input.gpName ?? `GP #${input.gpId}`}`);
+        const history = await db.getGpMonthlyHistory(input.gpId, 6);
+        lines.push("Monthly history (oldest first):");
+        for (const m of history as any[]) {
+          lines.push(
+            `- ${m.label}: avg ${Number(m.avgTotal).toFixed(1)}/22 over ${m.evalCount} evals` +
+            ` (appearance ${Number(m.avgAppearance).toFixed(1)}/12, game ${Number(m.avgPerformance).toFixed(1)}/10,` +
+            ` mistakes ${m.mistakes}, attitude ${m.attitude ?? "n/a"})`,
+          );
+        }
+        const recent = (await db.getEvaluationsByGP(input.gpId)).slice(0, 8);
+        lines.push("Most recent evaluations (newest first):");
+        for (const e of recent) {
+          const date = e.evaluationDate ? new Date(e.evaluationDate).toISOString().slice(0, 10) : "unknown date";
+          lines.push(
+            `- ${date}: total ${e.totalScore ?? "?"}/22` +
+            ` (hair ${e.hairScore ?? "-"}, makeup ${e.makeupScore ?? "-"}, outfit ${e.outfitScore ?? "-"},` +
+            ` posture ${e.postureScore ?? "-"}, dealing ${e.dealingStyleScore ?? "-"}, game ${e.gamePerformanceScore ?? "-"})` +
+            (e.game ? ` on ${e.game}` : ""),
+          );
+        }
+      } else {
+        const trend = await db.getMonthlyTrendData(6);
+        lines.push("Company-wide monthly trend (oldest first):");
+        for (const m of trend) {
+          lines.push(
+            `- ${m.label}: ${m.totalEvaluations} evals across ${m.uniqueGPs} GPs, avg ${m.avgTotalScore}/22` +
+            ` (top ${m.topScore}, low ${m.lowScore})`,
+          );
+        }
+      }
+
+      try {
+        const res = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are an operations analyst for ${COMPANY_NAME}, a live-casino studio. A monitoring system raised a signal about Game Presenter performance. Explain WHY it most likely fired, grounded ONLY in the numbers provided — never invent data. Format: 2-4 plain sentences of explanation, then the line "Next steps:" followed by 2-3 short imperative bullet lines starting with "- ". Keep the whole answer under 130 words.`,
+            },
+            {
+              role: "user",
+              content: `Signal [${input.kind}]: ${input.title}\n${input.description}\n\nData:\n${lines.join("\n")}`,
+            },
+          ],
+        });
+        const content = res.choices[0]?.message?.content;
+        const explanation = typeof content === "string" ? content.trim() : "";
+        if (!explanation) return { explanation: null, cached: false, error: "The AI returned an empty answer — try again." };
+        if (explainCache.size > 300) explainCache.clear();
+        explainCache.set(cacheKey, explanation);
+        return { explanation, cached: false };
+      } catch (e) {
+        log.warn(`explainInsight failed for ${input.id}`, { error: e instanceof Error ? e.message : String(e) });
+        return { explanation: null, cached: false, error: "Couldn't generate the explanation — likely a brief AI hiccup. Try again." };
+      }
     }),
 });
