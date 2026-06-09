@@ -707,6 +707,7 @@ export default function GPPortal() {
             delta={improvement?.total ?? null}
             deltaLabel={improvement?.previousLabel ?? null}
             cleanStreak={cleanStreak}
+            trend={scoreTrends.total.map(t => t.value)}
             lastEvaluationDate={
               recentEvaluations[0]?.evaluationDate
                 ? new Date(recentEvaluations[0].evaluationDate)
@@ -884,6 +885,18 @@ export default function GPPortal() {
             />
           </div>
         </section>
+
+        {/* Per-criterion breakdown — the actionable "which of the six am I
+            strong / weak at" view, surfaced on the Overview instead of
+            buried two tabs deep in Month. Shows the selected month when it
+            has data, else the all-time average. */}
+        {data.evaluations.length > 0 && (
+          <section>
+            <CriterionBreakdown
+              evaluations={(monthEvalCount > 0 && !monthDetailsLoading ? monthEvals : (data.evaluations as any[]))}
+            />
+          </section>
+        )}
 
         {/* Peer benchmark — anonymous percentile rank within team for
             each score family. Doesn't show others' actual numbers,
@@ -2386,6 +2399,18 @@ function CriterionBreakdown({ evaluations }: { evaluations: any[] }) {
     return "bg-rose-500";
   };
 
+  // Flag the strongest and weakest criterion (by % of max) so the GP gets
+  // an at-a-glance "what to protect / what to work on".
+  const withVals = data.filter(d => d.value != null);
+  let strengthKey: string | null = null;
+  let focusKey: string | null = null;
+  if (withVals.length >= 2) {
+    const ranked = [...withVals].sort((a, b) => (b.value! / b.max) - (a.value! / a.max));
+    strengthKey = ranked[0].key;
+    focusKey = ranked[ranked.length - 1].key;
+    if (strengthKey === focusKey) focusKey = null;
+  }
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
       <div className="flex items-center justify-between mb-4">
@@ -2402,11 +2427,17 @@ function CriterionBreakdown({ evaluations }: { evaluations: any[] }) {
           const pct = d.value != null ? Math.min(100, (d.value / d.max) * 100) : 0;
           return (
             <div key={d.key} className="grid grid-cols-[140px_1fr_64px] sm:grid-cols-[180px_1fr_72px] gap-3 items-center">
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
                 <div className="h-7 w-7 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
                   <d.icon className="h-3.5 w-3.5 text-slate-600" />
                 </div>
                 <span className="text-xs font-medium text-slate-700 truncate">{d.label}</span>
+                {d.key === strengthKey && (
+                  <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1 py-px">Top</span>
+                )}
+                {d.key === focusKey && (
+                  <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-px">Focus</span>
+                )}
               </div>
               <div className="relative h-2.5 rounded-full bg-slate-100 overflow-hidden">
                 <div

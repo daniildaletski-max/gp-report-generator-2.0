@@ -147,6 +147,45 @@ function useCountUp(target: number, durationMs = 900): number {
   return val;
 }
 
+/**
+ * Tiny dependency-free sparkline. Hand-rolled SVG (not recharts) so it
+ * renders crisply in the constrained hero slot without a ResponsiveContainer
+ * fighting for height. Draws a soft area fill + line + an endpoint dot.
+ */
+function Sparkline({
+  values, color = "#f59e0b", width = 132, height = 44,
+}: { values: number[]; color?: string; width?: number; height?: number }) {
+  const clean = (values ?? []).filter((v) => Number.isFinite(v));
+  if (clean.length < 2) return null;
+  const min = Math.min(...clean);
+  const max = Math.max(...clean);
+  const range = max - min || 1;
+  const pad = 4;
+  const pts = clean.map((v, i) => {
+    const x = pad + (i / (clean.length - 1)) * (width - pad * 2);
+    const y = pad + (1 - (v - min) / range) * (height - pad * 2);
+    return [x, y] as const;
+  });
+  const line = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const area = `${line} L${pts[pts.length - 1][0].toFixed(1)},${(height - pad).toFixed(1)} L${pts[0][0].toFixed(1)},${(height - pad).toFixed(1)} Z`;
+  const [lx, ly] = pts[pts.length - 1];
+  const gradId = `gp-spark-${color.replace("#", "")}`;
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden className="overflow-visible">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+          <stop offset="100%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gradId})`} />
+      <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lx} cy={ly} r={3} fill={color} />
+      <circle cx={lx} cy={ly} r={6} fill={color} opacity={0.18} />
+    </svg>
+  );
+}
+
 export function PerformancePulseHero({
   gpFirstName,
   greeting,
@@ -170,6 +209,7 @@ export function PerformancePulseHero({
   selectedYear,
   onMonthChange,
   isLoadingMonth,
+  trend,
 }: {
   gpFirstName: string;
   greeting: string;
@@ -202,6 +242,8 @@ export function PerformancePulseHero({
   selectedYear?: number;
   onMonthChange?: (month: number, year: number) => void;
   isLoadingMonth?: boolean;
+  /** Recent monthly average totals (oldest→newest) for the hero sparkline. */
+  trend?: number[];
 }) {
   const animated = useCountUp(avgScore, 900);
   const overallPct = maxScore > 0 ? Math.min(100, Math.max(0, (avgScore / maxScore) * 100)) : 0;
@@ -283,6 +325,17 @@ export function PerformancePulseHero({
               </span>
             )}
           </div>
+
+          {/* Trajectory sparkline — turns the "+x vs last month" chip into a
+              visible story of where the GP is heading. */}
+          {trend && trend.length >= 2 && (
+            <div className="sm:ml-auto flex flex-col items-end gap-1 pb-1">
+              <Sparkline values={trend} color="#f59e0b" />
+              <span className="text-[10px] uppercase tracking-[0.14em] text-slate-400 font-semibold">
+                last {trend.length} months
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Primary progress bar — horizontal, takes the full width.
