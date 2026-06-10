@@ -16,6 +16,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { PageHeader } from "@/components/PageHeader";
 import { QueryError } from "@/components/QueryError";
 import { CommandPalette } from "@/components/CommandPalette";
+import { GoalsStrip } from "@/components/GoalsCard";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +28,7 @@ import {
   Radar, Search, Sparkles, RefreshCw, Loader2, Wand2, ArrowRight, Users,
   TrendingDown, TrendingUp, Award, ScanLine, FileSpreadsheet, Clock,
   CalendarX, AlertTriangle, Activity, FileCheck, ChevronRight, Zap, ChevronsDown, Mail,
-  HelpCircle,
+  HelpCircle, Target,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -39,7 +40,7 @@ const MONTHS = [
 type InsightKind =
   | "missing_report" | "score_regression" | "score_improvement" | "coverage_gap"
   | "evaluation_stale" | "attendance_risk" | "error_spike" | "top_performer"
-  | "sustained_decline";
+  | "sustained_decline" | "goal_at_risk";
 
 const INSIGHT_ICON: Record<InsightKind, React.ComponentType<{ className?: string }>> = {
   score_regression: TrendingDown,
@@ -51,6 +52,7 @@ const INSIGHT_ICON: Record<InsightKind, React.ComponentType<{ className?: string
   attendance_risk: CalendarX,
   error_spike: AlertTriangle,
   sustained_decline: ChevronsDown,
+  goal_at_risk: Target,
 };
 
 const SEVERITY_STYLE: Record<string, { ring: string; icon: string; chip: string; label: string }> = {
@@ -234,6 +236,9 @@ export default function CommandCenterPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Monthly goals at a glance — one chip per tracked target. */}
+      <GoalsStrip />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Insights feed */}

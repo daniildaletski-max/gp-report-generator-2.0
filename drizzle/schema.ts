@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, double } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -631,4 +631,31 @@ export const studioworksImports = mysqlTable("studioworks_imports", {
 
 export type StudioworksImport = typeof studioworksImports.$inferSelect;
 export type InsertStudioworksImport = typeof studioworksImports.$inferInsert;
+
+/**
+ * Company goals — one row per (month, year) holding the month's management
+ * targets. Company-wide (one shared database): a single set of targets
+ * covers every GP. Null target = "not tracked this month"; the app falls
+ * back to sensible defaults until an admin sets real numbers.
+ */
+export const companyGoals = mysqlTable("company_goals", {
+  id: int("id").autoincrement().primaryKey(),
+  month: int("month").notNull(), // 1-12
+  year: int("year").notNull(),
+  /** Target company average total score (0-22 scale, e.g. 18.5). */
+  targetAvgScore: double("targetAvgScore"),
+  /** Target % of GPs fully evaluated (>= targetEvalsPerGp evals). */
+  targetCoveragePct: int("targetCoveragePct"),
+  /** Evals a GP needs for the month to count as "complete". */
+  targetEvalsPerGp: int("targetEvalsPerGp").default(10).notNull(),
+  /** Ceiling: no GP should exceed this many mistakes in the month. */
+  targetMaxMistakes: int("targetMaxMistakes"),
+  notes: text("notes"),
+  updatedById: int("updatedById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CompanyGoals = typeof companyGoals.$inferSelect;
+export type InsertCompanyGoals = typeof companyGoals.$inferInsert;
 

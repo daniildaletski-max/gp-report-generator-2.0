@@ -10,6 +10,7 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { useLocation } from "wouter";
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { GPDetailDrawer } from "@/components/GPDetailDrawer";
+import { GoalsCard } from "@/components/GoalsCard";
 import { PageHeader } from "@/components/PageHeader";
 import { useUrlState, urlNumber } from "@/hooks/useUrlState";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -415,6 +416,11 @@ export default function Dashboard() {
         selectedMonth={selectedMonth}
         selectedYear={selectedYear}
       />
+
+      {/* Monthly goals — management targets with live progress + status
+          chips. Follows the page's month/year selection; admins set the
+          targets inline. */}
+      <GoalsCard month={selectedMonth} year={selectedYear} />
 
       {/* Onboarding checklist — surfaces five setup milestones for
           new FMs (created team, added GPs, first eval recorded,

@@ -22,6 +22,7 @@ import { ensureMistakesConsolidated } from "../db/attendance";
 import { ensureWorkedHoursColumn } from "../db/monthlyStats";
 import { ensureReportsTeamNullable } from "../db/reports";
 import { ensureStudioworksSyncSchema } from "../db/studioworks";
+import { ensureGoalsSchema } from "../db/goals";
 import { ENV } from "./env";
 import * as db from "../db";
 
@@ -555,6 +556,11 @@ async function startServer() {
     // migrations" reason as the other ensure* installers.
     ensureStudioworksSyncSchema().catch(err => {
       log.warn("studioworks sync schema boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Company goals (the management targets layer) — same idempotent
+    // boot-install pattern as the other ensure* migrations.
+    ensureGoalsSchema().catch(err => {
+      log.warn("company goals schema boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
     });
     // Automation credentials audit — surfaces missing RESEND_API_KEY /
     // PERSONA_* / STUDIOWORKS_* env vars in deploy logs so operators
