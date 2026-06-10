@@ -533,85 +533,59 @@ export function AchievementBadge({ icon: Icon, title, description, unlocked, col
 }) {
   const showProgress = !unlocked && typeof progress === "number" && progress > 0;
   const almostThere = showProgress && (progress as number) >= 0.66;
-  // Rarity rim — only visible on unlocked badges, layered as a thin
-  // ring around the tile. Legendary gets a slowly-rotating conic
-  // gradient so it reads as "rare prize" without being garish.
-  const rarityRim =
-    !unlocked || !rarity ? null :
-    rarity === "legendary" ? "ring-2 ring-amber-400/60 shadow-md shadow-amber-200/60" :
-    rarity === "epic" ? "ring-2 ring-amber-300/60 shadow-sm shadow-amber-200/40" :
-    rarity === "rare" ? "ring-1 ring-amber-300/40" :
-    null;
-  const rarityLabel =
+  // Editorial badges: every tile is a quiet white card; rarity reads as a
+  // small uppercase word, unlocked as an amber tick + amber rarity text.
+  // The old per-achievement tile colours are intentionally ignored.
+  void color;
+  const rarityText =
     !rarity ? null :
-    rarity === "legendary" ? { text: "Legendary", cls: "text-amber-700 bg-gradient-to-r from-amber-100 to-yellow-100 border-amber-300" } :
-    rarity === "epic" ? { text: "Epic", cls: "text-amber-700 bg-amber-50 border-amber-200" } :
-    rarity === "rare" ? { text: "Rare", cls: "text-slate-600 bg-slate-50 border-slate-200" } :
-    { text: "Common", cls: "text-slate-500 bg-slate-50 border-slate-200" };
+    rarity === "legendary" ? "Legendary" :
+    rarity === "epic" ? "Epic" :
+    rarity === "rare" ? "Rare" : "Common";
   return (
-    <div className={`relative p-4 rounded-xl border transition-all duration-300 group cursor-default ${
+    <div className={`relative p-4 rounded-2xl border bg-white transition-colors duration-200 group cursor-default ${
       unlocked
-        ? `${color} shadow-sm hover:shadow-md hover:shadow-amber-100/60 hover:-translate-y-0.5 ${rarityRim ?? ""}`
+        ? "border-amber-300"
         : showProgress
-          ? `bg-white border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 ${almostThere ? "ring-1 ring-amber-200/80" : ""}`
-          : 'bg-slate-50 border-slate-200 opacity-60'
+          ? `border-slate-200/70 hover:border-slate-300 ${almostThere ? "border-amber-200" : ""}`
+          : "border-slate-200/70 opacity-55"
     }`}>
-      {/* Legendary rotating rim — only on unlocked legendary badges.
-          A super-slow conic gradient halo so they pop without being
-          distracting. */}
-
       <div className="flex items-center gap-3 relative">
-        <div className={`p-2.5 rounded-xl transition-all duration-300 ${
-          unlocked
-            ? 'bg-white/80 border border-amber-200/60 group-hover:scale-110 group-hover:border-amber-300'
-            : showProgress
-              ? `bg-amber-50 border ${almostThere ? "border-amber-300" : "border-amber-100"} group-hover:scale-110`
-              : 'bg-slate-100 border border-transparent'
+        <div className={`shrink-0 h-10 w-10 rounded-full border flex items-center justify-center ${
+          unlocked ? "bg-[#FAF9F7] border-amber-200" : "bg-[#FAF9F7] border-slate-200"
         }`}>
-          <Icon className={`h-5 w-5 ${
-            unlocked ? 'text-amber-700' : showProgress ? 'text-amber-500' : 'text-slate-400'
-          }`} />
+          <Icon className={`h-4.5 w-4.5 ${unlocked ? "text-amber-600" : "text-slate-300"}`} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <p className={`font-semibold text-sm truncate ${
-              unlocked ? 'text-slate-800' : showProgress ? 'text-slate-700' : 'text-slate-400'
-            }`}>{title}</p>
-            {rarityLabel && (
-              <span className={`shrink-0 inline-flex items-center px-1.5 py-0 text-[9px] uppercase tracking-wider font-bold rounded-full border ${rarityLabel.cls}`}>
-                {rarityLabel.text}
+            <p className={`font-semibold text-sm truncate ${unlocked || showProgress ? "text-slate-900" : "text-slate-400"}`}>{title}</p>
+            {rarityText && (
+              <span className={`shrink-0 text-[9px] uppercase tracking-[0.14em] font-semibold ${
+                unlocked ? "text-amber-600" : "text-slate-300"
+              }`}>
+                {rarityText}
               </span>
             )}
           </div>
-          <p className={`text-xs truncate ${
-            unlocked ? 'text-slate-500' : showProgress ? 'text-slate-500' : 'text-slate-400'
-          }`}>{description}</p>
+          <p className={`text-xs truncate ${unlocked || showProgress ? "text-slate-400" : "text-slate-300"}`}>{description}</p>
           {showProgress && (
             <div className="mt-2 flex items-center gap-2">
-              <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+              <div className="flex-1 h-1 rounded-full bg-slate-100 overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-[width] duration-700 ease-out ${
-                    almostThere
-                      ? "bg-gradient-to-r from-amber-400 to-yellow-500"
-                      : "bg-gradient-to-r from-slate-300 to-amber-300"
-                  }`}
+                  className={`h-full rounded-full transition-[width] duration-700 ease-out ${almostThere ? "bg-amber-500" : "bg-slate-300"}`}
                   style={{ width: `${Math.min(100, Math.max(4, (progress as number) * 100))}%` }}
                 />
               </div>
-              <span className={`text-[10px] font-semibold tabular-nums shrink-0 ${
-                almostThere ? "text-amber-700" : "text-slate-500"
-              }`}>
+              <span className={`text-[10px] font-medium tabular-nums shrink-0 ${almostThere ? "text-amber-600" : "text-slate-400"}`}>
                 {progressLabel ?? `${Math.round((progress as number) * 100)}%`}
               </span>
             </div>
           )}
         </div>
+        {unlocked && (
+          <span className="shrink-0 text-amber-500 text-sm font-semibold" aria-label="Unlocked">✓</span>
+        )}
       </div>
-      {unlocked && (
-        <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gradient-to-br from-amber-400 to-yellow-500 rounded-full flex items-center justify-center shadow-sm shadow-amber-200/60">
-          <span className="text-[10px] text-white font-bold">✓</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -678,20 +652,20 @@ export function LabeledComment({ icon: Icon, label, comment, score, maxScore }: 
 }) {
   if (!comment) return null;
   return (
-    <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-100/80 hover:border-amber-200 transition-colors duration-200">
+    <div className="p-3.5 bg-[#FAF9F7] rounded-xl border border-slate-200/70">
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-2">
-          <Icon className="h-3.5 w-3.5 text-amber-600" />
-          <span className="text-xs font-medium text-slate-500">{label}</span>
+          <Icon className="h-3.5 w-3.5 text-slate-300" />
+          <span className="text-[11px] uppercase tracking-[0.12em] font-semibold text-slate-400">{label}</span>
         </div>
         {score !== null && (
-          <span className={`text-xs font-bold ${
+          <span className={`text-xs font-semibold tabular-nums ${
             (score / maxScore) >= 0.9 ? 'text-emerald-600' :
-            (score / maxScore) >= 0.7 ? 'text-amber-600' : 'text-red-600'
+            (score / maxScore) >= 0.7 ? 'text-amber-600' : 'text-rose-600'
           }`}>{score}/{maxScore}</span>
         )}
       </div>
-      <p className="text-sm text-slate-700 leading-relaxed">{comment}</p>
+      <p className="text-sm text-slate-600 leading-relaxed">{comment}</p>
     </div>
   );
 }
@@ -814,48 +788,41 @@ export function MonthTabHeader({ selectedMonth, selectedYear, onChange, evalCoun
   const monthLabel = MONTH_NAMES[selectedMonth - 1];
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-amber-200/60 bg-gradient-to-br from-white to-amber-50/40 p-5 sm:p-6 shadow-sm">
-
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-6 sm:p-7 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <button
             onClick={handlePrev}
-            className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-amber-50 hover:border-amber-200 transition-all duration-200 shadow-sm"
+            className="h-9 w-9 inline-flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
             aria-label="Previous month"
           >
-            <ChevronLeft className="h-4 w-4 text-slate-600" />
+            <ChevronLeft className="h-4 w-4" />
           </button>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-amber-600/70 font-semibold">Viewing</p>
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 leading-tight">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-amber-600 font-semibold">Viewing</p>
+            <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 leading-tight tracking-tight">
               {monthLabel}{" "}
-              <span className="text-slate-400 font-normal">{selectedYear}</span>
+              <span className="text-slate-300 font-light">{selectedYear}</span>
             </h2>
           </div>
           <button
             onClick={handleNext}
             disabled={isCurrentMonth}
-            className={`p-2 rounded-lg border transition-all duration-200 shadow-sm ${
-              isCurrentMonth ? 'bg-slate-50 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 hover:bg-amber-50 hover:border-amber-200'
+            className={`h-9 w-9 inline-flex items-center justify-center rounded-full transition-colors ${
+              isCurrentMonth ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
             }`}
             aria-label="Next month"
           >
-            <ChevronRight className={`h-4 w-4 ${isCurrentMonth ? 'text-slate-300' : 'text-slate-600'}`} />
+            <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700">
-            <Eye className="h-3 w-3" /> {evalCount} eval{evalCount !== 1 ? 's' : ''}
+        <div className="flex items-center gap-x-5 gap-y-1 flex-wrap text-[12px] text-slate-500">
+          <span><span className="font-semibold text-slate-900 tabular-nums">{evalCount}</span> eval{evalCount !== 1 ? 's' : ''}</span>
+          <span>
+            <span className={`font-semibold tabular-nums ${errorCount > 0 ? "text-rose-600" : "text-slate-900"}`}>{errorCount}</span> mistake{errorCount !== 1 ? 's' : ''}
           </span>
-          <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${
-            errorCount > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-          }`}>
-            <AlertTriangle className="h-3 w-3" /> {errorCount} mistake{errorCount !== 1 ? 's' : ''}
-          </span>
-          <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${
-            attitudeScore >= 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'
-          }`}>
-            <ThumbsUp className="h-3 w-3" /> {attitudeScore > 0 ? '+' : ''}{attitudeScore} attitude
+          <span>
+            <span className={`font-semibold tabular-nums ${attitudeScore < 0 ? "text-rose-600" : "text-slate-900"}`}>{attitudeScore > 0 ? '+' : ''}{attitudeScore}</span> attitude
           </span>
         </div>
       </div>
@@ -919,44 +886,38 @@ export function ActionPlanCard({ items }: { items: Array<{ id: number; title: st
   const open = items.filter(i => i.status === "open");
   const inProgress = items.filter(i => i.status === "in_progress");
   return (
-    <Card className="bg-white border-amber-200/60 shadow-sm hover:shadow-md transition-shadow duration-300">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-slate-800 text-base flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-amber-100 border border-amber-200">
-            <Target className="h-4 w-4 text-amber-700" />
-          </div>
+    <Card className="bg-white border-slate-200/70 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+      <CardHeader className="pb-2">
+        <p className="text-[11px] uppercase tracking-[0.2em] font-semibold text-slate-400">
+          <span className="text-amber-500 mr-2" aria-hidden>—</span>
           Your action plan
-        </CardTitle>
-        <CardDescription className="text-slate-500 text-xs">
+        </p>
+        <CardDescription className="text-slate-400 text-xs">
           {open.length} open, {inProgress.length} in progress — what your FM is asking you to focus on
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-2">
-        {[...inProgress, ...open].slice(0, 6).map(item => (
-          <div
-            key={item.id}
-            className={`border rounded-lg p-3 hover:shadow-sm transition-all duration-200 ${PLAN_CATEGORY_TONE[item.category] ?? "border-slate-200 bg-white"}`}
-          >
-            <div className="flex items-start justify-between gap-2 mb-1">
-              <p className="text-sm font-semibold text-slate-800">{item.title}</p>
-              <div className="flex items-center gap-1 shrink-0">
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600 capitalize">{item.category}</span>
-                {item.status === "in_progress" && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-700">In progress</span>
-                )}
+      <CardContent>
+        <div className="divide-y divide-slate-100">
+          {[...inProgress, ...open].slice(0, 6).map(item => (
+            <div key={item.id} className="py-3.5 first:pt-1 last:pb-0">
+              <div className="flex items-start justify-between gap-3 mb-0.5">
+                <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] font-semibold text-slate-400">
+                  {item.category}{item.status === "in_progress" ? " · in progress" : ""}
+                </span>
               </div>
+              {item.description && (
+                <p className="text-xs text-slate-500 leading-relaxed">{item.description}</p>
+              )}
+              {item.dueDate && (
+                <p className="text-[11px] text-slate-400 mt-1.5 inline-flex items-center gap-1">
+                  <Calendar className="h-2.5 w-2.5" />
+                  Due {new Date(item.dueDate).toLocaleDateString()}
+                </p>
+              )}
             </div>
-            {item.description && (
-              <p className="text-xs text-slate-600 leading-relaxed">{item.description}</p>
-            )}
-            {item.dueDate && (
-              <p className="text-[11px] text-slate-500 mt-1.5 inline-flex items-center gap-1">
-                <Calendar className="h-2.5 w-2.5" />
-                Due {new Date(item.dueDate).toLocaleDateString()}
-              </p>
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
       </CardContent>
     </Card>
   );
@@ -968,8 +929,8 @@ export function ActionPlanCard({ items }: { items: Array<{ id: number; title: st
 
 export function GPPortalSkeleton() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50/30 via-white to-yellow-50/20">
-      <header className="border-b border-amber-200/40 bg-white/90 backdrop-blur-sm sticky top-0 z-10">
+    <div className="min-h-screen bg-[#FAF9F7]">
+      <header className="border-b border-slate-200/70 bg-[#FAF9F7]/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="container py-4 sm:py-5 flex items-center justify-between">
           <div className="flex items-center gap-3 sm:gap-4">
             <Skeleton className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl" />
