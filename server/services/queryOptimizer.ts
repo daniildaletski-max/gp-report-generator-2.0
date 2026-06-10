@@ -165,16 +165,4 @@ export const QUERY_TEMPLATES = {
     GROUP BY DATE(date)
     ORDER BY date DESC
   `,
-  getMonthlyBonusEligibility: `
-    SELECT
-      gp_id,
-      SUM(hours_worked) as total_hours,
-      COUNT(error_id) as error_count,
-      SUM(games_played) as total_games
-    FROM attendance
-    WHERE team_id = $1
-    AND date_part('year', date) = $2
-    AND date_part('month', date) = $3
-    GROUP BY gp_id
-  `,
 } as const;

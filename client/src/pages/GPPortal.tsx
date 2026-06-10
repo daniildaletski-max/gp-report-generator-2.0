@@ -11,7 +11,7 @@ import {
   PersonStanding, AlertCircle, TrendingUp, AlertTriangle, Trophy,
   Target, ThumbsUp, ThumbsDown, RefreshCw, ChevronDown, ChevronUp, BarChart3,
   Clock, TrendingDown, Flame, Crown, Medal, Gem, Heart, Shield,
-  MessageSquare, FileText, LayoutDashboard, BadgeEuro,
+  MessageSquare, FileText, LayoutDashboard,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
@@ -58,6 +58,25 @@ function scoreColor(score: number | null | undefined, max: number): {
       : "low";
   return { text: c.text, bg: c.bg, border: c.border, dot, tier };
 }
+
+/**
+ * Editorial section heading — a small tracked uppercase label with an
+ * optional right-side meta line. Replaces the old icon-box + gradient-bar
+ * headers so every section opens the same quiet way; amber appears only
+ * as the 1ch accent dash before the label.
+ */
+function SectionHeading({ label, meta }: { label: string; meta?: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 mb-4">
+      <p className="text-[11px] uppercase tracking-[0.2em] font-semibold text-slate-400">
+        <span className="text-amber-500 mr-2" aria-hidden>—</span>
+        {label}
+      </p>
+      {meta && <span className="text-[11px] text-slate-400 shrink-0">{meta}</span>}
+    </div>
+  );
+}
+
 
 export default function GPPortal() {
   const { token } = useParams<{ token: string }>();
@@ -110,13 +129,6 @@ export default function GPPortal() {
     { enabled: !!token && !!data, refetchOnWindowFocus: false, staleTime: 5 * 60_000 },
   );
   const refreshCoach = () => coachInsights.refetch();
-
-  // Performance bonus for the selected month — shows the GP their own
-  // GGs / level / payout standing. Fails soft (renders nothing on error).
-  const bonus = trpc.bonus.forPortalToken.useQuery(
-    { token: token || "", month: detailMonth, year: detailYear },
-    { enabled: !!token && !!data, refetchOnWindowFocus: false, staleTime: 60_000 },
-  );
 
   useEffect(() => {
     if (data) setLastRefresh(new Date());
@@ -660,32 +672,30 @@ export default function GPPortal() {
             wall of zeros / "no data" everywhere. Friendly welcome
             with a clear "what to expect" guide. */}
         {totalEvals === 0 && (
-          <Card className="bg-gradient-to-br from-amber-50 via-yellow-50/50 to-white border-amber-200 shadow-sm">
-            <CardContent className="p-6 sm:p-8 text-center">
-              <div className="mx-auto mb-4 h-16 w-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow-md">
-                <Sparkles className="h-8 w-8 text-white" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mb-1">
-                Welcome, {data.gpName.split(" ")[0]}!
+          <Card className="bg-white border-slate-200/70 rounded-[28px] shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+            <CardContent className="p-8 sm:p-12 text-center">
+              <p className="text-[11px] uppercase tracking-[0.2em] font-semibold text-amber-600 mb-3">Welcome</p>
+              <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight mb-2">
+                {data.gpName.split(" ")[0]}, your dashboard is ready
               </h2>
-              <p className="text-sm text-slate-600 max-w-md mx-auto mb-5">
-                Your performance dashboard is ready. As your floor manager evaluates your sessions, your scores, achievements, and trends will appear here.
+              <p className="text-sm text-slate-500 max-w-md mx-auto mb-8">
+                As your floor manager evaluates your sessions, your scores, achievements, and trends will appear here.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto text-left">
-                <div className="rounded-xl bg-white border border-amber-100 p-3">
-                  <Star className="h-5 w-5 text-amber-500 mb-1.5" />
-                  <p className="text-xs font-semibold text-slate-800">Get evaluated</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Hair, makeup, posture, dealing & more</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto text-left">
+                <div className="rounded-2xl bg-[#FAF9F7] border border-slate-200/70 p-4">
+                  <Star className="h-4 w-4 text-slate-300 mb-2" />
+                  <p className="text-xs font-semibold text-slate-900">Get evaluated</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Hair, makeup, posture, dealing & more</p>
                 </div>
-                <div className="rounded-xl bg-white border border-amber-100 p-3">
-                  <TrendingUp className="h-5 w-5 text-emerald-500 mb-1.5" />
-                  <p className="text-xs font-semibold text-slate-800">Track progress</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Per-criterion trends across months</p>
+                <div className="rounded-2xl bg-[#FAF9F7] border border-slate-200/70 p-4">
+                  <TrendingUp className="h-4 w-4 text-slate-300 mb-2" />
+                  <p className="text-xs font-semibold text-slate-900">Track progress</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Per-criterion trends across months</p>
                 </div>
-                <div className="rounded-xl bg-white border border-amber-100 p-3">
-                  <Trophy className="h-5 w-5 text-violet-500 mb-1.5" />
-                  <p className="text-xs font-semibold text-slate-800">Earn achievements</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Top scorer, clean month & more</p>
+                <div className="rounded-2xl bg-[#FAF9F7] border border-slate-200/70 p-4">
+                  <Trophy className="h-4 w-4 text-slate-300 mb-2" />
+                  <p className="text-xs font-semibold text-slate-900">Earn achievements</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Top scorer, clean month & more</p>
                 </div>
               </div>
             </CardContent>
@@ -792,64 +802,46 @@ export default function GPPortal() {
             GP see "I'm Level 6, 80 XP from Level 7" — much more
             actionable + addictive than a flat 3/6 unlocked count. */}
         {xp && (
-          <section className="relative overflow-hidden rounded-3xl border border-amber-200/60 bg-gradient-to-r from-amber-50 via-white to-yellow-50 shadow-lg shadow-amber-100/40">
-            <div className="absolute -top-20 -right-20 h-56 w-56 rounded-full bg-gradient-to-br from-amber-300/40 to-yellow-300/40 blur-3xl pointer-events-none" aria-hidden />
-            <div className="absolute -bottom-12 left-1/3 h-32 w-32 rounded-full bg-gradient-to-tr from-yellow-200/40 to-transparent blur-2xl pointer-events-none" aria-hidden />
-
-            <div className="relative p-5 sm:p-7 flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-7">
-              {/* Level shield — bold gold-foil look */}
-              <div className="shrink-0 relative">
-                <div className="absolute -inset-1 rounded-3xl bg-gradient-to-br from-amber-400 to-yellow-500 blur-md opacity-40 animate-[pulse_3s_ease-in-out_infinite]" aria-hidden />
-                <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-2xl bg-gradient-to-br from-amber-400 via-yellow-500 to-orange-500 flex flex-col items-center justify-center shadow-xl shadow-amber-300/60 ring-4 ring-white">
-                  <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-white/90 leading-none">Level</span>
-                  <span className="text-3xl sm:text-4xl font-black text-white tabular-nums leading-none mt-1 drop-shadow-md">{xp.level}</span>
-                </div>
+          <section className="relative overflow-hidden rounded-[28px] border border-slate-200/70 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+            <div className="relative p-7 sm:p-9 flex flex-col sm:flex-row sm:items-center gap-6 sm:gap-9">
+              {/* Level — quiet monochrome medallion; the number does the work. */}
+              <div className="shrink-0 h-20 w-20 sm:h-24 sm:w-24 rounded-full border border-slate-200 bg-[#FAF9F7] flex flex-col items-center justify-center">
+                <span className="text-[9px] uppercase tracking-[0.2em] font-semibold text-slate-400 leading-none">Level</span>
+                <span className="text-3xl sm:text-4xl font-semibold text-slate-900 tabular-nums leading-none mt-1 tracking-tight">{xp.level}</span>
               </div>
 
               {/* XP progress + headline */}
               <div className="min-w-0 flex-1">
-                <div className="flex items-end justify-between gap-3 mb-2">
+                <div className="flex items-end justify-between gap-3 mb-3">
                   <div className="min-w-0">
-                    <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-amber-700">Career XP</p>
-                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
+                    <p className="text-[11px] uppercase tracking-[0.2em] font-semibold text-amber-600">Career XP</p>
+                    <h2 className="text-2xl sm:text-3xl font-semibold text-slate-900 leading-tight tracking-tight mt-1">
                       <span className="tabular-nums">{xp.total.toLocaleString()}</span>
-                      <span className="text-amber-500 mx-1.5 font-bold text-lg sm:text-xl">XP</span>
-                      <span className="hidden sm:inline text-slate-400 font-bold text-base sm:text-lg">
+                      <span className="text-slate-300 mx-1.5 font-light text-lg sm:text-xl">XP</span>
+                      <span className="hidden sm:inline text-slate-400 font-normal text-base">
                         · {xp.untilNext} to Level {xp.level + 1}
                       </span>
                     </h2>
                   </div>
-                  <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 shrink-0 tabular-nums">
+                  <span className="hidden sm:inline text-xs text-slate-400 shrink-0 tabular-nums">
                     {xp.intoLevel} / {xp.xpForNext} XP
                   </span>
                 </div>
 
-                {/* Progress bar */}
-                <div className="relative h-3.5 rounded-full bg-slate-100 overflow-hidden shadow-inner">
+                {/* Progress — single hairline bar, amber fill only. */}
+                <div className="relative h-1.5 rounded-full bg-slate-100 overflow-hidden">
                   <div
-                    className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-500 shadow-md transition-[width] duration-700 ease-out"
+                    className="absolute inset-y-0 left-0 rounded-full bg-amber-500 transition-[width] duration-700 ease-out"
                     style={{ width: `${xp.pct}%` }}
                   />
                 </div>
 
-                {/* Sub-stats in a row — keeps information density high */}
-                <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-600">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400" aria-hidden />
-                    <span className="font-bold tabular-nums">{data.evaluations.length}</span> evals
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-orange-400" aria-hidden />
-                    <span className="font-bold tabular-nums">{data.evaluations.filter((e: any) => (e.totalScore || 0) >= MAX_TOTAL_SCORE).length}</span> perfect runs
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" aria-hidden />
-                    <span className="font-bold tabular-nums">{achievements.filter(a => a.unlocked).length}</span> badges
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-rose-400" aria-hidden />
-                    <span className="font-bold tabular-nums">{cleanStreak}</span> streak
-                  </span>
+                {/* Sub-stats — quiet figures separated by hairline dots. */}
+                <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px] text-slate-500">
+                  <span><span className="font-semibold text-slate-900 tabular-nums">{data.evaluations.length}</span> evals</span>
+                  <span><span className="font-semibold text-slate-900 tabular-nums">{data.evaluations.filter((e: any) => (e.totalScore || 0) >= MAX_TOTAL_SCORE).length}</span> perfect runs</span>
+                  <span><span className="font-semibold text-slate-900 tabular-nums">{achievements.filter(a => a.unlocked).length}</span> badges</span>
+                  <span><span className="font-semibold text-slate-900 tabular-nums">{cleanStreak}</span> streak</span>
                 </div>
               </div>
             </div>
@@ -927,20 +919,13 @@ export default function GPPortal() {
         {(personalBest !== null || focusAreas.length > 0) && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {personalBest !== null && (
-              <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200 shadow-sm">
-                <CardContent className="p-5">
-                  <div className="flex items-center gap-3 mb-1">
-                    <div className="p-2 rounded-xl bg-amber-100 border border-amber-200">
-                      <Trophy className="h-5 w-5 text-amber-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wider">Personal best</p>
-                      <p className="text-2xl font-bold text-amber-700">
-                        {personalBest}<span className="text-sm text-slate-500 font-normal">/{MAX_TOTAL_SCORE}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-2">
+              <Card className="bg-white border-slate-200/70 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+                <CardContent className="p-6">
+                  <p className="text-[11px] uppercase tracking-[0.2em] font-semibold text-amber-600">Personal best</p>
+                  <p className="text-4xl font-semibold text-slate-900 tabular-nums tracking-tight mt-2">
+                    {personalBest}<span className="text-lg text-slate-300 font-light">/{MAX_TOTAL_SCORE}</span>
+                  </p>
+                  <p className="text-xs text-slate-400 mt-2">
                     Your highest evaluation score so far. Keep stacking those wins.
                   </p>
                 </CardContent>
@@ -948,42 +933,35 @@ export default function GPPortal() {
             )}
 
             {focusAreas.length > 0 && (
-              <Card className="bg-white border-violet-200 shadow-sm">
-                <CardContent className="p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="p-2 rounded-xl bg-violet-100 border border-violet-200">
-                      <Target className="h-5 w-5 text-violet-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wider">Focus next</p>
-                      <p className="text-sm font-semibold text-slate-800">Where you can move the needle</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2.5">
+              <Card className="bg-white border-slate-200/70 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+                <CardContent className="p-6">
+                  <p className="text-[11px] uppercase tracking-[0.2em] font-semibold text-slate-400 mb-1">Focus next</p>
+                  <p className="text-sm text-slate-500 mb-4">Where you can move the needle</p>
+                  <div className="divide-y divide-slate-100">
                     {focusAreas.map(f => (
-                      <div key={f.key} className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-slate-800">{f.label}</span>
-                          <span className="text-xs tabular-nums font-semibold text-violet-700">
-                            {f.avg.toFixed(1)}/{f.max}
+                      <div key={f.key} className="py-3.5 first:pt-0 last:pb-0">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-sm font-semibold text-slate-900">{f.label}</span>
+                          <span className="text-xs tabular-nums font-semibold text-slate-700">
+                            {f.avg.toFixed(1)}<span className="text-slate-300 font-normal">/{f.max}</span>
                           </span>
                         </div>
                         {f.tipTitle && (
-                          <p className="text-[11px] uppercase tracking-wider text-violet-700 font-semibold mb-1.5">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-amber-600 font-semibold mb-1">
                             {f.tipTitle}
                           </p>
                         )}
                         {f.tips.length > 0 ? (
                           <ul className="space-y-1">
                             {f.tips.map((tip, i) => (
-                              <li key={i} className="flex items-start gap-1.5 text-[11px] text-slate-600 leading-relaxed">
-                                <span className="text-violet-500 mt-0.5 shrink-0">•</span>
+                              <li key={i} className="flex items-start gap-1.5 text-[12px] text-slate-500 leading-relaxed">
+                                <span className="text-slate-300 mt-0.5 shrink-0">·</span>
                                 <span>{tip}</span>
                               </li>
                             ))}
                           </ul>
                         ) : (
-                          <p className="text-[11px] text-slate-500 italic">Keep practising — small consistent improvements compound.</p>
+                          <p className="text-[12px] text-slate-400 italic">Keep practising — small consistent improvements compound.</p>
                         )}
                       </div>
                     ))}
@@ -1020,52 +998,10 @@ export default function GPPortal() {
           </TabsList>
 
           <TabsContent value="overview" className="mt-6 space-y-6">
-            {/* Performance bonus standing */}
-            {bonus.data && (
-              <Card className="overflow-hidden border-amber-200">
-                <CardContent className="p-4 sm:p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${bonus.data.level === "level2" ? "bg-amber-100 text-amber-700" : bonus.data.level === "level1" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                        <BadgeEuro className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">Performance Bonus</div>
-                        <div className="text-xs text-muted-foreground">
-                          {bonus.data.level === "level2" ? "Level 2 · €2.50/h" : bonus.data.level === "level1" ? "Level 1 · €1.50/h" : "Not eligible yet"}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold tabular-nums text-slate-900">
-                        {bonus.data.amount > 0 ? `€${bonus.data.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
-                      </div>
-                      <div className="text-xs text-muted-foreground tabular-nums">{bonus.data.ggs.toLocaleString()} GGs</div>
-                    </div>
-                  </div>
-                  {bonus.data.disqualifyingFactors.length > 0 ? (
-                    <div className="mt-3 text-xs text-rose-600 flex items-center gap-1.5">
-                      <AlertTriangle className="h-3.5 w-3.5" /> {bonus.data.disqualifyingFactors.join("; ")}
-                    </div>
-                  ) : bonus.data.gapToNext ? (
-                    <div className="mt-3 text-xs text-amber-700 flex items-center gap-1.5">
-                      <TrendingUp className="h-3.5 w-3.5" />
-                      {bonus.data.gapToNext.gapGGs.toLocaleString()} more GGs to reach {bonus.data.gapToNext.target === "level2" ? "Level 2" : "Level 1"}.
-                    </div>
-                  ) : bonus.data.isEligible && bonus.data.amount === 0 ? (
-                    <div className="mt-3 text-xs text-amber-700">Worked hours not recorded yet — payout shows once your hours are in.</div>
-                  ) : null}
-                </CardContent>
-              </Card>
-            )}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Quick Stats */}
               <div className="space-y-4">
-                <h2 className="text-lg font-bold flex items-center gap-2.5 text-slate-900">
-                  <span className="inline-block h-6 w-1 rounded-full bg-gradient-to-b from-amber-400 to-yellow-500" aria-hidden />
-                  <Target className="h-5 w-5 text-amber-600" />
-                  This Month's Stats
-                </h2>
+                <SectionHeading label="This month's stats" />
                 <div className="grid grid-cols-2 gap-3">
                   <StatCard
                     icon={Eye}
@@ -1104,13 +1040,12 @@ export default function GPPortal() {
               </div>
 
               {/* Recent Evaluations */}
-              <Card className="bg-white border-slate-200/80 shadow-sm hover:shadow-md transition-shadow duration-300">
+              <Card className="bg-white border-slate-200/70 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-slate-900 text-base font-bold flex items-center gap-2.5">
-                    <span className="inline-block h-5 w-1 rounded-full bg-gradient-to-b from-amber-400 to-yellow-500" aria-hidden />
-                    <Clock className="h-4 w-4 text-amber-600" />
-                    Recent Evaluations
-                  </CardTitle>
+                  <p className="text-[11px] uppercase tracking-[0.2em] font-semibold text-slate-400">
+                    <span className="text-amber-500 mr-2" aria-hidden>—</span>
+                    Recent evaluations
+                  </p>
                 </CardHeader>
                 <CardContent>
                   {recentEvaluations.length > 0 ? (
@@ -1129,7 +1064,7 @@ export default function GPPortal() {
                         if (eval_.dealingStyleScore != null) subs.push({ key: "d", label: "Deal", value: eval_.dealingStyleScore, max: SCORE_CONFIG.dealingStyle.max });
                         if (eval_.gamePerformanceScore != null) subs.push({ key: "g", label: "Perf", value: eval_.gamePerformanceScore, max: SCORE_CONFIG.gamePerformance.max });
                         return (
-                          <div key={eval_.id} className={`group relative overflow-hidden p-3 rounded-xl border ${sc.border} ${sc.bg} hover:shadow-md hover:-translate-y-0.5 transition-all duration-300`}>
+                          <div key={eval_.id} className="group relative overflow-hidden p-3 rounded-xl border border-slate-200/70 bg-white transition-colors duration-200 hover:border-slate-300">
                             {/* Big circular score badge on the left
                                 replaces the small inline score so the
                                 eye lands on the number first. */}
@@ -1266,61 +1201,30 @@ export default function GPPortal() {
               ];
               return (
                 <section className="mb-6">
-                  <div className="flex items-center justify-between gap-3 mb-3">
-                    <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2.5 text-slate-900">
-                      <span className="inline-block h-6 w-1 rounded-full bg-gradient-to-b from-amber-400 to-yellow-500" aria-hidden />
-                      <Target className="h-5 w-5 text-amber-600" />
-                      Active Quests
-                    </h2>
-                    <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">
-                      Earn XP toward Level {xp ? xp.level + 1 : "—"}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <SectionHeading label="Active quests" meta={`Earn XP toward Level ${xp ? xp.level + 1 : "—"}`} />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {quests.map((q) => (
                       <div
                         key={q.label}
-                        className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 ${
-                          q.done
-                            ? "border-amber-300 bg-gradient-to-br from-amber-50 to-yellow-50 shadow-md shadow-amber-100/60 ring-1 ring-amber-200/60"
-                            : "border-slate-200 bg-white shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                        className={`relative overflow-hidden rounded-2xl border bg-white p-5 transition-colors duration-200 ${
+                          q.done ? "border-amber-300" : "border-slate-200/70 hover:border-slate-300"
                         }`}
                       >
-                        {q.done && (
-                          <div className="absolute -top-1 -right-1 h-6 w-6 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-white text-[11px] font-bold shadow-sm">
-                            ✓
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-sm text-slate-900 truncate">{q.label}</p>
+                          <span className={`shrink-0 text-[10px] font-semibold tabular-nums ${q.done ? "text-amber-600" : "text-slate-400"}`}>
+                            {q.done ? "✓ done" : q.reward}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1 truncate">{q.goal}</p>
+                        <div className="mt-3 flex items-center gap-2.5">
+                          <div className="flex-1 h-1 rounded-full bg-slate-100 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-[width] duration-700 ease-out ${q.done ? "bg-amber-500" : "bg-slate-300"}`}
+                              style={{ width: `${Math.min(100, Math.max(8, q.pct * 100))}%` }}
+                            />
                           </div>
-                        )}
-                        <div className="flex items-start gap-3">
-                          <div className={`shrink-0 h-10 w-10 rounded-xl flex items-center justify-center ${
-                            q.done ? "bg-white/80 border border-amber-300" : "bg-amber-50 border border-amber-100"
-                          }`}>
-                            <q.icon className={`h-5 w-5 ${q.done ? "text-amber-700" : "text-amber-500"}`} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-bold text-sm text-slate-900 truncate">{q.label}</p>
-                              <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0 rounded-full border ${
-                                q.done
-                                  ? "text-amber-700 bg-white border-amber-300"
-                                  : "text-amber-600 bg-amber-50 border-amber-200"
-                              }`}>
-                                {q.reward}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-500 mt-0.5 truncate">{q.goal}</p>
-                            <div className="mt-2 flex items-center gap-2">
-                              <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full transition-[width] duration-700 ease-out ${
-                                    q.done ? "bg-gradient-to-r from-amber-400 to-yellow-500" : "bg-gradient-to-r from-slate-300 to-amber-300"
-                                  }`}
-                                  style={{ width: `${Math.min(100, Math.max(8, q.pct * 100))}%` }}
-                                />
-                              </div>
-                              <span className="text-[10px] font-semibold text-slate-500 shrink-0 tabular-nums">{q.hint}</span>
-                            </div>
-                          </div>
+                          <span className="text-[10px] font-medium text-slate-400 shrink-0 tabular-nums">{q.hint}</span>
                         </div>
                       </div>
                     ))}
@@ -1335,14 +1239,7 @@ export default function GPPortal() {
                 makes the portal feel like a personal space. */}
             {personalRecords && (
               <section>
-                <div className="flex items-center justify-between gap-3 mb-4">
-                  <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2.5 text-slate-900">
-                    <span className="inline-block h-6 w-1 rounded-full bg-gradient-to-b from-violet-400 to-fuchsia-500" aria-hidden />
-                    <Medal className="h-5 w-5 text-violet-600" />
-                    Personal Records
-                  </h2>
-                  <span className="text-[11px] text-muted-foreground">All time</span>
-                </div>
+                <SectionHeading label="Personal records" meta="All time" />
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                   <RecordTile
                     icon={Gem}
@@ -1399,21 +1296,10 @@ export default function GPPortal() {
 
             {/* Achievements moved into Overview */}
             <section>
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2.5 text-slate-900">
-                  {/* Gold accent bar — visual rhythm marker that
-                      replaces the smaller icon-only header treatment. */}
-                  <span className="inline-block h-6 w-1 rounded-full bg-gradient-to-b from-amber-400 to-yellow-500" aria-hidden />
-                  <Trophy className="h-5 w-5 text-amber-600" />
-                  Achievements
-                </h2>
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-50 to-yellow-50 text-amber-700 border border-amber-200 shadow-sm">
-                  <span className="tabular-nums">{achievements.filter(a => a.unlocked).length}</span>
-                  <span className="text-amber-400">/</span>
-                  <span className="tabular-nums text-amber-600">{achievements.length}</span>
-                  <span className="text-amber-500">unlocked</span>
-                </span>
-              </div>
+              <SectionHeading
+                label="Achievements"
+                meta={<span className="tabular-nums"><span className="font-semibold text-slate-700">{achievements.filter(a => a.unlocked).length}</span> / {achievements.length} unlocked</span>}
+              />
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {achievements.map((a) => (
                   <AchievementBadge key={a.title} {...a} />
@@ -1427,13 +1313,13 @@ export default function GPPortal() {
         {/* Score Trend Chart */}
         {data.monthlyHistory && data.monthlyHistory.length > 0 && (
           <section className="space-y-4">
-            <Card className="bg-white border-slate-200 shadow-sm">
+            <Card className="bg-white border-slate-200/70 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
               <CardHeader>
-                <CardTitle className="text-slate-800 flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-amber-500" />
-                  Score Trend
-                </CardTitle>
-                <CardDescription className="text-slate-500 text-sm">
+                <p className="text-[11px] uppercase tracking-[0.2em] font-semibold text-slate-400">
+                  <span className="text-amber-500 mr-2" aria-hidden>—</span>
+                  Score trend
+                </p>
+                <CardDescription className="text-slate-400 text-sm">
                   Average scores per month — Total, Appearance, and Game Performance
                 </CardDescription>
               </CardHeader>
@@ -1585,15 +1471,10 @@ export default function GPPortal() {
 
         {/* Evaluation History - Grouped by Month */}
         <section>
-          <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center gap-2 text-slate-800">
-            <Calendar className="h-5 w-5 text-amber-500" />
-            Evaluation History
-            {data.evaluations.length > 0 && (
-              <Badge className="ml-2 bg-amber-50 text-amber-700 border-amber-200">
-                {data.evaluations.length} total
-              </Badge>
-            )}
-          </h2>
+          <SectionHeading
+            label="Evaluation history"
+            meta={data.evaluations.length > 0 ? <span className="tabular-nums">{data.evaluations.length} total</span> : undefined}
+          />
 
           {data.evaluations.length > 0 ? (
             <div className="space-y-6">
@@ -1617,7 +1498,7 @@ export default function GPPortal() {
                         onClick={() => setSelectedEvalMonth('all')}
                         className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
                           selectedEvalMonth === 'all'
-                            ? 'bg-amber-500 text-white shadow-sm'
+                            ? 'bg-slate-900 text-white border border-slate-900 shadow-sm'
                             : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                         }`}
                       >
@@ -1629,7 +1510,7 @@ export default function GPPortal() {
                           onClick={() => setSelectedEvalMonth(m.key)}
                           className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
                             selectedEvalMonth === m.key
-                              ? 'bg-amber-500 text-white shadow-sm'
+                              ? 'bg-slate-900 text-white border border-slate-900 shadow-sm'
                               : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                           }`}
                         >
@@ -2576,20 +2457,20 @@ function PeerBenchmarkRow({
           const v = item.value!;
           const tier = tierFor(v.percentile);
           const toneCls =
-            tier.tone === "emerald" ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-            : tier.tone === "sky" ? "bg-sky-50 border-sky-200 text-sky-700"
-            : tier.tone === "amber" ? "bg-amber-50 border-amber-200 text-amber-700"
-            : "bg-slate-50 border-slate-200 text-slate-700";
+            tier.tone === "emerald" ? "text-emerald-600"
+            : tier.tone === "sky" ? "text-sky-600"
+            : tier.tone === "amber" ? "text-amber-600"
+            : "text-slate-400";
           return (
-            <div key={item.key} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+            <div key={item.key} className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{item.label}</span>
-                <span className={`text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full border ${toneCls}`}>
+                <span className="text-[10px] uppercase tracking-[0.14em] text-slate-400 font-semibold">{item.label}</span>
+                <span className={`text-[10px] uppercase tracking-[0.14em] font-semibold ${toneCls}`}>
                   {tier.label}
                 </span>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-slate-900 tabular-nums">
+                <span className="text-2xl font-semibold text-slate-900 tabular-nums tracking-tight">
                   {/* Compute from rank, not 100−percentile. Percentile
                       is a peer-relative metric (% of peers I outrank);
                       "Top X%" means "X% of the team is at-or-above
@@ -2619,28 +2500,27 @@ function NextGoalCard({ goal }: { goal: { icon: any; title: string; description:
   const Icon = goal.icon;
   const pct = Math.max(0, Math.min(100, (goal.progress ?? 0) * 100));
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-white to-yellow-50 p-5 shadow-sm">
-      <div className="pointer-events-none absolute -top-16 -right-12 h-40 w-40 rounded-full bg-gradient-to-br from-amber-200/50 to-yellow-100/0 blur-2xl" aria-hidden />
-      <div className="relative flex items-center gap-4">
-        <div className="shrink-0 h-12 w-12 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center">
-          <Icon className="h-6 w-6 text-amber-600" />
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
+      <div className="relative flex items-center gap-5">
+        <div className="shrink-0 h-12 w-12 rounded-full bg-[#FAF9F7] border border-slate-200 flex items-center justify-center">
+          <Icon className="h-5 w-5 text-slate-400" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase tracking-[0.16em] font-bold text-amber-700">Next badge</span>
+            <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-amber-600">Next badge</span>
             <span className="text-[10px] text-slate-300" aria-hidden>·</span>
-            <span className="text-[10px] font-semibold text-slate-500 tabular-nums">{Math.round(pct)}% there</span>
+            <span className="text-[10px] font-medium text-slate-400 tabular-nums">{Math.round(pct)}% there</span>
           </div>
-          <p className="text-base font-bold text-slate-900 leading-tight mt-0.5 truncate">{goal.title}</p>
-          <p className="text-xs text-slate-500 truncate">{goal.description}</p>
-          <div className="mt-2.5 h-2 rounded-full bg-amber-100 overflow-hidden">
+          <p className="text-base font-semibold text-slate-900 leading-tight mt-1 truncate">{goal.title}</p>
+          <p className="text-xs text-slate-400 truncate">{goal.description}</p>
+          <div className="mt-3 h-1 rounded-full bg-slate-100 overflow-hidden">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-[width] duration-700 ease-out"
+              className="h-full rounded-full bg-amber-500 transition-[width] duration-700 ease-out"
               style={{ width: `${pct}%` }}
             />
           </div>
           {goal.progressLabel && (
-            <p className="text-[11px] text-amber-700 font-medium mt-1.5">{goal.progressLabel}</p>
+            <p className="text-[11px] text-slate-400 mt-1.5">{goal.progressLabel}</p>
           )}
         </div>
       </div>
@@ -2662,35 +2542,17 @@ function RecordTile({
   sublabel: string | null;
   tone: "violet" | "amber" | "pink" | "sky" | "orange" | "emerald" | "indigo";
 }) {
-  const accent =
-    tone === "violet" ? "from-violet-300 to-violet-400" :
-    tone === "amber" ? "from-amber-300 to-amber-400" :
-    tone === "pink" ? "from-pink-300 to-pink-400" :
-    tone === "sky" ? "from-sky-300 to-sky-400" :
-    tone === "orange" ? "from-orange-300 to-orange-400" :
-    tone === "emerald" ? "from-emerald-300 to-emerald-400" :
-    "from-indigo-300 to-indigo-400";
-  const iconBg =
-    tone === "violet" ? "bg-violet-100 text-violet-700 border-violet-200" :
-    tone === "amber" ? "bg-amber-100 text-amber-700 border-amber-200" :
-    tone === "pink" ? "bg-pink-100 text-pink-700 border-pink-200" :
-    tone === "sky" ? "bg-sky-100 text-sky-700 border-sky-200" :
-    tone === "orange" ? "bg-orange-100 text-orange-700 border-orange-200" :
-    tone === "emerald" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
-    "bg-indigo-100 text-indigo-700 border-indigo-200";
+  // Editorial trophy shelf: monochrome tiles, the figure does the work.
+  // `tone` is kept for call-site compatibility but no longer drives colour.
+  void tone;
   return (
-    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white px-3.5 py-3 transition-all hover:shadow-sm">
-      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${accent}`} aria-hidden />
-      <div className="flex items-start gap-2.5">
-        <span className={`h-9 w-9 shrink-0 rounded-lg border flex items-center justify-center ${iconBg}`}>
-          <Icon className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold truncate">{label}</p>
-          <p className="text-xl font-bold tabular-nums text-slate-900 leading-tight mt-0.5">{value}</p>
-          {sublabel && <p className="text-[10px] text-slate-400 mt-0.5 truncate">{sublabel}</p>}
-        </div>
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white px-4 py-4 transition-colors duration-200 hover:border-slate-300">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400 font-semibold truncate">{label}</p>
+        <Icon className="h-3.5 w-3.5 text-slate-300 shrink-0" aria-hidden />
       </div>
+      <p className="text-2xl font-semibold tabular-nums text-slate-900 leading-tight tracking-tight mt-1.5">{value}</p>
+      {sublabel && <p className="text-[10px] text-slate-400 mt-1 truncate">{sublabel}</p>}
     </div>
   );
 }

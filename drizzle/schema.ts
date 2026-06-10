@@ -495,12 +495,13 @@ export type InsertActionItem = typeof actionItems.$inferInsert;
  * Persona Sync Log
  *
  * Records every Persona scrape attempt — manual or scheduled — so
- * admins can see when each team last got fresh attendance data and
- * why a sync failed if it did.
+ * admins can see when attendance data was last refreshed and why a
+ * sync failed if it did. Company-wide (one shared database): teamId
+ * is a legacy column kept nullable for any pre-teardown rows.
  */
 export const personaSyncLogs = mysqlTable("persona_sync_logs", {
   id: int("id").autoincrement().primaryKey(),
-  teamId: int("teamId").notNull(),
+  teamId: int("teamId"),
   triggeredById: int("triggeredById"), // null when triggered by cron
   source: mysqlEnum("source", ["manual", "scheduled"]).default("manual").notNull(),
   month: int("month").notNull(),
@@ -526,12 +527,12 @@ export type InsertPersonaSyncLog = typeof personaSyncLogs.$inferInsert;
  * 12 names fail to fuzzy-match" pain point. FMs add aliases via the
  * Reconcile panel after a sync surfaces unmatched names.
  *
- * Scoped to (teamId, personaName) — same Persona name can map to
- * different GPs in different teams (rare but possible).
+ * Company-wide (one shared database): teamId is a legacy column kept
+ * nullable for any pre-teardown rows; lookups key on personaName only.
  */
 export const personaNameAliases = mysqlTable("persona_name_aliases", {
   id: int("id").autoincrement().primaryKey(),
-  teamId: int("teamId").notNull(),
+  teamId: int("teamId"),
   personaName: varchar("personaName", { length: 255 }).notNull(),
   /** GP this Persona name resolves to. */
   gamePresenterId: int("gamePresenterId").notNull(),

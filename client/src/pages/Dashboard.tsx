@@ -341,7 +341,7 @@ export default function Dashboard() {
               </div>
             </button>
             <button
-              onClick={() => setLocation('/attendance')}
+              onClick={() => setLocation('/admin?tab=persona')}
               className="group flex items-center gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-blue-300 hover:shadow-md transition-all text-left card-interactive"
             >
               <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shrink-0">
@@ -1601,7 +1601,7 @@ function SparkStat({ label, value, tone }: { label: string; value: string; tone:
  */
 function DashboardQuickActions({ onNavigate }: { onNavigate: (path: string) => void }) {
   const actions: { label: string; description: string; icon: React.ComponentType<{ className?: string }>; path: string; tone: "amber" | "violet" | "blue" | "emerald" }[] = [
-    { label: "Sync Persona", description: "Pull attendance now", icon: RefreshCw, path: "/admin", tone: "amber" },
+    { label: "Sync Persona", description: "Pull attendance now", icon: RefreshCw, path: "/admin?tab=persona", tone: "amber" },
     { label: "Generate report", description: "Monthly Excel + email", icon: FileSpreadsheet, path: "/reports", tone: "violet" },
     { label: "Upload screenshots", description: "Evaluations + attitude", icon: Upload, path: "/upload", tone: "blue" },
     { label: "Review attendance", description: "Sick / late / extra", icon: Calendar, path: "/attendance", tone: "emerald" },

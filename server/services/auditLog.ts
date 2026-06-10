@@ -21,8 +21,7 @@ export type AuditEntity =
   | "TEAM"
   | "USER"
   | "REPORT"
-  | "SETTINGS"
-  | "BONUS";
+  | "SETTINGS";
 
 interface AuditLogEntry {
   userId: string;
@@ -107,28 +106,6 @@ export function logEvaluationChange(
     status: "success",
     ipAddress,
     userAgent,
-  });
-}
-
-export function logBonusCalculation(
-  userId: string,
-  gpId: string,
-  calculationResult: Record<string, unknown>,
-  ipAddress?: string,
-  userAgent?: string
-): void {
-  logAuditEvent({
-    userId,
-    action: "CREATE",
-    entity: "BONUS",
-    entityId: gpId,
-    newValues: calculationResult,
-    status: "success",
-    ipAddress,
-    userAgent,
-    metadata: {
-      calculatedAt: new Date().toISOString(),
-    },
   });
 }
 

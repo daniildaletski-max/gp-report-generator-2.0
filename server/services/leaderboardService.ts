@@ -3,11 +3,10 @@
  *
  * Now that there is one shared database, this ranks EVERY game presenter
  * company-wide for a month and rolls up company-level analytics (score
- * distribution, month-over-month movers, total bonus payout). Pure
- * aggregation over the global read functions — no team/user scoping.
+ * distribution, month-over-month movers). Pure aggregation over the
+ * global read functions — no team/user scoping.
  */
 import * as db from "../db";
-import { getBonusesAll } from "./bonusService";
 import { MAX_TOTAL_SCORE } from "../../shared/const";
 
 export interface LeaderboardRow {
@@ -22,8 +21,6 @@ export interface LeaderboardRow {
   lowScore: number;
   attitude: number | null;
   mistakes: number;
-  bonusAmount: number;
-  bonusLevel: "level1" | "level2" | "ineligible";
   /** Average total in the previous month, when the GP had evals then. */
   prevAvgTotal: number | null;
   /** avgTotal − prevAvgTotal (month-over-month movement). */
@@ -44,8 +41,6 @@ export interface LeaderboardResult {
     distribution: { band: string; min: number; count: number }[];
     topImprovers: Array<{ gpId: number; gpName: string; delta: number; avgTotal: number }>;
     topDecliners: Array<{ gpId: number; gpName: string; delta: number; avgTotal: number }>;
-    totalBonusPayout: number;
-    eligibleForBonus: number;
   };
 }
 
@@ -76,12 +71,11 @@ export async function getLeaderboard(month: number, year: number): Promise<Leade
   const prevMonth = prevDate.getMonth() + 1;
   const prevYear = prevDate.getFullYear();
 
-  const [gps, monthEvals, prevEvals, statsRows, bonuses] = await Promise.all([
+  const [gps, monthEvals, prevEvals, statsRows] = await Promise.all([
     db.getAllGamePresenters(),
     db.getEvaluationsByMonth(year, month),
     db.getEvaluationsByMonth(prevYear, prevMonth),
     db.getAllMonthlyGpStats(month, year),
-    getBonusesAll(month, year),
   ]);
 
   const agg = aggregateEvals(monthEvals as any);
@@ -90,9 +84,6 @@ export async function getLeaderboard(month: number, year: number): Promise<Leade
   for (const r of statsRows as Array<{ stats: { gamePresenterId: number; attitude: number | null; mistakes: number | null }; gp: unknown }>) {
     statsByGp.set(r.stats.gamePresenterId, { attitude: r.stats.attitude ?? null, mistakes: r.stats.mistakes ?? 0 });
   }
-  const bonusByGp = new Map<number, { amount: number; level: LeaderboardRow["bonusLevel"] }>();
-  for (const b of bonuses) bonusByGp.set(b.gpId, { amount: b.amount, level: b.level });
-
   const rows: LeaderboardRow[] = [];
   for (const gp of gps) {
     const a = agg.get(gp.id);
@@ -101,7 +92,6 @@ export async function getLeaderboard(month: number, year: number): Promise<Leade
     const prev = prevAgg.get(gp.id);
     const prevAvgTotal = prev && prev.count > 0 ? round1(prev.total / prev.count) : null;
     const st = statsByGp.get(gp.id);
-    const bn = bonusByGp.get(gp.id);
     rows.push({
       rank: 0,
       gpId: gp.id,
@@ -114,8 +104,6 @@ export async function getLeaderboard(month: number, year: number): Promise<Leade
       lowScore: a.low === Infinity ? 0 : a.low,
       attitude: st?.attitude ?? null,
       mistakes: st?.mistakes ?? 0,
-      bonusAmount: bn?.amount ?? 0,
-      bonusLevel: bn?.level ?? "ineligible",
       prevAvgTotal,
       delta: prevAvgTotal != null ? round1(avgTotal - prevAvgTotal) : null,
     });
@@ -161,8 +149,6 @@ export async function getLeaderboard(month: number, year: number): Promise<Leade
       distribution,
       topImprovers,
       topDecliners,
-      totalBonusPayout: Math.round(rows.reduce((s, r) => s + r.bonusAmount, 0) * 100) / 100,
-      eligibleForBonus: rows.filter(r => r.bonusLevel !== "ineligible").length,
     },
   };
 }

@@ -13,7 +13,7 @@ import {
 import {
   LayoutDashboard, FileSpreadsheet, FileCheck, Upload, CalendarCheck,
   Shield, Users, Target, BarChart3, AlertTriangle, RefreshCw,
-  User, Sparkles, Radar, Zap, ScanLine, BadgeEuro, Trophy,
+  User, Sparkles, Radar, Zap, ScanLine, Trophy,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { GPDetailDrawer } from "@/components/GPDetailDrawer";
@@ -29,7 +29,6 @@ const NAV_ITEMS = [
   { label: "Analytics", path: "/analytics", icon: BarChart3, hint: "Deep-dive" },
   { label: "Reports", path: "/reports", icon: FileSpreadsheet, hint: "Monthly Excel" },
   { label: "Attendance", path: "/attendance", icon: CalendarCheck, hint: "Sick / late / extra" },
-  { label: "Bonus", path: "/bonus", icon: BadgeEuro, hint: "Eligibility & payout" },
   { label: "Leaderboard", path: "/leaderboard", icon: Trophy, hint: "Rankings" },
   { label: "Assistant", path: "/assistant", icon: Sparkles, hint: "Ask your data" },
 ];

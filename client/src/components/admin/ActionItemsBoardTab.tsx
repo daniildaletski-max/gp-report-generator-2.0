@@ -119,7 +119,7 @@ export function ActionItemsBoardTab() {
             <Target className="h-10 w-10 text-muted-foreground/50 mx-auto mb-3" />
             <p className="text-sm font-medium text-foreground">No action items {search || filterCategory !== "all" || filterPriority !== "all" ? "match the filters" : "yet"}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Open a GP from the Bonuses tab or Dashboard and create plans for them.
+              Open a GP from the Leaderboard or Dashboard and create plans for them.
             </p>
           </CardContent>
         </Card>

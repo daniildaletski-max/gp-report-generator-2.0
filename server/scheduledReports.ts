@@ -176,8 +176,8 @@ async function generateCompanyReport(
     });
 
     // Build the rich workbook + email it. Shared with the on-demand path
-    // so scheduled reports also get the Coaching Plans + Bonus Summary
-    // sheets. With a null email this still builds + uploads the workbook.
+    // so scheduled reports get the same sheets (incl. Coaching Plans).
+    // With a null email this still builds + uploads the workbook.
     await generateExcelAndEmail(recipientCtx, report.id);
 
     log.info(`[ScheduledReports] Successfully generated company report for ${monthName} ${reportYear}`);
@@ -706,6 +706,68 @@ export function initWeeklyDigest() {
   return task;
 }
 
+// ============================================
+// Persona attendance auto-sync — daily pull of sick leaves / missed
+// days / late arrivals / extra shifts from the HR system, so the
+// Attendance page stays current without anyone clicking Sync.
+// ============================================
+
+let isPersonaSyncRunning = false;
+
+async function runPersonaAutoSync() {
+  if (isPersonaSyncRunning) {
+    log.warn("[PersonaAutoSync] Already running — skipping this tick");
+    return;
+  }
+  if (!process.env.PERSONA_USERNAME || !process.env.PERSONA_PASSWORD) {
+    log.info("[PersonaAutoSync] Credentials not configured — auto-sync skipped");
+    return;
+  }
+  isPersonaSyncRunning = true;
+  try {
+    const { runPersonaSync } = await import("./services/personaSyncService");
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+    await runPersonaSync({ month, year, trigger: "scheduled", triggeredById: null });
+    // Early in the month, HR is usually still correcting the previous
+    // month's records — refresh it too so late edits land here.
+    if (now.getDate() <= 5) {
+      const prev = new Date(year, month - 2, 1);
+      await runPersonaSync({
+        month: prev.getMonth() + 1,
+        year: prev.getFullYear(),
+        trigger: "scheduled",
+        triggeredById: null,
+      });
+    }
+  } catch (err) {
+    log.error("[PersonaAutoSync] failed", err instanceof Error ? err : new Error(String(err)));
+  } finally {
+    isPersonaSyncRunning = false;
+  }
+}
+
+/**
+ * Daily at 05:00 Tallinn by default. Override via PERSONA_SYNC_CRON
+ * (full cron expression); "off" disables.
+ */
+export function initPersonaSync() {
+  const expr = process.env.PERSONA_SYNC_CRON ?? "0 5 * * *";
+  if (expr.toLowerCase() === "off") {
+    log.info("[PersonaAutoSync] disabled via env");
+    return null;
+  }
+  const cronExpr = cron.validate(expr) ? expr : "0 5 * * *";
+  const task = cron.schedule(cronExpr, () => {
+    log.info("[PersonaAutoSync] Cron tick");
+    runPersonaAutoSync().catch(err =>
+      log.error("[PersonaAutoSync] unhandled error", err instanceof Error ? err : new Error(String(err))),
+    );
+  }, { timezone: "Europe/Tallinn" });
+  log.info(`[PersonaAutoSync] scheduled with cron "${cronExpr}"`);
+  return task;
+}
 
 // Export for manual triggering (e.g., from admin panel)
-export { runMonthlyReportGeneration, runStudioworksAutoSync, runAutoCoachingFromInsights, runWeeklyCoachingDigest };
+export { runMonthlyReportGeneration, runStudioworksAutoSync, runAutoCoachingFromInsights, runWeeklyCoachingDigest, runPersonaAutoSync };
