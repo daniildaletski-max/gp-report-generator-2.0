@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useUrlState, urlString } from "@/hooks/useUrlState";
 import { ActionItemsBoardTab } from "@/components/admin/ActionItemsBoardTab";
 import { StudioworksImportButton } from "@/components/StudioworksImporter";
-const ADMIN_TABS = ["overview", "invitations", "users", "stats", "action-items", "access", "errors", "studioworks"] as const;
+const ADMIN_TABS = ["overview", "invitations", "users", "stats", "action-items", "access", "errors", "studioworks", "persona"] as const;
 type AdminTab = (typeof ADMIN_TABS)[number];
 
 const FM_TABS = ["stats", "action-items", "access"] as const;
@@ -31,7 +31,7 @@ import {
   TrendingUp, TrendingDown, Search, Filter, X, Eye, EyeOff, Calendar,
   Award, Target, Zap, Clock, ChevronUp, ChevronDown, ChevronRight, Mail, Send, UserPlus,
   MailCheck, MailX, MailQuestion, Sparkles, Timer, Trophy, ThumbsUp, ThumbsDown,
-  MoreVertical, Gamepad2, Link2, ArrowRight
+  MoreVertical, Gamepad2, Link2, ArrowRight, CalendarCheck
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -219,6 +219,10 @@ function FullAdminPanel() {
             <FileCheck className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline text-xs font-medium">Studioworks</span>
           </TabsTrigger>
+          <TabsTrigger value="persona" className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-slate-600 data-[state=active]:bg-gradient-to-br data-[state=active]:from-amber-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-amber-200/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1">
+            <CalendarCheck className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline text-xs font-medium">Persona</span>
+          </TabsTrigger>
         </TabsList>
         </div>
 
@@ -265,6 +269,9 @@ function FullAdminPanel() {
 
         {/* Studioworks Sync Tab */}
         <StudioworksSyncTab />
+
+        {/* Persona HR Sync Tab */}
+        <PersonaSyncTab />
       </Tabs>
     </div>
   );
@@ -3829,5 +3836,386 @@ function StudioworksSyncTab() {
         </CardContent>
       </Card>
     </TabsContent>
+  );
+}
+
+// ============================================
+// Persona HR Sync tab — attendance (sick / missed / late / extra) pulled
+// from persona.fujitsu.ee into each GP's monthly row. Mirrors the
+// Studioworks tab: test-connection checklist, month sync, unmatched-name
+// mapping (learns aliases), sync history, alias editor.
+// ============================================
+
+type PersonaTestResult = {
+  success: boolean;
+  steps: Array<{ step: string; label: string; status: "pending" | "success" | "failed" | "skipped"; error?: string; durationMs?: number }>;
+  failureScreenshotB64: string;
+};
+
+type PersonaRunResult = {
+  success: boolean;
+  error?: string;
+  month: number;
+  year: number;
+  totalWorkers: number;
+  matched: number;
+  unmatched: number;
+  applied: number;
+  status: "success" | "partial" | "failed";
+  details: Array<{
+    workerName: string; matched: boolean; viaAlias?: boolean; gpId?: number; gpName?: string;
+    counts: { sickLeaves: number; missedDays: number; lateToWork: number; extraShifts: number };
+    error?: string;
+  }>;
+};
+
+function PersonaSyncTab() {
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+  const [testResult, setTestResult] = useState<PersonaTestResult | null>(null);
+  const [runResult, setRunResult] = useState<PersonaRunResult | null>(null);
+  const [mappings, setMappings] = useState<Record<string, number>>({});
+  const utils = trpc.useUtils();
+
+  const { data: gpList } = trpc.gamePresenter.list.useQuery();
+  const sortedGps = useMemo(
+    () => [...((gpList ?? []) as Array<{ id: number; name: string }>)].sort((a, b) => a.name.localeCompare(b.name)),
+    [gpList],
+  );
+
+  const testMutation = trpc.personaSync.testConnection.useMutation({
+    onSuccess: (data) => {
+      setTestResult(data as PersonaTestResult);
+      if (data.success) toast.success("Persona connection OK");
+      else {
+        const failed = data.steps.find((s: any) => s.status === "failed");
+        toast.error(`Test failed at: ${failed?.label ?? "unknown step"}`);
+      }
+    },
+    onError: (err) => toast.error(`Test failed: ${err.message}`),
+  });
+
+  const syncMutation = trpc.personaSync.syncNow.useMutation({
+    onSuccess: async (data) => {
+      setRunResult(data as PersonaRunResult);
+      setMappings({});
+      if (!data.success) toast.error(`Sync failed: ${data.error ?? "unknown error"}`);
+      else toast.success(`Attendance updated for ${data.applied} GP${data.applied === 1 ? "" : "s"} (${data.unmatched} unmatched)`);
+      await utils.attendance.invalidate();
+      await utils.personaSync.history.invalidate();
+    },
+    onError: (err) => toast.error(`Sync failed: ${err.message}`),
+  });
+
+  const applyMutation = trpc.personaSync.applyMapped.useMutation({
+    onSuccess: async (res) => {
+      toast.success(`Applied ${res.applied} mapped worker${res.applied === 1 ? "" : "s"}${res.errors.length ? ` · ${res.errors.length} failed` : ""}`);
+      setMappings({});
+      await utils.attendance.invalidate();
+      await utils.personaSync.aliases.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const unmatchedRows = (runResult?.details ?? []).filter(d => !d.matched && !d.error);
+
+  const onApplyMapped = () => {
+    const rows = unmatchedRows
+      .filter(d => mappings[d.workerName])
+      .map(d => ({
+        workerName: d.workerName,
+        gamePresenterId: mappings[d.workerName],
+        sickLeaves: d.counts.sickLeaves,
+        missedDays: d.counts.missedDays,
+        lateToWork: d.counts.lateToWork,
+        extraShifts: d.counts.extraShifts,
+      }));
+    if (rows.length === 0) { toast.error("Map at least one worker to a GP first"); return; }
+    applyMutation.mutate({ month, year, rows });
+  };
+
+  return (
+    <TabsContent value="persona" className="space-y-6">
+      <div className="flex items-center gap-3 justify-between flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="icon-box p-3">
+            <CalendarCheck className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Persona HR Sync</h2>
+            <p className="text-sm text-muted-foreground">
+              Pulls attendance — sick leaves, missed days, late arrivals, extra shifts — from persona.fujitsu.ee straight into each GP's month.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <Card className="border border-border">
+        <CardHeader>
+          <CardTitle className="text-base">Actions</CardTitle>
+          <CardDescription>
+            <strong>Test connection</strong> verifies login + schedule access without writing anything.
+            <strong> Sync month</strong> overwrites the selected month's attendance with HR data (Persona is the source of truth). A daily auto-sync also runs at 05:00.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <div className="flex items-center gap-2">
+              <Select value={String(month)} onValueChange={v => setMonth(Number(v))}>
+                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["January","February","March","April","May","June","July","August","September","October","November","December"].map((m, i) => (
+                    <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={String(year)} onValueChange={v => setYear(Number(v))}>
+                <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 4 }, (_, i) => now.getFullYear() - 2 + i).map(y => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 flex-1">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setTestResult(null); testMutation.mutate(); }}
+                disabled={testMutation.isPending || syncMutation.isPending}
+              >
+                {testMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Testing…</>
+                ) : (
+                  <><Activity className="h-4 w-4 mr-2" /> Test connection</>
+                )}
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => { setRunResult(null); syncMutation.mutate({ month, year }); }}
+                disabled={testMutation.isPending || syncMutation.isPending}
+              >
+                {syncMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Syncing…</>
+                ) : (
+                  <><RefreshCw className="h-4 w-4 mr-2" /> Sync month</>
+                )}
+              </Button>
+            </div>
+          </div>
+          <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-200 bg-amber-50/50 text-sm text-amber-800">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <div>
+              <strong>Setup:</strong> set <code className="bg-amber-100 px-1 rounded text-[11px]">PERSONA_USERNAME</code> and <code className="bg-amber-100 px-1 rounded text-[11px]">PERSONA_PASSWORD</code> env vars. Optional: <code className="bg-amber-100 px-1 rounded text-[11px]">PERSONA_PROJECT_ID</code> (filter to one project), <code className="bg-amber-100 px-1 rounded text-[11px]">PERSONA_SYNC_CRON</code> (default daily 05:00, "off" disables).
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Test result checklist */}
+      {testResult && (
+        <Card className={`border ${testResult.success ? "border-emerald-200 bg-emerald-50/30" : "border-rose-200 bg-rose-50/30"}`}>
+          <CardHeader className="flex-row items-start justify-between space-y-0 gap-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              {testResult.success ? <Check className="h-4 w-4 text-emerald-600" /> : <AlertCircle className="h-4 w-4 text-rose-600" />}
+              Connection {testResult.success ? "OK" : "failed"}
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => setTestResult(null)}><X className="h-4 w-4" /></Button>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {testResult.steps.map(s => (
+              <div key={s.step} className="flex items-center gap-2 text-sm">
+                {s.status === "success" ? <Check className="h-3.5 w-3.5 text-emerald-600" />
+                  : s.status === "failed" ? <X className="h-3.5 w-3.5 text-rose-600" />
+                  : <span className="h-3.5 w-3.5 inline-block rounded-full border border-slate-300" />}
+                <span className={s.status === "failed" ? "text-rose-700 font-medium" : "text-slate-700"}>{s.label}</span>
+                {s.durationMs != null && <span className="text-[11px] text-muted-foreground tabular-nums ml-auto">{(s.durationMs / 1000).toFixed(1)}s</span>}
+                {s.error && <span className="text-[11px] text-rose-600 truncate max-w-[50%]">{s.error}</span>}
+              </div>
+            ))}
+            {!testResult.success && testResult.failureScreenshotB64 && (
+              <img
+                src={`data:image/png;base64,${testResult.failureScreenshotB64}`}
+                alt="Persona page state at failure"
+                className="mt-2 rounded-lg border border-slate-200 max-h-64 object-contain"
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Run result + unmatched mapping */}
+      {runResult && runResult.success && (
+        <Card className="border border-border">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              Last run — {runResult.totalWorkers} workers
+              <SwStatusBadge status={runResult.status} />
+            </CardTitle>
+            <CardDescription>
+              {runResult.applied} GP{runResult.applied === 1 ? "" : "s"} updated · {runResult.unmatched} unmatched
+            </CardDescription>
+          </CardHeader>
+          {unmatchedRows.length > 0 && (
+            <CardContent className="space-y-2">
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                These Persona workers didn't match any GP. Pick the right one — the mapping is remembered for future syncs.
+              </p>
+              <div className="space-y-1.5 max-h-[260px] overflow-y-auto">
+                {unmatchedRows.map(d => (
+                  <div key={d.workerName} className="flex items-center gap-2 bg-white rounded-md border border-amber-200 px-2.5 py-1.5">
+                    <Link2 className={`h-3.5 w-3.5 shrink-0 ${mappings[d.workerName] ? "text-emerald-600" : "text-amber-500"}`} />
+                    <span className="text-xs font-semibold text-slate-700 min-w-0 flex-1 truncate">{d.workerName}</span>
+                    <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                      {d.counts.sickLeaves} sick · {d.counts.missedDays} missed · {d.counts.lateToWork} late · {d.counts.extraShifts} extra
+                    </span>
+                    <Select
+                      value={mappings[d.workerName] ? String(mappings[d.workerName]) : ""}
+                      onValueChange={v => setMappings(prev => ({ ...prev, [d.workerName]: Number(v) }))}
+                    >
+                      <SelectTrigger className="h-7 text-xs w-[160px] shrink-0"><SelectValue placeholder="Pick GP…" /></SelectTrigger>
+                      <SelectContent>
+                        {sortedGps.map(gp => <SelectItem key={gp.id} value={String(gp.id)}>{gp.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+              <Button
+                size="sm"
+                onClick={onApplyMapped}
+                disabled={Object.keys(mappings).length === 0 || applyMutation.isPending}
+                className="gap-1.5"
+              >
+                {applyMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                Apply {Object.keys(mappings).length} mapped
+              </Button>
+            </CardContent>
+          )}
+        </Card>
+      )}
+
+      <PersonaSyncHistory />
+      <PersonaAliases gps={sortedGps} />
+    </TabsContent>
+  );
+}
+
+function PersonaSyncHistory() {
+  const { data: logs, isLoading } = trpc.personaSync.history.useQuery({ limit: 15 });
+  return (
+    <Card className="border border-border">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><Activity className="h-4 w-4" /> Sync history</CardTitle>
+        <CardDescription>Every Persona run — manual or the daily auto-sync.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : !logs || logs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No syncs recorded yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground border-b">
+                  <th className="py-2 pr-3 font-semibold">When</th>
+                  <th className="py-2 pr-3 font-semibold">Period</th>
+                  <th className="py-2 pr-3 font-semibold">Trigger</th>
+                  <th className="py-2 pr-3 font-semibold">Status</th>
+                  <th className="py-2 pr-3 font-semibold text-right">Workers</th>
+                  <th className="py-2 pr-3 font-semibold text-right">Matched</th>
+                  <th className="py-2 pr-3 font-semibold text-right">Unmatched</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map(l => (
+                  <tr key={l.id} className="border-b last:border-0">
+                    <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">{new Date(l.startedAt).toLocaleString()}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap tabular-nums">{l.month}/{l.year}</td>
+                    <td className="py-2 pr-3"><Badge variant="outline" className="text-[10px] capitalize">{l.source}</Badge></td>
+                    <td className="py-2 pr-3"><SwStatusBadge status={l.status} /></td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{l.totalWorkers}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-emerald-600 font-medium">{l.matched}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-amber-600">{l.unmatched}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PersonaAliases({ gps }: { gps: Array<{ id: number; name: string }> }) {
+  const utils = trpc.useUtils();
+  const { data: aliases, isLoading } = trpc.personaSync.aliases.useQuery();
+  const [name, setName] = useState("");
+  const [gpId, setGpId] = useState("");
+
+  const gpName = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const g of gps) m.set(g.id, g.name);
+    return m;
+  }, [gps]);
+
+  const add = trpc.personaSync.addAlias.useMutation({
+    onSuccess: () => { toast.success("Mapping saved"); setName(""); setGpId(""); utils.personaSync.aliases.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const remove = trpc.personaSync.removeAlias.useMutation({
+    onSuccess: () => utils.personaSync.aliases.invalidate(),
+    onError: (e) => toast.error(e.message),
+  });
+
+  return (
+    <Card className="border border-border">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><Link2 className="h-4 w-4" /> Name mappings</CardTitle>
+        <CardDescription>
+          Persona worker names that resolve straight to a GP. Learned automatically when you map an unmatched worker; curate them here.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Input placeholder="Persona name (e.g. Kashnova Marija)" value={name} onChange={e => setName(e.target.value)} className="sm:max-w-xs" />
+          <Select value={gpId} onValueChange={setGpId}>
+            <SelectTrigger className="sm:max-w-xs"><SelectValue placeholder="Maps to GP…" /></SelectTrigger>
+            <SelectContent>
+              {gps.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button
+            onClick={() => add.mutate({ name: name.trim(), gamePresenterId: Number(gpId) })}
+            disabled={!name.trim() || !gpId || add.isPending}
+          >
+            {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add mapping"}
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : !aliases || aliases.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No learned mappings yet.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {aliases.map(a => (
+              <div key={a.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-card/50">
+                <span className="text-sm font-medium text-foreground">{a.personaName}</span>
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-sm text-foreground flex-1 truncate">{gpName.get(a.gamePresenterId) ?? `GP #${a.gamePresenterId}`}</span>
+                <Button variant="ghost" size="sm" className="text-rose-600 hover:text-rose-700" onClick={() => remove.mutate({ id: a.id })} disabled={remove.isPending}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

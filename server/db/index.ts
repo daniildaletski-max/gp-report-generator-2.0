@@ -140,9 +140,14 @@ export {
 } from "./actionItems";
 export type { ActionItemWithGp } from "./actionItems";
 
-// Persona Sync Logs
-// Persona sync removed — see commit history. Attendance is now manual /
-// imported from other sources only.
+// Persona HR sync — run history + learned aliases + attendance write-back
+export {
+  ensurePersonaSyncSchema,
+  normalizePersonaName, summarizePersonaSync,
+  recordPersonaSyncLog, listPersonaSyncLogs,
+  listPersonaAliases, resolvePersonaAlias, upsertPersonaAlias, deletePersonaAlias,
+  applyPersonaAttendance,
+} from "./persona";
 
 // Rubric (versioned scoring)
 export {

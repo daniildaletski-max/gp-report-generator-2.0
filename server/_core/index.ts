@@ -10,7 +10,7 @@ import { appRouter } from "../routers";
 import { createContext, authenticateUser } from "./context";
 import { subscribe, subscriberCount } from "./events";
 import { serveStatic, setupVite } from "./vite";
-import { initScheduledReports, initStudioworksSync, initAutoCoaching, initWeeklyDigest } from "../scheduledReports";
+import { initScheduledReports, initStudioworksSync, initAutoCoaching, initWeeklyDigest, initPersonaSync } from "../scheduledReports";
 import { createLogger } from "../services/logger";
 import { requestTracingMiddleware, requestValidation } from "../services/requestTracing";
 import { cache } from "../services/cache";
@@ -23,6 +23,7 @@ import { ensureWorkedHoursColumn } from "../db/monthlyStats";
 import { ensureReportsTeamNullable } from "../db/reports";
 import { ensureStudioworksSyncSchema } from "../db/studioworks";
 import { ensureGoalsSchema } from "../db/goals";
+import { ensurePersonaSyncSchema } from "../db/persona";
 import { ENV } from "./env";
 import * as db from "../db";
 
@@ -497,6 +498,7 @@ async function startServer() {
     // runtime when STUDIOWORKS_USERNAME/PASSWORD env vars aren't set,
     // so this is safe even when the integration isn't configured yet.
     initStudioworksSync();
+    initPersonaSync();
     // Auto-coaching — daily at 07:00 EET, turns regression insights
     // into action items so the FM doesn't have to manually create
     // a coaching plan for every GP that dropped points.
@@ -561,6 +563,10 @@ async function startServer() {
     // boot-install pattern as the other ensure* migrations.
     ensureGoalsSchema().catch(err => {
       log.warn("company goals schema boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // Persona HR sync — run-history + alias tables (company-wide form).
+    ensurePersonaSyncSchema().catch(err => {
+      log.warn("persona sync schema boot check failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
     });
     // Automation credentials audit — surfaces missing RESEND_API_KEY /
     // PERSONA_* / STUDIOWORKS_* env vars in deploy logs so operators

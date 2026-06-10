@@ -32,6 +32,7 @@ import { leaderboardRouter } from "./routers/leaderboard";
 import { commandCenterRouter } from "./routers/commandCenter";
 import { analyticsRouter } from "./routers/analytics";
 import { goalsRouter } from "./routers/goals";
+import { personaSyncRouter } from "./routers/personaSync";
 
 export const appRouter = router({
   system: systemRouter,
@@ -57,6 +58,7 @@ export const appRouter = router({
   commandCenter: commandCenterRouter,
   analytics: analyticsRouter,
   goals: goalsRouter,
+  personaSync: personaSyncRouter,
 });
 
 export type AppRouter = typeof appRouter;
