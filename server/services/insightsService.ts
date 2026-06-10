@@ -127,9 +127,9 @@ GUIDELINES
 - Each suggestion must be specific enough to act on this week, not generic ("be better"). Examples of good titles:
   * "Schedule grooming review — appearance scores down 18%"
   * "Reduce procedure errors with dealing-style refresher session"
-  * "Address 3 late incidents this month before they disqualify the bonus"
+  * "Address 3 late incidents this month before they become a pattern"
 - Pick the right \`category\` for each suggestion — it must match the metric domain that's slipping.
-- \`priority\` reflects urgency: high = blocking bonus / disciplinary risk, medium = consistent decline, low = nice-to-have polish.
+- \`priority\` reflects urgency: high = disciplinary risk, medium = consistent decline, low = nice-to-have polish.
 - If the GP looks fine across the board, return ONE "general" suggestion celebrating the trend and recommending what to keep doing — do not invent problems.
 - Do NOT include suggestions for issues with no supporting data in the snapshot.
 - Output JSON exactly matching the schema. No prose outside it.`;

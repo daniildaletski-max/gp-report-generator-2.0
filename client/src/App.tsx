@@ -10,7 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import Home from "./pages/Home";
 import { useAuth } from "./_core/hooks/useAuth";
-import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, SlidersHorizontal, Sparkles, BadgeEuro, Trophy, Radar, LineChart } from "lucide-react";
+import { Upload as UploadIcon, LayoutDashboard, FileCheck, FileSpreadsheet, Settings, Shield, CalendarCheck, Zap, SlidersHorizontal, Sparkles, Trophy, Radar, LineChart } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -26,7 +26,6 @@ const GPPortal = lazy(() => import("./pages/GPPortal"));
 const InvitePage = lazy(() => import("./pages/InvitePage"));
 const Rubric = lazy(() => import("./pages/Rubric"));
 const Assistant = lazy(() => import("./pages/Assistant"));
-const Bonus = lazy(() => import("./pages/Bonus"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const CommandCenter = lazy(() => import("./pages/CommandCenter"));
 const Analytics = lazy(() => import("./pages/Analytics"));
@@ -61,7 +60,6 @@ const baseSidebarItems = [
   { href: "/analytics", label: "Analytics", icon: LineChart, section: "Insights" },
   { href: "/reports", label: "Reports", icon: FileSpreadsheet, section: "Insights" },
   { href: "/attendance", label: "Attendance", icon: CalendarCheck, section: "Insights" },
-  { href: "/bonus", label: "Bonus", icon: BadgeEuro, section: "Insights" },
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy, section: "Insights" },
   { href: "/assistant", label: "Assistant", icon: Sparkles, section: "Insights" },
 ];
@@ -146,11 +144,6 @@ function DashboardRoutes() {
                 <Attendance />
               </RouteErrorBoundary>
             </Route>
-            <Route path="/bonus">
-              <RouteErrorBoundary fallbackTitle="Bonus failed to load">
-                <Bonus />
-              </RouteErrorBoundary>
-            </Route>
             <Route path="/leaderboard">
               <RouteErrorBoundary fallbackTitle="Leaderboard failed to load">
                 <Leaderboard />
@@ -213,7 +206,6 @@ function Router() {
       <Route path="/reports" component={DashboardRoutes} />
       <Route path="/admin" component={DashboardRoutes} />
       <Route path="/attendance" component={DashboardRoutes} />
-      <Route path="/bonus" component={DashboardRoutes} />
       <Route path="/leaderboard" component={DashboardRoutes} />
       <Route path="/workspace" component={DashboardRoutes} />
       <Route path="/404" component={NotFound} />

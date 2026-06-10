@@ -176,8 +176,8 @@ async function generateCompanyReport(
     });
 
     // Build the rich workbook + email it. Shared with the on-demand path
-    // so scheduled reports also get the Coaching Plans + Bonus Summary
-    // sheets. With a null email this still builds + uploads the workbook.
+    // so scheduled reports get the same sheets (incl. Coaching Plans).
+    // With a null email this still builds + uploads the workbook.
     await generateExcelAndEmail(recipientCtx, report.id);
 
     log.info(`[ScheduledReports] Successfully generated company report for ${monthName} ${reportYear}`);

@@ -9,7 +9,7 @@ import { QueryError } from "@/components/QueryError";
 import { useLiveEvents } from "@/hooks/useLiveEvents";
 import { MONTH_NAMES, MAX_TOTAL_SCORE } from "@shared/const";
 import {
-  Trophy, Crown, Medal, TrendingUp, TrendingDown, Minus, BadgeEuro,
+  Trophy, Crown, Medal, TrendingUp, TrendingDown, Minus,
   Users, BarChart3, Sparkles, Star, ArrowUpRight, ArrowDownRight,
 } from "lucide-react";
 
@@ -78,10 +78,6 @@ export default function LeaderboardPage() {
           <div className="text-2xl font-semibold mt-1.5 tabular-nums number-tick">{a ? round1(a.medianTotal) : "0.0"}</div>
         </CardContent></Card>
         <Card className="metric-hover"><CardContent className="p-4">
-          <div className="text-xs text-muted-foreground flex items-center gap-1.5"><BadgeEuro className="h-3.5 w-3.5" /> Bonus payout</div>
-          <div className="text-2xl font-semibold mt-1.5 tabular-nums number-tick">€{(a?.totalBonusPayout ?? 0).toLocaleString()}</div>
-        </CardContent></Card>
-        <Card className="metric-hover"><CardContent className="p-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Total evals</div>
           <div className="text-2xl font-semibold mt-1.5 tabular-nums number-tick">{a?.totalEvaluations ?? 0}</div>
         </CardContent></Card>
@@ -105,7 +101,7 @@ export default function LeaderboardPage() {
                       <Delta delta={r.delta} />
                     </div>
                     <div className="font-semibold text-slate-900 truncate mt-0.5">{r.gpName}</div>
-                    <div className="text-xs text-muted-foreground tabular-nums">{round1(r.avgTotal)}/{MAX_TOTAL_SCORE} · {r.evalCount} eval{r.evalCount === 1 ? "" : "s"}{r.bonusAmount > 0 ? ` · €${r.bonusAmount}` : ""}</div>
+                    <div className="text-xs text-muted-foreground tabular-nums">{round1(r.avgTotal)}/{MAX_TOTAL_SCORE} · {r.evalCount} eval{r.evalCount === 1 ? "" : "s"}</div>
                   </div>
                 </CardContent>
               </Card>
@@ -178,7 +174,6 @@ export default function LeaderboardPage() {
                   <th className="px-3 py-2 font-medium text-right">Attitude</th>
                   <th className="px-3 py-2 font-medium text-right">Mistakes</th>
                   <th className="px-3 py-2 font-medium text-right">Evals</th>
-                  <th className="px-3 py-2 font-medium text-right">Bonus</th>
                 </tr>
               </thead>
               <tbody>
@@ -193,7 +188,6 @@ export default function LeaderboardPage() {
                     <td className="px-3 py-2 text-right tabular-nums">{r.attitude == null ? "—" : <span className={r.attitude > 0 ? "text-emerald-600" : r.attitude < 0 ? "text-rose-600" : ""}>{r.attitude > 0 ? `+${r.attitude}` : r.attitude}</span>}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{r.mistakes > 0 ? <span className="text-rose-600">{r.mistakes}</span> : <span className="text-muted-foreground">0</span>}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-600">{r.evalCount}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-medium">{r.bonusAmount > 0 ? `€${r.bonusAmount}` : <span className="text-muted-foreground">—</span>}</td>
                   </tr>
                 ))}
               </tbody>
